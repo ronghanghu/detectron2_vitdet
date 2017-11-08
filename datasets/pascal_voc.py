@@ -59,7 +59,8 @@ class PascalVOC(data.Dataset):
         count = len(objs)
 
         # Use a 2D array for bounding box coordinates (x1, y1, x2, y2)
-        boxes = np.ndarray((count, 4), dtype=np.uint16)
+        # todo: ross code uses uint16, but not supported by torch.Tensor ctor
+        boxes = np.ndarray((count, 4), dtype=np.int32)
 
         # TODO: ross associates class labels with an index, and only stores the
         # index instead of a string
