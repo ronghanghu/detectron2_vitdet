@@ -10,6 +10,7 @@ def backbone():
 
 # Used to get the region proposal network for the detection model
 def rpn():
+    print('not implemented')
 
 if __name__ == '__main__':
     print(backbone())

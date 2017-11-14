@@ -1,6 +1,8 @@
 */**/__pycache__
+*/**/_ext
 */**/*.pyc
 */**/*~
+torch_detectron.egg-info/
 
 # Editor temporaries
 *.swn
