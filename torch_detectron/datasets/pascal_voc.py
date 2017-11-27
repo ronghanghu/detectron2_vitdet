@@ -4,14 +4,6 @@ import torch.utils.data as data
 import xml.etree.ElementTree as ET
 
 class PascalVOC(data.Dataset):
-    """`Pascal VOC <http://host.robots.ox.ac.uk/pascal/VOC/>`_ Dataset.
-
-    Args:
-        root (string): Root directory of VOC devkit
-        image_set (string): Which set of images to use, e.g. 'train',
-            'trainval', 'test', etc.
-        # TODO: year --> we currently only have 2012 on the cluster
-    """
 
     image_sets = ['train', 'val', 'trainval', 'test'] # TODO: test included?
 
@@ -84,7 +76,17 @@ class PascalVOC(data.Dataset):
 
         return {'boxes': boxes, 'classes': classes}
 
-    def __init__(self, root, image_set):
+    """`Pascal VOC <http://host.robots.ox.ac.uk/pascal/VOC/>`_ Dataset.
+
+    Args:
+        root (string): Root directory of VOC devkit
+        image_set (string): Which set of images to use, e.g. 'train',
+            'trainval', 'test', etc.
+        # TODO: year --> we currently only have 2012 on the cluster
+        target_transform (callable, optional): A function/transform that takes
+            in the target and transforms it.
+    """
+    def __init__(self, root, image_set, target_transform=None):
         self.root = root
 
         # TODO: should be assertion ?
@@ -108,6 +110,8 @@ class PascalVOC(data.Dataset):
         if not os.path.exists(self.annotation_dir):
             raise RuntimeError('Invalid path to Pascal VOC Annotation directory')
 
+        self.target_transform = target_transform
+
     def __getitem__(self, index):
         img_id = self.image_ids[index]
         img_path = self._get_image_path(self.image_dir, img_id)
@@ -118,7 +122,11 @@ class PascalVOC(data.Dataset):
         if not os.path.exists(annotation_path):
             raise RuntimeError('Invalid path to annotation')
 
-        return img_path, self._parse_annotation_xml(annotation_path)
+        target = self._parse_annotation_xml(annotation_path)
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        return img_path, target
 
     def __len__(self):
         return len(self.image_ids)
