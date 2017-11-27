@@ -1,7 +1,10 @@
 import torch.utils.data as data
 
 from datasets import PascalVOC
-from lib.dataset_transforms import pascal_target_transform
+# todo: need to make this optional?
+from torchvision.datasets import coco
+from lib.dataset_transforms import pascal_target_transform, \
+    coco_target_transform
 
 # TODO: one possible org structure?
 class CompositeDetectionDataset(data.Dataset):
@@ -22,11 +25,17 @@ class CompositeDetectionDataset(data.Dataset):
     def register_pascal_voc(self, root, imageset):
         self.datasets.append(PascalVOC(root, imageset, pascal_target_transform))
 
+    def register_coco(self, root, annotation_file):
+        self.datasets.append(coco.CocoDetection(root, annotation_file,
+            target_transform=coco_target_transform))
+
     def __getitem__(self, index):
-        return self.datasets[0][index]
+        return self.datasets[1][index]
 
 if __name__ == '__main__':
     composite = CompositeDetectionDataset()
     composite.register_pascal_voc("/datasets01/VOC/060817/VOCdevkit/", "trainval")
+    composite.register_coco('/datasets01/COCO/060817/train2014',
+        '/datasets01/COCO/060817/annotations/instances_train2014.json')
     print(composite[3][1].detection_annotations()[0].bounding_box())
 
