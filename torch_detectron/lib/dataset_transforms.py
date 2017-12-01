@@ -1,24 +1,23 @@
 from .image_metadata import ImageMetadata
-from .annotation import DetectionAnnotation
+from .annotation import DetectionAnnotations
 from .data_utils import bbox_xywh_hflip
 
-# Note: this seems like a sus design right now, will have to iterate
-class PascalAnnotation(DetectionAnnotation):
+class PascalImage(DetectionAnnotations):
 
     def __init__(self, raw_annotation):
-        self.bbox = [
-            raw_annotation['bndbox']['xmin'],
-            raw_annotation['bndbox']['ymin'],
-            raw_annotation['bndbox']['xmax'],
-            raw_annotation['bndbox']['ymax']
-        ]
-        self.label = raw_annotation['name']
+        self.raw_annotation = raw_annotation
 
-    def bounding_box(self, f):
-        return self.bbox
+    def bounding_boxes(self):
+        return [[
+            obj['bndbox']['xmin'],
+            obj['bndbox']['ymin'],
+            obj['bndbox']['xmax'],
+            obj['bndbox']['ymax']] for obj in
+            self.raw_annotation['annotation']['object']]
 
-    def class_label(self):
-        return self.label
+    def class_labels(self):
+        return [obj['name'] for obj in
+            self.raw_annotation['annotation']['object']]
 
 class PascalImage(ImageMetadata):
 
@@ -37,23 +36,17 @@ def pascal_target_transform(raw_target):
     # 2. class labels, keyed by 'classes'
     return PascalImage(raw_target)
 
-# not sure about design, but this could also in theory subclass
-# something like 'SegmentationAnnotation'
-class COCOAnnotation(DetectionAnnotation):
-
+class COCOImage(DetectionAnnotations):
+ 
     def __init__(self, raw_annotation):
         self.raw_annotation = raw_annotation
 
-    def bounding_box(self):
-        return self.raw_annotation['bbox']
+    def bounding_boxes(self):
+        return [obj['bbox'] for obj in self.raw_annotation]
 
-    def class_label(self):
-        return self.raw_annotation['category_id']
+    def class_labels(self):
+        return [obj['category_id'] for obj in self.raw_annotation]
 
-class COCOImage(ImageMetadata):
- 
-    def __init__(self, raw_annotation):
-        self.annotations = [COCOAnnotation(ann) for ann in raw_annotation]
 
     def detection_annotations(self):
         return self.annotations

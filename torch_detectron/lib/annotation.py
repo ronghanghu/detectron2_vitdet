@@ -1,7 +1,4 @@
-# from abc import ABCMeta
-
-# class DetectionAnnotation(metaclass=ABCMeta):
-class DetectionAnnotation():
+class DetectionAnnotations():
     """
     An Abstract Base Class defining methods for working with object detection
     annotations for an image. Because the different datasets have different
@@ -10,18 +7,15 @@ class DetectionAnnotation():
     boxes are consistent across datasets.
     """
 
-    # @abstractmethod
-    def bounding_box():
+    def bounding_boxes():
         """
-        Get the ground truth bounding box associated with this annotation.
+        Get the ground truth bounding boxes associated with this Image.
         """
         raise NotImplementedError()
-        # pass
 
     # @abstractmethod
-    def class_label():
+    def class_labels():
         """
-        Get the class label associated with this annotation.
+        Get the class labels associated with this Image.
         """
         raise NotImplementedError()
-        # pass
