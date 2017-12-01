@@ -1,7 +1,8 @@
 import numpy as np
 import os
 import torch.utils.data as data
-import xml.etree.ElementTree as ET
+from PIL import Image
+import xmltodict
 
 class PascalVOC(data.Dataset):
 
@@ -46,35 +47,22 @@ class PascalVOC(data.Dataset):
         # components are subtrees with the <object> tag, these store the ground
         # truth objects in the image, including the class label and the
         # bounding box, and other metadata
-        tree = ET.parse(annotation_path)
-        objs = tree.findall('object')
-        count = len(objs)
+        with open(annotation_path, 'rb') as ann:
+            tree = xmltodict.parse(ann)
 
-        # Use a 2D array for bounding box coordinates (x1, y1, x2, y2)
-        # todo: ross code uses uint16, but not supported by torch.Tensor ctor
-        boxes = np.ndarray((count, 4), dtype=np.int32)
+        # We want most of the processing of the annotation to occur in a
+        # user-specified target transform. However, we perform the conversion
+        # of bounding box coordinates to integers, and base-correction here
 
-        # TODO: ross associates class labels with an index, and only stores the
-        # index instead of a string
-        classes = list()
-        
-        # TODO: ross includes more of the metadata, for now we just get classes
-        # and bounding boxes
-        for idx, obj in enumerate(objs):
-            bbox = obj.find('bndbox')
-            
+        for obj in tree['annotation']['object']:
             # Pascal VOC dataset has image indices 1-base (#tbt to LuaTorch) so
             # we convert them to be 0-base
-            x1 = int(bbox.find('xmin').text) - 1
-            y1 = int(bbox.find('ymin').text) - 1
-            x2 = int(bbox.find('xmax').text) - 1
-            y2 = int(bbox.find('ymax').text) - 1
-            boxes[idx, :] = [x1, y1, x2, y2]
-            
-            class_label = obj.find('name').text
-            classes.append(class_label)
+            obj['bndbox']['xmin'] = int(obj['bndbox']['xmin']) - 1
+            obj['bndbox']['ymin'] = int(obj['bndbox']['ymin']) - 1
+            obj['bndbox']['xmax'] = int(obj['bndbox']['xmax']) - 1
+            obj['bndbox']['ymax'] = int(obj['bndbox']['ymax']) - 1
 
-        return {'boxes': boxes, 'classes': classes}
+        return tree
 
     """`Pascal VOC <http://host.robots.ox.ac.uk/pascal/VOC/>`_ Dataset.
 
@@ -83,10 +71,12 @@ class PascalVOC(data.Dataset):
         image_set (string): Which set of images to use, e.g. 'train',
             'trainval', 'test', etc.
         # TODO: year --> we currently only have 2012 on the cluster
+        transform (callable, optional): A function/transform that takes in an
+            PIL image and returns a transformed version.
         target_transform (callable, optional): A function/transform that takes
             in the target and transforms it.
     """
-    def __init__(self, root, image_set, target_transform=None):
+    def __init__(self, root, image_set, transform=None, target_transform=None):
         self.root = root
 
         # TODO: should be assertion ?
@@ -110,6 +100,7 @@ class PascalVOC(data.Dataset):
         if not os.path.exists(self.annotation_dir):
             raise RuntimeError('Invalid path to Pascal VOC Annotation directory')
 
+        self.transform = transform
         self.target_transform = target_transform
 
     def __getitem__(self, index):
@@ -122,11 +113,15 @@ class PascalVOC(data.Dataset):
         if not os.path.exists(annotation_path):
             raise RuntimeError('Invalid path to annotation')
 
+        img = Image.open(img_path).convert('RGB')
+        if self.transform is not None:
+            img = self.transform(img)
+
         target = self._parse_annotation_xml(annotation_path)
         if self.target_transform is not None:
             target = self.target_transform(target)
 
-        return img_path, target
+        return img, target
 
     def __len__(self):
         return len(self.image_ids)

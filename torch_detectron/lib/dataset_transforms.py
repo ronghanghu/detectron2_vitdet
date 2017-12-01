@@ -1,14 +1,20 @@
 from .image_metadata import ImageMetadata
 from .annotation import DetectionAnnotation
+from .data_utils import bbox_xywh_hflip
 
 # Note: this seems like a sus design right now, will have to iterate
 class PascalAnnotation(DetectionAnnotation):
 
-    def __init__(self, bounding_box, class_label):
-        self.bbox = bounding_box
-        self.label = class_label
+    def __init__(self, raw_annotation):
+        self.bbox = [
+            raw_annotation['bndbox']['xmin'],
+            raw_annotation['bndbox']['ymin'],
+            raw_annotation['bndbox']['xmax'],
+            raw_annotation['bndbox']['ymax']
+        ]
+        self.label = raw_annotation['name']
 
-    def bounding_box(self):
+    def bounding_box(self, f):
         return self.bbox
 
     def class_label(self):
