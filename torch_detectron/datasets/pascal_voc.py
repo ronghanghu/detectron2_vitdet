@@ -54,6 +54,9 @@ class PascalVOC(data.Dataset):
         # user-specified target transform. However, we perform the conversion
         # of bounding box coordinates to integers, and base-correction here
 
+        if not isinstance(tree['annotation']['object'], list):
+            tree['annotation']['object'] = [tree['annotation']['object']]
+
         for obj in tree['annotation']['object']:
             # Pascal VOC dataset has image indices 1-base (#tbt to LuaTorch) so
             # we convert them to be 0-base
@@ -130,4 +133,5 @@ if __name__ == '__main__':
     ds = PascalVOC("/datasets01/VOC/060817/VOCdevkit/", "trainval")
     print(len(ds))
     print(ds[3])
+    print(ds[0])
 
