@@ -20,13 +20,12 @@ def _get_rpn_state_dict(pretrained_path):
     return rpn_state_dict
 
 
-def build_resnet_model():
+def build_resnet_model(pretrained_path):
     """
     Example function of how to build a detection model for inference.
     This function builds a Faster R-CNN network based on resnet50, without FPN nor mask
     prediction.
     """
-    pretrained_path = '/private/home/fmassa/github/detectron.pytorch/torch_detectron/lib/clean_inference/faster_rcnn_resnet50.pth'
     # create FeatureProvider
     backbone = resnet50_conv4_body(pretrained_path)
 
@@ -79,26 +78,34 @@ def build_fpn_model(pretrained_path=None):
     return model
 
 
-def test_fpn():
-    pretrained_path = '/private/home/fmassa/github/detectron.pytorch/torch_detectron/core/fpn_r50.pth'
-    model = build_fpn_model(pretrained_path)
-    # x = torch.rand(1, 3, 800, 800)
-
+def run_model(model, bs):
     from PIL import Image
     import numpy as np
     img = Image.open('/datasets01/COCO/060817/val2014/COCO_val2014_000000000139.jpg').convert('RGB').resize((1216, 800), Image.BILINEAR)
 
     x = torch.from_numpy(np.array(img)).float()[:, :, [2,1,0]]
     x = x - torch.tensor([102.9801, 115.9465, 122.7717])
-    x = x.permute(2, 0, 1).unsqueeze(0)
+    x = x.permute(2, 0, 1)
 
 
     device = torch.device('cuda')
     x = x.to(device)
     model.to(device)
 
+    x = [x for _ in range(bs)]
+
     with torch.no_grad():
-        o = model.predict([x[0], x[0]])
+        o = model.predict(x)
 
     print(o)
 
+
+def test_resnet(bs=2):
+    pretrained_path = '/private/home/fmassa/github/detectron.pytorch/torch_detectron/core/models/faster_rcnn_resnet50.pth'
+    model = build_resnet_model(pretrained_path)
+    run_model(model, bs)
+
+def test_fpn(bs=2):
+    pretrained_path = '/private/home/fmassa/github/detectron.pytorch/torch_detectron/core/models/fpn_r50.pth'
+    model = build_fpn_model(pretrained_path)
+    run_model(model, bs)

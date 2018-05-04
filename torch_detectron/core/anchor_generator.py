@@ -76,15 +76,15 @@ class AnchorGenerator(nn.Module):
         anchors.add_field('visibility', inds_inside)
 
         # TODO check if want to return list of not
-        return [anchors]
-        # return anchors
+        # return [anchors]
+        return anchors
 
     def forward(self, images_sizes, feature_maps):
         assert len(feature_maps) == 1, 'only single feature maps allowed'
         anchors = []
         for image_sizes, feature_map in zip(images_sizes, feature_maps[0]):
             anchors.append(self.forward_single_image(image_sizes, feature_map))
-        return anchors
+        return [anchors]
 
 
 
