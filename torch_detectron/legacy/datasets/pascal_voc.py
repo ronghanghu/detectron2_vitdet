@@ -124,7 +124,16 @@ class PascalVOC(data.Dataset):
         if self.target_transform is not None:
             target = self.target_transform(target)
 
+        if isinstance(target, tuple):
+            return (img,) + target
         return img, target
+
+    def get_img_info(self, index):
+        img_id = self.image_ids[index]
+        annotation_path = self._get_annotation_path(self.annotation_dir, img_id)
+        target = self._parse_annotation_xml(annotation_path)
+        return target['annotation']['size']
+
 
     def __len__(self):
         return len(self.image_ids)

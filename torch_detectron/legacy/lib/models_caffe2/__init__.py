@@ -1,0 +1,1 @@
+from .fastrcnn_resnet50c4_1x import load_resnet50_model

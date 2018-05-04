@@ -9,16 +9,24 @@ class GroupedBatchSampler(BatchSampler):
     """Samples elements randomly, while enforcing that elements from the same group
     should appear in groups of group_size
     """
-    def __init__(self, group_ids, group_size, drop_uneven=True):
+    def __init__(self, group_ids, group_size, drop_uneven=True, sampler=None):
         self.group_ids = np.asarray(group_ids)
         assert self.group_ids.ndim == 1
         self.groups = np.unique(self.group_ids)
         self.group_size = group_size
         self.drop_uneven = drop_uneven
+        self.sampler = sampler
 
     def __iter__(self):
+        if self.sampler is not None:
+            sampled_ids = list(self.sampler)
+            mask = np.zeros((len(self.group_ids),), dtype=np.bool)
+            mask[sampled_ids] = True
+        else:
+            mask = np.ones((len(self.group_ids),), dtype=np.bool)
+        # TODO make it take into account the sampler that is passed for the order
         # cluster and shuffle indices that belong to the same group
-        clusters = [np.random.permutation(np.where(self.group_ids == i)[0])
+        clusters = [np.random.permutation(np.where((self.group_ids == i) & mask)[0])
                 for i in self.groups]
 
         # numpy split don't specify the size of each split easily
@@ -40,7 +48,13 @@ class GroupedBatchSampler(BatchSampler):
         return iter(merged)
 
     def __len__(self):
-        nums = tuple((self.group_ids == i).sum() for i in self.groups)
+        if self.sampler is not None:
+            sampled_ids = list(self.sampler)
+            mask = np.zeros((len(self.group_ids),), dtype=np.bool)
+            mask[sampled_ids] = True
+        else:
+            mask = np.ones((len(self.group_ids),), dtype=np.bool)
+        nums = tuple(((self.group_ids == i) & mask).sum() for i in self.groups)
         if self.drop_uneven:
             return sum(n // self.group_size for n in nums)
         else:

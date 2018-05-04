@@ -3,9 +3,18 @@
 */**/*.pyc
 */**/*~
 torch_detectron.egg-info/
+torch_detectron/legacy/
+
+*.pth
+*.plk
+*.pkl
+*.npy
+*.ipynb
 
 # Editor temporaries
 *.swn
 *.swo
 *.swp
 *~
+build/
+dist/
