@@ -85,18 +85,23 @@ class GeneralizedRCNN(nn.Module):
         self.feature_provider = feature_provider
         self.heads = heads
 
-    def predict(self, x):
+    def predict(self, x, proposals=None):
+        """
+        Idea: instead of passing everywhere the proposals argument,
+        why not also allow ImageList to hold the proposals?
+        This would make it very specific to object detection though
+        """
         x = to_image_list(x)
-        x, boxes = self.feature_provider.predict(x)
+        x, boxes = self.feature_provider.predict(x, proposals)
         x = self.heads.predict(x, boxes)
         return x  # can be a tuple, or dict
     
-    def forward(self, x, targets=None):
+    def forward(self, x, targets=None, proposals=None):
         pass
 
-    def loss(self, x, targets):
+    def loss(self, x, targets, proposals=None):
         x = to_image_list(x)
-        x, boxes, box_provider_loss = self.feature_provider.loss(x, targets)
+        x, boxes, box_provider_loss = self.feature_provider.loss(x, targets, proposals)
         x, heads_loss = self.heads.loss(x, boxes, targets)
         return x, heads_loss, box_provider_loss
 
@@ -113,19 +118,25 @@ class RPNProvider(FeatureProvider):
         self.rpn_net = rpn_net
         self.box_sampler = box_sampler
 
-    def predict(self, x):
+    def predict(self, x, proposals=None):
         """
         x should be an ImageList object
         """
         x = to_image_list(x)
         features = self.backbone(x.tensors)
-        boxes = self.rpn_net.predict(x.image_sizes, features)
-        return features, boxes
+        if proposals is None:
+            proposals = self.rpn_net.predict(x, features)
+        return features, proposals
 
-    def loss(self, x, targets):
+    def loss(self, x, targets, proposals=None):
+        # TODO the order targets, proposals is not good
         x = to_image_list(x)
         features = self.backbone(x.tensors)
-        boxes, loss = self.rpn_net.loss(x.image_sizes, features, targets)
+        if proposals is None:
+            boxes, loss = self.rpn_net.loss(x, features, targets)
+        else:
+            boxes = proposals
+            loss = 0
         # subsample FG / BG
         boxes = self.box_sampler(boxes, targets)
         return features, boxes, loss
@@ -142,18 +153,18 @@ class RPN(nn.Module):
         self.anchor_generator = anchor_generator
         self.box_selector = box_selector
 
-    def predict(self, image_sizes, features):
+    def predict(self, images, features):
         objectness, box_regression = self.layers(features)
 
         # anchors is a BBox with image size information
-        anchors = self.anchor_generator(image_sizes, features)
+        anchors = self.anchor_generator(images.image_sizes, features)
         boxes = self.box_selector(anchors, objectness, box_regression)
         return boxes
 
-    def loss(self, image_sizes, features, targets):
+    def loss(self, images, features, targets):
         objectness, box_regression = self.layers(features)
         
-        anchors = self.anchor_generator(image_sizes, features)
+        anchors = self.anchor_generator(images.image_sizes, features)
         # TODO returning the scores from the box selector might be unecessary
         # it's here originally because of FPN, but the selector will take
         # care of the selection / reshuffle of the boxes to have things in the

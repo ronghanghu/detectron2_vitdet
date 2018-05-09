@@ -61,8 +61,9 @@ class RPNBoxSelector(object):
             height, width = im_shape
             
             if proposal.dim() == 0:
-                sampled_proposals.append(proposal.new())
-                sampled_scores.append(score.new())
+                # TODO check what to do here
+                # sampled_proposals.append(proposal.new())
+                # sampled_scores.append(score.new())
                 print('skipping')
                 continue
             
@@ -107,6 +108,8 @@ class FPNRPNBoxSelector(RPNBoxSelector):
         if len(sampled_boxes) == 1:
             return sampled_boxes
 
+        # TODO almost all this part can be
+        # factored out in a RPN-agnostic class
         # merge all lists
         num_features = len(sampled_boxes)
         num_images = len(sampled_boxes[0])
@@ -118,7 +121,7 @@ class FPNRPNBoxSelector(RPNBoxSelector):
         indices = [torch.full((box.bbox.shape[0],), img_idx, device=device) for per_feature_boxes in sampled_boxes
                 for img_idx, box in enumerate(per_feature_boxes)]
 
-        # TODO make it a helper function
+        # TODO make these concatenations a helper function?
         concat_boxes = torch.cat([b.bbox for b in merged_lists], dim=0)
         indices = torch.cat(indices, dim=0)
         extra_fields = {}
@@ -143,6 +146,8 @@ class FPNRPNBoxSelector(RPNBoxSelector):
         for feat_lvl in range(lvl_min, lvl_max + 1):
             per_feat_boxes = []
             for img_idx in range(num_images):
+                # TODO adding a nonzero makes this slighly faster, but uglier because
+                # needo to handle the squeeze (which might not work for empty tensors)
                 lvl_idx_per_img = (indices == img_idx) & (levels == feat_lvl)
                 selected_boxes = concat_boxes[lvl_idx_per_img]
                 bbox = BBox(selected_boxes, image_sizes[img_idx], mode='xyxy')

@@ -3,11 +3,12 @@ import torch
 from core.resnet_builder import resnet50_conv4_body, resnet50_conv5_head
 from core.anchor_generator import AnchorGenerator, FPNAnchorGenerator
 from core.box_selector import RPNBoxSelector, FPNRPNBoxSelector, ROI2FPNLevelsMapper
-from core import detection_model
+from core import detection_model_ross as detection_model
 from core.faster_rcnn import RPNHeads, Pooler
 from core.post_processor import PostProcessor, FPNPostProcessor
 from core.region_proposal import RandomRegionProposal, FPNRandomRegionProposal
 
+# copied from test_script.py with small modificatons
 
 def _get_rpn_state_dict(pretrained_path):
     from collections import OrderedDict
@@ -21,21 +22,41 @@ def _get_rpn_state_dict(pretrained_path):
     return rpn_state_dict
 
 
+
 def build_resnet_without_rpn_model(pretrained_path):
     # create FeatureProvider
     backbone = resnet50_conv4_body(pretrained_path)
 
     region_proposal = RandomRegionProposal(2000)
-    region_provider = detection_model.RPNProvider(backbone, region_proposal, box_sampler=None)
-
     # create heads
     pooler = Pooler()
     classifier_layers = resnet50_conv5_head(num_classes=81, pretrained=pretrained_path)
     postprocessor = PostProcessor()
-    classifier_head = detection_model.ClassificationHead(pooler, classifier_layers, postprocessor)
-
+    head = detection_model.Head(classifier_layers, postprocessor)
+    
     # build model
-    model = detection_model.GeneralizedRCNN(region_provider, classifier_head)
+    model = detection_model.GeneralizedRCNN(backbone, region_proposal, pooler, head)
+    return model
+
+
+def build_fpn_without_rpn_model(pretrained_path=None):
+    from core.fpn import fpn_resnet50_conv5_body, FPNPooler, fpn_classification_head
+
+    backbone = fpn_resnet50_conv5_body(pretrained_path)
+
+
+    roi_to_fpn_level_mapper = ROI2FPNLevelsMapper(2, 5)
+    region_proposal = FPNRandomRegionProposal(2000, roi_to_fpn_level_mapper)
+
+    # rpn_provider = detection_model.RPNProvider(backbone, rpn, box_sampler=None)
+
+    pooler = FPNPooler(
+            output_size=(7, 7), scales=[2 ** (-i) for i in range(2, 6)], sampling_ratio=2, drop_last=True)
+    classifier_layers = fpn_classification_head(num_classes=81, pretrained=pretrained_path)
+    postprocessor = FPNPostProcessor()
+    head = detection_model.Head(classifier_layers, postprocessor)
+
+    model = detection_model.GeneralizedRCNN(backbone, region_proposal, pooler, head)
     return model
 
 
@@ -53,37 +74,16 @@ def build_resnet_model(pretrained_path):
     rpn_heads.load_state_dict(_get_rpn_state_dict(pretrained_path))
     box_selector = RPNBoxSelector(6000, 1000, 0.7, 0)
     
-    rpn = detection_model.RPN(rpn_heads, anchor_generator, box_selector)
+    rpn = detection_model.RPN(rpn_heads, anchor_generator, box_selector, box_sampler=None)
 
-    rpn_provider = detection_model.RPNProvider(backbone, rpn, box_sampler=None)
-    
     # create heads
     pooler = Pooler()
     classifier_layers = resnet50_conv5_head(num_classes=81, pretrained=pretrained_path)
     postprocessor = PostProcessor()
-    classifier_head = detection_model.ClassificationHead(pooler, classifier_layers, postprocessor)
+    head = detection_model.Head(classifier_layers, postprocessor)
     
     # build model
-    model = detection_model.GeneralizedRCNN(rpn_provider, classifier_head)
-    return model
-
-
-def build_fpn_without_rpn_model(pretrained_path=None):
-    from core.fpn import fpn_resnet50_conv5_body, FPNPooler, fpn_classification_head
-
-    backbone = fpn_resnet50_conv5_body(pretrained_path)
-
-    roi_to_fpn_level_mapper = ROI2FPNLevelsMapper(2, 5)
-    region_proposal = FPNRandomRegionProposal(2000, roi_to_fpn_level_mapper)
-    rpn_provider = detection_model.RPNProvider(backbone, region_proposal, box_sampler=None)
-
-    pooler = FPNPooler(
-            output_size=(7, 7), scales=[2 ** (-i) for i in range(2, 6)], sampling_ratio=2, drop_last=True)
-    classifier_layers = fpn_classification_head(num_classes=81, pretrained=pretrained_path)
-    postprocessor = FPNPostProcessor()
-    classifier_head = detection_model.ClassificationHead(pooler, classifier_layers, postprocessor)
-
-    model = detection_model.GeneralizedRCNN(rpn_provider, classifier_head)
+    model = detection_model.GeneralizedRCNN(backbone, rpn, pooler, head)
     return model
 
 
@@ -102,18 +102,19 @@ def build_fpn_model(pretrained_path=None):
             fpn_post_nms_top_n=2000,
             pre_nms_top_n=6000, post_nms_top_n=1000, nms_thresh=0.7, min_size=0)
 
-    rpn = detection_model.RPN(rpn_heads, anchor_generator, box_selector)
+    rpn = detection_model.RPN(rpn_heads, anchor_generator, box_selector, box_sampler=None)
 
-    rpn_provider = detection_model.RPNProvider(backbone, rpn, box_sampler=None)
+    # rpn_provider = detection_model.RPNProvider(backbone, rpn, box_sampler=None)
 
     pooler = FPNPooler(
             output_size=(7, 7), scales=[2 ** (-i) for i in range(2, 6)], sampling_ratio=2, drop_last=True)
     classifier_layers = fpn_classification_head(num_classes=81, pretrained=pretrained_path)
     postprocessor = FPNPostProcessor()
-    classifier_head = detection_model.ClassificationHead(pooler, classifier_layers, postprocessor)
+    head = detection_model.Head(classifier_layers, postprocessor)
 
-    model = detection_model.GeneralizedRCNN(rpn_provider, classifier_head)
+    model = detection_model.GeneralizedRCNN(backbone, rpn, pooler, head)
     return model
+
 
 def get_image():
     from PIL import Image
