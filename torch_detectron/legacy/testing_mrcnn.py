@@ -380,7 +380,7 @@ if __name__ == '__main__':
 
     data_loader = torch.utils.data.DataLoader(dataset, batch_size=1, collate_fn=collate_fn, num_workers=4, pin_memory=True)
 
-    model = C2MRCNNResNetFPN('/private/home/fmassa/github/detectron.pytorch/torch_detectron/mrcnn-fpn50.pkl')
+    model = C2MRCNNResNetFPN('/private/home/fmassa/github/detectron.pytorch/torch_detectron/legacy/mrcnn-fpn50.pkl')
     # model.load_state_dict(torch.load('/checkpoint02/fmassa/detectron_v2_faster_rcnn_R50.pth')['model'])
 
     # model = fastrcnn_resnet18(num_classes=81)

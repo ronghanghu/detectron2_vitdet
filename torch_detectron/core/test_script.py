@@ -87,6 +87,34 @@ def build_fpn_without_rpn_model(pretrained_path=None):
     return model
 
 
+# TODO use this in build_fpn_model and build_mrcnn_fpn_model
+def build_base_fpn_model(pretrained_path=None, config=None):
+    from core.fpn import fpn_resnet50_conv5_body, FPNPooler, fpn_classification_head
+
+    backbone = fpn_resnet50_conv5_body(pretrained_path)
+
+    anchor_generator = FPNAnchorGenerator(
+            scales=(0.125, 0.25, 0.5, 1., 2.), anchor_strides=(4, 8, 16, 32, 64))
+    rpn_heads = RPNHeads(256, anchor_generator.num_anchors_per_location()[0])
+    rpn_heads.load_state_dict(_get_rpn_state_dict(pretrained_path))
+
+    roi_to_fpn_level_mapper = ROI2FPNLevelsMapper(2, 5)
+    box_selector = FPNRPNBoxSelector(roi_to_fpn_level_mapper=roi_to_fpn_level_mapper,
+            fpn_post_nms_top_n=1000,
+            pre_nms_top_n=1000, post_nms_top_n=1000, nms_thresh=0.7, min_size=0)
+
+    rpn = detection_model.RPN(rpn_heads, anchor_generator, box_selector)
+
+    rpn_provider = detection_model.RPNProvider(backbone, rpn, box_sampler=None)
+
+    pooler = FPNPooler(
+            output_size=(7, 7), scales=[2 ** (-i) for i in range(2, 6)], sampling_ratio=2, drop_last=True)
+    classifier_layers = fpn_classification_head(num_classes=81, pretrained=pretrained_path)
+    postprocessor = FPNPostProcessor()
+    classifier_head = detection_model.ClassificationHead(pooler, classifier_layers, postprocessor)
+
+    return rpn_provider, classifier_head
+
 def build_fpn_model(pretrained_path=None):
     from core.fpn import fpn_resnet50_conv5_body, FPNPooler, fpn_classification_head
 
@@ -99,8 +127,8 @@ def build_fpn_model(pretrained_path=None):
 
     roi_to_fpn_level_mapper = ROI2FPNLevelsMapper(2, 5)
     box_selector = FPNRPNBoxSelector(roi_to_fpn_level_mapper=roi_to_fpn_level_mapper,
-            fpn_post_nms_top_n=2000,
-            pre_nms_top_n=6000, post_nms_top_n=1000, nms_thresh=0.7, min_size=0)
+            fpn_post_nms_top_n=1000,
+            pre_nms_top_n=1000, post_nms_top_n=1000, nms_thresh=0.7, min_size=0)
 
     rpn = detection_model.RPN(rpn_heads, anchor_generator, box_selector)
 
@@ -114,6 +142,94 @@ def build_fpn_model(pretrained_path=None):
 
     model = detection_model.GeneralizedRCNN(rpn_provider, classifier_head)
     return model
+
+
+def build_mrcnn_fpn_model(pretrained_path=None):
+    from core.fpn import fpn_resnet50_conv5_body, FPNPooler, fpn_classification_head
+
+    backbone = fpn_resnet50_conv5_body(pretrained_path)
+
+    anchor_generator = FPNAnchorGenerator(
+            scales=(0.125, 0.25, 0.5, 1., 2.), anchor_strides=(4, 8, 16, 32, 64))
+    rpn_heads = RPNHeads(256, anchor_generator.num_anchors_per_location()[0])
+    rpn_heads.load_state_dict(_get_rpn_state_dict(pretrained_path))
+
+    roi_to_fpn_level_mapper = ROI2FPNLevelsMapper(2, 5)
+    box_selector = FPNRPNBoxSelector(roi_to_fpn_level_mapper=roi_to_fpn_level_mapper,
+            fpn_post_nms_top_n=1000,
+            pre_nms_top_n=1000, post_nms_top_n=1000, nms_thresh=0.7, min_size=0)
+
+    rpn = detection_model.RPN(rpn_heads, anchor_generator, box_selector)
+
+    rpn_provider = detection_model.RPNProvider(backbone, rpn, box_sampler=None)
+
+    pooler = FPNPooler(
+            output_size=(7, 7), scales=[2 ** (-i) for i in range(2, 6)], sampling_ratio=2, drop_last=True)
+    classifier_layers = fpn_classification_head(num_classes=81, pretrained=pretrained_path)
+    postprocessor = FPNPostProcessor()
+    classifier_head = detection_model.ClassificationHead(pooler, classifier_layers, postprocessor)
+
+    from core.mask_rcnn import maskrcnn_head, MaskFPNPooler, MaskPostProcessor
+    mask_pooler = MaskFPNPooler(roi_to_fpn_level_mapper=roi_to_fpn_level_mapper,
+            output_size=(14, 14), scales=[2 ** (-i) for i in range(2, 6)], sampling_ratio=2, drop_last=True)
+    mask_layers = maskrcnn_head(num_classes=81, pretrained=pretrained_path)
+    mask_postprocessor = MaskPostProcessor()
+    mask_head = detection_model.ClassificationHead(mask_pooler, mask_layers, mask_postprocessor)
+
+    head = detection_model.MultiTaskSequentialHead([classifier_head, mask_head])
+
+    model = detection_model.GeneralizedRCNN(rpn_provider, head)
+    return model
+
+
+from core.image_list import to_image_list
+class MaskRCNNModel(torch.nn.Module):
+    def __init__(self, pretrained_path):
+        super(MaskRCNNModel, self).__init__()
+        from core.fpn import fpn_resnet50_conv5_body, FPNPooler, fpn_classification_head
+
+        self.backbone = fpn_resnet50_conv5_body(pretrained_path)
+
+        self.anchor_generator = FPNAnchorGenerator(
+                scales=(0.125, 0.25, 0.5, 1., 2.), anchor_strides=(4, 8, 16, 32, 64))
+        self.rpn_heads = RPNHeads(256, self.anchor_generator.num_anchors_per_location()[0])
+        self.rpn_heads.load_state_dict(_get_rpn_state_dict(pretrained_path))
+
+        roi_to_fpn_level_mapper = ROI2FPNLevelsMapper(2, 5)
+        self.box_selector = FPNRPNBoxSelector(roi_to_fpn_level_mapper=roi_to_fpn_level_mapper,
+                fpn_post_nms_top_n=2000,
+                pre_nms_top_n=6000, post_nms_top_n=1000, nms_thresh=0.7, min_size=0)
+
+        self.pooler = FPNPooler(
+                output_size=(7, 7), scales=[2 ** (-i) for i in range(2, 6)], sampling_ratio=2, drop_last=True)
+        self.classifier_layers = fpn_classification_head(num_classes=81, pretrained=pretrained_path)
+        self.postprocessor = FPNPostProcessor()
+
+        from core.mask_rcnn import maskrcnn_head, MaskFPNPooler, MaskPostProcessor
+        self.mask_pooler = MaskFPNPooler(roi_to_fpn_level_mapper=roi_to_fpn_level_mapper,
+                output_size=(14, 14), scales=[2 ** (-i) for i in range(2, 6)], sampling_ratio=2, drop_last=True)
+        self.mask_layers = maskrcnn_head(num_classes=81, pretrained=pretrained_path)
+        self.mask_postprocessor = MaskPostProcessor()
+
+    def predict(self, images):
+        images = to_image_list(images)
+        features = self.backbone(images.tensors)
+
+        objectness, rpn_box_regression = self.rpn_heads(features)
+        anchors = self.anchor_generator(images.image_sizes, features)
+        boxes = self.box_selector(anchors, objectness, rpn_box_regression)
+
+        x = self.pooler(features, boxes)
+        x = self.classifier_layers(x)
+        detections = self.postprocessor(x, boxes)
+
+        x = self.mask_pooler(features, detections)
+        x = self.mask_layers(x)
+        masks = self.mask_postprocessor(x, detections)
+
+        return masks
+
+
 
 def get_image():
     from PIL import Image
@@ -195,6 +311,11 @@ def test_fpn(bs=2):
     model = build_fpn_model(pretrained_path)
     run_model(model, bs)
 
+def test_mrcnn_fpn(bs=2):
+    pretrained_path = '/private/home/fmassa/github/detectron.pytorch/torch_detectron/core/models/mrcnn_fpn_r50.pth'
+    model = build_mrcnn_fpn_model(pretrained_path)
+    run_model(model, bs)
+
 def test_all():
     print('Fast R-CNN ResNet without RPN')
     test_resnet_without_rpn()
@@ -204,3 +325,5 @@ def test_all():
     test_fpn_without_rpn()
     print('Faster R-CNN ResNet FPN')
     test_fpn()
+    print('Mask R-CNN ResNet FPN')
+    test_mrcnn_fpn()

@@ -212,6 +212,23 @@ class ClassificationHead(HeadProvider):
         pass
 
 
+class MultiTaskSequentialHead(nn.Module):
+    """
+    Given a set of features and bounding boxes, computes the predictions
+    sequentially. The boxes from the prediction i are used for the
+    prediction i+1.
+    """
+    def __init__(self, heads):
+        super(MultiTaskSequentialHead, self).__init__()
+        self.heads = nn.ModuleList(heads)
+
+    def predict(self, features, boxes):
+        x = boxes
+        for head in self.heads:
+            x = head.predict(features, x)
+        return x
+
+
 if __name__ == '__main__':
     backbone = ResNet50Backbone(...)
     # after each line add getter from config

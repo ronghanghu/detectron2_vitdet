@@ -8,7 +8,7 @@ import math
 
 from ..layers import ROIAlign, ROIPool
 
-
+"""
 import torch.cuda
 _ = torch.rand(2, 2).cuda()
 # _ = _ @ _
@@ -25,7 +25,7 @@ def roi_align(input, rois, img_idxs, size=(14,14), spatial_scale=1.0 / 16, sampl
     boxes = torch.cat([Variable(img_idxs[:, None].float().cuda()), rois], 1)
     o = loaded_mod.roi_align_cuda(input.data, boxes.data, spatial_scale, size[0], size[1], sampling_ratio)
     return Variable(o)
-
+"""
 
 class FixedBatchNorm2d(nn.Module):
     def __init__(self, n):

@@ -1,10 +1,11 @@
 import torch
-from torchvision.layers import nms
 
 from .box_coder import BoxCoder
 
 from torchvision.structures.bounding_box import BBox
 
+from .kernels import _C
+box_nms = _C.nms
 
 #TODO add option for different params in train / test
 class RPNBoxSelector(object):
@@ -72,7 +73,7 @@ class RPNBoxSelector(object):
             p = p[keep, :]
             score = score[keep]
             if self.nms_thresh > 0:
-                keep = nms(p.cpu(), score.cpu(), self.nms_thresh)
+                keep = box_nms(p, score, self.nms_thresh)
                 if self.post_nms_top_n > 0:
                     keep = keep[:self.post_nms_top_n]
                 p = p[keep]
@@ -197,6 +198,9 @@ class ROI2FPNLevelsMapper(object):
         self.eps = eps
 
     def __call__(self, rois):
+        # handle empty tensors
+        if rois.numel() == 0:
+            return rois.new()
         # Compute level ids
         s = torch.sqrt(boxes_area(rois))
 

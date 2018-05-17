@@ -6,7 +6,7 @@ from torchvision.layers import ROIAlign
 
 
 class FPN(nn.Module):
-    def __init__(self, layers, representation_size):
+    def __init__(self, layers, representation_size, top_blocks=None):
         super(FPN, self).__init__()
         self.inner_blocks = []
         self.layer_blocks = []
@@ -19,6 +19,7 @@ class FPN(nn.Module):
                     nn.Conv2d(representation_size, representation_size, 3, 1, 1))
             self.inner_blocks.append(inner_block)
             self.layer_blocks.append(layer_block)
+        self.top_blocks = top_blocks
 
     def forward(self, x):
 
@@ -29,19 +30,26 @@ class FPN(nn.Module):
                 x[:-1][::-1], self.inner_blocks[:-1][::-1], self.layer_blocks[:-1][::-1]):
             inner_top_down = F.upsample(last_inner, scale_factor=2, mode='nearest')
             inner_lateral = getattr(self, inner_block)(feature)
+            # TODO use size instead of scale to make it robust to different sizes
+            # inner_top_down = F.upsample(last_inner, size=inner_lateral.shape[-2:], mode='bilinear', align_corners=False)
             last_inner = inner_lateral + inner_top_down
             results.insert(0, getattr(self, layer_block)(last_inner))
 
-        smallest_resolution = F.max_pool2d(results[-1], 1, 2, 0)
-        results.append(smallest_resolution)
+        if self.top_blocks is not None:
+            last_results = self.top_blocks(results[-1])
+            results.extend(last_results)
 
         return tuple(results)
 
 
+class LastLevelMaxPool(nn.Module):
+    def forward(self, x):
+        return [F.max_pool2d(x, 1, 2, 0)]
+
 def fpn_resnet50_conv5_body(pretrained=None):
     from .resnet_builder import ResNetBackbone, Bottleneck
     body = ResNetBackbone(Bottleneck, layers=[(2, 3, True), (3, 4, True), (4, 6, True), (5, 3, True)])
-    fpn = FPN(layers=[256, 512, 1024, 2048], representation_size=256)
+    fpn = FPN(layers=[256, 512, 1024, 2048], representation_size=256, top_blocks=LastLevelMaxPool())
     if pretrained:
         state_dict = torch.load(pretrained)
         body.load_state_dict(state_dict, strict=False)
@@ -74,6 +82,8 @@ class FPNPooler(nn.Module):
                 continue
             concat_boxes = torch.cat([ids[:, None], concat_boxes], dim=1)
             result.append(pooler(per_level_feature, concat_boxes))
+        if not result:  # empty
+            return x[0].new()
         return torch.cat(result, dim=0)
 
 

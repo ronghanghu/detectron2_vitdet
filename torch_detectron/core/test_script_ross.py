@@ -116,6 +116,69 @@ def build_fpn_model(pretrained_path=None):
     return model
 
 
+"""
+Can't do in a nice way the inference part  -- drawback for this approach
+"""
+def build_mrcnn_fpn_model(pretrained_path=None):
+    from core.fpn import fpn_resnet50_conv5_body, FPNPooler, fpn_classification_head
+
+    backbone = fpn_resnet50_conv5_body(pretrained_path)
+
+    anchor_generator = FPNAnchorGenerator(
+            scales=(0.125, 0.25, 0.5, 1., 2.), anchor_strides=(4, 8, 16, 32, 64))
+    rpn_heads = RPNHeads(256, anchor_generator.num_anchors_per_location()[0])
+    rpn_heads.load_state_dict(_get_rpn_state_dict(pretrained_path))
+
+    roi_to_fpn_level_mapper = ROI2FPNLevelsMapper(2, 5)
+    box_selector = FPNRPNBoxSelector(roi_to_fpn_level_mapper=roi_to_fpn_level_mapper,
+            fpn_post_nms_top_n=2000,
+            pre_nms_top_n=6000, post_nms_top_n=1000, nms_thresh=0.7, min_size=0)
+
+    rpn = detection_model.RPN(rpn_heads, anchor_generator, box_selector, box_sampler=None)
+
+    classifier_pooler = FPNPooler(
+            output_size=(7, 7), scales=[2 ** (-i) for i in range(2, 6)], sampling_ratio=2, drop_last=True)
+    classifier_layers = fpn_classification_head(num_classes=81, pretrained=pretrained_path)
+    postprocessor = FPNPostProcessor()
+    classifier_head = detection_model.Head(classifier_layers, postprocessor)
+
+    from core.mask_rcnn import maskrcnn_head, MaskFPNPooler, MaskPostProcessor
+    mask_pooler = MaskFPNPooler(roi_to_fpn_level_mapper=roi_to_fpn_level_mapper,
+            output_size=(14, 14), scales=[2 ** (-i) for i in range(2, 6)], sampling_ratio=2, drop_last=True)
+    mask_layers = maskrcnn_head(num_classes=81, pretrained=pretrained_path)
+    mask_postprocessor = MaskPostProcessor()
+
+
+    class CombinedMaskPoolerAndClassifier(torch.nn.Module):
+        def __init__(self, pooler, layers):
+            super(CombinedMaskPoolerAndClassifier, self).__init__()
+            self.pooler = pooler
+            self.layers = layers
+
+        def forward(self, x):
+            """
+            x is a tuple of features and boxes
+            """
+            result = self.pooler(x[0], x[1])
+            result = self.layers(result)
+            return result
+
+    mask_head = detection_model.Head(CombinedMaskPoolerAndClassifier(mask_pooler, mask_layers), mask_postprocessor)
+
+    class SelectFeatures(torch.nn.Module):
+        def forward(self, features, proposals):
+            return features
+
+    pooler = detection_model.MultiPoolers([classifier_pooler, SelectFeatures()])
+    # raise RuntimeError("This doesn't work. Need to hack around by
+    #         adding a new pooler inside the mask_head to be able to perform testing
+    #         as done in Detectron. Training works fine though")
+    head = detection_model.MaskOnTopOfClassifierHead([classifier_head, mask_head])
+
+    model = detection_model.GeneralizedRCNN(backbone, rpn, pooler, head)
+    return model
+
+
 def get_image():
     from PIL import Image
     import numpy as np
@@ -194,6 +257,11 @@ def test_resnet(bs=2):
 def test_fpn(bs=2):
     pretrained_path = '/private/home/fmassa/github/detectron.pytorch/torch_detectron/core/models/fpn_r50.pth'
     model = build_fpn_model(pretrained_path)
+    run_model(model, bs)
+
+def test_mrcnn_fpn(bs=2):
+    pretrained_path = '/private/home/fmassa/github/detectron.pytorch/torch_detectron/core/models/mrcnn_fpn_r50.pth'
+    model = build_mrcnn_fpn_model(pretrained_path)
     run_model(model, bs)
 
 def test_all():

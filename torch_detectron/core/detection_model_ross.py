@@ -110,3 +110,41 @@ class Head(nn.Module):
         pass
 
 
+# TODO this is ConcatTable from Lua, rename it to make
+# more generic?
+class MultiPoolers(nn.Module):
+    def __init__(self, poolers):
+        super(MultiPoolers, self).__init__()
+        self.poolers = nn.ModuleList(poolers)
+
+    def forward(self, features, proposals):
+        results = []
+        for pooler in self.poolers:
+            results.append(pooler(features, proposals))
+        return results
+
+
+class MaskOnTopOfClassifierHead(nn.Module):
+    def __init__(self, heads):
+        super(MaskOnTopOfClassifierHead, self).__init__()
+        self.heads = nn.ModuleList(heads)
+
+    def predict(self, x, proposals):
+        """
+        This is quite confusing: x is list of
+        pooled features, where the first element
+        is the pooled features for the detector,
+        and the second one is just the whole
+        image features before pooling.
+        This is necessary because during
+        inference, we use the refined boxes
+        from the detector instead of just using
+        the boxes from the RPN.
+
+        Note that heads[0] only contain the classifiers,
+        while heads[1] contains both the pooler and the
+        classifier.
+        """
+        refined_proposals = self.heads[0].predict(x[0], proposals)
+        results = self.heads[1].predict((x[1], refined_proposals), refined_proposals)
+        return results
