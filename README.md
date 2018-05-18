@@ -1,3 +1,9 @@
-# Object Detection in PyTorch
+# Object Detection and Segmentation in PyTorch
 
-Description.
+## Abstractions
+
+- Region Proposals
+- Anchor Generators
+- Box Selectors
+- Post Processors
+- FPN / Mask utilities
