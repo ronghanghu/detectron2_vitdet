@@ -1,6 +1,7 @@
 from collections import OrderedDict
 import pickle
 
+import torch
 from torchvision import models
 from torch.autograd import Variable
 from torch import nn
