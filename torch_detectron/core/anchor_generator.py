@@ -46,12 +46,17 @@ class AnchorGenerator(nn.Module):
     def forward_single_image(self, image_sizes, feature_map):
         device = feature_map.device
         grid_height, grid_width = feature_map.shape[-2:]
-        shifts_x = torch.arange(0, grid_width, dtype=torch.float32) * self.stride
-        shifts_y = torch.arange(0, grid_height, dtype=torch.float32) * self.stride
+        stride = self.stride
+        shifts_x = torch.arange(0, grid_width * stride, step=stride,
+                dtype=torch.float32, device=device)
+        shifts_y = torch.arange(0, grid_height * stride, step=stride,
+                dtype=torch.float32, device=device)
         shift_x, shift_y = meshgrid(shifts_x, shifts_y)
         shift_x = shift_x.view(-1)
         shift_y = shift_y.view(-1)
         shifts = torch.stack((shift_x, shift_y, shift_x, shift_y), dim=1)
+
+        self.cell_anchors = self.cell_anchors.to(device)
 
         A = self.cell_anchors.size(0)
         K = shifts.size(0)
@@ -64,7 +69,6 @@ class AnchorGenerator(nn.Module):
         # add visibility information to anchors
         image_height, image_width = image_sizes
 
-        anchors = anchors.to(device)
         inds_inside = (
             (anchors[..., 0] >= -self.straddle_thresh) &
             (anchors[..., 1] >= -self.straddle_thresh) &

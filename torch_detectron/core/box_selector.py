@@ -4,8 +4,8 @@ from .box_coder import BoxCoder
 
 from torchvision.structures.bounding_box import BBox
 
-from .kernels import _C
-box_nms = _C.nms
+from torchvision.layers import nms as box_nms
+
 
 #TODO add option for different params in train / test
 class RPNBoxSelector(object):

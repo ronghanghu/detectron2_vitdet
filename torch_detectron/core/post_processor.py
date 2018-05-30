@@ -7,8 +7,8 @@ from torchvision.structures.bounding_box import BBox
 from .box_coder import BoxCoder
 from .box_selector import _clip_boxes_to_image
 
-from .kernels import _C
-box_nms = _C.nms
+from torchvision.layers import nms as box_nms
+
 
 def box_results_with_nms_and_limit(scores, boxes, score_thresh=0.05, nms=0.5, detections_per_img=100):
     """Returns bounding-box detection results by thresholding on scores and
