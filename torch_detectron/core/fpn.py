@@ -68,6 +68,11 @@ class FPNPooler(nn.Module):
         self.drop_last = drop_last
 
     def forward(self, x, boxes):
+        """
+        Arguments:
+            x (tensor)
+            boxes (list of BBox)
+        """
         if self.drop_last:
             x = x[:-1]
         assert len(boxes) == len(self.poolers)

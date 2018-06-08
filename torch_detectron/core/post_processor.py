@@ -74,6 +74,13 @@ class PostProcessor(nn.Module):
     """
     def __init__(self, score_thresh=0.05, nms=0.5, detections_per_img=100,
             box_coder=BoxCoder(weights=(10., 10., 5., 5.))):
+        """
+        Arguments:
+            score_thresh (float)
+            nms (float)
+            detections_per_img (int)
+            box_coder (BoxCoder)
+        """
         super(PostProcessor, self).__init__()
         self.score_thresh = score_thresh
         self.nms = nms
@@ -81,6 +88,11 @@ class PostProcessor(nn.Module):
         self.box_coder = box_coder
 
     def forward(self, x, boxes):
+        """
+        Arguments:
+            x (tuple[tensor, tensor])
+            boxes (list[list[BBox]])
+        """
         assert len(boxes) == 1, 'Only single feature'
         boxes = boxes[0]
         class_logits, box_regression = x
@@ -115,6 +127,13 @@ class PostProcessor(nn.Module):
 class FPNPostProcessor(nn.Module):
     def __init__(self, score_thresh=0.05, nms=0.5, detections_per_img=100,
             box_coder=BoxCoder(weights=(10., 10., 5., 5.))):
+        """
+        Arguments:
+            score_thresh (float)
+            nms (float)
+            detections_per_img (int)
+            box_coder (BoxCoder)
+        """
         super(FPNPostProcessor, self).__init__()
         self.score_thresh = score_thresh
         self.nms = nms
@@ -122,6 +141,11 @@ class FPNPostProcessor(nn.Module):
         self.box_coder = box_coder
 
     def forward(self, x, boxes):
+        """
+        Arguments:
+            x (tuple[tensor, tensor])
+            boxes (list[list[BBox]])
+        """
         class_logits, box_regression = x
         class_prob = F.softmax(class_logits, -1)
 
@@ -165,4 +189,3 @@ class FPNPostProcessor(nn.Module):
             results.append(bbox)
 
         return results
-

@@ -15,6 +15,14 @@ class RPNBoxSelector(object):
     """
     def __init__(self, pre_nms_top_n, post_nms_top_n, nms_thresh, min_size,
             box_coder=BoxCoder(weights=(1., 1., 1., 1.))):
+        """
+        Arguments:
+            pre_nms_top_n (int)
+            post_nms_top_n (int)
+            nms_thresh (float)
+            min_size (int)
+            box_coder (BoxCoder)
+        """
         # TODO ATTENTION, as those numbers are for single-image in Detectron, and here it's for the batch
         self.pre_nms_top_n = pre_nms_top_n
         self.post_nms_top_n = post_nms_top_n
@@ -25,9 +33,10 @@ class RPNBoxSelector(object):
 
     def forward_for_single_feature_map(self, anchors, objectness, box_regression):
         """
-        anchors: list of BBox
-        objectness: tensor of size N, A, H, W
-        box_regression: tensor of size N, A * 4, H, W
+        Arguments:
+            anchors: list of BBox
+            objectness: tensor of size N, A, H, W
+            box_regression: tensor of size N, A * 4, H, W
         """
         device = objectness.device
         N, A, H, W = objectness.shape
@@ -86,6 +95,12 @@ class RPNBoxSelector(object):
         return sampled_bboxes
 
     def __call__(self, anchors, objectness, box_regression):
+        """
+        Arguments:
+            anchors: list[list[BBox]]
+            objectness: list[tensor]
+            box_regression: list[tensor]
+        """
         assert len(anchors) == 1, 'only single feature map supported'
         sampled_boxes = []
         for a, o, b in zip(anchors, objectness, box_regression):
@@ -96,11 +111,23 @@ class RPNBoxSelector(object):
 
 class FPNRPNBoxSelector(RPNBoxSelector):
     def __init__(self, roi_to_fpn_level_mapper, fpn_post_nms_top_n, **kwargs):
+        """
+        Arguments:
+            roi_to_fpn_level_mapper (ROI2FPNLevelsMapper)
+            fpn_post_nms_top_n (int)
+            + same arguments as RPNBoxSelector
+        """
         super(FPNRPNBoxSelector, self).__init__(**kwargs)
         self.roi_to_fpn_level_mapper = roi_to_fpn_level_mapper
         self.fpn_post_nms_top_n = fpn_post_nms_top_n
 
     def __call__(self, anchors, objectness, box_regression):
+        """
+        Arguments:
+            anchors: list[list[BBox]]
+            objectness: list[tensor]
+            box_regression: list[tensor]
+        """
         sampled_boxes = []
         for a, o, b in zip(anchors, objectness, box_regression):
             sampled_boxes.append(self.forward_for_single_feature_map(a, o, b))
@@ -191,6 +218,14 @@ class ROI2FPNLevelsMapper(object):
     on the heuristic in the FPN paper.
     """
     def __init__(self, k_min, k_max, canonical_scale=224, canonical_level=4, eps=1e-6):
+        """
+        Arguments:
+            k_min (int)
+            k_max (int)
+            canonical_scale (int)
+            canonical_level (int)
+            eps (float)
+        """
         self.k_min = k_min
         self.k_max = k_max
         self.s0 = canonical_scale
@@ -198,6 +233,10 @@ class ROI2FPNLevelsMapper(object):
         self.eps = eps
 
     def __call__(self, rois):
+        """
+        Arguments:
+            rois: tensor
+        """
         # handle empty tensors
         if rois.numel() == 0:
             return rois.new()

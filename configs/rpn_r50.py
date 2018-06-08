@@ -31,10 +31,11 @@ num_workers = 4
 device = torch.device('cuda')
 #number_of_epochs = 2
 max_iter = 90000
-save_dir = ''
-checkpoint = ''
-do_test = True
 
+import os
+save_dir = os.environ['SAVE_DIR'] if 'SAVE_DIR' in os.environ else ''
+checkpoint = os.environ['CHECKPOINT_FILE'] if 'CHECKPOINT_FILE' in os.environ else ''
+do_test = True
 
 # function getters
 # should implement get_data_loader, get_model, get_optimizer and get_scheduler
@@ -126,7 +127,10 @@ class RPNModel(torch.nn.Module):
         from torch_detectron.core.anchor_generator import AnchorGenerator
         from torch_detectron.core.box_selector import RPNBoxSelector
         from torch_detectron.core.rpn_losses import (RPNLossComputation,
-                BalancedPositiveNegativeSampler, RPNTargetPreparator, Matcher)
+                RPNTargetPreparator)
+        from torch_detectron.core.proposal_matcher import Matcher
+        from torch_detectron.core.balanced_positive_negative_sampler import (
+                BalancedPositiveNegativeSampler)
         from torch_detectron.core.faster_rcnn import RPNHeads
         from torch_detectron.core.box_coder import BoxCoder
 
@@ -139,7 +143,7 @@ class RPNModel(torch.nn.Module):
         box_coder = BoxCoder(weights=(1., 1., 1., 1.))
         target_preparator = RPNTargetPreparator(matcher, box_coder)
         fg_bg_sampler = BalancedPositiveNegativeSampler(
-                batch_size_per_image=256, positive_fraction=0.5, which_negatives=-1)
+                batch_size_per_image=256, positive_fraction=0.5)
         self.rpn_loss_evaluator = RPNLossComputation(target_preparator, fg_bg_sampler)
 
         # for inference

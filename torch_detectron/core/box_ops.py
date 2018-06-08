@@ -1,8 +1,11 @@
 import torch
-from torch.jit import compile
 
 
 def boxes_area(box):
+    """
+    Arguments:
+        box: tensor
+    """
     TO_REMOVE = 1
     area = (box[:, 2] - box[:, 0] + TO_REMOVE) * (box[:, 3] - box[:, 1] + TO_REMOVE)
     return area
@@ -13,11 +16,14 @@ def boxes_area(box):
 def boxes_iou(box1, box2):
     '''Compute the intersection over union of two set of boxes.
     The box order must be (xmin, ymin, xmax, ymax).
-    Args:
+
+    Arguments:
       box1: (tensor) bounding boxes, sized [N,4].
       box2: (tensor) bounding boxes, sized [M,4].
-    Return:
+
+    Returns:
       (tensor) iou, sized [N,M].
+
     Reference:
       https://github.com/chainer/chainercv/blob/master/chainercv/utils/bbox/bbox_iou.py
     '''

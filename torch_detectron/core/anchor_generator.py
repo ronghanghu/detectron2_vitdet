@@ -84,6 +84,11 @@ class AnchorGenerator(nn.Module):
         return anchors
 
     def forward(self, images_sizes, feature_maps):
+        """
+        Arguments:
+            image_sizes (list(tuple(int, int)))
+            feature_maps (list(list(tensor)))
+        """
         assert len(feature_maps) == 1, 'only single feature maps allowed'
         anchors = []
         for image_sizes, feature_map in zip(images_sizes, feature_maps[0]):
@@ -153,6 +158,11 @@ class FPNAnchorGenerator(nn.Module):
         return anchors
 
     def forward(self, images_sizes, feature_maps):
+        """
+        Arguments:
+            image_sizes (list(tuple(int, int)))
+            feature_maps (list(list(tensor)))
+        """
         anchors = []
         for feature_map_level, stride, cell_anchor in zip(feature_maps, self.strides, self.cell_anchors):
             per_level_anchors = []

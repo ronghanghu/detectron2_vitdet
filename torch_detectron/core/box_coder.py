@@ -1,13 +1,24 @@
 import torch
 import math
 
+
 class BoxCoder(object):
 
     def __init__(self, weights, bbox_xform_clip=math.log(1000. / 16)):
+        """
+        Arguments:
+            weights (4-element tuple)
+            bbox_xform_clip (float)
+        """
         self.weights = weights
         self.bbox_xform_clip = bbox_xform_clip
 
     def encode(self, boxes, anchors):
+        """
+        Arguments:
+            boxes: tensor
+            anchors: tensor
+        """
         TO_REMOVE = 1  # TODO remove
         ex_widths = anchors[:, 2] - anchors[:, 0] + TO_REMOVE
         ex_heights = anchors[:, 3] - anchors[:, 1] + TO_REMOVE
@@ -30,6 +41,11 @@ class BoxCoder(object):
         return targets
 
     def decode(self, rel_codes, anchors):
+        """
+        Arguments:
+            boxes: tensor
+            anchors: tensor
+        """
         if anchors.shape[0] == 0:
             # TODO this might crash
             # return torch.zeros(0, rel_codes.shape[1], dtype=rel_codes.dtype)

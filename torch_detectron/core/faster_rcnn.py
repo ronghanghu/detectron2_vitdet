@@ -27,14 +27,22 @@ class RPNHeads(nn.Module):
 
 
 class Pooler(nn.Module):
-    def __init__(self):
+    def __init__(self, pooler=None):
+        """
+        Arguments:
+            pooler (nn.Module)
+        """
         super(Pooler, self).__init__()
-        self.pooler = ROIAlign((14, 14), spatial_scale=1. / 16, sampling_ratio=0)
+        if pooler is None:
+            # FIXME only for backward-compatibility. Remove this
+            pooler = ROIAlign((14, 14), spatial_scale=1.0 / 16, sampling_ratio=0)
+        self.pooler = pooler
 
     def forward(self, x, boxes):
         """
-        x is a Tensor
-        boxes is a list of BBox
+        Arguments:
+            x (tensor)
+            boxes (list of BBox)
         """
         result = []
         for per_level_feature, per_level_boxes in zip(x, boxes):

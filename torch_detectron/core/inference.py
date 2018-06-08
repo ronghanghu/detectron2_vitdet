@@ -6,64 +6,7 @@ from torchvision.structures.bounding_box import BBox
 import logging
 import sys
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-ch = logging.StreamHandler(stream=sys.stdout)
-ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-ch.setFormatter(formatter)
-logger.addHandler(ch)
-
-class COCODataset(torchvision.datasets.coco.CocoDetection):
-    def __init__(self, ann_file, root, transforms=None):
-        super(COCODataset, self).__init__(root, ann_file)
-
-        # filter images without detection annotations
-        self.ids = [img_id for img_id in self.ids
-                if len(self.coco.getAnnIds(imgIds=img_id, iscrowd=None)) > 0]
-
-        self.json_category_id_to_contiguous_id = {
-            v: i + 1
-            for i, v in enumerate(self.coco.getCatIds())
-        }
-        self.contiguous_category_id_to_json_id = {
-            v: k
-            for k, v in self.json_category_id_to_contiguous_id.items()
-        }
-        self.id_to_img_map = {k: v for k, v in enumerate(self.ids)}
-        self.transforms = transforms
-
-    def __getitem__(self, idx):
-        img, anno = super(COCODataset, self).__getitem__(idx)
-
-        """
-        boxes = [obj['bbox'] for obj in anno]
-        target = BBox(boxes, img.size, mode='xywh').convert('xyxy')
-
-        classes = [obj['category_id'] for obj in anno]
-        classes = [self.json_category_id_to_contiguous_id[c] for c in classes]
-        classes = torch.tensor(classes)
-        target.add_field('labels', classes)
-        """
-        """
-        Idea: maybe don't need to rescale the targets here, but only
-        during the loss computation?
-        """
-        # if self.transforms is not None:
-        #     img, target = self.transforms(img, target)
-        if self.transforms is not None:
-            img = self.transforms(img)
-
-        return img, anno
-
-    def get_img_info(self, index):
-        img_id = self.id_to_img_map[index]
-        img_data = self.coco.imgs[img_id]
-        return img_data
-
-    # def __len__(self):
-    #     return 16
-
+from torch_detectron.helpers.config_utils import load_config
 
 from tqdm import tqdm
 def compute_on_dataset(model, data_loader, device):
@@ -110,7 +53,7 @@ def prepare_for_coco_detection(predictions, dataset):
 
 import time
 def prepare_for_coco_segmentation(predictions, dataset):
-    from core.mask_rcnn import Masker
+    from .mask_rcnn import Masker
     import pycocotools.mask as mask_util
     import numpy as np
     masker = Masker(threshold=0.5, padding=1)
@@ -183,7 +126,7 @@ def evaluate_box_proposals(
     area_range = area_ranges[areas[area]]
     gt_overlaps = []
     num_pos = 0
-    from core.box_ops import boxes_iou, boxes_area
+    from .box_ops import boxes_iou, boxes_area
     for image_id, prediction in enumerate(predictions):
         original_id = dataset.id_to_img_map[image_id]
 
@@ -258,118 +201,12 @@ def evaluate_predictions_on_coco(coco_gt, coco_results,
 
     from pycocotools.cocoeval import COCOeval
     coco_dt = coco_gt.loadRes(str(json_result_file))
+    # coco_dt = coco_gt.loadRes(coco_results)
     coco_eval = COCOeval(coco_gt, coco_dt, iou_type)
     coco_eval.evaluate()
     coco_eval.accumulate()
     # torch.save(coco_eval, join(args.save, 'computed_results.pth'))
-    coco_eval.summarize()
-
-
-from torchvision.transforms import functional as F
-class ImageTransform(object):
-    def __call__(self, x):
-        x = F.resize(x, 800, max_size=1333)
-        x = F.to_tensor(x)
-
-        x = x[[2, 1, 0]] * 255
-        x -= torch.tensor([102.9801, 115.9465, 122.7717]).view(3,1,1)
-
-        return x
-
-from core.image_list import to_image_list
-class Collator(object):
-    def __init__(self, size_divisible=0):
-        self.size_divisible = size_divisible
-
-    def __call__(self, batch):
-        transposed_batch = list(zip(*batch))
-        images = to_image_list(transposed_batch[0], self.size_divisible)
-        targets = transposed_batch[1]
-        return images, targets
-
-def get_dataset():
-    ann_file = '/private/home/fmassa/coco_trainval2017/annotations/instances_val2017_mod.json'
-    data_dir = '/datasets01/COCO/060817/val2014/'
-    
-    dataset = COCODataset(ann_file, data_dir, ImageTransform())
-    return dataset
-
-def main(model_builder=None,
-        pretrained_path=None,
-        iou_types=('bbox',),#'segm'),
-        batch_size=1):
-
-    dataset = get_dataset()
-
-    device = torch.device('cuda')
-
-    import core.test_script as test_script
-    model_builder = 'build_fpn_model'
-    pretrained_path = '/private/home/fmassa/github/detectron.pytorch/torch_detectron/core/models/fpn_r50.pth'
-    model_builder = 'build_resnet_model'
-    pretrained_path = '/private/home/fmassa/github/detectron.pytorch/torch_detectron/core/models/faster_rcnn_resnet50.pth'
-    model_builder = 'build_mrcnn_fpn_model'
-    pretrained_path = '/private/home/fmassa/github/detectron.pytorch/torch_detectron/core/models/mrcnn_fpn_r50.pth'
-
-    size_divisible = 32 if 'fpn' in model_builder else 0
-    data_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
-            num_workers=4, collate_fn=Collator(size_divisible))
-
-    model = getattr(test_script, model_builder)(pretrained_path)
-    if False: #'mrcnn' in model_builder:
-        from core.mask_rcnn import MaskPostProcessorCOCOFormat, Masker
-        masker = Masker(threshold=0.5, padding=0)
-        mask_postprocessor = MaskPostProcessorCOCOFormat(masker)
-        model.heads.heads[1].postprocessor = mask_postprocessor
-    model.to(device)
-
-    predictions = compute_on_dataset(model, data_loader, device)
-    logger.info('Preparing results for COCO format')
-    coco_results = {}
-    if 'bbox' in iou_types:
-        logger.info('Preparing bbox results')
-        coco_results['bbox'] = prepare_for_coco_detection(predictions, dataset)
-    if 'segm' in iou_types:
-        logger.info('Preparing segm results')
-        coco_results['segm'] = prepare_for_coco_segmentation(predictions, dataset)
-    logger.info('Evaluating predictions')
-    for iou_type in iou_types:
-        evaluate_predictions_on_coco(dataset.coco, coco_results[iou_type],
-                'tmp_results/{}_{}.json'.format(model_builder, iou_type), iou_type)
-    # return predictions
-
-
-def profile(batch_size=4):
-    """
-    Test script to be used with nvvp to profile the execution of CUDA kernels
-    Run it as follows
-
-    nvprof --profile-from-start off -o trace_name.prof -- python eval.py
-    """
-    dataset = get_dataset()
-    data_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
-            num_workers=4, collate_fn=collate_fn)
-
-    device = torch.device('cuda')
-
-    import core.test_script as test_script
-    model_builder = 'build_fpn_model'
-    pretrained_path = '/private/home/fmassa/github/detectron.pytorch/torch_detectron/core/models/fpn_r50.pth'
-    #model_builder = 'build_resnet_model'
-    #pretrained_path = '/private/home/fmassa/github/detectron.pytorch/torch_detectron/core/models/faster_rcnn_resnet50.pth'
-    model = getattr(test_script, model_builder)(pretrained_path)
-    model.to(device)
-
-    iterator = iter(data_loader)
-    batch = next(iterator)
-    images = batch[0]
-    images = images.to(device)
-
-    model.predict(images)
-    with torch.cuda.profiler.profile():
-        with torch.autograd.profiler.emit_nvtx():
-            for i in range(5):
-                model.predict(images)
+    return coco_eval.summarize()
 
 
 def inference(model,
@@ -379,6 +216,7 @@ def inference(model,
         device=torch.device('cuda'),
         json_file=None):
 
+    logger = logging.getLogger('__main__')
     dataset = data_loader.dataset
     predictions = compute_on_dataset(model, data_loader, device)
     if box_only:
@@ -391,12 +229,35 @@ def inference(model,
     if 'bbox' in iou_types:
         logger.info('Preparing bbox results')
         coco_results['bbox'] = prepare_for_coco_detection(predictions, dataset)
+    if 'segm' in iou_types:
+        logger.info('Preparing segm results')
+        coco_results['segm'] = prepare_for_coco_segmentation(predictions, dataset)
+
     logger.info('Evaluating predictions')
-    iou_type = 'bbox'
-    evaluate_predictions_on_coco(dataset.coco, coco_results[iou_type],
-            'tmp_results/{}_{}.json'.format(json_file, iou_type), iou_type)
+    for iou_type in iou_types:
+        res = evaluate_predictions_on_coco(dataset.coco, coco_results[iou_type],
+                'tmp_results/{}_{}.json'.format(json_file, iou_type), iou_type)
+        logger.info(res)
 
 
-if __name__ == '__main__':
-    main()
-    # profile()
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description='PyTorch Object Detection Inference')
+    parser.add_argument('--config-file', default='/private/home/fmassa/github/detectron.pytorch/configs/faster_rcnn_r50_relaunch.py',
+            metavar='FILE', help='path to config file')
+
+    parser.add_argument('--checkpoint', default='/checkpoint02/fmassa/detectron_logs/faster_rcnn_R50_3970040/model_161249.pth', metavar='FILE', help='path to checkpoint file')
+
+    args = parser.parse_args()
+    config = load_config(args.config_file)
+    config.distributed = False
+
+    data_loader, data_loader_val = config.get_data_loader(config.distributed)
+    model = config.get_model()
+
+    checkpoint = torch.load(args.checkpoint)
+    model = torch.nn.DataParallel(model)
+    model.load_state_dict(checkpoint['model'])
+    model = model.module
+
+    inference(model, data_loader_val)
