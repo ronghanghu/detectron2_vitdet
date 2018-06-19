@@ -27,8 +27,32 @@ class Resize(object):
         self.min_size = min_size
         self.max_size = max_size
 
+    # modified from torchvision
+    def get_size(self, image_size):
+        w, h = image_size
+        size = self.min_size
+        max_size = self.max_size
+        if max_size is not None:
+            min_original_size = float(min((w, h)))
+            max_original_size = float(max((w, h)))
+            if max_original_size / min_original_size * size > max_size:
+                size = int(round(max_size * min_original_size / max_original_size))
+
+        if (w <= h and w == size) or (h <= w and h == size):
+            return (h, w)
+
+        if w < h:
+            ow = size
+            oh = int(size * h / w)
+        else:
+            oh = size
+            ow = int(size * w / h)
+
+        return (oh, ow)
+
     def __call__(self, image, target):
-        image = F.resize(image, self.min_size, max_size=self.max_size)
+        size = self.get_size(image.size)
+        image = F.resize(image, size)
         target = target.resize(image.size)
         return image, target
 
