@@ -3,6 +3,53 @@
 This project aims at providing the necessary building blocks for easily
 creating detection and segmentation models.
 
+## Installation
+
+### Requirements:
+- PyTorch compiled from master
+- torchvision from master
+- cocoapi
+
+### Installing the lib
+
+```bash
+git clone git@github.com:fairinternal/detectron.pytorch.git
+cd detectron.pytorch
+
+# the following will install the lib with
+# symbolic links, so that you can modify
+# the files if you wantand won't need to
+# re-build it
+python setup.py build develop
+```
+
+## Running training code
+
+For the following examples to work, you need to first install `torch_detectron`.
+
+### Single GPU training
+
+```bash
+python -m torch_detectron.train --config-file "/path/to/config/file.py"
+```
+
+### Multi-GPU training
+We use internally `torch.distributed.launch` in order to launch
+multi-gpu training. This utility function from PyTorch spawns as many
+Python processes as the number of GPUs we want to use, and each Python
+process will only use a single GPU.
+
+```bash
+export NGPUS=8
+python -m torch.distributed.launch --nproc_per_node=$NGPUS /path_to_detectron/train.py --config-file "path/to/config/file.py"
+```
+
+It is unfortunately not possible (at least I haven't figured out)
+to launch two processes in python with `-m` flag, so that in the
+multi-gpu case we need to specify the full path of the detectron `train.py`
+file.
+
+
 ## Abstractions
 The main abstractions introduced by `torch_detectron` that are useful to
 have in mind are the following:
@@ -95,53 +142,6 @@ bbox_subset = bbox[[0, 2]]
 
 *TODO: explain the different abstractions and add a figure*
 
-
-
-## Installation
-
-### Requirements:
-- PyTorch compiled from master
-- torchvision from master
-- cocoapi
-
-### Installing the lib
-
-```bash
-git clone git@github.com:fairinternal/detectron.pytorch.git
-cd detectron.pytorch
-
-# the following will install the lib with
-# symbolic links, so that you can modify
-# the files if you wantand won't need to
-# re-build it
-python setup.py build develop
-```
-
-## Running training code
-
-For the following examples to work, you need to first install `torch_detectron`.
-
-### Single GPU training
-
-```bash
-python -m torch_detectron.train --config-file "/path/to/config/file.py"
-```
-
-### Multi-GPU training
-We use internally `torch.distributed.launch` in order to launch
-multi-gpu training. This utility function from PyTorch spawns as many
-Python processes as the number of GPUs we want to use, and each Python
-process will only use a single GPU.
-
-```bash
-export NGPUS=8
-python -m torch.distributed.launch --nproc_per_node=$NGPUS /path_to_detectron/train.py --config-file "path/to/config/file.py"
-```
-
-It is unfortunately not possible (at least I haven't figured out)
-to launch two processes in python with `-m` flag, so that in the
-multi-gpu case we need to specify the full path of the detectron `train.py`
-file.
 
 ## The configuration file
 Detection models are very modular and have many degrees of freedom.
