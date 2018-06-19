@@ -1,15 +1,11 @@
+import math
 import torch
 from torch import nn
 
 #from .meshgrid import meshgrid
 
-from torchvision.structures.bounding_box import BBox
+from ..structures.bounding_box import BBox
 
-
-
-
-import math
-import torch
 
 def meshgrid(x, y=None):
     if y is None:

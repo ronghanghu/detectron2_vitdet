@@ -4,7 +4,7 @@ import time
 import torch
 
 import torchvision
-from torchvision.structures.bounding_box import BBox
+from ..structures.bounding_box import BBox
 
 
 from tqdm import tqdm

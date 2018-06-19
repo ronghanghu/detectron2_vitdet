@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from torchvision.structures.bounding_box import BBox
+from ..structures.bounding_box import BBox
 
 from PIL import Image
 

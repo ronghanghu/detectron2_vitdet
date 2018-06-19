@@ -3,7 +3,7 @@ import torch
 from .box_coder import BoxCoder
 from .utils import nonzero
 
-from torchvision.structures.bounding_box import BBox
+from ..structures.bounding_box import BBox
 
 from torchvision.layers import nms as box_nms
 
@@ -253,7 +253,7 @@ class ROI2FPNLevelsMapper(object):
 
 
 if __name__ == '__main__':
-    from torchvision.structures.bounding_box import BBox
+    from ..structures.bounding_box import BBox
     box_selector = RPNBoxSelector(10, 5, 0.7, 0)
 
     anchors = [BBox(torch.rand(16, 4) * 50, (100, 100), mode='xywh').convert('xyxy')]

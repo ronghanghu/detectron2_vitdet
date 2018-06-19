@@ -4,7 +4,7 @@ Miscellaneous utility functions
 
 import torch
 
-from torchvision.structures.bounding_box import BBox
+from ..structures.bounding_box import BBox
 
 
 def nonzero(tensor):

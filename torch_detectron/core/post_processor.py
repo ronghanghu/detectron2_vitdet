@@ -2,7 +2,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from torchvision.structures.bounding_box import BBox
+from ..structures.bounding_box import BBox
 
 from .box_coder import BoxCoder
 from .box_selector import _clip_boxes_to_image
