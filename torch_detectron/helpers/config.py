@@ -33,7 +33,6 @@ The only required fields for the moment are:
 Everything in between can be modified / replaced.
 """
 import torch
-import torchvision.layers
 
 from torch_detectron.helpers.config_utils import AttrDict
 
@@ -41,6 +40,7 @@ import torch_detectron.helpers.data as _data
 import torch_detectron.helpers.solver as _solver
 import torch_detectron.helpers.model as _model
 
+from torch_detectron.layers import ROIAlign as _ROIAlign
 
 _C = AttrDict()
 config = _C
@@ -91,7 +91,7 @@ RPN.FPN_POST_NMS_TOP_N_TEST = 2000
 
 POOLER = _model.PoolerBuilder()
 # TODO decide if we want to decompose in elementary objects
-POOLER.MODULE = torchvision.layers.ROIAlign((14, 14), 1.0 / 16, 0)
+POOLER.MODULE = _ROIAlign((14, 14), 1.0 / 16, 0)
 
 HEADS = _model.DetectionAndMaskHeadsBuilder()
 HEADS.USE_FPN = False

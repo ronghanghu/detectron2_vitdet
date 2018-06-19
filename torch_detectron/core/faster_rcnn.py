@@ -2,7 +2,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from torchvision.layers import ROIAlign
+from torch_detectron.layers import ROIAlign
 
 
 class RPNHeads(nn.Module):

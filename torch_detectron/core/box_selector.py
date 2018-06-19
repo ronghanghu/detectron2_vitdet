@@ -5,7 +5,7 @@ from .utils import nonzero
 
 from ..structures.bounding_box import BBox
 
-from torchvision.layers import nms as box_nms
+from torch_detectron.layers import nms as box_nms
 
 
 #TODO add option for different params in train / test

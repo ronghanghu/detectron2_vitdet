@@ -88,8 +88,8 @@ if False:
     config.MODEL.HEADS.BATCH_SIZE_PER_IMAGE = 256
 
 
-    import torchvision
-    config.MODEL.HEADS.POOLER.MODULE = torchvision.layers.ROIAlign((7, 7), 1.0 / 16, 0)
+    import torch_detectron.layers
+    config.MODEL.HEADS.POOLER.MODULE = torch_detectron.layers.ROIAlign((7, 7), 1.0 / 16, 0)
     #import os
     #os.environ['SAVE_DIR'] = '/checkpoint02/fmassa/detectron_logs/mask_rcnn_quick_debug'
 
