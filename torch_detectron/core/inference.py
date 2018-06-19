@@ -1,12 +1,11 @@
+import datetime
+import logging
+import time
 import torch
 
 import torchvision
 from torchvision.structures.bounding_box import BBox
 
-import logging
-import sys
-
-from torch_detectron.helpers.config_utils import load_config
 
 from tqdm import tqdm
 def compute_on_dataset(model, data_loader, device):
@@ -51,13 +50,12 @@ def prepare_for_coco_detection(predictions, dataset):
     return coco_results
 
 
-import time
 def prepare_for_coco_segmentation(predictions, dataset):
     from .mask_rcnn import Masker
     import pycocotools.mask as mask_util
     import numpy as np
     masker = Masker(threshold=0.5, padding=1)
-    assert isinstance(dataset, COCODataset)
+    # assert isinstance(dataset, COCODataset)
     coco_results = []
     for image_id, prediction in tqdm(enumerate(predictions)):
         original_id = dataset.id_to_img_map[image_id]
@@ -135,11 +133,17 @@ def evaluate_box_proposals(
         image_height = dataset.coco.imgs[original_id]['height']
         prediction = prediction.resize((image_width, image_height))
 
+        # sort predictions in descending order
+        # TODO maybe remove this and make it explicit in the documentation
+        inds = prediction.get_field('objectness').sort(descending=True)[1]
+        prediction = prediction[inds]
+
         ann_ids = dataset.coco.getAnnIds(imgIds=original_id)
         anno = dataset.coco.loadAnns(ann_ids)
-        gt_boxes = [obj['bbox'] for obj in anno]
+        gt_boxes = [obj['bbox'] for obj in anno if obj['iscrowd'] == 0]
         gt_boxes = BBox(gt_boxes, (image_width, image_height), mode='xywh').convert('xyxy')
 
+        # FIXME Detectron C2 uses segment area, and not box area
         gt_areas = boxes_area(gt_boxes.bbox)
         valid_gt_inds = (gt_areas >= area_range[0]) & (gt_areas <= area_range[1])
         gt_boxes = gt_boxes[valid_gt_inds]
@@ -216,9 +220,16 @@ def inference(model,
         device=torch.device('cuda'),
         json_file=None):
 
-    logger = logging.getLogger('__main__')
+    logger = logging.getLogger('torch_detectron.inference')
     dataset = data_loader.dataset
+    logger.info('Start evaluation')
+    start_time = time.time()
     predictions = compute_on_dataset(model, data_loader, device)
+    total_time = time.time() - start_time
+    total_time_str = str(datetime.timedelta(seconds=total_time))
+    logger.info('Total inference time: {} ({} s / img)'.format(
+        total_time_str, total_time / len(dataset)))
+
     if box_only:
         logger.info('Evaluating bbox proposals')
         results = evaluate_box_proposals(predictions, dataset, area='all', limit=1000)
@@ -238,26 +249,3 @@ def inference(model,
         res = evaluate_predictions_on_coco(dataset.coco, coco_results[iou_type],
                 'tmp_results/{}_{}.json'.format(json_file, iou_type), iou_type)
         logger.info(res)
-
-
-def main():
-    import argparse
-    parser = argparse.ArgumentParser(description='PyTorch Object Detection Inference')
-    parser.add_argument('--config-file', default='/private/home/fmassa/github/detectron.pytorch/configs/faster_rcnn_r50_relaunch.py',
-            metavar='FILE', help='path to config file')
-
-    parser.add_argument('--checkpoint', default='/checkpoint02/fmassa/detectron_logs/faster_rcnn_R50_3970040/model_161249.pth', metavar='FILE', help='path to checkpoint file')
-
-    args = parser.parse_args()
-    config = load_config(args.config_file)
-    config.distributed = False
-
-    data_loader, data_loader_val = config.get_data_loader(config.distributed)
-    model = config.get_model()
-
-    checkpoint = torch.load(args.checkpoint)
-    model = torch.nn.DataParallel(model)
-    model.load_state_dict(checkpoint['model'])
-    model = model.module
-
-    inference(model, data_loader_val)

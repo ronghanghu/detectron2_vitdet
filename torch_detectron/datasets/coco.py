@@ -2,6 +2,7 @@ import torch
 
 import torchvision
 from torchvision.structures.bounding_box import BBox
+from torchvision.structures.segmentation_mask import SegmentationMask
 
 
 class COCODataset(torchvision.datasets.coco.CocoDetection):
@@ -37,6 +38,10 @@ class COCODataset(torchvision.datasets.coco.CocoDetection):
         classes = [self.json_category_id_to_contiguous_id[c] for c in classes]
         classes = torch.tensor(classes)
         target.add_field('labels', classes)
+
+        masks = [obj['segmentation'] for obj in anno]
+        masks = SegmentationMask(masks, img.size)
+        target.add_field('masks', masks)
 
         target = target.clip_to_image(remove_empty=True)
         

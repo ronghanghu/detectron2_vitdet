@@ -13,10 +13,15 @@ class FPN(nn.Module):
         for idx, layer_size in enumerate(layers, 1):
             inner_block = 'fpn_inner{}'.format(idx)
             layer_block = 'fpn_layer{}'.format(idx)
+            inner_block_module = nn.Conv2d(layer_size, representation_size, 1)
+            layer_block_module = nn.Conv2d(representation_size, representation_size, 3, 1, 1)
+            for module in [inner_block_module, layer_block_module]:
+                nn.init.kaiming_uniform_(module.weight, a=1)
+                nn.init.constant_(module.bias, 0)
             self.add_module(inner_block,
-                    nn.Conv2d(layer_size, representation_size, 1))
+                    inner_block_module)
             self.add_module(layer_block,
-                    nn.Conv2d(representation_size, representation_size, 3, 1, 1))
+                    layer_block_module)
             self.inner_blocks.append(inner_block)
             self.layer_blocks.append(layer_block)
         self.top_blocks = top_blocks
@@ -70,12 +75,13 @@ class FPNPooler(nn.Module):
     def forward(self, x, boxes):
         """
         Arguments:
-            x (tensor)
-            boxes (list of BBox)
+            x (list of tensor)
+            boxes (list of list of BBox)
         """
         if self.drop_last:
             x = x[:-1]
         assert len(boxes) == len(self.poolers)
+        assert len(boxes) == len(x)
         result = []
         for per_level_feature, per_level_boxes, pooler in zip(x, boxes, self.poolers):
             # TODO the scales can be inferred from the bboxes and the feature maps
@@ -100,6 +106,14 @@ class FPNHeadClassifier(nn.Module):
 
         self.cls_score = nn.Linear(representation_size, num_classes)
         self.bbox_pred = nn.Linear(representation_size, num_classes * 4)
+
+        for l in [self.fc6, self.fc7]:
+            nn.init.kaiming_uniform_(l.weight, a=1)
+            nn.init.constant_(l.bias, 0)
+
+        for l in [self.cls_score, self.bbox_pred]:
+            nn.init.normal_(l.weight, std=0.001)
+            nn.init.constant_(l.bias, 0)
 
     def forward(self, x):
         x = x.view(x.size(0), -1)

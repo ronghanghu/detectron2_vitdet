@@ -170,6 +170,47 @@ def expand_masks(mask, padding):
     padded_mask[:, :, padding:-padding, padding:-padding] = mask
     return padded_mask, scale
 
+from PIL import Image
+import numpy as np
+# TODO remove this. This is just for exactly matching the
+# results from Detectron. Ideally, make it use the
+# grid_sample instead, but results are slightly off with it
+def paste_mask_in_image(mask, box, im_h, im_w, M=14):
+
+    if True:
+        scale = (M + 2.0) / M
+        padded_mask = torch.zeros((M + 2, M + 2), dtype=torch.float32)
+        padded_mask[1:-1, 1:-1] = mask
+        mask = padded_mask
+        box = expand_boxes(box[None], scale)[0]
+    box = box.numpy().astype(np.int32)
+
+    TO_REMOVE = 1
+    w = box[2] - box[0] + TO_REMOVE
+    h = box[3] - box[1] + TO_REMOVE
+    w = max(w, 1)
+    h = max(h, 1)
+
+    mask = Image.fromarray(mask.numpy())
+    mask = mask.resize((w, h), resample=Image.BILINEAR)
+    mask = np.array(mask, copy=False)
+
+    THRESH_BINARIZE = 0.5
+    mask = np.array(mask > THRESH_BINARIZE, dtype=np.uint8)
+    mask = torch.from_numpy(mask)
+
+    im_mask = torch.zeros((im_h, im_w), dtype=torch.uint8)
+    x_0 = max(box[0], 0)
+    x_1 = min(box[2] + 1, im_w)
+    y_0 = max(box[1], 0)
+    y_1 = min(box[3] + 1, im_h)
+
+    im_mask[y_0:y_1, x_0:x_1] = mask[
+        (y_0 - box[1]):(y_1 - box[1]),
+        (x_0 - box[0]):(x_1 - box[0])
+    ]
+    return im_mask
+
 
 class Masker(object):
     """
@@ -248,10 +289,19 @@ class Masker(object):
             result = result > self.threshold
         return result
 
+    def forward_single_image_2(self, masks, boxes):
+        boxes = boxes.convert('xyxy')
+        im_w, im_h = boxes.size
+        M = masks[0].shape[-1]
+        res = [paste_mask_in_image(mask[0], box, im_h, im_w, M) for mask, box in zip(masks, boxes.bbox)]
+        res = torch.stack(res, dim=0)[:, None]
+        return res
+
     def __call__(self, masks, boxes):
         # TODO do this properly
         if isinstance(boxes, BBox):
             boxes = [boxes]
         assert len(boxes) == 1
-        result = self.forward_single_image(masks, boxes[0])
+        # result = self.forward_single_image(masks, boxes[0])
+        result = self.forward_single_image_2(masks, boxes[0])
         return result

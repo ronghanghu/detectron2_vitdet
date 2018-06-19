@@ -47,6 +47,10 @@ config = _C
 
 _C.DEVICE = torch.device('cuda')
 _C.DO_TEST = True
+# if None, doesn't save checkpoints
+_C.SAVE_DIR = None
+# if None, doesn't load from checkpoint
+_C.CHECKPOINT = None
 
 # ============================================================== #
 
@@ -54,15 +58,20 @@ _C.DO_TEST = True
 # but this makes loading checkpoints harder
 
 _C.MODEL = _model.ModelBuilder()
+_C.MODEL.RPN_ONLY = False
+_C.MODEL.USE_MASK = False
+
 _C.MODEL.BACKBONE = _model.BackboneBuilder()
 _C.MODEL.BACKBONE.WEIGHTS = None
 _C.MODEL.BACKBONE.BUILDER = _model.resnet50_conv4_body
 
 RPN = _model.RPNBuilder()
+RPN.USE_FPN = False
 RPN.SCALES = (0.125, 0.25, 0.5, 1., 2.)
 RPN.BASE_ANCHOR_SIZE = 256
 RPN.ANCHOR_STRIDE = 16
 RPN.ASPECT_RATIOS = (0.5, 1.0, 2.0)
+RPN.STRADDLE_THRESH = 0
 RPN.NUM_INPUT_FEATURES = 256 * 4
 RPN.MATCHED_THRESHOLD = 0.7
 RPN.UNMATCHED_THRESHOLD = 0.3
@@ -76,12 +85,16 @@ RPN.PRE_NMS_TOP_N_TEST = 6000
 RPN.POST_NMS_TOP_N_TEST = 1000
 RPN.NMS_THRESH = 0.7
 RPN.MIN_SIZE = 0
+RPN.WEIGHTS = None
+RPN.FPN_POST_NMS_TOP_N = 2000
+RPN.FPN_POST_NMS_TOP_N_TEST = 2000
 
 POOLER = _model.PoolerBuilder()
 # TODO decide if we want to decompose in elementary objects
 POOLER.MODULE = torchvision.layers.ROIAlign((14, 14), 1.0 / 16, 0)
 
-HEADS = _model.DetectionHeadBuilder()
+HEADS = _model.DetectionAndMaskHeadsBuilder()
+HEADS.USE_FPN = False
 HEADS.POOLER = POOLER
 HEADS.MATCHED_THRESHOLD = 0.5
 HEADS.UNMATCHED_THRESHOLD = 0.0
@@ -91,6 +104,10 @@ HEADS.POSITIVE_FRACTION = 0.25
 HEADS.NUM_CLASSES = 81
 HEADS.WEIGHTS = None
 HEADS.BUILDER = _model.resnet50_conv5_head
+
+HEADS.HEAD_BUILDER = None
+HEADS.MASK_BUILDER = None
+HEADS.MASK_RESOLUTION = 14
 
 # Only used on test mode
 HEADS.SCORE_THRESH = 0.05

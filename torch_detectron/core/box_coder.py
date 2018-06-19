@@ -19,6 +19,10 @@ class BoxCoder(object):
             boxes: tensor
             anchors: tensor
         """
+        # FIXME PyTorch desn't handle empty tensors well
+        if anchors.shape[0] == 0:
+            return anchors.new_zeros(0, 4)
+
         TO_REMOVE = 1  # TODO remove
         ex_widths = anchors[:, 2] - anchors[:, 0] + TO_REMOVE
         ex_heights = anchors[:, 3] - anchors[:, 1] + TO_REMOVE

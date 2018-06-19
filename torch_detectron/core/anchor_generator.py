@@ -30,6 +30,7 @@ class AnchorGenerator(nn.Module):
             aspect_ratios=(0.5, 1.0, 2.0),
             base_anchor_size=256,
             anchor_stride=16,
+            straddle_thresh=0,
             *args, **kwargs):
         super(AnchorGenerator, self).__init__()
         # TODO complete and fix
@@ -38,7 +39,7 @@ class AnchorGenerator(nn.Module):
         cell_anchors = generate_anchors(anchor_stride, sizes, aspect_ratios).float()
         self.stride = anchor_stride
         self.cell_anchors = cell_anchors
-        self.straddle_thresh = 0
+        self.straddle_thresh = straddle_thresh
 
     def num_anchors_per_location(self):
         return [len(self.cell_anchors)]
@@ -69,12 +70,15 @@ class AnchorGenerator(nn.Module):
         # add visibility information to anchors
         image_height, image_width = image_sizes
 
-        inds_inside = (
-            (anchors[..., 0] >= -self.straddle_thresh) &
-            (anchors[..., 1] >= -self.straddle_thresh) &
-            (anchors[..., 2] < image_width + self.straddle_thresh) &
-            (anchors[..., 3] < image_height + self.straddle_thresh)
-        )
+        if self.straddle_thresh >= 0:
+            inds_inside = (
+                (anchors[..., 0] >= -self.straddle_thresh) &
+                (anchors[..., 1] >= -self.straddle_thresh) &
+                (anchors[..., 2] < image_width + self.straddle_thresh) &
+                (anchors[..., 3] < image_height + self.straddle_thresh)
+            )
+        else:
+            inds_inside = torch.ones(anchors.shape[0], dtype=torch.uint8, device=device)
 
         anchors = BBox(anchors, (image_width, image_height), mode='xyxy')
         anchors.add_field('visibility', inds_inside)
@@ -96,7 +100,7 @@ class AnchorGenerator(nn.Module):
         return [anchors]
 
 
-
+# TODO deduplicate with AnchorGenerator
 class FPNAnchorGenerator(nn.Module):
     """
     For a set of image sizes and feature maps, computes a set
@@ -107,6 +111,7 @@ class FPNAnchorGenerator(nn.Module):
             aspect_ratios=(0.5, 1.0, 2.0),
             base_anchor_size=256,
             anchor_strides=(8, 16, 32),
+            straddle_thresh=0,
             *args, **kwargs):
         super(FPNAnchorGenerator, self).__init__()
         # TODO complete and fix
@@ -116,7 +121,7 @@ class FPNAnchorGenerator(nn.Module):
                 for anchor_stride, size in zip(anchor_strides, sizes)]
         self.strides = anchor_strides
         self.cell_anchors = cell_anchors
-        self.straddle_thresh = 0
+        self.straddle_thresh = straddle_thresh
 
     def num_anchors_per_location(self):
         return [len(cell_anchors) for cell_anchors in self.cell_anchors]
@@ -124,8 +129,10 @@ class FPNAnchorGenerator(nn.Module):
     def forward_single_image(self, image_sizes, feature_map, cell_anchors, stride):
         device = feature_map.device
         grid_height, grid_width = feature_map.shape[-2:]
-        shifts_x = torch.arange(0, grid_width, dtype=torch.float32) * stride
-        shifts_y = torch.arange(0, grid_height, dtype=torch.float32) * stride
+        shifts_x = torch.arange(0, grid_width * stride, step=stride,
+                dtype=torch.float32, device=device)
+        shifts_y = torch.arange(0, grid_height * stride, step=stride,
+                dtype=torch.float32, device=device)
         shift_x, shift_y = meshgrid(shifts_x, shifts_y)
         shift_x = shift_x.view(-1)
         shift_y = shift_y.view(-1)
@@ -142,13 +149,15 @@ class FPNAnchorGenerator(nn.Module):
         # add visibility information to anchors
         image_height, image_width = image_sizes
 
-        anchors = anchors.to(device)
-        inds_inside = (
-            (anchors[..., 0] >= -self.straddle_thresh) &
-            (anchors[..., 1] >= -self.straddle_thresh) &
-            (anchors[..., 2] < image_width + self.straddle_thresh) &
-            (anchors[..., 3] < image_height + self.straddle_thresh)
-        )
+        if self.straddle_thresh >= 0:
+            inds_inside = (
+                (anchors[..., 0] >= -self.straddle_thresh) &
+                (anchors[..., 1] >= -self.straddle_thresh) &
+                (anchors[..., 2] < image_width + self.straddle_thresh) &
+                (anchors[..., 3] < image_height + self.straddle_thresh)
+            )
+        else:
+            inds_inside = torch.ones(anchors.shape[0], dtype=torch.uint8, device=device)
 
         anchors = BBox(anchors, (image_width, image_height), mode='xyxy')
         anchors.add_field('visibility', inds_inside)
@@ -163,6 +172,8 @@ class FPNAnchorGenerator(nn.Module):
             image_sizes (list(tuple(int, int)))
             feature_maps (list(list(tensor)))
         """
+        device = feature_maps[0][0].device
+        self.cell_anchors = [anchor.to(device) for anchor in self.cell_anchors]
         anchors = []
         for feature_map_level, stride, cell_anchor in zip(feature_maps, self.strides, self.cell_anchors):
             per_level_anchors = []

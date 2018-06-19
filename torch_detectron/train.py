@@ -12,101 +12,63 @@ import torch
 import logging
 import os
 
-import time
-
 from torch_detectron.utils.logging import setup_logger
-from torch_detectron.utils.metric_logger import MetricLogger
 from torch_detectron.utils.checkpoint import Checkpoint
 from torch_detectron.utils.miscellaneous import mkdir
 
 from torch_detectron.helpers.config_utils import load_config
 
-def train_one_epoch(model, data_loader, optimizer, scheduler, device, iteration, max_iter):
-    logger = logging.getLogger(__name__)
-    meters = MetricLogger()
-    model.train()
-    end = time.time()
-    for i, (images, targets) in enumerate(data_loader):
-        data_time = time.time() - end
+from torch_detectron.core.trainer import do_train
+from torch_detectron.core.inference import inference
 
-        scheduler.step()
-
-        images = images.to(device)
-        targets = [target.to(device) for target in targets]
-
-        loss_dict = model(images, targets)
-
-        losses = sum(loss for loss in loss_dict.values())
-
-        meters.update(loss=losses, **loss_dict)
-
-        optimizer.zero_grad()
-        losses.backward()
-        optimizer.step()
-
-        batch_time = time.time() - end
-        end = time.time()
-        meters.update(time=batch_time, data=data_time)
-
-        if iteration % 20 == 0 or iteration == (max_iter - 1):
-            logger.info('Iter: {0}\t'
-                  '{meters}\t'
-                  'lr {lr:.6f}\t'
-                  'Max Memory {memory:.0f}'.format(iteration,
-                      meters=str(meters),
-                      lr=optimizer.param_groups[0]['lr'],
-                      memory=torch.cuda.max_memory_allocated() / 1024.0 / 1024.0))
-
-        iteration += 1
-        if iteration >= max_iter:
-            break
-    return iteration
 
 def train(config):
-    logger = logging.getLogger(__name__)
-    data_loader, data_loader_val = config.get_data_loader(config.distributed)
-    model = config.get_model()
-    optimizer = config.get_optimizer(model)
-    scheduler = config.get_scheduler(optimizer)
+    use_distributed = config.distributed
+    local_rank = config.local_rank
 
-    if config.distributed:
+    # FIXME this is not great
+    config.config.TRAIN.DATA.DATALOADER.SAMPLER.DISTRIBUTED = use_distributed
+    data_loader = config.config.TRAIN.DATA()
+
+    model = config.config.MODEL()
+    device = config.config.DEVICE
+    model.to(device)
+
+    optimizer = config.config.SOLVER.OPTIM(model)
+    scheduler = config.config.SOLVER.SCHEDULER(optimizer)
+    max_iter = config.config.SOLVER.MAX_ITER
+
+    if use_distributed:
         model = torch.nn.parallel.DistributedDataParallel(model,
-            device_ids=[config.local_rank], output_device=config.local_rank)
+            device_ids=[local_rank], output_device=local_rank)
 
     arguments = {}
     arguments['iteration'] = 0
 
-    checkpointer = Checkpoint(model, optimizer, scheduler, config.save_dir, config.local_rank)
+    save_dir = config.config.SAVE_DIR
+    checkpoint_file = config.config.CHECKPOINT
 
-    if config.checkpoint:
-        extra_checkpoint_data = checkpointer.load(config.checkpoint)
+    checkpointer = Checkpoint(model, optimizer, scheduler, save_dir, local_rank)
+
+    if checkpoint_file:
+        extra_checkpoint_data = checkpointer.load(checkpoint_file)
         arguments.update(extra_checkpoint_data)
 
-    logger.info('Start training')
-    while arguments['iteration'] < config.max_iter:
-        start_epoch_time = time.time()
-        iteration = arguments['iteration']
-        if config.distributed:
-            data_loader.sampler.set_epoch(iteration)
-        try:
-            iteration_end = train_one_epoch(model, data_loader, optimizer, scheduler, config.device, iteration, config.max_iter)
-        except (EOFError, ConnectionResetError):  # dataloader that returns early might raise this exception.
-            pass
-        total_epoch_time = time.time() - start_epoch_time
-        import datetime
-        epoch_time_str = str(datetime.timedelta(seconds=total_epoch_time))
-        logger.info('Total epoch time: {} ({:.4f} s / it)'.format(
-            epoch_time_str, total_epoch_time / (iteration_end - iteration)))
-        arguments['iteration'] = iteration_end
+    do_train(model, data_loader, optimizer, scheduler, checkpointer, max_iter, device, use_distributed, arguments)
 
-        checkpointer('model_{}'.format(arguments['iteration']), **arguments)
+    return model
 
-    if config.local_rank == 0 and config.do_test:
-        if config.distributed:
-            model = model.module
-        from torch_detectron.core.inference import inference
-        torch.cuda.empty_cache()  # TODO check if it helps
-        inference(model, data_loader_val, box_only=False)
+def test(config, model):
+    use_distributed = config.distributed
+    config.config.TEST.DATA.DATALOADER.SAMPLER.DISTRIBUTED = False
+    data_loader_val = config.config.TEST.DATA()
+    if use_distributed:
+        model = model.module
+    torch.cuda.empty_cache()  # TODO check if it helps
+    iou_types = ('bbox',)
+    if config.config.MODEL.USE_MASK:
+        iou_types = iou_types + ('segm',)
+    inference(model, data_loader_val, iou_types=iou_types, box_only=config.config.MODEL.RPN_ONLY)
 
 
 def main():
@@ -132,12 +94,13 @@ def main():
     config.local_rank = args.local_rank
     config.distributed = args.distributed
 
-    if config.save_dir:
-        mkdir(config.save_dir)
+    save_dir = config.config.SAVE_DIR
+    if save_dir:
+        mkdir(save_dir)
 
-    setup_logger(__name__, config.save_dir, args.local_rank)
+    setup_logger('torch_detectron', save_dir, args.local_rank)
 
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger('torch_detectron')
     logger.info(args)
 
     logger.info('Loaded configuration file {}'.format(args.config_file))
@@ -146,7 +109,10 @@ def main():
         logger.info(config_str)
     logger.info({k:v for k,v in config.__dict__.items() if not k.startswith('__')})
 
-    train(config)
+    model = train(config)
+
+    if args.local_rank == 0 and config.config.DO_TEST:
+        test(config, model)
 
 
 if __name__ == '__main__':

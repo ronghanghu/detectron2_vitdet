@@ -1,4 +1,7 @@
+import torch
+
 from .box_ops import boxes_iou
+from .utils import cat_bbox
 
 
 class TargetPreparator(object):
@@ -29,16 +32,31 @@ class TargetPreparator(object):
         results = []
         for anchor, target in zip(anchors, targets):
             # TODO pass the BBox object to boxes_iou?
-            match_quality_matrix = boxes_iou(target.bbox, anchor.bbox)
-            matched_idxs = self.proposal_matcher(match_quality_matrix)
+            if anchor.bbox.numel() > 0:
+                match_quality_matrix = boxes_iou(target.bbox, anchor.bbox)
+                matched_idxs = self.proposal_matcher(match_quality_matrix)
+            else:
+                matched_idxs = torch.empty(0, dtype=torch.int64,
+                        device=target.bbox.device)
             # get the targets corresponding GT for each anchor
             # NB: need to clamp the indices because we can have a single
             # GT in the image, and matched_idxs can be -2, which goes
             # out of bounds
-            matched_targets = target[matched_idxs.clamp(min=0)]
+            matched_targets = self.index_target(target, matched_idxs.clamp(min=0))
             matched_targets.add_field('matched_idxs', matched_idxs)
             results.append(matched_targets)
         return results
+
+    def index_target(self, target, index):
+        """
+        This function is used to index the targets, possibly only propagating a few
+        fields of target (instead of them all)
+
+        Arguments:
+            target (BBox): an arbitrary bbox object, containing many possible fields
+            index (tensor): the indices to select.
+        """
+        return target[index]
 
     def prepare_labels(self, matched_targets_per_image, anchors_per_image):
         """
@@ -58,9 +76,14 @@ class TargetPreparator(object):
     def __call__(self, anchors, targets):
         """
         Arguments:
-            anchors: a list of BBoxes, one for each image
+            anchors: a list of list of BBoxes. The first level correspond to the different
+                feature levels, and the second correspond to the images
             targets: a list of BBoxes, one for each image
         """
+        # flip anchors so that first level correspond to images, and second to
+        # feature levels
+        anchors = list(zip(*anchors))
+        anchors = [cat_bbox(anchor) for anchor in anchors]
         # TODO assert / resize anchors to have the same .size as targets?
         matched_targets = self.match_targets_to_anchors(anchors, targets)
         labels = []

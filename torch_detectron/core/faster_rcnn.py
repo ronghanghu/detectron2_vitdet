@@ -41,8 +41,8 @@ class Pooler(nn.Module):
     def forward(self, x, boxes):
         """
         Arguments:
-            x (tensor)
-            boxes (list of BBox)
+            x (list of tensor)
+            boxes (list of list of BBox)
         """
         result = []
         for per_level_feature, per_level_boxes in zip(x, boxes):

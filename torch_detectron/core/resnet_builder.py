@@ -119,25 +119,43 @@ class ResNetBackbone(nn.Module):
  
 
 class ResNetHead(nn.Module):
-    def __init__(self, block, layers, num_classes):
+    def __init__(self, block, layers, stride_init=None):
         self.inplanes = 1024  # TODO make it generic
         super(ResNetHead, self).__init__()
 
         self.blocks = []
+        stride = stride_init
         for block_id, layer_config in layers:
             name = 'res' + str(block_id)
+            if not stride:
+                stride = int(block_id > 2) + 1
             module = _make_layer(self, block, 16 * 2 ** block_id,
-                    layer_config, stride=int(block_id > 2) + 1)
+                    layer_config, stride=stride)
+            stride = None
             self.add_module(name, module)
             self.blocks.append(name)
-
-        self.avgpool = nn.AvgPool2d(7, stride=1)
-        self.cls_score = nn.Linear(512 * block.expansion, num_classes)
-        self.bbox_pred = nn.Linear(512 * block.expansion, num_classes * 4)
 
     def forward(self, x):
         for block in self.blocks:
             x = getattr(self, block)(x)
+        return x
+
+
+# TODO find a better name for this
+class ClassifierHead(nn.Module):
+    def __init__(self, num_inputs, num_classes):
+        super(ClassifierHead, self).__init__()
+        self.avgpool = nn.AvgPool2d(7, stride=1)
+        self.cls_score = nn.Linear(num_inputs, num_classes)
+        self.bbox_pred = nn.Linear(num_inputs, num_classes * 4)
+
+        nn.init.normal_(self.cls_score.weight, mean=0, std=0.01)
+        nn.init.constant_(self.cls_score.weight, 0)
+
+        nn.init.normal_(self.bbox_pred.weight, mean=0, std=0.001)
+        nn.init.constant_(self.bbox_pred.weight, 0)
+
+    def forward(self, x):
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         cls_logit = self.cls_score(x)
@@ -152,14 +170,16 @@ def resnet50_conv4_body(pretrained=None):
         model.load_state_dict(state_dict, strict=False)
     return model
 
-
 def resnet50_conv5_head(num_classes, pretrained=None):
-    model = ResNetHead(Bottleneck, layers=[(5, 3)], num_classes=num_classes)
+    block = Bottleneck
+    head = ResNetHead(block, layers=[(5, 3)])
+    classifier = ClassifierHead(512 * block.expansion, num_classes)
     if pretrained:
         state_dict = torch.load(pretrained)
-        model.load_state_dict(state_dict, strict=False)
+        head.load_state_dict(state_dict, strict=False)
+        classifier.load_state_dict(state_dict, strict=False)
+    model = nn.Sequential(head, classifier)
     return model
-
 
 def resnet50_conv5_body():
     model = ResNetBackbone(Bottleneck, layers=[(2, 3), (3, 4), (4, 6), (5, 3)])

@@ -2,7 +2,7 @@ import torch
 from torch.nn import functional as F
 
 from .proposal_matcher import Matcher
-from .utils import nonzero, smooth_l1_loss
+from .utils import nonzero, smooth_l1_loss, cat, cat_bbox
 from .target_preparator import TargetPreparator
 
 
@@ -10,6 +10,10 @@ class FastRCNNTargetPreparator(TargetPreparator):
     """
     This class returns labels and regression targets for Fast R-CNN
     """
+    def index_target(self, target, index):
+        target = target.copy_with_fields('labels')
+        return target[index]
+
     def prepare_labels(self, matched_targets_per_image, anchors_per_image):
         matched_idxs = matched_targets_per_image.get_field('matched_idxs')
         labels_per_image = matched_targets_per_image.get_field('labels')
@@ -44,21 +48,45 @@ class FastRCNNLossComputation(object):
         Note: this function keeps a state.
 
         Arguments:
-            anchors (list of BBox)
+            anchors (list of list of BBox)
             targets (list of BBox)
         """
-        assert len(anchors) == 1, 'only single feature map supported'
-        anchors = anchors[0]
 
         labels, regression_targets = self.target_preparator(anchors, targets)
         sampled_pos_inds, sampled_neg_inds = self.fg_bg_sampler(labels)
 
+        # flip anchors to be images -> feature map levels
+        anchors = list(zip(*anchors))
+        levels = [torch.tensor([i for i, n in enumerate(anchor)
+            for _ in range(n.bbox.shape[0])]) for anchor in anchors]
+        num_levels = len(anchors[0])
+        num_images = len(anchors)
+        # concatenate all anchors for the same image
+        anchors = [cat_bbox(anchors_per_image) for anchors_per_image in anchors]
+
         sampled_inds = []
+        sampled_image_levels = []
+        # distributed sampled anchors, that were obtained on all feature maps
+        # concatenated via the fg_bg_sampler, into individual feature map levels
         for img_idx, (pos_inds_img, neg_inds_img) in enumerate(
                 zip(sampled_pos_inds, sampled_neg_inds)):
             img_sampled_inds = pos_inds_img | neg_inds_img
-            anchors[img_idx] = anchors[img_idx][img_sampled_inds]
+            anchors_per_image = anchors[img_idx][img_sampled_inds]
+            sampled_levels = levels[img_idx][img_sampled_inds]
+            # TODO replace with bincount because indices in the same level
+            # are packed together
+            anchors_per_level_per_image = []
+            sampled_image_level_temp = []
+            for level in range(num_levels):
+                level_idx = nonzero(sampled_levels == level)[0]
+                anchors_per_level_per_image.append(anchors_per_image[level_idx])
+                sampled_image_level_temp.append(torch.full_like(level_idx, img_idx))
+            anchors[img_idx] = anchors_per_level_per_image
             sampled_inds.append(img_sampled_inds)
+            sampled_image_levels.append(sampled_image_level_temp)
+
+        # flip back to original format feature map level -> images
+        anchors = list(zip(*anchors))
 
         labels = torch.cat(labels, dim=0)
         regression_targets = torch.cat(regression_targets, dim=0)
@@ -69,7 +97,18 @@ class FastRCNNLossComputation(object):
         self._sampled_neg_inds = sampled_neg_inds
         self._sampled_inds = sampled_inds
 
-        return [anchors]
+        # find permutation that brings the concatenated representation in the order
+        # that first joins the images for the same level, and then concatenates the
+        # levels into the representation obtained by concatenating first the feature maps
+        # and then the images
+        sampled_image_levels = list(zip(*sampled_image_levels))
+        sampled_image_levels = cat([cat(l, dim=0) for l in sampled_image_levels], dim=0)
+        permute_inds = cat([nonzero(sampled_image_levels == img_idx)[0]
+                for img_idx in range(num_images)], dim=0)
+
+        self._permute_inds = permute_inds
+
+        return anchors
 
     def __call__(self, class_logits, box_regression):
         """
@@ -80,9 +119,9 @@ class FastRCNNLossComputation(object):
             class_logits (list of tensor)
             box_regression (list of tensor)
         """
-        assert len(class_logits) == 1, 'only single feature map supported'
-        class_logits = class_logits[0]
-        box_regression = box_regression[0]
+
+        class_logits = cat(class_logits, dim=0)
+        box_regression = cat(box_regression, dim=0)
         device = class_logits.device
 
         if not hasattr(self, '_labels'):
@@ -93,9 +132,16 @@ class FastRCNNLossComputation(object):
         sampled_neg_inds = torch.cat(self._sampled_neg_inds, dim=0)
         sampled_inds = torch.cat(self._sampled_inds, dim=0)
 
+        permute_inds = self._permute_inds
+        assert len(permute_inds) == len(class_logits)
+
+        class_logits = class_logits[permute_inds]
+        box_regression = box_regression[permute_inds]
+
         # delete cached elements
         for attr in ['_labels', '_regression_targets',
-                '_sampled_pos_inds', '_sampled_neg_inds', '_sampled_inds']:
+                '_sampled_pos_inds', '_sampled_neg_inds', '_sampled_inds',
+                '_permute_inds']:
             delattr(self, attr)
 
         # get indices of the positive examples in the subsampled space
@@ -149,6 +195,11 @@ class FastRCNNOHEMLossComputation(object):
         anchors = anchors[0]
         class_logits = class_logits[0]
         box_regression = box_regression[0]
+
+        # TODO test if this works for multi-feature maps
+        # assert len(anchors) == len(class_logits)
+        # class_logits = cat(class_logits, dim=0)
+        # box_regression = cat(box_regression, dim=0)
 
         device = class_logits.device
 

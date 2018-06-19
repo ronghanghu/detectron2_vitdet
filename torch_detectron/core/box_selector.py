@@ -1,6 +1,7 @@
 import torch
 
 from .box_coder import BoxCoder
+from .utils import nonzero
 
 from torchvision.structures.bounding_box import BBox
 
@@ -142,11 +143,13 @@ class FPNRPNBoxSelector(RPNBoxSelector):
         num_features = len(sampled_boxes)
         num_images = len(sampled_boxes[0])
 
-        merged_lists = [box for per_feature_boxes in sampled_boxes for box in per_feature_boxes]
+        merged_lists = [box for per_feature_boxes in sampled_boxes
+                for box in per_feature_boxes]
         image_sizes = [b.size for b in sampled_boxes[0]]
 
         device = merged_lists[0].bbox.device
-        indices = [torch.full((box.bbox.shape[0],), img_idx, device=device) for per_feature_boxes in sampled_boxes
+        indices = [torch.full((box.bbox.shape[0],), img_idx, device=device)
+                for per_feature_boxes in sampled_boxes
                 for img_idx, box in enumerate(per_feature_boxes)]
 
         # TODO make these concatenations a helper function?
@@ -155,10 +158,12 @@ class FPNRPNBoxSelector(RPNBoxSelector):
         extra_fields = {}
         field_names = merged_lists[0].fields()
         for field in field_names:
-            extra_fields[field] = torch.cat([b.get_field(field) for b in merged_lists], dim=0)
+            extra_fields[field] = torch.cat([b.get_field(field)
+                for b in merged_lists], dim=0)
 
         post_nms_top_n = min(self.fpn_post_nms_top_n, concat_boxes.shape[0])
-        _, inds_sorted = torch.topk(extra_fields['objectness'], post_nms_top_n, dim=0, sorted=True)
+        _, inds_sorted = torch.topk(extra_fields['objectness'],
+                post_nms_top_n, dim=0, sorted=True)
 
         concat_boxes = concat_boxes[inds_sorted]
         indices = indices[inds_sorted]
@@ -174,9 +179,7 @@ class FPNRPNBoxSelector(RPNBoxSelector):
         for feat_lvl in range(lvl_min, lvl_max + 1):
             per_feat_boxes = []
             for img_idx in range(num_images):
-                # TODO adding a nonzero makes this slighly faster, but uglier because
-                # needo to handle the squeeze (which might not work for empty tensors)
-                lvl_idx_per_img = (indices == img_idx) & (levels == feat_lvl)
+                lvl_idx_per_img = nonzero((indices == img_idx) & (levels == feat_lvl))[0]
                 selected_boxes = concat_boxes[lvl_idx_per_img]
                 bbox = BBox(selected_boxes, image_sizes[img_idx], mode='xyxy')
                 for field, data in extra_fields.items():
@@ -206,9 +209,9 @@ def _filter_boxes(boxes, min_size, im_shape):
     hs = boxes[:, 3] - boxes[:, 1] + fact
     x_ctr = boxes[:, 0] + ws / 2.
     y_ctr = boxes[:, 1] + hs / 2.
-    keep = torch.nonzero(
+    keep = nonzero(
         (ws >= min_size) & (hs >= min_size) &
-        (x_ctr < im_shape[1]) & (y_ctr < im_shape[0])).squeeze(1)
+        (x_ctr < im_shape[1]) & (y_ctr < im_shape[0]))[0]
     return keep
 
 
