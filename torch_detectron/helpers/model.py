@@ -152,7 +152,7 @@ class DetectionAndMaskHeadsBuilder(ConfigClass):
         module_builder = self.BUILDER
 
         # FIXME this is an ugly hack
-        if use_mask:
+        if use_mask and not use_fpn:
             classifier_layers = module_builder(pretrained_path=pretrained_weights)
 
             head_builder = self.HEAD_BUILDER
@@ -186,7 +186,7 @@ class DetectionAndMaskHeadsBuilder(ConfigClass):
 
         # mask
 
-        if use_mask:
+        if use_mask and not use_fpn:
             mask_builder = self.MASK_BUILDER
             heads_mask = mask_builder(num_classes, pretrained_weights)
 
@@ -200,6 +200,23 @@ class DetectionAndMaskHeadsBuilder(ConfigClass):
             return generalized_rcnn.DetectionAndMaskHead(pooler, classifier_layers,
                     postprocessor, loss_evaluator, classifier,
                     heads_mask, mask_loss_evaluator, mask_post_processor)
+
+        if use_mask and use_fpn:
+            mask_builder = self.MASK_BUILDER
+            heads_mask = mask_builder(num_classes, pretrained_weights)
+
+            mask_pooler = self.MASK_POOLER()
+
+            discretization_size = self.MASK_RESOLUTION
+            mask_target_preparator = MaskTargetPreparator(matcher, discretization_size)
+            mask_loss_evaluator = MaskRCNNLossComputation(mask_target_preparator)
+
+            masker = None
+            mask_post_processor = MaskPostProcessor(masker)
+
+            return generalized_rcnn.DetectionAndMaskFPNHead(pooler, classifier_layers,
+                    postprocessor, loss_evaluator,
+                    heads_mask, mask_pooler, mask_loss_evaluator, mask_post_processor)
 
         return generalized_rcnn.DetectionHead(pooler, classifier_layers,
                 postprocessor, loss_evaluator)

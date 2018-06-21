@@ -1,3 +1,4 @@
+import torch
 import argparse
 
 from torch_detectron.core.inference import inference

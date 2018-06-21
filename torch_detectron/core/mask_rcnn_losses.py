@@ -3,7 +3,7 @@ from torch.nn import functional as F
 
 from .proposal_matcher import Matcher
 from .target_preparator import TargetPreparator
-from .utils import nonzero, smooth_l1_loss, cat, cat_bbox, split_bbox
+from .utils import nonzero, smooth_l1_loss, cat, cat_bbox, split_with_sizes
 
 
 class MaskTargetPreparator(TargetPreparator):
@@ -117,14 +117,18 @@ class MaskRCNNLossComputation(object):
         # indices according to a list of features of list of images, invert the
         # representation to be images -> features, and then concatenate it all
         inds = torch.arange(sum(sizes), device=device)
-        inds = inds.split(sizes)
+        # can't use torch.split because of a bug with 0 in sizes
+        inds = split_with_sizes(inds, sizes)
+        # grouped correspond to the linear indices split in
+        # features first, and then images
         grouped = [inds[i:i+num_images] for i in range(0, len(inds), num_images)]
+        # convert to images first, then features by flipping the representation
         flip = list(zip(*grouped))
+        # flatten the list of lists into a single list of tensors
         flip = [f for l in flip for f in l]
         return torch.cat(flip, dim=0)
 
     def __call__(self, anchors, mask_logits, targets):
-        # labels, mask_targets = self.target_preparator(anchors, targets)
         labels, mask_targets = self.prepare_targets(anchors, targets)
 
         permutation_inds = self.get_permutation_inds(anchors)

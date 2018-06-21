@@ -31,6 +31,7 @@ class FastRCNNTargetPreparator(TargetPreparator):
 class FastRCNNLossComputation(object):
     """
     Computes the loss for Faster R-CNN.
+    Also supports FPN
     """
     def __init__(self, target_preparator, fg_bg_sampler):
         """

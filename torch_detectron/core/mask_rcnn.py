@@ -17,12 +17,22 @@ class MaskRCNNHeads(nn.Module):
             layer_name = 'mask_fcn{}'.format(layer_idx)
             module = nn.Conv2d(next_feature, layer_features, 3,
                     stride=1, padding=1)
+            nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
+            nn.init.constant_(module.bias, 0)
             self.add_module(layer_name, module)
             next_feature = layer_features
             self.blocks.append(layer_name)
 
         self.conv5_mask = nn.ConvTranspose2d(next_feature, next_feature, 2, stride=2)
+        nn.init.kaiming_normal_(self.conv5_mask.weight, mode='fan_out',
+                nonlinearity='relu')
+        nn.init.constant_(self.conv5_mask.bias, 0)
+
+        # TODO split classifier in different module
         self.mask_fcn_logits = nn.Conv2d(next_feature, num_classes, 1)
+        nn.init.kaiming_normal_(self.mask_fcn_logits.weight,
+                mode='fan_out', nonlinearity='relu')
+        nn.init.constant_(self.mask_fcn_logits.bias, 0)
 
     def forward(self, x):
         # TODO need to handle case of no boxes -> empty x
@@ -44,8 +54,15 @@ def maskrcnn_head(num_classes, pretrained=None):
     return model
 
 
-from core.fpn import FPNPooler
+from .fpn import FPNPooler
 class MaskFPNPooler(FPNPooler):
+    """
+    This pooler is used for inference.
+    It takes a set of bounding boxes (one per image), splits them
+    in several feature map levels, process each level independently,
+    concatenates the results from all the levels and then permute
+    the results so that they are in the original order.
+    """
     def __init__(self, output_size, scales, sampling_ratio,
             drop_last, roi_to_fpn_level_mapper):
         super(MaskFPNPooler, self).__init__(output_size, scales,
@@ -53,6 +70,12 @@ class MaskFPNPooler(FPNPooler):
         self.roi_to_fpn_level_mapper = roi_to_fpn_level_mapper
 
     def forward(self, x, boxes):
+
+        # if it's in training format, fall back to standard
+        # FPNPooler implementation
+        if isinstance(boxes[0], (list, tuple)):
+            return super(MaskFPNPooler, self).forward(x, boxes)
+
         # TODO maybe factor this out in a helper class
         # This is very similar to region_proposal.py FPN
         lvl_min = self.roi_to_fpn_level_mapper.k_min

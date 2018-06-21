@@ -87,3 +87,21 @@ def split_bbox(bbox, split_size_or_sections):
                 for field, field_data in fields_data.items()]
 
     return bboxes
+
+
+def split_with_sizes(tensor, split_sizes, dim=0):
+    """
+    Similar to split, but with a fix for
+    https://github.com/pytorch/pytorch/issues/8686
+    """
+    assert sum(split_sizes) == tensor.shape[dim]
+    result = []
+    start_idx = 0
+    for length in split_sizes:
+        if length == 0:
+            result.append(tensor.new())
+            continue
+        result.append(tensor.narrow(dim, start_idx, length))
+        start_idx += length
+    assert start_idx == tensor.shape[dim]
+    return result

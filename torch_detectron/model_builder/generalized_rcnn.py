@@ -137,3 +137,52 @@ class DetectionAndMaskHead(torch.nn.Module):
                 proposals, mask_logits, targets)
 
         return None, dict(loss_classifier=loss_classifier, loss_box_reg=loss_box_reg, loss_mask=loss_mask)
+
+
+class DetectionAndMaskFPNHead(torch.nn.Module):
+    def __init__(self, pooler, heads, post_processor, loss_evaluator,
+            heads_mask, mask_pooler, loss_evaluator_mask, mask_post_processor):
+        super(DetectionAndMaskFPNHead, self).__init__()
+        self.pooler = pooler
+        self.heads = heads
+        self.post_processor = post_processor
+        self.loss_evaluator = loss_evaluator
+
+        self.mask_heads = heads_mask
+        self.mask_pooler = mask_pooler
+        self.loss_evaluator_mask = loss_evaluator_mask
+        self.mask_post_processor = mask_post_processor
+
+    def forward(self, features, proposals, targets=None):
+        if self.training:
+            with torch.no_grad():
+                proposals = self.loss_evaluator.subsample(proposals, targets)
+
+        pooled_features = self.pooler(features, proposals)
+        class_logits, box_regression = self.heads(pooled_features)
+
+        if not self.training:
+            result = self.post_processor((class_logits, box_regression), proposals)
+
+            # the network can't handle the case of no selected proposals,
+            # so need to shortcut before
+            if sum(r.bbox.shape[0] for r in result) == 0:
+                for r in result:
+                    r.add_field('mask', class_logits.new())
+                return result, ()
+
+            pooled_features = self.mask_pooler(features, result)
+            mask_logits = self.mask_heads(pooled_features)
+            result = self.mask_post_processor(mask_logits, result)
+            return result, ()
+
+        pooled_features_mask = self.mask_pooler(features, proposals)
+        mask_logits = self.mask_heads(pooled_features_mask)
+
+        loss_classifier, loss_box_reg = self.loss_evaluator(
+                [class_logits], [box_regression])
+
+        loss_mask = self.loss_evaluator_mask(
+                proposals, mask_logits, targets)
+
+        return None, dict(loss_classifier=loss_classifier, loss_box_reg=loss_box_reg, loss_mask=loss_mask)
