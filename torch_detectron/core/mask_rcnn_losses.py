@@ -3,7 +3,7 @@ from torch.nn import functional as F
 
 from .proposal_matcher import Matcher
 from .target_preparator import TargetPreparator
-from .utils import nonzero, smooth_l1_loss, cat, cat_bbox, split_with_sizes
+from .utils import nonzero, smooth_l1_loss, cat, cat_bbox, split_with_sizes, keep_only_positive_boxes
 
 
 class MaskTargetPreparator(TargetPreparator):
@@ -72,12 +72,18 @@ class MaskTargetPreparator(TargetPreparator):
 
 
 
-# TODO this implementation considers that we forward the whole batch to the mask branch,
-# which means that ~75% of the elements for the mask prediction are not used.
-# check if this is a problem for runtime speed or not, but makes the implementation easier
 class MaskRCNNLossComputation(object):
-    def __init__(self, target_preparator):
+    def __init__(self, target_preparator, subsample_only_positive_boxes=False):
+        """
+        If subsample_only_positive_boxes is False, all the boxes from the RPN
+        that were passed to the detection branch will be used for mask loss
+        computation. This is wasteful, as only the positive boxes are used
+        for mask loss (which corresponds to 25% of a batch).
+        If subsample_only_positive_boxes is True, then only the positive
+        boxes are selected, but this only works with FPN-like architectures.
+        """
         self.target_preparator = target_preparator
+        self.subsampled_only_positive_boxes = subsample_only_positive_boxes
 
     def prepare_targets(self, anchors, targets):
         """
@@ -129,6 +135,8 @@ class MaskRCNNLossComputation(object):
         return torch.cat(flip, dim=0)
 
     def __call__(self, anchors, mask_logits, targets):
+        if self.subsample_only_positive_boxes:
+            anchors = keep_only_positive_boxes(anchors)
         labels, mask_targets = self.prepare_targets(anchors, targets)
 
         permutation_inds = self.get_permutation_inds(anchors)

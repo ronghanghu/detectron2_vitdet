@@ -3,6 +3,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from ..structures.bounding_box import BBox
+from .utils import nonzero, keep_only_positive_boxes
 
 from PIL import Image
 
@@ -74,6 +75,12 @@ class MaskFPNPooler(FPNPooler):
         # if it's in training format, fall back to standard
         # FPNPooler implementation
         if isinstance(boxes[0], (list, tuple)):
+            # use the labels that were added by Faster R-CNN
+            # subsampling to select only the positive
+            # boxes -- this saves computation as usually only
+            # 1 / 4 of the boxes are positive (and thus used
+            # during loss computation)
+            boxes = keep_only_positive_boxes(boxes)
             return super(MaskFPNPooler, self).forward(x, boxes)
 
         # TODO maybe factor this out in a helper class

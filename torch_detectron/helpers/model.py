@@ -202,6 +202,9 @@ class DetectionAndMaskHeadsBuilder(ConfigClass):
                     heads_mask, mask_loss_evaluator, mask_post_processor)
 
         if use_mask and use_fpn:
+            # TODO there are a number of things that are implicit here.
+            # for example, the mask_pooler should be subsampling the positive
+            # boxes only, so that the loss evaluator knows that it should do the same
             mask_builder = self.MASK_BUILDER
             heads_mask = mask_builder(num_classes, pretrained_weights)
 
@@ -209,7 +212,8 @@ class DetectionAndMaskHeadsBuilder(ConfigClass):
 
             discretization_size = self.MASK_RESOLUTION
             mask_target_preparator = MaskTargetPreparator(matcher, discretization_size)
-            mask_loss_evaluator = MaskRCNNLossComputation(mask_target_preparator)
+            mask_loss_evaluator = MaskRCNNLossComputation(mask_target_preparator,
+                    subsample_only_positive_boxes=True)
 
             masker = None
             mask_post_processor = MaskPostProcessor(masker)

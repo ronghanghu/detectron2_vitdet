@@ -65,6 +65,13 @@ class FastRCNNLossComputation(object):
         # concatenate all anchors for the same image
         anchors = [cat_bbox(anchors_per_image) for anchors_per_image in anchors]
 
+        # add corresponding label information to the bounding boxes
+        # this can be used with `keep_only_positive_boxes` in order to
+        # restrict the set of boxes to be used during other steps (Mask R-CNN
+        # for example)
+        for labels_per_image, anchors_per_image in zip(labels, anchors):
+            anchors_per_image.add_field('labels', labels_per_image)
+
         sampled_inds = []
         sampled_image_levels = []
         # distributed sampled anchors, that were obtained on all feature maps

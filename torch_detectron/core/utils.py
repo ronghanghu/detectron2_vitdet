@@ -105,3 +105,35 @@ def split_with_sizes(tensor, split_sizes, dim=0):
         start_idx += length
     assert start_idx == tensor.shape[dim]
     return result
+
+
+def keep_only_positive_boxes(boxes):
+    """
+    Given a set of BBoxes containing the `labels` field,
+    return a set of BBoxes for which `labels > 0`.
+
+    If there are no positive boxes, this function returns
+    the original set of boxes
+
+    Arguments:
+        boxes (list of list of BBox)
+    """
+    assert isinstance(boxes, (list, tuple))
+    assert isinstance(boxes[0], (list, tuple))
+    assert isinstance(boxes[0][0], BBox)
+    assert boxes[0][0].has_field('labels')
+    positive_boxes = []
+    num_boxes = 0
+    for boxes_per_feature_map in boxes:
+        positive_boxes_per_feature_map = []
+        for boxes_per_image in boxes_per_feature_map:
+            labels = boxes_per_image.get_field('labels')
+            inds = nonzero(labels > 0)[0]
+            selected_boxes = boxes_per_image[inds]
+            positive_boxes_per_feature_map.append(selected_boxes)
+            num_boxes += len(inds)
+        positive_boxes.append(positive_boxes_per_feature_map)
+    # if there are no positive boxes, returns original boxes
+    if num_boxes == 0:
+        return boxes
+    return positive_boxes
