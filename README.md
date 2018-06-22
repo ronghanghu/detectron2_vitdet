@@ -49,6 +49,28 @@ to launch two processes in python with `-m` flag, so that in the
 multi-gpu case we need to specify the full path of the detectron `train.py`
 file.
 
+## Model Zoo and Baselines
+
+The numbers below were obtaining by running the code on 8 V100 GPUs, using Cuda 8.0 and CUDNN 6.0.
+
+### RPN Proposal Baselines
+
+TODO add numbers for R-50-C4
+
+backbone | total train time (h) | train time (s / it) | test time (s / it) | max memory (GB) | mAR | model id
+-- | -- | -- | -- | -- | -- | --
+R-50-FPN | 9.9 | 0.397 | 0.067 | 5.2 | 56.8 | 4409548
+
+### End to end detection and mask
+
+backbone | type | lr sched | im / gpu | train mem(GB) | train time (s/iter) | total train time(hr) | inference time(s/im) | box AP | mask AP
+-- | -- | -- | -- | -- | -- | -- | -- | -- | --
+R-50-C4  | Fast | 1x | 1 |  4.0 | 0.409  | 20.4 | 0.140         | 34.3 | -    | 4022836
+R-50-FPN | Fast | 1x | 2 |  5.3 | 0.464  | 11.5 | 0.102         | 36.3 | -    | 4418514
+R-50-C4  | Mask | 1x | 1 |  4.2 | 0.486  | 24.3 | 0.151 + 0.022 | 35.5 | 31.4 | 4354304
+R-50-FPN | Mask | 1x | 2 |  7.5 | 0.565  | 14.1 | 0.110 + 0.026 | 37.2 | 34.0 | 4444352
+
+
 
 ## Abstractions
 The main abstractions introduced by `torch_detectron` that are useful to
