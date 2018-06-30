@@ -9,6 +9,9 @@ class COCODataset(torchvision.datasets.coco.CocoDetection):
     def __init__(self, ann_file, root, transforms=None):
         super(COCODataset, self).__init__(root, ann_file)
 
+        # sort indices for reproducible results
+        self.ids = sorted(self.ids)
+
         # filter images without detection annotations
         self.ids = [img_id for img_id in self.ids
                 if len(self.coco.getAnnIds(imgIds=img_id, iscrowd=None)) > 0]

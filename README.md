@@ -6,7 +6,7 @@ creating detection and segmentation models.
 ## Installation
 
 ### Requirements:
-- PyTorch compiled from master
+- PyTorch compiled from master. Installation instructions can be found in [here](https://github.com/pytorch/pytorch#installation).
 - torchvision from master
 - cocoapi
 
@@ -18,7 +18,7 @@ cd detectron.pytorch
 
 # the following will install the lib with
 # symbolic links, so that you can modify
-# the files if you wantand won't need to
+# the files if you want and won't need to
 # re-build it
 python setup.py build develop
 ```
