@@ -83,7 +83,7 @@ class MaskRCNNLossComputation(object):
         boxes are selected, but this only works with FPN-like architectures.
         """
         self.target_preparator = target_preparator
-        self.subsampled_only_positive_boxes = subsample_only_positive_boxes
+        self.subsample_only_positive_boxes = subsample_only_positive_boxes
 
     def prepare_targets(self, anchors, targets):
         """
