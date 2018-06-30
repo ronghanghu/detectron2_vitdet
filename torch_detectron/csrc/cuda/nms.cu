@@ -1,5 +1,4 @@
-#include "torch/csrc/autograd/generated/VariableType.h"
-#include <torch/csrc/autograd/variable.h>
+#include <ATen/ATen.h>
 
 #include <THC/THC.h>
 #include "THCDeviceTensor.cuh"
@@ -105,7 +104,7 @@ at::Tensor nms_cuda(const at::Tensor boxes, float nms_overlap_thresh) {
   std::vector<unsigned long long> remv(col_blocks);
   memset(&remv[0], 0, sizeof(unsigned long long) * col_blocks);
 
-  at::Tensor keep = (*torch::autograd::VariableType::getType(at::getType(at::kCPU, at::kLong))).tensor({boxes_num});
+  at::Tensor keep = at::empty({boxes_num}, boxes.options().dtype(at::kLong).device(at::kCPU));
   int64_t* keep_out = keep.data<int64_t>();
 
   int num_to_keep = 0;
