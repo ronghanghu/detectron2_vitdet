@@ -48,33 +48,22 @@ config.SOLVER.OPTIM.MOMENTUM = 0.9
 config.SOLVER.SCHEDULER.STEPS = [120000, 160000]
 config.SOLVER.SCHEDULER.GAMMA = 0.1
 
-
-# FIXME remove those required attributes from the trainer and directly use the config
-# instead
-device = config.DEVICE
-max_iter = config.SOLVER.MAX_ITER
-
 import os
-save_dir = os.environ['SAVE_DIR'] if 'SAVE_DIR' in os.environ else ''
-checkpoint = os.environ['CHECKPOINT_FILE'] if 'CHECKPOINT_FILE' in os.environ else ''
-do_test = config.DO_TEST
+config.SAVE_DIR = os.environ['SAVE_DIR'] if 'SAVE_DIR' in os.environ else ''
+config.CHECKPOINT = os.environ['CHECKPOINT_FILE'] if 'CHECKPOINT_FILE' in os.environ else ''
 
-# function getters
-# should implement get_data_loader, get_model, get_optimizer and get_scheduler
-# FIXME remove there and use directly the config
-def get_data_loader(distributed=False):
-    config.TRAIN.DATA.DATALOADER.SAMPLER.DISTRIBUTED = distributed
-    config.TEST.DATA.DATALOADER.SAMPLER.DISTRIBUTED = distributed
+if 'QUICK_SCHEDULE' in os.environ and os.environ['QUICK_SCHEDULE']:
+    config.TRAIN.DATA.DATASET.FILES = [
+            ('/private/home/fmassa/coco_trainval2017/annotations/instances_val2017_mod.json',
+             '/datasets01/COCO/060817/val2014/')
+    ]
 
-    data_loader = config.TRAIN.DATA()
-    data_loader_val = config.TEST.DATA()
-    return data_loader, data_loader_val
+    config.MODEL.HEADS.BATCH_SIZE_PER_IMAGE = 256
+    config.TRAIN.DATA.DATALOADER.IMAGES_PER_BATCH = 2
 
+    lr = 0.005
+    config.SOLVER.MAX_ITER = 2000
+    config.SOLVER.OPTIM.BASE_LR = lr
+    config.SOLVER.OPTIM.BASE_LR_BIAS = 2 * lr
 
-def get_model():
-    model = config.MODEL()
-    model.to(device)
-    return model
-
-get_optimizer = config.SOLVER.OPTIM
-get_scheduler = config.SOLVER.SCHEDULER
+    config.SOLVER.SCHEDULER.STEPS = [1000]
