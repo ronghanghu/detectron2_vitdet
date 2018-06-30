@@ -86,6 +86,8 @@ class RPNBuilder(ConfigClass):
         if weights:
             rpn_heads.load_state_dict(weights)
 
+        rpn_box_coder = BoxCoder(weights=(1., 1., 1., 1.))
+
         box_selector_maker = RPNBoxSelector
         box_selector_args = {}
         if use_fpn:
@@ -102,7 +104,8 @@ class RPNBuilder(ConfigClass):
         min_size = self.MIN_SIZE
         box_selector_train = box_selector_maker(pre_nms_top_n=pre_nms_top_n,
                 post_nms_top_n=post_nms_top_n,
-                nms_thresh=nms_thresh, min_size=min_size, **box_selector_args)
+                nms_thresh=nms_thresh, min_size=min_size, box_coder=rpn_box_coder,
+                **box_selector_args)
 
         if use_fpn:
             fpn_post_nms_top_n = self.FPN_POST_NMS_TOP_N_TEST
@@ -112,13 +115,14 @@ class RPNBuilder(ConfigClass):
         post_nms_top_n_test = self.POST_NMS_TOP_N_TEST
         box_selector_test = box_selector_maker(pre_nms_top_n=pre_nms_top_n_test,
                 post_nms_top_n=post_nms_top_n_test,
-                nms_thresh=nms_thresh, min_size=min_size, **box_selector_args)
+                nms_thresh=nms_thresh, min_size=min_size, box_coder=rpn_box_coder,
+                **box_selector_args)
 
         # loss evaluation
         matched_threshold = self.MATCHED_THRESHOLD
         unmatched_threshold = self.UNMATCHED_THRESHOLD
         rpn_matcher = Matcher(matched_threshold, unmatched_threshold, force_match_for_each_row=True)
-        rpn_box_coder = BoxCoder(weights=(1., 1., 1., 1.))
+
         rpn_target_preparator = RPNTargetPreparator(rpn_matcher, rpn_box_coder)
 
         batch_size_per_image = self.BATCH_SIZE_PER_IMAGE

@@ -344,6 +344,8 @@ from torch_detectron.helpers.config import config
 from torch_detectron.helpers.config_utils import ConfigClass
 
 from torch_detectron.core.image_list import to_image_list
+
+from torch_detectron.core.resnet_builder import resnet50_conv4_body
 from torch_detectron.core.anchor_generator import AnchorGenerator
 from torch_detectron.core.rpn_losses import (RPNLossComputation,
             RPNTargetPreparator)
@@ -356,16 +358,16 @@ from torch_detectron.core.box_coder import BoxCoder
 from torch import nn
 
 class MyModel(nn.Module):
-    def __init__(self):
+    def __init__(self, pretrained_weights):
         super(MyModel, self).__init__()
+        self.backbone = resnet50_conv4_body(pretrained=pretrained_weights)
+        self.refine_module = nn.Conv2d(1024, 1024, 3, 1, 1)
+
         self.anchor_generator = AnchorGenerator(
             scales=(0.125, 0.25, 0.5, 1., 2.))
-        self.backbone = ...
-        self.my_crazy_module = ...
 
-        self.cls_scores = nn.Conv2d(...)
-        self.box_reg = nn.Conv2d(...)
-        ...
+        self.cls_scores = nn.Conv2d(1024, 5 * 3, 1)
+        self.box_reg = nn.Conv2d(1024, 5 * 3 * 4, 1)
 
         # Those are classes that helps matching / sampling and creating
         # the targets for the detection models
@@ -374,27 +376,36 @@ class MyModel(nn.Module):
         target_preparator = RPNTargetPreparator(matcher, box_coder)
         fg_bg_sampler = BalancedPositiveNegativeSampler(
                 batch_size_per_image=256, positive_fraction=0.5)
+        # this class is in charge of computing the losses for the RPN
         self.rpn_loss_evaluator = RPNLossComputation(target_preparator, fg_bg_sampler)
 
         # for inference only
         self.box_selector = RPNBoxSelector(12000, 2000, 0.7, 0)
 
     def forward(self, images, target=None):
+        # convert the input images to an ImageList, if not already
         images = to_image_list(images)
+        # get features
         features = self.backbone(images.tensors)
+        # compute anchors from image and features
         anchors = self.anchor_generator(images.image_sizes, features)
 
+        # some arbitrary new criteria is added
         if features.mean() > 0.5:
-            features = self.my_crazy_module(features)
+            features = self.refine_module(features)
 
+        # compute objectness and regression
         objectness = self.cls_scores(features)
         rpn_box_regression = self.box_reg(features)
 
+        # behavior of the model changes during training and testing
+        # during training, we return the losses, during testing the predicted boxes
         if not self.training:
             result = self.box_selector(anchors, objectness, rpn_box_regression)
             return result[0]  # returns result for single feature map
 
 
+        # loss computation is handled in loss_evaluator
         loss_objectness, loss_box_reg = self.rpn_loss_evaluator(
                 anchors, objectness, rpn_box_regression, targets)
 
@@ -402,6 +413,13 @@ class MyModel(nn.Module):
                     loss_objectness=loss_objectness,
                     loss_box_reg=loss_box_reg)
         
+# can add arbitrary attributes so that it can be configurable
+class ModelGetter(ConfigClass):
+    def __call__(self):
+        return MyModel(self.WEIGHTS)
+
+config.MODEL = ModelGetter()
+config.MODEL.WEIGHTS = '/path/to/pretrained.pkl'
 ```
 The current constraint we impose to the model is that in `.train()` mode
 the mode should return a dict containing the losses, while in `.eval()` mode
