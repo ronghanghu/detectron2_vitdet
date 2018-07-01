@@ -23,6 +23,47 @@ cd detectron.pytorch
 python setup.py build develop
 ```
 
+### Step by step installation on the FAIR Cluster
+
+```bash
+# setup environments
+module load anaconda3/5.0.1 cuda/9.0 cudnn/v7.0-cuda.9.0 NCCL/2.2.13-cuda.9.0
+
+conda create --name pytorch_detection
+source activate pytorch_detection
+
+conda install ipython
+
+# pytorch dependencies
+conda install numpy pyyaml mkl mkl-include setuptools cmake cffi typing
+conda install -c mingfeima mkldnn
+conda install -c pytorch magma-cuda90
+
+pip install ninja
+
+# cloning and installing PyTorch from master
+mkdir ~/github && cd ~/github
+git clone --recursive git@github.com:pytorch/pytorch.git
+cd pytorch
+# compile for several GPU architectures
+TORCH_CUDA_ARCH_LIST="3.5;5.0+PTX;6.0;6.1;7.0" python setup.py install
+
+# install torchvision
+conda install torchvision -c pytorch
+
+# install pycocotools
+cd ~/github
+git clone git@github.com:cocodataset/cocoapi.git
+cd cocoapi/PythonAPI
+python setup.py build_ext install
+
+# install PyTorch Detection
+cd ~/github
+git clone git@github.com:fairinternal/detectron.pytorch.git
+cd detectron.pytorch
+TORCH_CUDA_ARCH_LIST="3.5;5.0+PTX;6.0;6.1;7.0" python setup.py build develop
+```
+
 ## Running training code
 
 For the following examples to work, you need to first install `torch_detectron`.
