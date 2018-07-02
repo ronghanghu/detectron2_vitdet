@@ -6,7 +6,7 @@ a configuration file.
 from torch_detectron.helpers.config_utils import ConfigClass
 import torch_detectron.model_builder.generalized_rcnn as generalized_rcnn
 
-from torch_detectron.core.resnet_builder import resnet50_conv4_body, resnet50_conv5_head
+from torch_detectron.model_builder.resnet import resnet50_conv4_body, resnet50_conv5_head
 from torch_detectron.core.anchor_generator import AnchorGenerator, FPNAnchorGenerator
 from torch_detectron.core.box_selector import RPNBoxSelector, FPNRPNBoxSelector, ROI2FPNLevelsMapper
 

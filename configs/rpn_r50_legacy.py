@@ -123,7 +123,7 @@ def get_data_loader(distributed=False):
 class RPNModel(torch.nn.Module):
     def __init__(self, pretrained_path):
         super(RPNModel, self).__init__()
-        from torch_detectron.core.resnet_builder import resnet50_conv4_body
+        from torch_detectron.model_builder.resnet import resnet50_conv4_body
         from torch_detectron.core.anchor_generator import AnchorGenerator
         from torch_detectron.core.box_selector import RPNBoxSelector
         from torch_detectron.core.rpn_losses import (RPNLossComputation,

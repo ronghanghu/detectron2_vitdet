@@ -386,7 +386,7 @@ from torch_detectron.helpers.config_utils import ConfigClass
 
 from torch_detectron.core.image_list import to_image_list
 
-from torch_detectron.core.resnet_builder import resnet50_conv4_body
+from torch_detectron.model_builder.resnet import resnet50_conv4_body
 from torch_detectron.core.anchor_generator import AnchorGenerator
 from torch_detectron.core.rpn_losses import (RPNLossComputation,
             RPNTargetPreparator)

@@ -31,7 +31,7 @@ config.TEST.DATA.DATASET.FILES = [
 
 
 def head_builder(pretrained_path):
-    from torch_detectron.core.resnet_builder import Bottleneck, ResNetHead
+    from torch_detectron.model_builder.resnet import Bottleneck, ResNetHead
     block = Bottleneck
     # head = ResNetHead(block, layers=[(5, 3)], stride_init=1)
     head = ResNetHead(block, layers=[(5, 3)])
@@ -41,7 +41,7 @@ def head_builder(pretrained_path):
     return head
 
 def classifier(num_classes, pretrained_path=None):
-    from torch_detectron.core.resnet_builder import Bottleneck, ClassifierHead
+    from torch_detectron.model_builder.resnet import Bottleneck, ClassifierHead
     classifier = ClassifierHead(512 * Bottleneck.expansion, num_classes)
     if pretrained_path:
         state_dict = torch.load(pretrained_path)
