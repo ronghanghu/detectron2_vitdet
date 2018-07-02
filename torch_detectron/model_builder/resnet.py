@@ -185,3 +185,22 @@ def resnet50_conv5_body():
     model = ResNetBackbone(Bottleneck, layers=[(2, 3), (3, 4), (4, 6), (5, 3)])
     return model
 
+
+def fpn_resnet50_conv5_body(pretrained=None):
+    from ..core.fpn import FPN, LastLevelMaxPool
+    body = ResNetBackbone(Bottleneck, layers=[(2, 3, True), (3, 4, True), (4, 6, True), (5, 3, True)])
+    fpn = FPN(layers=[256, 512, 1024, 2048], representation_size=256, top_blocks=LastLevelMaxPool())
+    if pretrained:
+        state_dict = torch.load(pretrained)
+        body.load_state_dict(state_dict, strict=False)
+        fpn.load_state_dict(state_dict, strict=False)
+    model = nn.Sequential(body, fpn)
+    return model
+
+def fpn_classification_head(num_classes, pretrained=None):
+    from ..core.fpn import FPNHeadClassifier
+    model = FPNHeadClassifier(num_classes, 256 * 7 * 7, 1024)
+    if pretrained:
+        state_dict = torch.load(pretrained)
+        model.load_state_dict(state_dict, strict=False)
+    return model

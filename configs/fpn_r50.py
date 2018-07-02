@@ -8,7 +8,8 @@ import torch
 from torch_detectron.helpers.config import config
 from torch_detectron.helpers.config_utils import ConfigClass
 
-from torch_detectron.core.fpn import fpn_resnet50_conv5_body, FPNPooler, fpn_classification_head
+from torch_detectron.core.fpn import FPNPooler
+from torch_detectron.model_builder.resnet import fpn_resnet50_conv5_body, fpn_classification_head
 
 # dataset
 config.TRAIN.DATA.DATASET.FILES = [

@@ -28,7 +28,8 @@ config.TEST.DATA.DATASET.FILES = [
 config.TRAIN.DATA.DATALOADER.COLLATOR.SIZE_DIVISIBLE = 32
 config.TEST.DATA.DATALOADER.COLLATOR.SIZE_DIVISIBLE = 32
 
-from torch_detectron.core.fpn import fpn_resnet50_conv5_body, FPNPooler, fpn_classification_head
+from torch_detectron.core.fpn import FPNPooler
+from torch_detectron.model_builder.resnet import fpn_resnet50_conv5_body, fpn_classification_head
 from torch_detectron.core.mask_rcnn import MaskFPNPooler, maskrcnn_head
 from torch_detectron.core.box_selector import ROI2FPNLevelsMapper
 

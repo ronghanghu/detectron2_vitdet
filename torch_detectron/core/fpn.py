@@ -51,17 +51,6 @@ class LastLevelMaxPool(nn.Module):
     def forward(self, x):
         return [F.max_pool2d(x, 1, 2, 0)]
 
-def fpn_resnet50_conv5_body(pretrained=None):
-    from .resnet_builder import ResNetBackbone, Bottleneck
-    body = ResNetBackbone(Bottleneck, layers=[(2, 3, True), (3, 4, True), (4, 6, True), (5, 3, True)])
-    fpn = FPN(layers=[256, 512, 1024, 2048], representation_size=256, top_blocks=LastLevelMaxPool())
-    if pretrained:
-        state_dict = torch.load(pretrained)
-        body.load_state_dict(state_dict, strict=False)
-        fpn.load_state_dict(state_dict, strict=False)
-    model = nn.Sequential(body, fpn)
-    return model
-
 
 class FPNPooler(nn.Module):
     def __init__(self, output_size, scales, sampling_ratio, drop_last):
@@ -125,10 +114,3 @@ class FPNHeadClassifier(nn.Module):
         bbox_deltas = self.bbox_pred(x)
 
         return scores, bbox_deltas
-
-def fpn_classification_head(num_classes, pretrained=None):
-    model = FPNHeadClassifier(num_classes, 256 * 7 * 7, 1024)
-    if pretrained:
-        state_dict = torch.load(pretrained)
-        model.load_state_dict(state_dict, strict=False)
-    return model
