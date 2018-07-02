@@ -131,6 +131,15 @@ class MaskFPNPooler(FPNPooler):
 # TODO check if want to return a single BBox or a composite
 # object
 class MaskPostProcessor(nn.Module):
+    """
+    From the results of the CNN, post process the masks
+    by taking the mask corresponding to the class with max
+    probability (which are of fixed size and directly output
+    by the CNN) and return the masks in the mask field of the BBox.
+
+    If a masker object is passed, it will additionally
+    projecte the masks in the image according to the locations in boxes,
+    """
     def __init__(self, masker=None):
         super(MaskPostProcessor, self).__init__()
         self.masker = masker
@@ -163,6 +172,11 @@ class MaskPostProcessor(nn.Module):
 
 
 class MaskPostProcessorCOCOFormat(MaskPostProcessor):
+    """
+    From the results of the CNN, post process the results
+    so that the masks are pasted in the image, and
+    additionally convert the results to COCO format.
+    """
     def forward(self, x, boxes):
         import pycocotools.mask as mask_util
         import numpy as np
@@ -251,6 +265,8 @@ class Masker(object):
         self.threshold = threshold
         self.padding = padding
 
+    # TODO this gives slightly different results
+    # than the Detectron implementation. Fix it
     def compute_flow_field_cpu(self, boxes):
         im_w, im_h = boxes.size
         boxes_data = boxes.bbox
@@ -271,8 +287,6 @@ class Masker(object):
 
         flow_field = torch.full((num_boxes, im_h, im_w, 2), -2)
 
-        # TODO maybe optimize to make it GPU-friendly with advanced indexing
-        # or dedicated kernel
         for i in range(num_boxes):
             w = box_widths[i]
             h = box_heights[i]
@@ -319,6 +333,10 @@ class Masker(object):
             result = result > self.threshold
         return result
 
+    # FIXME this is a hack to make inference gives the same resuts
+    # as Detectron C2. Ideally, we should just fix the approach using
+    # the compute_flow, which is batched and runs on the GPU, but this
+    # gives slightly different (and worse) results.
     def forward_single_image_2(self, masks, boxes):
         boxes = boxes.convert('xyxy')
         im_w, im_h = boxes.size

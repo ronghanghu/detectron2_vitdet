@@ -250,17 +250,3 @@ class ROI2FPNLevelsMapper(object):
         target_lvls = torch.floor(self.lvl0 + torch.log2(s / self.s0 + 1e-6))
         target_lvls = torch.clamp(target_lvls, min=self.k_min, max=self.k_max)
         return target_lvls
-
-
-if __name__ == '__main__':
-    from ..structures.bounding_box import BBox
-    box_selector = RPNBoxSelector(10, 5, 0.7, 0)
-
-    anchors = [BBox(torch.rand(16, 4) * 50, (100, 100), mode='xywh').convert('xyxy')]
-    objectness = torch.rand(1, 4, 2, 2)
-    box_regression = torch.rand(1, 4 * 4, 2, 2)
-
-    sampled = box_selector(anchors, objectness, box_regression)
-
-    from IPython import embed; embed()
-
