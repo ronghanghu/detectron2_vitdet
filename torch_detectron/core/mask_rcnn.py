@@ -8,8 +8,18 @@ from .utils import nonzero, keep_only_positive_boxes
 from PIL import Image
 
 
+# TODO remove num_classes and add in a separate class
 class MaskRCNNHeads(nn.Module):
+    """
+    Heads for Mask R-CNN, equivalent to mask_rcnn_fcn_head_v1upXconvs plus the outputs.
+    """
     def __init__(self, input_features, layers, num_classes):
+        """
+        Arguments:
+            input_features (int): number of channels of the input feature map
+            layers (list[int]): number of channels for intermediate layers
+            num_classes (int): number of classes
+        """
         super(MaskRCNNHeads, self).__init__()
 
         next_feature = input_features
@@ -36,6 +46,10 @@ class MaskRCNNHeads(nn.Module):
         nn.init.constant_(self.mask_fcn_logits.bias, 0)
 
     def forward(self, x):
+        """
+        Arguments:
+            x (Tensor): pooled feature maps after concatenation
+        """
         # TODO need to handle case of no boxes -> empty x
         for layer_name in self.blocks:
             x = F.relu(getattr(self, layer_name)(x))
@@ -58,7 +72,15 @@ def maskrcnn_head(num_classes, pretrained=None):
 from .fpn import FPNPooler
 class MaskFPNPooler(FPNPooler):
     """
-    This pooler is used for inference.
+    This pooler is used for both training and inference.
+    The behavior of the pooler changes if it's in training or inference.
+
+    During training:
+    The behavior is the same as in FPNPooler, except that we
+    filter out all the non-positive boxes before passing it to
+    the pooler. This saves compute and memory.
+
+    During inference:
     It takes a set of bounding boxes (one per image), splits them
     in several feature map levels, process each level independently,
     concatenates the results from all the levels and then permute
@@ -71,6 +93,18 @@ class MaskFPNPooler(FPNPooler):
         self.roi_to_fpn_level_mapper = roi_to_fpn_level_mapper
 
     def forward(self, x, boxes):
+        """
+        Arguments:
+            x (list[Tensor]): feature maps for each level
+            boxes (list[list[BBox]] or list[BBox]): boxes
+                to be used to perform the cropping.
+                If in training mode, boxes is a list[list[BBox]],
+                where the first dimension is the feature maps,
+                and the second is the image.
+                In in eval mode, boxes is a list[BBox], where
+                each element in the list correspond to a different
+                image.
+        """
 
         # if it's in training format, fall back to standard
         # FPNPooler implementation
@@ -189,6 +223,9 @@ class MaskPostProcessorCOCOFormat(MaskPostProcessor):
             result.add_field('mask', rles)
         return results
 
+# the next two functions should be merged inside Masker
+# but are kept here for the moment while we need them
+# temporarily gor paste_mask_in_image
 def expand_boxes(boxes, scale):
     w_half = (boxes[:, 2] - boxes[:, 0]) * .5
     h_half = (boxes[:, 3] - boxes[:, 1]) * .5

@@ -3,7 +3,10 @@ import math
 
 
 class BoxCoder(object):
-
+    """
+    This class encodes and decodes a set of bounding boxes into
+    the representation used for training the regressors.
+    """
     def __init__(self, weights, bbox_xform_clip=math.log(1000. / 16)):
         """
         Arguments:
@@ -15,9 +18,12 @@ class BoxCoder(object):
 
     def encode(self, boxes, anchors):
         """
+        Encode a set of anchors with respect to some
+        reference boxes
+
         Arguments:
-            boxes: tensor
-            anchors: tensor
+            boxes (Tensor): reference boxes
+            anchors (Tensor): boxes to be encoded
         """
         # FIXME PyTorch desn't handle empty tensors well
         if anchors.shape[0] == 0:
@@ -46,9 +52,12 @@ class BoxCoder(object):
 
     def decode(self, rel_codes, anchors):
         """
+        From a set of original anchors and encoded relative box offsets,
+        get the decoded boxes.
+
         Arguments:
-            boxes: tensor
-            anchors: tensor
+            rel_codes (Tensor): encoded boxes
+            anchors (Tensor): reference anchors.
         """
         if anchors.shape[0] == 0:
             # TODO this might crash
