@@ -46,7 +46,7 @@ mkdir ~/github && cd ~/github
 git clone --recursive git@github.com:pytorch/pytorch.git
 cd pytorch
 # compile for several GPU architectures
-TORCH_CUDA_ARCH_LIST="3.5;5.0+PTX;6.0;6.1;7.0" python setup.py install
+TORCH_CUDA_ARCH_LIST="3.5;5.0+PTX;6.0;6.1;7.0" python setup.py build develop
 
 # install torchvision
 cd ~/github
