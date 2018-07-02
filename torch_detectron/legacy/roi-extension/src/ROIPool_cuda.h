@@ -1,9 +1,0 @@
-void ROIPooling_updateOutput(
-    THCState *state,
-	THCudaTensor *input,
-	THCudaTensor *rois,
-	int pooledHeight,
-	int pooledWidth,
-	float spatialScale,
-	THCudaTensor *output,
-	THCudaIntTensor *argmaxes);
