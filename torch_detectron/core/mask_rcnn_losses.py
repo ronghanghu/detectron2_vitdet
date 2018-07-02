@@ -7,15 +7,41 @@ from .utils import nonzero, smooth_l1_loss, cat, cat_bbox, split_with_sizes, kee
 
 
 class MaskTargetPreparator(TargetPreparator):
+    """
+    This class aligns the ground-truth targets to the anchors that are
+    passed to the image.
+    """
     def __init__(self, proposal_matcher, discretization_size):
         super(MaskTargetPreparator, self).__init__(proposal_matcher, None)
         self.discretization_size = discretization_size
 
     def index_target(self, target, index):
+        """
+        This function is used to index the targets, possibly only propagating a few
+        fields of target (instead of them all). In this case, we only propagate
+        labels and masks.
+
+        Arguments:
+            target (BBox): an arbitrary bbox object, containing many possible fields
+            index (Tensor): the indices to select.
+        """
+
         target = target.copy_with_fields(['labels', 'masks'])
         return target[index]
 
     def prepare_labels(self, matched_targets_per_image, anchors_per_image):
+        """
+        Arguments:
+            matched_targets_per_image (BBox): a BBox with the 'matched_idx' field set,
+                containing the ground-truth targets aligned to the anchors,
+                i.e., it contains the same number of elements as the number of anchors,
+                and contains de best-matching ground-truth target element. This is
+                returned by match_targets_to_anchors
+            anchors_per_image (a BBox object)
+
+        This method should return a single tensor, containing the labels
+        for each element in the anchors
+        """
         matched_idxs = matched_targets_per_image.get_field('matched_idxs')
         labels_per_image = matched_targets_per_image.get_field('labels')
         labels_per_image = labels_per_image.to(dtype=torch.int64)
@@ -111,8 +137,18 @@ class MaskRCNNLossComputation(object):
         return labels, masks
 
     def get_permutation_inds(self, anchors):
-        # anchors is in features - images order get the permutation to make it in
-        # image - features order
+        """
+        anchors is in features - images order get the permutation to make it in
+        image - features order
+
+        Arguments:
+            anchors (list[list[BBox]]): first level corresponds to the feature maps,
+                and the second to the images.
+
+        Returns:
+            result (Tensor): indices that allow to convert from the feature map-first
+                representation to the image-first representation
+        """
         num_images = len(anchors[0])
         # flatten anchors into a single list
         flattened = [f for l in anchors for f in l]
@@ -135,13 +171,22 @@ class MaskRCNNLossComputation(object):
         return torch.cat(flip, dim=0)
 
     def __call__(self, anchors, mask_logits, targets):
+        """
+        Arguments:
+            anchors (list[list[BBox]))
+            mask_logits (Tensor)
+            targets (list[BBox])
+
+        Return:
+            mask_loss (Tensor): scalar tensor containing the loss
+        """
         if self.subsample_only_positive_boxes:
             anchors = keep_only_positive_boxes(anchors)
         labels, mask_targets = self.prepare_targets(anchors, targets)
 
+        # convert from feature map-first representation to
+        # image-first representation
         permutation_inds = self.get_permutation_inds(anchors)
-        # TODO is this required???
-        # mask_logits = cat(mask_logits, dim=0)
         mask_logits = mask_logits[permutation_inds]
         
         labels = cat(labels, dim=0)
