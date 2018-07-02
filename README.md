@@ -49,7 +49,10 @@ cd pytorch
 TORCH_CUDA_ARCH_LIST="3.5;5.0+PTX;6.0;6.1;7.0" python setup.py install
 
 # install torchvision
-conda install torchvision -c pytorch
+cd ~/github
+git clone git@github.com:pytorch/vision.git
+cd vision
+python setup.py install
 
 # install pycocotools
 cd ~/github

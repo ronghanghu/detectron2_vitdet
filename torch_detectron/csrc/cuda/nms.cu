@@ -1,9 +1,7 @@
 #include <ATen/ATen.h>
 
 #include <THC/THC.h>
-#include "THCDeviceTensor.cuh"
-#include "THCDeviceTensorUtils.cuh"
-#include "THCDeviceUtils.cuh"
+#include <THC/THCDeviceUtils.cuh>
 
 #include <vector>
 #include <iostream>
