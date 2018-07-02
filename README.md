@@ -101,7 +101,7 @@ backbone | total train time (h) | train time (s / it) | test time (s / it) | max
 R-50-C4  | 6.2 | 0.246 | 0.054 | 3.2 | 51.6 | 4457116
 R-50-FPN | 9.9 | 0.397 | 0.067 | 5.2 | 56.8 | 4409548
 
-*NOTE* For R-50-C4, my original run had wrong test hyperparameters (`PRE_RPN_TOP_N` and `POST_RPN_TOP_N` where smaller than they should be),
+*NOTE* For R-50-C4, my original run had wrong test hyperparameters (`PRE_NMS_TOP_N` and `POST_NMS_TOP_N` where smaller than they should be),
 so the corrected mAR numbers were obtaining on a separate test run.
 
 ### End to end detection and mask

@@ -2,10 +2,6 @@
 This is an example config file.
 
 The goal is to have as much flexibility as possible.
-
-TODO: remove the dependency on get_data_loader,
-get_model, get_optimizer, get_scheduler and the extra
-arguments in the training code and use directly the config
 """
 
 import torch
