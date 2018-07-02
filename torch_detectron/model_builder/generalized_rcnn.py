@@ -5,6 +5,9 @@ from torch_detectron.core.utils import cat_bbox
 
 
 class GeneralizedRCNN(torch.nn.Module):
+    """
+    Model that implements the Generalized R-CNN framework.
+    """
     def __init__(self, backbone, region_proposal, heads, rpn_only=False):
         super(GeneralizedRCNN, self).__init__()
         self.backbone = backbone
@@ -13,6 +16,11 @@ class GeneralizedRCNN(torch.nn.Module):
         self.rpn_only = rpn_only
 
     def forward(self, images, targets=None):
+        """
+        Arguments:
+            images (list[Tensor] or ImageList): images to be processed
+            targets (list[BBox]): ground-truth boxes present in the image (optional)
+        """
         images = to_image_list(images)
         features = self.backbone(images.tensors)
         proposals, proposal_losses = self.region_proposal(images, features, targets)
@@ -31,6 +39,9 @@ class GeneralizedRCNN(torch.nn.Module):
         return result
         
 class RPNModule(torch.nn.Module):
+    """
+    Module for RPN computation. Works for both FPN and non-FPN.
+    """
     def __init__(self, anchor_generator, heads, box_selector_train, box_selector_test, loss_evaluator, rpn_only):
         super(RPNModule, self).__init__()
         self.anchor_generator = anchor_generator
@@ -41,6 +52,14 @@ class RPNModule(torch.nn.Module):
         self.rpn_only = rpn_only
 
     def forward(self, images, features, targets=None):
+        """
+        Arguments:
+            images (ImageList): images for which we want to compute the predictions
+            features (list[Tensor]): features computed from the images that are
+                used for computing the predictions. Each tensor in the list
+                correspond to different feature levels
+            targets (list[BBox): ground-truth boxes present in the image (optional)
+        """
         objectness, rpn_box_regression = self.heads(features)
         anchors = self.anchor_generator(images.image_sizes, features)
 
@@ -65,6 +84,10 @@ class RPNModule(torch.nn.Module):
 
 
 class DetectionHead(torch.nn.Module):
+    """
+    Baseline implementation for Detection Heads.
+    Works for both FPN and non-FPN.
+    """
     def __init__(self, pooler, heads, post_processor, loss_evaluator):
         super(DetectionHead, self).__init__()
         self.pooler = pooler
@@ -73,6 +96,16 @@ class DetectionHead(torch.nn.Module):
         self.loss_evaluator = loss_evaluator
 
     def forward(self, features, proposals, targets=None):
+        """
+        Arguments:
+            features (list[Tensor]): features computed from the images that are
+                used for computing the predictions. Each tensor in the list
+                correspond to different feature levels
+            proposals (list[list[BBox]]): proposal boxes for each feature map and each
+                image. The first level of the list correspond to different feature
+                maps, and the second level to different images.
+            targets (list[BBox): ground-truth boxes present in the image (optional)
+        """
         if self.training:
             with torch.no_grad():
                 proposals = self.loss_evaluator.subsample(proposals, targets)
@@ -91,6 +124,9 @@ class DetectionHead(torch.nn.Module):
 
 
 class DetectionAndMaskHead(torch.nn.Module):
+    """
+    Heads for Detection and Mask when no FPN is used.
+    """
     def __init__(self, pooler, heads, post_processor, loss_evaluator, classifier, heads_mask, loss_evaluator_mask, mask_post_processor):
         super(DetectionAndMaskHead, self).__init__()
         self.pooler = pooler
@@ -104,6 +140,16 @@ class DetectionAndMaskHead(torch.nn.Module):
         self.mask_post_processor = mask_post_processor
 
     def forward(self, features, proposals, targets=None):
+        """
+        Arguments:
+            features (list[Tensor]): features computed from the images that are
+                used for computing the predictions. Each tensor in the list
+                correspond to different feature levels
+            proposals (list[list[BBox]]): proposal boxes for each feature map and each
+                image. The first level of the list correspond to different feature
+                maps, and the second level to different images.
+            targets (list[BBox): ground-truth boxes present in the image (optional)
+        """
         if self.training:
             with torch.no_grad():
                 proposals = self.loss_evaluator.subsample(proposals, targets)
@@ -140,6 +186,12 @@ class DetectionAndMaskHead(torch.nn.Module):
 
 
 class DetectionAndMaskFPNHead(torch.nn.Module):
+    """
+    Head to be used when using FPN with Masks.
+    The reason why we can't fold it in the previous one is that
+    the architecture is slightly different, as they reuse the heads
+    for detection during mask training, in order to save memory and compute.
+    """
     def __init__(self, pooler, heads, post_processor, loss_evaluator,
             heads_mask, mask_pooler, loss_evaluator_mask, mask_post_processor):
         super(DetectionAndMaskFPNHead, self).__init__()
@@ -154,6 +206,16 @@ class DetectionAndMaskFPNHead(torch.nn.Module):
         self.mask_post_processor = mask_post_processor
 
     def forward(self, features, proposals, targets=None):
+        """
+        Arguments:
+            features (list[Tensor]): features computed from the images that are
+                used for computing the predictions. Each tensor in the list
+                correspond to different feature levels
+            proposals (list[list[BBox]]): proposal boxes for each feature map and each
+                image. The first level of the list correspond to different feature
+                maps, and the second level to different images.
+            targets (list[BBox): ground-truth boxes present in the image (optional)
+        """
         if self.training:
             with torch.no_grad():
                 proposals = self.loss_evaluator.subsample(proposals, targets)
