@@ -2,18 +2,9 @@ import math
 import torch
 from torch import nn
 
-#from .meshgrid import meshgrid
+from .utils import meshgrid
 
 from ..structures.bounding_box import BBox
-
-
-def meshgrid(x, y=None):
-    if y is None:
-        y = x
-    m, n = x.size(0), y.size(0)
-    grid_x = x[None].expand(n, m).contiguous()
-    grid_y = y[:, None].expand(n, m).contiguous()
-    return grid_x, grid_y
 
 
 class AnchorGenerator(nn.Module):
