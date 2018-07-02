@@ -90,8 +90,15 @@ class PostProcessor(nn.Module):
     def forward(self, x, boxes):
         """
         Arguments:
-            x (tuple[tensor, tensor])
-            boxes (list[list[BBox]])
+            x (tuple[tensor, tensor]): x contains the class logits
+                and the box_regression from the model
+            boxes (list[list[BBox]]): bounding boxes that are used as
+                reference. The first level correspond to the feature maps,
+                and the second level to the images.
+
+        Returns:
+            results (list[BBox]): one BBox for each image, containing
+                the extra fields labels and scores
         """
         assert len(boxes) == 1, 'Only single feature'
         boxes = boxes[0]
@@ -125,6 +132,11 @@ class PostProcessor(nn.Module):
 
 # TODO maybe simplify
 class FPNPostProcessor(nn.Module):
+    """
+    Extension of PostProcessor for FPN case.
+
+    TODO: can probably merge this with PostProcessor
+    """
     def __init__(self, score_thresh=0.05, nms=0.5, detections_per_img=100,
             box_coder=BoxCoder(weights=(10., 10., 5., 5.))):
         """
@@ -143,8 +155,15 @@ class FPNPostProcessor(nn.Module):
     def forward(self, x, boxes):
         """
         Arguments:
-            x (tuple[tensor, tensor])
-            boxes (list[list[BBox]])
+            x (tuple[tensor, tensor]): x contains the class logits
+                and the box_regression from the model
+            boxes (list[list[BBox]]): bounding boxes that are used as
+                reference. The first level correspond to the feature maps,
+                and the second level to the images.
+
+        Returns:
+            results (list[BBox]): one BBox for each image, containing
+                the extra fields labels and scores
         """
         class_logits, box_regression = x
         class_prob = F.softmax(class_logits, -1)
