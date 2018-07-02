@@ -66,7 +66,7 @@ __global__ void compute_flow_kernel(
 at::Tensor compute_flow_cuda(const at::Tensor& boxes,
                              const int height,
                              const int width) {
-  AT_ASSERT(boxes.type().is_cuda(), "boxes must be a CUDA tensor");
+  AT_ASSERTM(boxes.type().is_cuda(), "boxes must be a CUDA tensor");
 
   auto num_rois = boxes.size(0);
   at::Tensor output = boxes.type().tensor({num_rois, height, width, 2});

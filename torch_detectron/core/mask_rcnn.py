@@ -295,9 +295,9 @@ class Masker(object):
         return flow_field.to(device)
 
     def compute_flow_field_gpu(self, boxes):
-        from core.kernels import _C
+        from torch_detectron import layers
         width, height = boxes.size
-        flow_field = _C.compute_flow(boxes.bbox, height, width)
+        flow_field = layers.compute_flow(boxes.bbox, height, width)
         return flow_field
 
     def compute_flow_field(self, boxes):
