@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 
-from ..structures.bounding_box import BBox
+from torch_detectron.structures.bounding_box import BBox
 
 
 class RandomRegionProposal(nn.Module):
