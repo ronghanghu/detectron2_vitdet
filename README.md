@@ -116,7 +116,21 @@ R-50-FPN | Fast | 1x | 2 |  5.3 | 0.464  | 11.5 | 0.102         | 36.3 | -    | 
 R-50-C4  | Mask | 1x | 1 |  4.2 | 0.486  | 24.3 | 0.151 + 0.022 | 35.5 | 31.4 | 4354304
 R-50-FPN | Mask | 1x | 2 |  7.5 | 0.565  | 14.1 | 0.110 + 0.026 | 37.2 | 34.0 | 4444352
 
+#### Comparing with Detectron C2 using CUDA 9.0 and CUDNN 7.0
 
+In the following table, we run a few detection algorithms for 20 minutes using CUDA 9.0 and CUDNN 7.0 on
+8 V100 cards, using both our implementation and the Detectron Caffe2 codebase.
+
+backbone | type | im / gpu | train mem(GB) | train time (s/iter) | Codebase
+-- | -- | -- | -- | -- | --
+R-50-FPN | Fast | 2 | 5.2 | 0.403 | This repo
+R-50-FPN | Fast | 2 | 7.4 | 0.488 | Detectron C2
+R-50-FPN | Mask | 2 | 7.2 | 0.459 | This repo
+R-50-FPN | Mask | 2 | 8.7 | 0.796 | Detectron C2
+
+As can be seem from this table, the implementation in this repo uses significantly less memory
+and is significantly faster. Also, we use a naive Python implementation for `AffineChannel`; an optimized
+implementation would bring additional speed benefits.
 
 ## Abstractions
 The main abstractions introduced by `torch_detectron` that are useful to
