@@ -5,22 +5,30 @@ The goal is to have as much flexibility as possible.
 """
 
 import torch
+
+from configs import dataset_catalog
+from torch_detectron.core.fpn import FPNPooler
 from torch_detectron.helpers.config import config
 from torch_detectron.helpers.config_utils import ConfigClass
-
-from torch_detectron.core.fpn import FPNPooler
 from torch_detectron.model_builder.resnet import fpn_resnet50_conv5_body, fpn_classification_head
+
 
 # dataset
 config.TRAIN.DATA.DATASET.FILES = [
-        ('/datasets01/COCO/060817/annotations/instances_train2014.json',
-         '/datasets01/COCO/060817/train2014/'),
-        ('/private/home/fmassa/coco_trainval2017/annotations/instances_valminusminival2017.json',
-         '/datasets01/COCO/060817/val2014/')
+    (
+        dataset_catalog.get_annotation_filename('coco_2014_train'),
+        dataset_catalog.get_image_dir('coco_2014_train')
+    ),
+    (
+        '/private/home/fmassa/coco_annotations/instances_valminusminival2017.json',
+         '/datasets01/COCO/060817/val2014/'
+    ),
 ]
 config.TEST.DATA.DATASET.FILES = [
-        ('/private/home/fmassa/coco_trainval2017/annotations/instances_val2017_mod.json',
-         '/datasets01/COCO/060817/val2014/')
+    (
+        '/private/home/fmassa/coco_trainval2017/annotations/instances_val2017_mod.json',
+        '/datasets01/COCO/060817/val2014/'
+    ),
 ]
 
 
@@ -34,8 +42,7 @@ class Pooler(ConfigClass):
         return FPNPooler(
             output_size=(7, 7), scales=[2 ** (-i) for i in range(2, 6)], sampling_ratio=2, drop_last=True)
 
-pretrained_path = '/private/home/fmassa/github/detectron.pytorch/torch_detectron/core/models/r50_new.pth'
-# pretrained_path = '/private/home/fmassa/github/detectron.pytorch/torch_detectron/core/models/fpn_r50.pth'
+pretrained_path = '/private/home/fmassa/models/r50_new.pth'
 
 config.MODEL.BACKBONE.WEIGHTS = pretrained_path
 config.MODEL.HEADS.WEIGHTS = pretrained_path
