@@ -34,8 +34,8 @@ source activate pytorch_detection
 
 conda install ipython
 
-# pytorch dependencies
-conda install numpy pyyaml mkl mkl-include setuptools cmake cffi typing
+# pytorch and coco api dependencies
+conda install numpy pyyaml mkl mkl-include setuptools cmake cffi typing cython
 conda install -c mingfeima mkldnn
 conda install -c pytorch magma-cuda90
 
