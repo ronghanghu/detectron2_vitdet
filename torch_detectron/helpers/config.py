@@ -32,18 +32,16 @@ The only required fields for the moment are:
 
 Everything in between can be modified / replaced.
 """
+import copy
+
 import torch
-
-from torch_detectron.helpers.config_utils import AttrDict
-
 import torch_detectron.helpers.data as _data
-import torch_detectron.helpers.solver as _solver
 import torch_detectron.helpers.model as _model
-
+import torch_detectron.helpers.solver as _solver
+from torch_detectron.helpers.config_utils import AttrDict
 from torch_detectron.layers import ROIAlign as _ROIAlign
 
 _C = AttrDict()
-config = _C
 
 _C.DEVICE = torch.device('cuda')
 _C.DO_TEST = True
@@ -189,3 +187,8 @@ _C.TEST.DATA.TRANSFORM.MEAN = [102.9801, 115.9465, 122.7717]
 _C.TEST.DATA.TRANSFORM.STD = [1, 1, 1]
 _C.TEST.DATA.TRANSFORM.TO_BGR255 = True
 _C.TEST.DATA.TRANSFORM.FLIP_PROB = 0
+
+
+def get_default_config():
+    """Return a config object populated with defaults."""
+    return copy.deepcopy(_C)

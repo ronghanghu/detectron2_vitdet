@@ -301,7 +301,10 @@ Here is an example where we specify a different learning rate,
 the path to our local COCO dataset and a few hyperparameters of
 our model:
 ```python
-from torch_detectron.helpers.config import config
+from torch_detectron.helpers.config import get_default_config
+
+
+config = get_default_config()
 
 # we specify a list of tuples, each tuple containing
 # the information for a single COCO dataset.
@@ -350,7 +353,7 @@ Suppose that you want to use a new dataset which
 does not fit with the COCO style. You can do it in the following manner:
 
 ```python
-from torch_detectron.helpers.config import config
+from torch_detectron.helpers.config import get_default_config
 # this is just a helper class, it's not strictly needed
 from torch_detectron.helpers.config_utils import ConfigClass
 
@@ -369,6 +372,7 @@ class MyDatasetBuilder(ConfigClass):
     def __call__(self, transforms):
         return MyDataset(transforms)
 
+config = get_default_config()
 config.TRAIN.DATA.DATASET = MyDatasetBuilder()
 ```
 There are no other constraints imposed. The constraints on the image
@@ -381,7 +385,7 @@ The default optimizer that we provide uses SGD. Creating a new
 optimizer is simple:
 
 ```python
-from torch_detectron.helpers.config import config
+from torch_detectron.helpers.config import get_default_config
 from torch_detectron.helpers.config_utils import ConfigClass
 
 from torch.optim import Adam
@@ -392,6 +396,7 @@ class MyOptimizer(ConfigClass):
         optimizer = Adam(model.parameters(), lr=lr)
         return optimizer
 
+config = get_default_config()
 config.SOLVER.OPTIM = MyOptimizer()
 config.SOLVER.OPTIM.LEARNING_RATE = 0.01
 ```
@@ -406,7 +411,7 @@ never been tried before, you can do it without having to modify the
 `torch_detectron` files (but you _can_, if you want).
 Here is a toy example:
 ```python
-from torch_detectron.helpers.config import config
+from torch_detectron.helpers.config import get_default_config
 from torch_detectron.helpers.config_utils import ConfigClass
 
 from torch_detectron.core.image_list import to_image_list
@@ -484,6 +489,7 @@ class ModelGetter(ConfigClass):
     def __call__(self):
         return MyModel(self.WEIGHTS)
 
+config = get_default_config()
 config.MODEL = ModelGetter()
 config.MODEL.WEIGHTS = '/path/to/pretrained.pkl'
 ```

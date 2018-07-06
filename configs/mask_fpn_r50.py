@@ -8,10 +8,19 @@ get_model, get_optimizer, get_scheduler and the extra
 arguments in the training code and use directly the config
 """
 
-import torch
-from torch_detectron.helpers.config import config
-from torch_detectron.helpers.config_utils import ConfigClass
+import os
 
+import torch
+from torch_detectron.core.box_selector import ROI2FPNLevelsMapper
+from torch_detectron.core.fpn import FPNPooler
+from torch_detectron.core.mask_rcnn import MaskFPNPooler
+from torch_detectron.core.mask_rcnn import maskrcnn_head
+from torch_detectron.helpers.config import get_default_config
+from torch_detectron.helpers.config_utils import ConfigClass
+from torch_detectron.model_builder.resnet import fpn_classification_head
+from torch_detectron.model_builder.resnet import fpn_resnet50_conv5_body
+
+config = get_default_config()
 
 # dataset
 config.TRAIN.DATA.DATASET.FILES = [
@@ -28,10 +37,6 @@ config.TEST.DATA.DATASET.FILES = [
 config.TRAIN.DATA.DATALOADER.COLLATOR.SIZE_DIVISIBLE = 32
 config.TEST.DATA.DATALOADER.COLLATOR.SIZE_DIVISIBLE = 32
 
-from torch_detectron.core.fpn import FPNPooler
-from torch_detectron.model_builder.resnet import fpn_resnet50_conv5_body, fpn_classification_head
-from torch_detectron.core.mask_rcnn import MaskFPNPooler, maskrcnn_head
-from torch_detectron.core.box_selector import ROI2FPNLevelsMapper
 
 class Pooler(ConfigClass):
     def __call__(self):
@@ -92,7 +97,6 @@ config.SOLVER.SCHEDULER.STEPS = [60000, 80000]
 config.SOLVER.SCHEDULER.GAMMA = 0.1
 
 
-import os
 config.SAVE_DIR = os.environ['SAVE_DIR'] if 'SAVE_DIR' in os.environ else ''
 config.CHECKPOINT = os.environ['CHECKPOINT_FILE'] if 'CHECKPOINT_FILE' in os.environ else ''
 
@@ -113,4 +117,3 @@ if 'QUICK_SCHEDULE' in os.environ and os.environ['QUICK_SCHEDULE']:
 
     #import os
     #os.environ['SAVE_DIR'] = '/checkpoint02/fmassa/detectron_logs/mask_rcnn_quick_debug'
-

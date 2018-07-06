@@ -4,14 +4,17 @@ This is an example config file.
 The goal is to have as much flexibility as possible.
 """
 
-import torch
+import os
 
+import torch
 from configs import dataset_catalog
 from torch_detectron.core.fpn import FPNPooler
-from torch_detectron.helpers.config import config
+from torch_detectron.helpers.config import get_default_config
 from torch_detectron.helpers.config_utils import ConfigClass
-from torch_detectron.model_builder.resnet import fpn_resnet50_conv5_body, fpn_classification_head
+from torch_detectron.model_builder.resnet import fpn_classification_head
+from torch_detectron.model_builder.resnet import fpn_resnet50_conv5_body
 
+config = get_default_config()
 
 # dataset
 config.TRAIN.DATA.DATASET.FILES = [
@@ -103,6 +106,5 @@ config.SOLVER.OPTIM.MOMENTUM = 0.9
 config.SOLVER.SCHEDULER.STEPS = [60000, 80000]
 config.SOLVER.SCHEDULER.GAMMA = 0.1
 
-import os
 config.SAVE_DIR = os.environ['SAVE_DIR'] if 'SAVE_DIR' in os.environ else ''
 config.CHECKPOINT = os.environ['CHECKPOINT_FILE'] if 'CHECKPOINT_FILE' in os.environ else ''
