@@ -1,11 +1,11 @@
 import torch
 
-from .box_coder import BoxCoder
-from .utils import nonzero
+from torch_detectron.layers import nms as box_nms
 
 from ..structures.bounding_box import BBox
-
-from torch_detectron.layers import nms as box_nms
+from .box_coder import BoxCoder
+from .box_ops import boxes_area
+from .utils import nonzero
 
 
 #TODO add option for different params in train / test
@@ -215,7 +215,6 @@ def _filter_boxes(boxes, min_size, im_shape):
     return keep
 
 
-from .box_ops import boxes_area
 class ROI2FPNLevelsMapper(object):
     """Determine which FPN level each RoI in a set of RoIs should map to based
     on the heuristic in the FPN paper.

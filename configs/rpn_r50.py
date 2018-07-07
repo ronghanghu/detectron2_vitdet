@@ -7,6 +7,7 @@ The goal is to have as much flexibility as possible.
 import os
 
 import torch
+
 from torch_detectron.helpers.config import get_default_config
 
 config = get_default_config()

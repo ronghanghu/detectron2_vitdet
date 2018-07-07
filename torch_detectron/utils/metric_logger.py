@@ -1,4 +1,6 @@
-from collections import defaultdict, deque
+from collections import defaultdict
+from collections import deque
+
 import torch
 
 

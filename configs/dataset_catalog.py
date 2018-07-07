@@ -19,7 +19,6 @@
 
 import os
 
-
 # Path to data dir
 _DATA_DIR = os.path.join(os.path.dirname(__file__), 'datasets')
 

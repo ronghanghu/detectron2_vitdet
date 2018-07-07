@@ -1,5 +1,6 @@
-import torch
 import math
+
+import torch
 
 
 class BoxCoder(object):
@@ -99,5 +100,3 @@ class BoxCoder(object):
         pred_boxes[:, 3::4] = pred_ctr_y + 0.5 * pred_h - 1
 
         return pred_boxes
-
-

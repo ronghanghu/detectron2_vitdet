@@ -1,5 +1,7 @@
-import torch
 from bisect import bisect_right
+
+import torch
+
 
 # FIXME ideally this would be achieved with a CombinedLRScheduler,
 # separating MultiStepLR with WarmupLR

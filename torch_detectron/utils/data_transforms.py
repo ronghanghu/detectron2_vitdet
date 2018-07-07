@@ -1,7 +1,8 @@
+import random
+
 import torch
 import torchvision
 from torchvision.transforms import functional as F
-import random
 
 
 class Compose(object):
@@ -112,4 +113,3 @@ class ImageTransform(object):
         x -= torch.tensor([102.9801, 115.9465, 122.7717]).view(3,1,1)
 
         return x, target
-

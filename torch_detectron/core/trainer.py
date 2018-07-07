@@ -1,6 +1,7 @@
 import datetime
 import logging
 import time
+
 import torch
 
 from torch_detectron.utils.metric_logger import MetricLogger

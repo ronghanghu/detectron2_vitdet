@@ -7,19 +7,17 @@ python -m torch_detectron.train --config-file path_to_config_file
 
 to perform training
 """
-import torch
-
 import logging
 import os
 
-from torch_detectron.utils.logging import setup_logger
-from torch_detectron.utils.checkpoint import Checkpoint
-from torch_detectron.utils.miscellaneous import mkdir
+import torch
 
-from torch_detectron.helpers.config_utils import load_config
-
-from torch_detectron.core.trainer import do_train
 from torch_detectron.core.inference import inference
+from torch_detectron.core.trainer import do_train
+from torch_detectron.helpers.config_utils import load_config
+from torch_detectron.utils.checkpoint import Checkpoint
+from torch_detectron.utils.logging import setup_logger
+from torch_detectron.utils.miscellaneous import mkdir
 
 
 def train(config):

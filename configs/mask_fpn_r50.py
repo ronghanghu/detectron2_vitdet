@@ -11,6 +11,7 @@ arguments in the training code and use directly the config
 import os
 
 import torch
+
 from torch_detectron.core.box_selector import ROI2FPNLevelsMapper
 from torch_detectron.core.fpn import FPNPooler
 from torch_detectron.core.mask_rcnn import MaskFPNPooler

@@ -1,13 +1,15 @@
 import datetime
 import logging
 import time
-import torch
 
+import torch
 import torchvision
+
+from tqdm import tqdm
+
 from ..structures.bounding_box import BBox
 
 
-from tqdm import tqdm
 def compute_on_dataset(model, data_loader, device):
     model.eval()
     results = []

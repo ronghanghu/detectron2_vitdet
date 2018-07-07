@@ -5,16 +5,14 @@ Specific to COCO-like dataset
 
 
 import torch.utils.data
-from torch.utils.data.dataset import ConcatDataset
 import torch.utils.data.distributed
 import torch.utils.data.sampler
+from torch.utils.data.dataset import ConcatDataset
 
 from torch_detectron.datasets.coco import COCODataset
-
+from torch_detectron.helpers.config_utils import ConfigClass
 from torch_detectron.utils import data_transforms as T
 from torch_detectron.utils.data_collate import BatchCollator
-
-from torch_detectron.helpers.config_utils import ConfigClass
 
 
 class _COCODataset(ConfigClass):

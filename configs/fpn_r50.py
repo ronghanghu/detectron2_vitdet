@@ -7,6 +7,7 @@ The goal is to have as much flexibility as possible.
 import os
 
 import torch
+
 from configs import dataset_catalog
 from torch_detectron.core.fpn import FPNPooler
 from torch_detectron.helpers.config import get_default_config

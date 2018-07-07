@@ -6,9 +6,11 @@ file
 import torch
 from torch.nn import functional as F
 
-from .utils import nonzero, smooth_l1_loss, cat
 from .proposal_matcher import Matcher
 from .target_preparator import TargetPreparator
+from .utils import cat
+from .utils import nonzero
+from .utils import smooth_l1_loss
 
 
 class RPNTargetPreparator(TargetPreparator):
