@@ -1,10 +1,12 @@
 import math
+
 import torch
 from torch import nn
 
-from .utils import meshgrid
+import numpy as np
 
 from ..structures.bounding_box import BBox
+from .utils import meshgrid
 
 
 class AnchorGenerator(nn.Module):
@@ -193,8 +195,6 @@ class FPNAnchorGenerator(nn.Module):
 # Written by Ross Girshick and Sean Bell
 # --------------------------------------------------------
 
-import numpy as np
-import torch
 
 # Verify that we compute the same anchors as Shaoqing's matlab implementation:
 #

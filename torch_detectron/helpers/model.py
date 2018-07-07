@@ -3,28 +3,31 @@ This file contains utility functions for building detection models from
 a configuration file.
 """
 
-from torch_detectron.helpers.config_utils import ConfigClass
 import torch_detectron.model_builder.generalized_rcnn as generalized_rcnn
-
-from torch_detectron.model_builder.resnet import resnet50_conv4_body, resnet50_conv5_head
-from torch_detectron.core.anchor_generator import AnchorGenerator, FPNAnchorGenerator
-from torch_detectron.core.box_selector import RPNBoxSelector, FPNRPNBoxSelector, ROI2FPNLevelsMapper
-
-from torch_detectron.core.proposal_matcher import Matcher
-from torch_detectron.core.balanced_positive_negative_sampler import (
-        BalancedPositiveNegativeSampler)
-
-from torch_detectron.core.rpn_losses import (RPNLossComputation,
-        RPNTargetPreparator)
-from torch_detectron.core.fast_rcnn_losses import (FastRCNNLossComputation,
-        FastRCNNTargetPreparator)
-from torch_detectron.core.faster_rcnn import RPNHeads, Pooler
+from torch_detectron.core.anchor_generator import AnchorGenerator
+from torch_detectron.core.anchor_generator import FPNAnchorGenerator
+from torch_detectron.core.balanced_positive_negative_sampler import \
+    BalancedPositiveNegativeSampler
 from torch_detectron.core.box_coder import BoxCoder
-from torch_detectron.core.post_processor import PostProcessor, FPNPostProcessor
-
-from torch_detectron.core.mask_rcnn_losses import (MaskRCNNLossComputation,
-        MaskTargetPreparator)
+from torch_detectron.core.box_selector import FPNRPNBoxSelector
+from torch_detectron.core.box_selector import ROI2FPNLevelsMapper
+from torch_detectron.core.box_selector import RPNBoxSelector
+from torch_detectron.core.fast_rcnn_losses import FastRCNNLossComputation
+from torch_detectron.core.fast_rcnn_losses import FastRCNNTargetPreparator
+from torch_detectron.core.faster_rcnn import Pooler
+from torch_detectron.core.faster_rcnn import RPNHeads
 from torch_detectron.core.mask_rcnn import MaskPostProcessor
+from torch_detectron.core.mask_rcnn_losses import MaskRCNNLossComputation
+from torch_detectron.core.mask_rcnn_losses import MaskTargetPreparator
+from torch_detectron.core.post_processor import FPNPostProcessor
+from torch_detectron.core.post_processor import PostProcessor
+from torch_detectron.core.proposal_matcher import Matcher
+from torch_detectron.core.rpn_losses import RPNLossComputation
+from torch_detectron.core.rpn_losses import RPNTargetPreparator
+from torch_detectron.helpers.config_utils import ConfigClass
+from torch_detectron.model_builder.resnet import resnet50_conv4_body
+from torch_detectron.model_builder.resnet import resnet50_conv5_head
+
 
 class ModelBuilder(ConfigClass):
     def __call__(self):

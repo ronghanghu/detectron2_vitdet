@@ -1,5 +1,6 @@
-import torch
 import argparse
+
+import torch
 
 from torch_detectron.core.inference import inference
 from torch_detectron.helpers.config_utils import load_config

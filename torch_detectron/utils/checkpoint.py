@@ -1,6 +1,7 @@
-import os
-import torch
 import logging
+import os
+
+import torch
 
 
 class Checkpoint(object):

@@ -20,4 +20,3 @@ def setup_logger(name, save_dir, local_rank):
         fh.setLevel(logging.DEBUG)
         fh.setFormatter(formatter)
         logger.addHandler(fh)
-

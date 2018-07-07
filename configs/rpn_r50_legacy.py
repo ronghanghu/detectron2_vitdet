@@ -7,7 +7,14 @@ WARNING: this is an initial POC, and needs iteration!
 It currently is too much verbose
 """
 
+import os
+import random
+from bisect import bisect_right
+
 import torch
+import torchvision
+
+from torch_detectron.core.image_list import to_image_list
 
 # dataset
 ann_file = '/private/home/fmassa/coco_trainval2017/annotations/instances_val2017_mod.json'
@@ -32,7 +39,6 @@ device = torch.device('cuda')
 #number_of_epochs = 2
 max_iter = 90000
 
-import os
 save_dir = os.environ['SAVE_DIR'] if 'SAVE_DIR' in os.environ else ''
 checkpoint = os.environ['CHECKPOINT_FILE'] if 'CHECKPOINT_FILE' in os.environ else ''
 do_test = True
@@ -40,8 +46,6 @@ do_test = True
 # function getters
 # should implement get_data_loader, get_model, get_optimizer and get_scheduler
 
-import torchvision
-import random
 class ImageTransform(object):
     """
     Data transformations to be performed in the image and the targets.
@@ -64,7 +68,6 @@ class ImageTransform(object):
 
         return x, target
 
-from torch_detectron.core.image_list import to_image_list
 class Collator(object):
     """
     From a list of samples from the dataset,
@@ -198,7 +201,6 @@ def get_optimizer(model):
 # def get_scheduler(optimizer):
 #     return torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=lr_steps, gamma=lr_gamma)
 
-from bisect import bisect_right
 def get_lr_at_iter(it):
     """Get the learning rate at iteration it according to the cfg.SOLVER
     settings.

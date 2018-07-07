@@ -1,6 +1,6 @@
 import torch
-
 import torchvision
+
 from ..structures.bounding_box import BBox
 from ..structures.segmentation_mask import SegmentationMask
 

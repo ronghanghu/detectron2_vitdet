@@ -2,8 +2,11 @@ import torch
 from torch.nn import functional as F
 
 from .proposal_matcher import Matcher
-from .utils import nonzero, smooth_l1_loss, cat, cat_bbox
 from .target_preparator import TargetPreparator
+from .utils import cat
+from .utils import cat_bbox
+from .utils import nonzero
+from .utils import smooth_l1_loss
 
 
 class FastRCNNTargetPreparator(TargetPreparator):

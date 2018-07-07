@@ -2,10 +2,13 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from ..structures.bounding_box import BBox
-from .utils import nonzero, keep_only_positive_boxes
-
+import numpy as np
 from PIL import Image
+
+from ..structures.bounding_box import BBox
+from .fpn import FPNPooler
+from .utils import keep_only_positive_boxes
+from .utils import nonzero
 
 
 # TODO remove num_classes and add in a separate class
@@ -69,7 +72,6 @@ def maskrcnn_head(num_classes, pretrained=None):
     return model
 
 
-from .fpn import FPNPooler
 class MaskFPNPooler(FPNPooler):
     """
     This pooler is used for both training and inference.
@@ -251,8 +253,6 @@ def expand_masks(mask, padding):
     padded_mask[:, :, padding:-padding, padding:-padding] = mask
     return padded_mask, scale
 
-from PIL import Image
-import numpy as np
 # TODO remove this. This is just for exactly matching the
 # results from Detectron. Ideally, make it use the
 # grid_sample instead, but results are slightly off with it

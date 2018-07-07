@@ -3,7 +3,12 @@ from torch.nn import functional as F
 
 from .proposal_matcher import Matcher
 from .target_preparator import TargetPreparator
-from .utils import nonzero, smooth_l1_loss, cat, cat_bbox, split_with_sizes, keep_only_positive_boxes
+from .utils import cat
+from .utils import cat_bbox
+from .utils import keep_only_positive_boxes
+from .utils import nonzero
+from .utils import smooth_l1_loss
+from .utils import split_with_sizes
 
 
 class MaskTargetPreparator(TargetPreparator):
