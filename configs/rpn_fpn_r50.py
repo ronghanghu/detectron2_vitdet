@@ -22,15 +22,21 @@ config = get_default_config()
 
 # dataset
 config.TRAIN.DATA.DATASET.FILES = [
-        ('/datasets01/COCO/060817/annotations/instances_train2014.json',
-         '/datasets01/COCO/060817/train2014/'),
-        ('/private/home/fmassa/coco_trainval2017/annotations/instances_valminusminival2017.json',
-         '/datasets01/COCO/060817/val2014/')
+    (
+        "/datasets01/COCO/060817/annotations/instances_train2014.json",
+        "/datasets01/COCO/060817/train2014/",
+    ),
+    (
+        "/private/home/fmassa/coco_trainval2017/annotations/instances_valminusminival2017.json",
+        "/datasets01/COCO/060817/val2014/",
+    ),
 ]
 
 config.TEST.DATA.DATASET.FILES = [
-        ('/private/home/fmassa/coco_trainval2017/annotations/instances_val2017_mod.json',
-         '/datasets01/COCO/060817/val2014/')
+    (
+        "/private/home/fmassa/coco_trainval2017/annotations/instances_val2017_mod.json",
+        "/datasets01/COCO/060817/val2014/",
+    )
 ]
 
 
@@ -39,7 +45,7 @@ config.TEST.DATA.DATALOADER.COLLATOR.SIZE_DIVISIBLE = 32
 
 # model
 
-pretrained_path = '/private/home/fmassa/github/detectron.pytorch/torch_detectron/core/models/r50_new.pth'
+pretrained_path = "/private/home/fmassa/github/detectron.pytorch/torch_detectron/core/models/r50_new.pth"
 # pretrained_path = '/private/home/fmassa/github/detectron.pytorch/torch_detectron/core/models/rpn_fpn_r50.pth'
 
 
@@ -73,8 +79,10 @@ config.SOLVER.SCHEDULER.STEPS = [60000, 80000]
 config.SOLVER.SCHEDULER.GAMMA = 0.1
 
 
-config.SAVE_DIR = os.environ['SAVE_DIR'] if 'SAVE_DIR' in os.environ else ''
-config.CHECKPOINT = os.environ['CHECKPOINT_FILE'] if 'CHECKPOINT_FILE' in os.environ else ''
+config.SAVE_DIR = os.environ["SAVE_DIR"] if "SAVE_DIR" in os.environ else ""
+config.CHECKPOINT = (
+    os.environ["CHECKPOINT_FILE"] if "CHECKPOINT_FILE" in os.environ else ""
+)
 
 # only for quick
 
@@ -82,8 +90,10 @@ config.CHECKPOINT = os.environ['CHECKPOINT_FILE'] if 'CHECKPOINT_FILE' in os.env
 if False:
 
     config.TRAIN.DATA.DATASET.FILES = [
-            ('/private/home/fmassa/coco_trainval2017/annotations/instances_val2017_mod.json',
-             '/datasets01/COCO/060817/val2014/')
+        (
+            "/private/home/fmassa/coco_trainval2017/annotations/instances_val2017_mod.json",
+            "/datasets01/COCO/060817/val2014/",
+        )
     ]
 
     config.MODEL.REGION_PROPOSAL.PRE_NMS_TOP_N = 12000
@@ -105,9 +115,10 @@ if False:
 
     _loaded_weights = torch.load(pretrained_path)
     from collections import OrderedDict
+
     _rpn_weights = OrderedDict()
     for k, _v in _loaded_weights.items():
-        if k.startswith('rpn'):
+        if k.startswith("rpn"):
             _rpn_weights[k[4:]] = _v
 
     config.MODEL.REGION_PROPOSAL.WEIGHTS = _rpn_weights

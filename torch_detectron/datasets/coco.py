@@ -13,16 +13,17 @@ class COCODataset(torchvision.datasets.coco.CocoDetection):
         self.ids = sorted(self.ids)
 
         # filter images without detection annotations
-        self.ids = [img_id for img_id in self.ids
-                if len(self.coco.getAnnIds(imgIds=img_id, iscrowd=None)) > 0]
+        self.ids = [
+            img_id
+            for img_id in self.ids
+            if len(self.coco.getAnnIds(imgIds=img_id, iscrowd=None)) > 0
+        ]
 
         self.json_category_id_to_contiguous_id = {
-            v: i + 1
-            for i, v in enumerate(self.coco.getCatIds())
+            v: i + 1 for i, v in enumerate(self.coco.getCatIds())
         }
         self.contiguous_category_id_to_json_id = {
-            v: k
-            for k, v in self.json_category_id_to_contiguous_id.items()
+            v: k for k, v in self.json_category_id_to_contiguous_id.items()
         }
         self.id_to_img_map = {k: v for k, v in enumerate(self.ids)}
         self.transforms = transforms
@@ -32,22 +33,22 @@ class COCODataset(torchvision.datasets.coco.CocoDetection):
 
         # filter crowd annotations
         # TODO might be better to add an extra field
-        anno = [obj for obj in anno if obj['iscrowd'] == 0]
+        anno = [obj for obj in anno if obj["iscrowd"] == 0]
 
-        boxes = [obj['bbox'] for obj in anno]
-        target = BBox(boxes, img.size, mode='xywh').convert('xyxy')
+        boxes = [obj["bbox"] for obj in anno]
+        target = BBox(boxes, img.size, mode="xywh").convert("xyxy")
 
-        classes = [obj['category_id'] for obj in anno]
+        classes = [obj["category_id"] for obj in anno]
         classes = [self.json_category_id_to_contiguous_id[c] for c in classes]
         classes = torch.tensor(classes)
-        target.add_field('labels', classes)
+        target.add_field("labels", classes)
 
-        masks = [obj['segmentation'] for obj in anno]
+        masks = [obj["segmentation"] for obj in anno]
         masks = SegmentationMask(masks, img.size)
-        target.add_field('masks', masks)
+        target.add_field("masks", masks)
 
         target = target.clip_to_image(remove_empty=True)
-        
+
         if self.transforms is not None:
             img, target = self.transforms(img, target)
 

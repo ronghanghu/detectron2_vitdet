@@ -8,6 +8,7 @@ class ImageList(object):
     This works by padding the images to the same size,
     and storing in a field the original sizes of each image
     """
+
     def __init__(self, tensors, image_sizes):
         """
         Arguments:
@@ -47,6 +48,7 @@ def to_image_list(tensors, size_divisible=0):
         # input sizs
         if size_divisible > 0:
             import math
+
             stride = size_divisible
             max_size = list(max_size)
             max_size[1] = int(math.ceil(max_size[1] / stride) * stride)
@@ -56,7 +58,7 @@ def to_image_list(tensors, size_divisible=0):
         batch_shape = (len(tensors),) + max_size
         batched_imgs = tensors[0].new(*batch_shape).zero_()
         for img, pad_img in zip(tensors, batched_imgs):
-            pad_img[:img.shape[0], :img.shape[1], :img.shape[2]].copy_(img)
+            pad_img[: img.shape[0], : img.shape[1], : img.shape[2]].copy_(img)
 
         image_sizes = [im.shape[-2:] for im in tensors]
 

@@ -8,14 +8,21 @@ from .box_ops import boxes_area
 from .utils import nonzero
 
 
-#TODO add option for different params in train / test
+# TODO add option for different params in train / test
 class RPNBoxSelector(object):
     """
     Performs post-processing on the outputs of the RPN boxes, before feeding the proposals
     to the heads
     """
-    def __init__(self, pre_nms_top_n, post_nms_top_n, nms_thresh, min_size,
-            box_coder=BoxCoder(weights=(1., 1., 1., 1.))):
+
+    def __init__(
+        self,
+        pre_nms_top_n,
+        post_nms_top_n,
+        nms_thresh,
+        min_size,
+        box_coder=BoxCoder(weights=(1., 1., 1., 1.)),
+    ):
         """
         Arguments:
             pre_nms_top_n (int)
@@ -62,7 +69,8 @@ class RPNBoxSelector(object):
         concat_anchors = concat_anchors.reshape(N, -1, 4)[batch_idx, topk_idx]
 
         proposals = self.box_coder.decode(
-                box_regression.view(-1, 4), concat_anchors.view(-1, 4))
+            box_regression.view(-1, 4), concat_anchors.view(-1, 4)
+        )
 
         proposals = proposals.view(N, -1, 4)
 
@@ -70,14 +78,14 @@ class RPNBoxSelector(object):
         sampled_bboxes = []
         for proposal, score, im_shape in zip(proposals, objectness, image_shapes):
             height, width = im_shape
-            
+
             if proposal.dim() == 0:
                 # TODO check what to do here
                 # sampled_proposals.append(proposal.new())
                 # sampled_scores.append(score.new())
-                print('skipping')
+                print("skipping")
                 continue
-            
+
             p = _clip_boxes_to_image(proposal, height, width)
             keep = _filter_boxes(p, self.min_size, im_shape)
             p = p[keep, :]
@@ -85,11 +93,11 @@ class RPNBoxSelector(object):
             if self.nms_thresh > 0:
                 keep = box_nms(p, score, self.nms_thresh)
                 if self.post_nms_top_n > 0:
-                    keep = keep[:self.post_nms_top_n]
+                    keep = keep[: self.post_nms_top_n]
                 p = p[keep]
                 score = score[keep]
-            sampled_bbox = BBox(p, (width, height), mode='xyxy')
-            sampled_bbox.add_field('objectness', score)
+            sampled_bbox = BBox(p, (width, height), mode="xyxy")
+            sampled_bbox.add_field("objectness", score)
             sampled_bboxes.append(sampled_bbox)
             # TODO maybe also copy the other fields that were originally present?
 
@@ -102,7 +110,7 @@ class RPNBoxSelector(object):
             objectness: list[tensor]
             box_regression: list[tensor]
         """
-        assert len(anchors) == 1, 'only single feature map supported'
+        assert len(anchors) == 1, "only single feature map supported"
         sampled_boxes = []
         for a, o, b in zip(anchors, objectness, box_regression):
             sampled_boxes.append(self.forward_for_single_feature_map(a, o, b))
@@ -143,14 +151,17 @@ class FPNRPNBoxSelector(RPNBoxSelector):
         num_features = len(sampled_boxes)
         num_images = len(sampled_boxes[0])
 
-        merged_lists = [box for per_feature_boxes in sampled_boxes
-                for box in per_feature_boxes]
+        merged_lists = [
+            box for per_feature_boxes in sampled_boxes for box in per_feature_boxes
+        ]
         image_sizes = [b.size for b in sampled_boxes[0]]
 
         device = merged_lists[0].bbox.device
-        indices = [torch.full((box.bbox.shape[0],), img_idx, device=device)
-                for per_feature_boxes in sampled_boxes
-                for img_idx, box in enumerate(per_feature_boxes)]
+        indices = [
+            torch.full((box.bbox.shape[0],), img_idx, device=device)
+            for per_feature_boxes in sampled_boxes
+            for img_idx, box in enumerate(per_feature_boxes)
+        ]
 
         # TODO make these concatenations a helper function?
         concat_boxes = torch.cat([b.bbox for b in merged_lists], dim=0)
@@ -158,12 +169,14 @@ class FPNRPNBoxSelector(RPNBoxSelector):
         extra_fields = {}
         field_names = merged_lists[0].fields()
         for field in field_names:
-            extra_fields[field] = torch.cat([b.get_field(field)
-                for b in merged_lists], dim=0)
+            extra_fields[field] = torch.cat(
+                [b.get_field(field) for b in merged_lists], dim=0
+            )
 
         post_nms_top_n = min(self.fpn_post_nms_top_n, concat_boxes.shape[0])
-        _, inds_sorted = torch.topk(extra_fields['objectness'],
-                post_nms_top_n, dim=0, sorted=True)
+        _, inds_sorted = torch.topk(
+            extra_fields["objectness"], post_nms_top_n, dim=0, sorted=True
+        )
 
         concat_boxes = concat_boxes[inds_sorted]
         indices = indices[inds_sorted]
@@ -179,9 +192,11 @@ class FPNRPNBoxSelector(RPNBoxSelector):
         for feat_lvl in range(lvl_min, lvl_max + 1):
             per_feat_boxes = []
             for img_idx in range(num_images):
-                lvl_idx_per_img = nonzero((indices == img_idx) & (levels == feat_lvl))[0]
+                lvl_idx_per_img = nonzero((indices == img_idx) & (levels == feat_lvl))[
+                    0
+                ]
                 selected_boxes = concat_boxes[lvl_idx_per_img]
-                bbox = BBox(selected_boxes, image_sizes[img_idx], mode='xyxy')
+                bbox = BBox(selected_boxes, image_sizes[img_idx], mode="xyxy")
                 for field, data in extra_fields.items():
                     bbox.add_field(field, data[lvl_idx_per_img])
                 per_feat_boxes.append(bbox)
@@ -194,8 +209,8 @@ class FPNRPNBoxSelector(RPNBoxSelector):
 def _clip_boxes_to_image(boxes, height, width):
     fact = 1  # TODO REMOVE
     num_boxes = boxes.shape[0]
-    b1 = boxes[:, 0::2].clamp(min=0, max=width-fact)
-    b2 = boxes[:, 1::2].clamp(min=0, max=height-fact)
+    b1 = boxes[:, 0::2].clamp(min=0, max=width - fact)
+    b2 = boxes[:, 1::2].clamp(min=0, max=height - fact)
     boxes = torch.stack((b1, b2), 2).view(num_boxes, -1)
     return boxes
 
@@ -210,8 +225,11 @@ def _filter_boxes(boxes, min_size, im_shape):
     x_ctr = boxes[:, 0] + ws / 2.
     y_ctr = boxes[:, 1] + hs / 2.
     keep = nonzero(
-        (ws >= min_size) & (hs >= min_size) &
-        (x_ctr < im_shape[1]) & (y_ctr < im_shape[0]))[0]
+        (ws >= min_size)
+        & (hs >= min_size)
+        & (x_ctr < im_shape[1])
+        & (y_ctr < im_shape[0])
+    )[0]
     return keep
 
 
@@ -219,6 +237,7 @@ class ROI2FPNLevelsMapper(object):
     """Determine which FPN level each RoI in a set of RoIs should map to based
     on the heuristic in the FPN paper.
     """
+
     def __init__(self, k_min, k_max, canonical_scale=224, canonical_level=4, eps=1e-6):
         """
         Arguments:

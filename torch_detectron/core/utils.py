@@ -21,7 +21,7 @@ def nonzero(tensor):
 
 
 # TODO maybe push this to nn?
-def smooth_l1_loss(input, target, beta=1./9, size_average=True):
+def smooth_l1_loss(input, target, beta=1. / 9, size_average=True):
     """
     very similar to the smooth_l1_loss from pytorch, but with
     the extra beta parameter
@@ -72,6 +72,7 @@ def cat_bbox(bboxes):
 
     return cat_boxes
 
+
 def split_bbox(bbox, split_size_or_sections):
     assert isinstance(bbox, BBox)
 
@@ -79,12 +80,15 @@ def split_bbox(bbox, split_size_or_sections):
     size = bbox.size
     mode = bbox.mode
     fields = bbox.fields()
-    fields_data = {field:bbox.get_field(field).split(split_size_or_sections)
-            for field in fields}
+    fields_data = {
+        field: bbox.get_field(field).split(split_size_or_sections) for field in fields
+    }
     bboxes = [BBox(box, size, mode) for box in boxes]
     for i, box in enumerate(bboxes):
-        [box.add_field(field, field_data[i])
-                for field, field_data in fields_data.items()]
+        [
+            box.add_field(field, field_data[i])
+            for field, field_data in fields_data.items()
+        ]
 
     return bboxes
 
@@ -121,13 +125,13 @@ def keep_only_positive_boxes(boxes):
     assert isinstance(boxes, (list, tuple))
     assert isinstance(boxes[0], (list, tuple))
     assert isinstance(boxes[0][0], BBox)
-    assert boxes[0][0].has_field('labels')
+    assert boxes[0][0].has_field("labels")
     positive_boxes = []
     num_boxes = 0
     for boxes_per_feature_map in boxes:
         positive_boxes_per_feature_map = []
         for boxes_per_image in boxes_per_feature_map:
-            labels = boxes_per_image.get_field('labels')
+            labels = boxes_per_image.get_field("labels")
             inds = nonzero(labels > 0)[0]
             selected_boxes = boxes_per_image[inds]
             positive_boxes_per_feature_map.append(selected_boxes)

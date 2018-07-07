@@ -9,6 +9,7 @@ class RPNHeads(nn.Module):
     """
     Adds a simple RPN Head with classification and regression heads
     """
+
     def __init__(self, inplanes, num_anchors):
         """
         Arguments:
@@ -42,6 +43,7 @@ class Pooler(nn.Module):
 
     TODO: merge this with FPNPooler
     """
+
     def __init__(self, pooler=None):
         """
         Arguments:
@@ -63,7 +65,9 @@ class Pooler(nn.Module):
         """
         result = []
         for per_level_feature, per_level_boxes in zip(x, boxes):
-            ids = [i for i, l in enumerate(per_level_boxes) for _ in range(l.bbox.shape[0])]
+            ids = [
+                i for i, l in enumerate(per_level_boxes) for _ in range(l.bbox.shape[0])
+            ]
             concat_boxes = torch.cat([b.bbox for b in per_level_boxes], dim=0)
             ids = concat_boxes.new_tensor(ids)
             concat_boxes = torch.cat([ids[:, None], concat_boxes], dim=1)

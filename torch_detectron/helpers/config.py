@@ -44,7 +44,7 @@ from torch_detectron.layers import ROIAlign as _ROIAlign
 
 _C = AttrDict()
 
-_C.DEVICE = torch.device('cuda')
+_C.DEVICE = torch.device("cuda")
 _C.DO_TEST = True
 # if None, doesn't save checkpoints
 _C.SAVE_DIR = None
@@ -134,7 +134,7 @@ _C.SOLVER.SCHEDULER.STEPS = [30000]
 _C.SOLVER.SCHEDULER.GAMMA = 0.1
 _C.SOLVER.SCHEDULER.WARMUP_FACTOR = 1.0 / 3
 _C.SOLVER.SCHEDULER.WARMUP_ITERS = 500
-_C.SOLVER.SCHEDULER.WARMUP_METHOD = 'linear'
+_C.SOLVER.SCHEDULER.WARMUP_METHOD = "linear"
 
 # ============================================================== #
 

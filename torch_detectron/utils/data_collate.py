@@ -7,6 +7,7 @@ class BatchCollator(object):
     returns the batched images and targets.
     This should be passed to the DataLoader
     """
+
     def __init__(self, size_divisible=0):
         self.size_divisible = size_divisible
 

@@ -17,6 +17,7 @@ class RPNTargetPreparator(TargetPreparator):
     """
     This class returns labels and regression targets for the RPN
     """
+
     def index_target(self, target, index):
         # RPN doesn't need any fields from target
         # for creating the labels, so clear them all
@@ -33,11 +34,11 @@ class RPNTargetPreparator(TargetPreparator):
                 returned by match_targets_to_anchors
             anchors_per_image (BBox object)
         """
-        matched_idxs = matched_targets_per_image.get_field('matched_idxs')
+        matched_idxs = matched_targets_per_image.get_field("matched_idxs")
         labels_per_image = matched_idxs >= 0
         labels_per_image = labels_per_image.to(dtype=torch.float32)
         # discard anchors that go out of the boundaries of the image
-        labels_per_image[~anchors_per_image.get_field('visibility')] = -1
+        labels_per_image[~anchors_per_image.get_field("visibility")] = -1
 
         # discard indices that are between thresholds
         inds_to_discard = matched_idxs == Matcher.BETWEEN_THRESHOLDS
@@ -49,6 +50,7 @@ class RPNLossComputation(object):
     """
     This class computes the RPN loss.
     """
+
     def __init__(self, target_preparator, fg_bg_sampler):
         """
         Arguments:
@@ -81,9 +83,12 @@ class RPNLossComputation(object):
         # all feature levels concatenated, so we keep the same representation
         # for the objectness and the box_regression
         for objectness_per_level, box_regression_per_level in zip(
-                objectness, box_regression):
+            objectness, box_regression
+        ):
             N, A, H, W = objectness_per_level.shape
-            objectness_per_level = objectness_per_level.permute(0, 2, 3, 1).reshape(N, -1)
+            objectness_per_level = objectness_per_level.permute(0, 2, 3, 1).reshape(
+                N, -1
+            )
             box_regression_per_level = box_regression_per_level.view(N, -1, 4, H, W)
             box_regression_per_level = box_regression_per_level.permute(0, 3, 4, 1, 2)
             box_regression_per_level = box_regression_per_level.reshape(N, -1, 4)
@@ -99,12 +104,14 @@ class RPNLossComputation(object):
         regression_targets = torch.cat(regression_targets, dim=0)
 
         box_loss = smooth_l1_loss(
-                box_regression[sampled_pos_inds],
-                regression_targets[sampled_pos_inds],
-                beta=1.0 / 9,
-                size_average=False) / (sampled_inds.numel())
+            box_regression[sampled_pos_inds],
+            regression_targets[sampled_pos_inds],
+            beta=1.0 / 9,
+            size_average=False,
+        ) / (sampled_inds.numel())
 
         objectness_loss = F.binary_cross_entropy_with_logits(
-                objectness[sampled_inds], labels[sampled_inds])
+            objectness[sampled_inds], labels[sampled_inds]
+        )
 
         return objectness_loss, box_loss

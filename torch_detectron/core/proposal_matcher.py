@@ -16,7 +16,9 @@ class Matcher(object):
     BELOW_UNMATCHED_THRESHOLD = -1
     BETWEEN_THRESHOLDS = -2
 
-    def __init__(self, matched_threshold, unmatched_threshold, force_match_for_each_row=False):
+    def __init__(
+        self, matched_threshold, unmatched_threshold, force_match_for_each_row=False
+    ):
         """
         Arguments:
             matched_threshold (float): similarity greater or equal to this value are considered
@@ -38,8 +40,9 @@ class Matcher(object):
         """
         matched_vals, matches = match_quality_matrix.max(0)
         below_unmatched_threshold = matched_vals < self.unmatched_threshold
-        between_thresholds = ((matched_vals >= self.unmatched_threshold)
-                & (matched_vals < self.matched_threshold))
+        between_thresholds = (matched_vals >= self.unmatched_threshold) & (
+            matched_vals < self.matched_threshold
+        )
 
         # Ross implementation always uses the box with the max overlap
         matched_backup = matches.clone()
@@ -49,7 +52,9 @@ class Matcher(object):
 
         if self.force_match_for_each_row:
             force_matched_vals, force_matches = match_quality_matrix.max(1)
-            force_max_overlaps = torch.nonzero(match_quality_matrix == force_matched_vals[:, None])
+            force_max_overlaps = torch.nonzero(
+                match_quality_matrix == force_matched_vals[:, None]
+            )
             # matches[force_max_overlaps[:, 1]] = force_max_overlaps[:, 0]
             # Ross implementation always uses the box with the max overlap
             matches[force_max_overlaps[:, 1]] = matched_backup[force_max_overlaps[:, 1]]

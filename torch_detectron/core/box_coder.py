@@ -8,6 +8,7 @@ class BoxCoder(object):
     This class encodes and decodes a set of bounding boxes into
     the representation used for training the regressors.
     """
+
     def __init__(self, weights, bbox_xform_clip=math.log(1000. / 16)):
         """
         Arguments:
@@ -47,8 +48,7 @@ class BoxCoder(object):
         targets_dw = ww * torch.log(gt_widths / ex_widths)
         targets_dh = wh * torch.log(gt_heights / ex_heights)
 
-        targets = torch.stack((targets_dx, targets_dy, targets_dw,
-                              targets_dh), dim=1)
+        targets = torch.stack((targets_dx, targets_dy, targets_dw, targets_dh), dim=1)
         return targets
 
     def decode(self, rel_codes, anchors):

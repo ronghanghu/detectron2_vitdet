@@ -14,8 +14,9 @@ class BBox(object):
     They can contain extra information that is specific to each bounding box, such as
     labels.
     """
-    def __init__(self, bbox, image_size, mode='xyxy'):
-        device = bbox.device if isinstance(bbox, torch.Tensor) else torch.device('cpu')
+
+    def __init__(self, bbox, image_size, mode="xyxy"):
+        device = bbox.device if isinstance(bbox, torch.Tensor) else torch.device("cpu")
         bbox = torch.tensor(bbox, dtype=torch.float32, device=device)
         """
         if bbox.ndimension() != 2:
@@ -26,9 +27,8 @@ class BBox(object):
                     "last dimenion of bbox should have a "
                     "size of 4, got {}".format(bbox.size(-1)))
         """
-        if mode not in ('xyxy', 'xywh'):
-            raise ValueError(
-                    "mode should be 'xyxy' or 'xywh'")
+        if mode not in ("xyxy", "xywh"):
+            raise ValueError("mode should be 'xyxy' or 'xywh'")
 
         self.bbox = bbox
         self.size = image_size  # (image_width, image_height)
@@ -52,36 +52,40 @@ class BBox(object):
             self.extra_fields[k] = v
 
     def convert(self, mode):
-        if mode not in ('xyxy', 'xywh'):
-            raise ValueError(
-                    "mode should be 'xyxy' or 'xywh'")
+        if mode not in ("xyxy", "xywh"):
+            raise ValueError("mode should be 'xyxy' or 'xywh'")
         if mode == self.mode:
             return self
         # we only have two modes, so don't need to check
         # self.mode
         xmin, ymin, xmax, ymax = self._split()
-        if mode == 'xyxy':
-            bbox = torch.cat(
-                    (xmin, ymin, xmax, ymax), dim=-1)
+        if mode == "xyxy":
+            bbox = torch.cat((xmin, ymin, xmax, ymax), dim=-1)
             bbox = BBox(bbox, self.size, mode=mode)
         else:
             TO_REMOVE = 1
             bbox = torch.cat(
-                    (xmin, ymin, xmax - xmin + TO_REMOVE, ymax - ymin + TO_REMOVE), dim=-1)
+                (xmin, ymin, xmax - xmin + TO_REMOVE, ymax - ymin + TO_REMOVE), dim=-1
+            )
             bbox = BBox(bbox, self.size, mode=mode)
         bbox._copy_extra_fields(self)
         return bbox
 
     def _split(self):
-        if self.mode == 'xyxy':
+        if self.mode == "xyxy":
             xmin, ymin, xmax, ymax = self.bbox.split(1, dim=-1)
             return xmin, ymin, xmax, ymax
-        elif self.mode == 'xywh':
+        elif self.mode == "xywh":
             TO_REMOVE = 1
             xmin, ymin, w, h = self.bbox.split(1, dim=-1)
-            return xmin, ymin, (xmin + w - TO_REMOVE).clamp(min=0), (ymin + h - TO_REMOVE).clamp(min=0)
+            return (
+                xmin,
+                ymin,
+                (xmin + w - TO_REMOVE).clamp(min=0),
+                (ymin + h - TO_REMOVE).clamp(min=0),
+            )
         else:
-            raise RuntimeError('Should not be here')
+            raise RuntimeError("Should not be here")
 
     def resize(self, size, *args, **kwargs):
         """
@@ -110,8 +114,9 @@ class BBox(object):
         scaled_ymin = ymin * ratio_height
         scaled_ymax = ymax * ratio_height
         scaled_box = torch.cat(
-                (scaled_xmin, scaled_ymin, scaled_xmax, scaled_ymax), dim=-1)
-        bbox = BBox(scaled_box, size, mode='xyxy')
+            (scaled_xmin, scaled_ymin, scaled_xmax, scaled_ymax), dim=-1
+        )
+        bbox = BBox(scaled_box, size, mode="xyxy")
         # bbox._copy_extra_fields(self)
         for k, v in self.extra_fields.items():
             if not isinstance(v, torch.Tensor):
@@ -130,7 +135,8 @@ class BBox(object):
         """
         if method not in (FLIP_LEFT_RIGHT, FLIP_TOP_BOTTOM):
             raise NotImplementedError(
-                    "Only FLIP_LEFT_RIGHT and FLIP_TOP_BOTTOM implemented")
+                "Only FLIP_LEFT_RIGHT and FLIP_TOP_BOTTOM implemented"
+            )
         image_width, image_height = self.size
         xmin, ymin, xmax, ymax = self._split()
         if method == FLIP_LEFT_RIGHT:
@@ -146,8 +152,9 @@ class BBox(object):
             transposed_ymax = image_height - ymin
 
         transposed_boxes = torch.cat(
-                (transposed_xmin, transposed_ymin, transposed_xmax, transposed_ymax), dim=-1)
-        bbox = BBox(transposed_boxes, self.size, mode='xyxy')
+            (transposed_xmin, transposed_ymin, transposed_xmax, transposed_ymax), dim=-1
+        )
+        bbox = BBox(transposed_boxes, self.size, mode="xyxy")
         # bbox._copy_extra_fields(self)
         for k, v in self.extra_fields.items():
             if not isinstance(v, torch.Tensor):
@@ -173,8 +180,9 @@ class BBox(object):
             is_empty = (cropped_xmin == cropped_xmax) | (cropped_ymin == cropped_ymax)
 
         cropped_box = torch.cat(
-                (cropped_xmin, cropped_ymin, cropped_xmax, cropped_ymax), dim=-1)
-        bbox = BBox(cropped_box, (w, h), mode='xyxy')
+            (cropped_xmin, cropped_ymin, cropped_xmax, cropped_ymax), dim=-1
+        )
+        bbox = BBox(cropped_box, (w, h), mode="xyxy")
         # bbox._copy_extra_fields(self)
         for k, v in self.extra_fields.items():
             if not isinstance(v, torch.Tensor):
@@ -187,7 +195,7 @@ class BBox(object):
     def to(self, device):
         bbox = BBox(self.bbox.to(device), self.size, self.mode)
         for k, v in self.extra_fields.items():
-            if hasattr(v, 'to'):
+            if hasattr(v, "to"):
                 v = v.to(device)
             bbox.add_field(k, v)
         return bbox
@@ -219,15 +227,15 @@ class BBox(object):
         return bbox
 
     def __repr__(self):
-        s = self.__class__.__name__ + '('
-        s += 'num_boxes={}, '.format(self.bbox.size(0))
-        s += 'image_width={}, '.format(self.size[0])
-        s += 'image_height={}, '.format(self.size[1])
-        s += 'mode={})'.format(self.mode)
+        s = self.__class__.__name__ + "("
+        s += "num_boxes={}, ".format(self.bbox.size(0))
+        s += "image_width={}, ".format(self.size[0])
+        s += "image_height={}, ".format(self.size[1])
+        s += "mode={})".format(self.mode)
         return s
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     bbox = BBox([[0, 0, 10, 10], [0, 0, 5, 5]], (10, 10))
     s_bbox = bbox.resize((5, 5))
     print(s_bbox)

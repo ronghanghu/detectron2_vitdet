@@ -20,24 +20,24 @@ class Checkpoint(object):
             return
 
         data = {}
-        data['model'] = self.model.state_dict()
-        data['optimizer'] = self.optimizer.state_dict()
-        data['scheduler'] = self.scheduler.state_dict()
+        data["model"] = self.model.state_dict()
+        data["optimizer"] = self.optimizer.state_dict()
+        data["scheduler"] = self.scheduler.state_dict()
         data.update(kwargs)
 
-        save_file = os.path.join(self.save_dir, '{}.pth'.format(name))
+        save_file = os.path.join(self.save_dir, "{}.pth".format(name))
 
         logger = logging.getLogger(__name__)
-        logger.info('Saving checkpoint to {}'.format(save_file))
+        logger.info("Saving checkpoint to {}".format(save_file))
         torch.save(data, save_file)
 
     def load(self, f):
         logger = logging.getLogger(__name__)
-        logger.info('Loading checkpoint from {}'.format(f))
+        logger.info("Loading checkpoint from {}".format(f))
         checkpoint = torch.load(f)
-        self.model.load_state_dict(checkpoint.pop('model'))
-        self.optimizer.load_state_dict(checkpoint.pop('optimizer'))
-        self.scheduler.load_state_dict(checkpoint.pop('scheduler'))
+        self.model.load_state_dict(checkpoint.pop("model"))
+        self.optimizer.load_state_dict(checkpoint.pop("optimizer"))
+        self.scheduler.load_state_dict(checkpoint.pop("scheduler"))
 
         # extra arguments taht were stored
         return checkpoint

@@ -15,14 +15,14 @@ def load_config(config_path):
 
 
 def _addindent(s_, numSpaces):
-    s = s_.split('\n')
+    s = s_.split("\n")
     # don't do anything for single-line stuff
     if len(s) == 1:
         return s_
     first = s.pop(0)
-    s = [(numSpaces * ' ') + line for line in s]
-    s = '\n'.join(s)
-    s = first + '\n' + s
+    s = [(numSpaces * " ") + line for line in s]
+    s = "\n".join(s)
+    s = first + "\n" + s
     return s
 
 
@@ -33,23 +33,26 @@ class ConfigClass(object):
     All it does is to give a nicer error message if an attribute is not
     set, and also has a nice repr that allows for json-like printing
     """
+
     def __getattr__(self, attr):
         if attr not in self.__dict__:
-            raise AttributeError("{} is not specified. There is either "
-                    "a typo or you forgot to set a value".format(attr))
+            raise AttributeError(
+                "{} is not specified. There is either "
+                "a typo or you forgot to set a value".format(attr)
+            )
         return object.__getattr__(self, attr)
 
     def __repr__(self):
         r = object.__repr__(self)
-        attrs = {k: v for k, v in vars(self).items() if not k.startswith('_')}
+        attrs = {k: v for k, v in vars(self).items() if not k.startswith("_")}
         if attrs:
-            r += ': \n'
+            r += ": \n"
             s = []
             for k, v in attrs.items():
                 attr_str = "{}: {}".format(repr(k), repr(v))
                 attr_str = _addindent(attr_str, 2)
                 s.append(attr_str)
-            r += '  ' + '\n  '.join(s)
+            r += "  " + "\n  ".join(s)
         return r
 
 
@@ -57,6 +60,7 @@ class AttrDict(dict):
     """
     A simple attribute dictionary used for representing configuration options.
     """
+
     def __getattr__(self, name):
         if name in self.__dict__:
             return self.__dict__[name]
@@ -79,4 +83,4 @@ class AttrDict(dict):
             attr_str = _addindent(attr_str, 2)
             s.append(attr_str)
 
-        return r + '\n  ' + '\n  '.join(s)
+        return r + "\n  " + "\n  ".join(s)

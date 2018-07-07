@@ -13,6 +13,7 @@ class Mask(object):
     It is supposed to contain the mask for an object as
     a 2d tensor
     """
+
     def __init__(self, masks, size, mode):
         self.masks = masks
         self.size = size
@@ -21,7 +22,8 @@ class Mask(object):
     def transpose(self, method):
         if method not in (FLIP_LEFT_RIGHT, FLIP_TOP_BOTTOM):
             raise NotImplementedError(
-                    "Only FLIP_LEFT_RIGHT and FLIP_TOP_BOTTOM implemented")
+                "Only FLIP_LEFT_RIGHT and FLIP_TOP_BOTTOM implemented"
+            )
 
         width, height = self.size
         if method == FLIP_LEFT_RIGHT:
@@ -34,12 +36,12 @@ class Mask(object):
         flip_idx = list(range(dim)[::-1])
         flipped_masks = self.masks.index_select(dim, flip_idx)
         return Mask(flipped_masks, self.size, self.mode)
-    
+
     def crop(self, box):
         w, h = box[2] - box[0], box[3] - box[1]
 
-        cropped_masks = self.masks[:, box[1]:box[3], box[0]:box[2]]
-        return Mask(cropped_masks, size=(w, h), mode = self.mode)
+        cropped_masks = self.masks[:, box[1] : box[3], box[0] : box[2]]
+        return Mask(cropped_masks, size=(w, h), mode=self.mode)
 
     def resize(self, size, *args, **kwargs):
         pass
@@ -51,6 +53,7 @@ class Polygons(object):
     of an object mask. The object can be represented as a set of
     polygons
     """
+
     def __init__(self, polygons, size, mode):
         # assert isinstance(polygons, list), '{}'.format(polygons)
         if isinstance(polygons, list):
@@ -65,7 +68,8 @@ class Polygons(object):
     def transpose(self, method):
         if method not in (FLIP_LEFT_RIGHT, FLIP_TOP_BOTTOM):
             raise NotImplementedError(
-                    "Only FLIP_LEFT_RIGHT and FLIP_TOP_BOTTOM implemented")
+                "Only FLIP_LEFT_RIGHT and FLIP_TOP_BOTTOM implemented"
+            )
 
         flipped_polygons = []
         width, height = self.size
@@ -94,8 +98,8 @@ class Polygons(object):
         cropped_polygons = []
         for poly in self.polygons:
             p = poly.clone()
-            p[0::2] = (p[0::2] - box[0])#.clamp(min=0, max=w)
-            p[1::2] = (p[1::2] - box[1])#.clamp(min=0, max=h)
+            p[0::2] = p[0::2] - box[0]  # .clamp(min=0, max=w)
+            p[1::2] = p[1::2] - box[1]  # .clamp(min=0, max=h)
             cropped_polygons.append(p)
 
         return Polygons(cropped_polygons, size=(w, h), mode=self.mode)
@@ -117,25 +121,24 @@ class Polygons(object):
 
         return Polygons(scaled_polygons, size=size, mode=self.mode)
 
-
     def convert(self, mode):
         width, height = self.size
-        if mode == 'mask':
-            rles = mask_utils.frPyObjects([
-                p.numpy() for p in self.polygons], height, width)
+        if mode == "mask":
+            rles = mask_utils.frPyObjects(
+                [p.numpy() for p in self.polygons], height, width
+            )
             rle = mask_utils.merge(rles)
             mask = mask_utils.decode(rle)
             mask = torch.from_numpy(mask)
             # TODO add squeeze?
             return mask
 
-
     def __repr__(self):
-        s = self.__class__.__name__ + '('
-        s += 'num_polygons={}, '.format(len(self.polygons))
-        s += 'image_width={}, '.format(self.size[0])
-        s += 'image_height={}, '.format(self.size[1])
-        s += 'mode={})'.format(self.mode)
+        s = self.__class__.__name__ + "("
+        s += "num_polygons={}, ".format(len(self.polygons))
+        s += "image_width={}, ".format(self.size[0])
+        s += "image_height={}, ".format(self.size[1])
+        s += "mode={})".format(self.mode)
         return s
 
 
@@ -143,6 +146,7 @@ class SegmentationMask(object):
     """
     This class stores the segmentations for all objects in the image
     """
+
     def __init__(self, polygons, size, mode=None):
         """
         Arguments:
@@ -160,13 +164,13 @@ class SegmentationMask(object):
     def transpose(self, method):
         if method not in (FLIP_LEFT_RIGHT, FLIP_TOP_BOTTOM):
             raise NotImplementedError(
-                    "Only FLIP_LEFT_RIGHT and FLIP_TOP_BOTTOM implemented")
+                "Only FLIP_LEFT_RIGHT and FLIP_TOP_BOTTOM implemented"
+            )
 
         flipped = []
         for polygon in self.polygons:
             flipped.append(polygon.transpose(method))
         return SegmentationMask(flipped, size=self.size, mode=self.mode)
-
 
     def crop(self, box):
         w, h = box[2] - box[0], box[3] - box[1]
@@ -202,8 +206,8 @@ class SegmentationMask(object):
         return iter(self.polygons)
 
     def __repr__(self):
-        s = self.__class__.__name__ + '('
-        s += 'num_instances={}, '.format(len(self.polygons))
-        s += 'image_width={}, '.format(self.size[0])
-        s += 'image_height={})'.format(self.size[1])
+        s = self.__class__.__name__ + "("
+        s += "num_instances={}, ".format(len(self.polygons))
+        s += "image_width={}, ".format(self.size[0])
+        s += "image_height={})".format(self.size[1])
         return s

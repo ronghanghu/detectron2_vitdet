@@ -20,19 +20,19 @@ config = get_default_config()
 # dataset
 config.TRAIN.DATA.DATASET.FILES = [
     (
-        dataset_catalog.get_annotation_filename('coco_2014_train'),
-        dataset_catalog.get_image_dir('coco_2014_train')
+        dataset_catalog.get_annotation_filename("coco_2014_train"),
+        dataset_catalog.get_image_dir("coco_2014_train"),
     ),
     (
-        '/private/home/fmassa/coco_annotations/instances_valminusminival2017.json',
-         '/datasets01/COCO/060817/val2014/'
+        "/private/home/fmassa/coco_annotations/instances_valminusminival2017.json",
+        "/datasets01/COCO/060817/val2014/",
     ),
 ]
 config.TEST.DATA.DATASET.FILES = [
     (
-        '/private/home/fmassa/coco_trainval2017/annotations/instances_val2017_mod.json',
-        '/datasets01/COCO/060817/val2014/'
-    ),
+        "/private/home/fmassa/coco_trainval2017/annotations/instances_val2017_mod.json",
+        "/datasets01/COCO/060817/val2014/",
+    )
 ]
 
 
@@ -41,12 +41,18 @@ config.TEST.DATA.DATALOADER.COLLATOR.SIZE_DIVISIBLE = 32
 
 # model
 
+
 class Pooler(ConfigClass):
     def __call__(self):
         return FPNPooler(
-            output_size=(7, 7), scales=[2 ** (-i) for i in range(2, 6)], sampling_ratio=2, drop_last=True)
+            output_size=(7, 7),
+            scales=[2 ** (-i) for i in range(2, 6)],
+            sampling_ratio=2,
+            drop_last=True,
+        )
 
-pretrained_path = '/private/home/fmassa/models/r50_new.pth'
+
+pretrained_path = "/private/home/fmassa/models/r50_new.pth"
 
 config.MODEL.BACKBONE.WEIGHTS = pretrained_path
 config.MODEL.HEADS.WEIGHTS = pretrained_path
@@ -81,9 +87,10 @@ if False:
 
     loaded_weights = torch.load(pretrained_path)
     from collections import OrderedDict
+
     rpn_weights = OrderedDict()
     for k, v in loaded_weights.items():
-        if k.startswith('rpn'):
+        if k.startswith("rpn"):
             rpn_weights[k[4:]] = v
 
     config.MODEL.REGION_PROPOSAL.WEIGHTS = rpn_weights
@@ -107,5 +114,7 @@ config.SOLVER.OPTIM.MOMENTUM = 0.9
 config.SOLVER.SCHEDULER.STEPS = [60000, 80000]
 config.SOLVER.SCHEDULER.GAMMA = 0.1
 
-config.SAVE_DIR = os.environ['SAVE_DIR'] if 'SAVE_DIR' in os.environ else ''
-config.CHECKPOINT = os.environ['CHECKPOINT_FILE'] if 'CHECKPOINT_FILE' in os.environ else ''
+config.SAVE_DIR = os.environ["SAVE_DIR"] if "SAVE_DIR" in os.environ else ""
+config.CHECKPOINT = (
+    os.environ["CHECKPOINT_FILE"] if "CHECKPOINT_FILE" in os.environ else ""
+)

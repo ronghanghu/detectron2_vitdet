@@ -10,6 +10,7 @@ class RandomRegionProposal(nn.Module):
     algorithms such as selective search or edge-box for
     generating the proposals
     """
+
     def __init__(self, number_of_proposals):
         super(RandomRegionProposal, self).__init__()
         self.number_of_proposals = number_of_proposals
@@ -25,7 +26,7 @@ class RandomRegionProposal(nn.Module):
             boxes = torch.rand(self.number_of_proposals, 4, device=x.tensors.device)
             boxes[:, [0, 2]] *= width
             boxes[:, [1, 3]] *= height
-            bbox = BBox(boxes, (width, height), mode='xywh').convert('xyxy')
+            bbox = BBox(boxes, (width, height), mode="xywh").convert("xyxy")
             bbox.bbox[:, 0].clamp_(min=0, max=width)
             bbox.bbox[:, 1].clamp_(min=0, max=height)
             bbox.bbox[:, 2].clamp_(min=0, max=width)
@@ -45,7 +46,7 @@ class FPNRandomRegionProposal(RandomRegionProposal):
 
     def forward(self, x, features=None):
         boxes = super(FPNRandomRegionProposal, self).forward(x, features)
-        
+
         # TODO maybe factor this out in a helper class
         image_sizes = x.image_sizes
         lvl_min = self.roi_to_fpn_level_mapper.k_min
@@ -59,9 +60,9 @@ class FPNRandomRegionProposal(RandomRegionProposal):
             per_img_boxes = []
             levels = self.roi_to_fpn_level_mapper(box_data)
             for feat_lvl in range(lvl_min, lvl_max + 1):
-                lvl_idx_per_img = (levels == feat_lvl)
+                lvl_idx_per_img = levels == feat_lvl
                 selected_boxes = box_data[lvl_idx_per_img]
-                bbox = BBox(selected_boxes, (width, height), mode='xyxy')
+                bbox = BBox(selected_boxes, (width, height), mode="xyxy")
                 per_img_boxes.append(bbox)
             fpn_boxes.append(per_img_boxes)
 

@@ -14,13 +14,17 @@ class AnchorGenerator(nn.Module):
     For a set of image sizes and feature maps, computes a set
     of anchors
     """
-    def __init__(self,
-            scales=(0.5, 1.0, 2.0),
-            aspect_ratios=(0.5, 1.0, 2.0),
-            base_anchor_size=256,
-            anchor_stride=16,
-            straddle_thresh=0,
-            *args, **kwargs):
+
+    def __init__(
+        self,
+        scales=(0.5, 1.0, 2.0),
+        aspect_ratios=(0.5, 1.0, 2.0),
+        base_anchor_size=256,
+        anchor_stride=16,
+        straddle_thresh=0,
+        *args,
+        **kwargs
+    ):
         super(AnchorGenerator, self).__init__()
         # TODO complete and fix
         sizes = tuple(i * base_anchor_size for i in scales)
@@ -37,10 +41,12 @@ class AnchorGenerator(nn.Module):
         device = feature_map.device
         grid_height, grid_width = feature_map.shape[-2:]
         stride = self.stride
-        shifts_x = torch.arange(0, grid_width * stride, step=stride,
-                dtype=torch.float32, device=device)
-        shifts_y = torch.arange(0, grid_height * stride, step=stride,
-                dtype=torch.float32, device=device)
+        shifts_x = torch.arange(
+            0, grid_width * stride, step=stride, dtype=torch.float32, device=device
+        )
+        shifts_y = torch.arange(
+            0, grid_height * stride, step=stride, dtype=torch.float32, device=device
+        )
         shift_x, shift_y = meshgrid(shifts_x, shifts_y)
         shift_x = shift_x.view(-1)
         shift_y = shift_y.view(-1)
@@ -50,10 +56,9 @@ class AnchorGenerator(nn.Module):
 
         A = self.cell_anchors.size(0)
         K = shifts.size(0)
-        field_of_anchors = (
-            self.cell_anchors.view(1, A, 4) +
-            shifts.view(1, K, 4).permute(1, 0, 2)
-        )
+        field_of_anchors = self.cell_anchors.view(1, A, 4) + shifts.view(
+            1, K, 4
+        ).permute(1, 0, 2)
         anchors = field_of_anchors.view(K * A, 4)
 
         # add visibility information to anchors
@@ -61,16 +66,16 @@ class AnchorGenerator(nn.Module):
 
         if self.straddle_thresh >= 0:
             inds_inside = (
-                (anchors[..., 0] >= -self.straddle_thresh) &
-                (anchors[..., 1] >= -self.straddle_thresh) &
-                (anchors[..., 2] < image_width + self.straddle_thresh) &
-                (anchors[..., 3] < image_height + self.straddle_thresh)
+                (anchors[..., 0] >= -self.straddle_thresh)
+                & (anchors[..., 1] >= -self.straddle_thresh)
+                & (anchors[..., 2] < image_width + self.straddle_thresh)
+                & (anchors[..., 3] < image_height + self.straddle_thresh)
             )
         else:
             inds_inside = torch.ones(anchors.shape[0], dtype=torch.uint8, device=device)
 
-        anchors = BBox(anchors, (image_width, image_height), mode='xyxy')
-        anchors.add_field('visibility', inds_inside)
+        anchors = BBox(anchors, (image_width, image_height), mode="xyxy")
+        anchors.add_field("visibility", inds_inside)
 
         # TODO check if want to return list of not
         # return [anchors]
@@ -82,7 +87,7 @@ class AnchorGenerator(nn.Module):
             image_sizes (list(tuple(int, int)))
             feature_maps (list(list(tensor)))
         """
-        assert len(feature_maps) == 1, 'only single feature maps allowed'
+        assert len(feature_maps) == 1, "only single feature maps allowed"
         anchors = []
         for image_sizes, feature_map in zip(images_sizes, feature_maps[0]):
             anchors.append(self.forward_single_image(image_sizes, feature_map))
@@ -95,19 +100,25 @@ class FPNAnchorGenerator(nn.Module):
     For a set of image sizes and feature maps, computes a set
     of anchors
     """
-    def __init__(self,
-            scales=(0.5, 1.0, 2.0),
-            aspect_ratios=(0.5, 1.0, 2.0),
-            base_anchor_size=256,
-            anchor_strides=(8, 16, 32),
-            straddle_thresh=0,
-            *args, **kwargs):
+
+    def __init__(
+        self,
+        scales=(0.5, 1.0, 2.0),
+        aspect_ratios=(0.5, 1.0, 2.0),
+        base_anchor_size=256,
+        anchor_strides=(8, 16, 32),
+        straddle_thresh=0,
+        *args,
+        **kwargs
+    ):
         super(FPNAnchorGenerator, self).__init__()
         # TODO complete and fix
         sizes = tuple(i * base_anchor_size for i in scales)
 
-        cell_anchors = [generate_anchors(anchor_stride, (size,), aspect_ratios).float()
-                for anchor_stride, size in zip(anchor_strides, sizes)]
+        cell_anchors = [
+            generate_anchors(anchor_stride, (size,), aspect_ratios).float()
+            for anchor_stride, size in zip(anchor_strides, sizes)
+        ]
         self.strides = anchor_strides
         self.cell_anchors = cell_anchors
         self.straddle_thresh = straddle_thresh
@@ -118,10 +129,12 @@ class FPNAnchorGenerator(nn.Module):
     def forward_single_image(self, image_sizes, feature_map, cell_anchors, stride):
         device = feature_map.device
         grid_height, grid_width = feature_map.shape[-2:]
-        shifts_x = torch.arange(0, grid_width * stride, step=stride,
-                dtype=torch.float32, device=device)
-        shifts_y = torch.arange(0, grid_height * stride, step=stride,
-                dtype=torch.float32, device=device)
+        shifts_x = torch.arange(
+            0, grid_width * stride, step=stride, dtype=torch.float32, device=device
+        )
+        shifts_y = torch.arange(
+            0, grid_height * stride, step=stride, dtype=torch.float32, device=device
+        )
         shift_x, shift_y = meshgrid(shifts_x, shifts_y)
         shift_x = shift_x.view(-1)
         shift_y = shift_y.view(-1)
@@ -129,9 +142,8 @@ class FPNAnchorGenerator(nn.Module):
 
         A = cell_anchors.size(0)
         K = shifts.size(0)
-        field_of_anchors = (
-            cell_anchors.view(1, A, 4) +
-            shifts.view(1, K, 4).permute(1, 0, 2)
+        field_of_anchors = cell_anchors.view(1, A, 4) + shifts.view(1, K, 4).permute(
+            1, 0, 2
         )
         anchors = field_of_anchors.view(K * A, 4)
 
@@ -140,16 +152,16 @@ class FPNAnchorGenerator(nn.Module):
 
         if self.straddle_thresh >= 0:
             inds_inside = (
-                (anchors[..., 0] >= -self.straddle_thresh) &
-                (anchors[..., 1] >= -self.straddle_thresh) &
-                (anchors[..., 2] < image_width + self.straddle_thresh) &
-                (anchors[..., 3] < image_height + self.straddle_thresh)
+                (anchors[..., 0] >= -self.straddle_thresh)
+                & (anchors[..., 1] >= -self.straddle_thresh)
+                & (anchors[..., 2] < image_width + self.straddle_thresh)
+                & (anchors[..., 3] < image_height + self.straddle_thresh)
             )
         else:
             inds_inside = torch.ones(anchors.shape[0], dtype=torch.uint8, device=device)
 
-        anchors = BBox(anchors, (image_width, image_height), mode='xyxy')
-        anchors.add_field('visibility', inds_inside)
+        anchors = BBox(anchors, (image_width, image_height), mode="xyxy")
+        anchors.add_field("visibility", inds_inside)
 
         # TODO check if want to return list of not
         # return [anchors]
@@ -164,10 +176,16 @@ class FPNAnchorGenerator(nn.Module):
         device = feature_maps[0][0].device
         self.cell_anchors = [anchor.to(device) for anchor in self.cell_anchors]
         anchors = []
-        for feature_map_level, stride, cell_anchor in zip(feature_maps, self.strides, self.cell_anchors):
+        for feature_map_level, stride, cell_anchor in zip(
+            feature_maps, self.strides, self.cell_anchors
+        ):
             per_level_anchors = []
             for image_sizes, feature_map in zip(images_sizes, feature_map_level):
-                per_level_anchors.append(self.forward_single_image(image_sizes, feature_map, cell_anchor, stride))
+                per_level_anchors.append(
+                    self.forward_single_image(
+                        image_sizes, feature_map, cell_anchor, stride
+                    )
+                )
             anchors.append(per_level_anchors)
         return anchors
 
@@ -234,7 +252,7 @@ def generate_anchors(
     return _generate_anchors(
         stride,
         np.array(sizes, dtype=np.float) / stride,
-        np.array(aspect_ratios, dtype=np.float)
+        np.array(aspect_ratios, dtype=np.float),
     )
 
 
@@ -270,7 +288,7 @@ def _mkanchors(ws, hs, x_ctr, y_ctr):
             x_ctr - 0.5 * (ws - 1),
             y_ctr - 0.5 * (hs - 1),
             x_ctr + 0.5 * (ws - 1),
-            y_ctr + 0.5 * (hs - 1)
+            y_ctr + 0.5 * (hs - 1),
         )
     )
     return anchors
@@ -296,38 +314,38 @@ def _scale_enum(anchor, scales):
     return anchors
 
 
-
-
 # TODO doesn't match exactly Detectron
 # heavily inspired from tensorflow
 class AnchorGenerator_v0(nn.Module):
-    def __init__(self,
-            scales=(0.5, 1.0, 2.0),
-            aspect_ratios=(0.5, 1.0, 2.0),
-            base_anchor_size=None,
-            anchor_stride=None,
-            anchor_offset=None,
-            straddle_thresh=0):
+    def __init__(
+        self,
+        scales=(0.5, 1.0, 2.0),
+        aspect_ratios=(0.5, 1.0, 2.0),
+        base_anchor_size=None,
+        anchor_stride=None,
+        anchor_offset=None,
+        straddle_thresh=0,
+    ):
         super(AnchorGenerator, self).__init__()
         # Handle argument defaults
         if base_anchor_size is None:
-          base_anchor_size = [256, 256]
+            base_anchor_size = [256, 256]
         base_anchor_size = torch.tensor(base_anchor_size, dtype=torch.float32)
         if anchor_stride is None:
-          anchor_stride = [16, 16]
+            anchor_stride = [16, 16]
         anchor_stride = torch.tensor(anchor_stride, dtype=torch.float32)
         if anchor_offset is None:
-          anchor_offset = [0, 0]
+            anchor_offset = [0, 0]
         anchor_offset = torch.tensor(anchor_offset, dtype=torch.float32)
 
         scales = torch.tensor(scales, dtype=torch.float32)
         aspect_ratios = torch.tensor(aspect_ratios, dtype=torch.float32)
 
-        self.register_buffer('_scales', scales)
-        self.register_buffer('_aspect_ratios', aspect_ratios)
-        self.register_buffer('_base_anchor_size', base_anchor_size)
-        self.register_buffer('_anchor_stride', anchor_stride)
-        self.register_buffer('_anchor_offset', anchor_offset)
+        self.register_buffer("_scales", scales)
+        self.register_buffer("_aspect_ratios", aspect_ratios)
+        self.register_buffer("_base_anchor_size", base_anchor_size)
+        self.register_buffer("_anchor_stride", anchor_stride)
+        self.register_buffer("_anchor_offset", anchor_offset)
 
         """
         self._scales = scales
@@ -352,8 +370,7 @@ class AnchorGenerator_v0(nn.Module):
         # TODO attention if we want to return a list or not
         # grid_height, grid_width = feature_map[0].shape[-2:]
         grid_height, grid_width = feature_map.shape[-2:]
-        scales_grid, aspect_ratios_grid = meshgrid(self._scales,
-                                                   self._aspect_ratios)
+        scales_grid, aspect_ratios_grid = meshgrid(self._scales, self._aspect_ratios)
         scales_grid = torch.reshape(scales_grid, [-1])
         aspect_ratios_grid = torch.reshape(aspect_ratios_grid, [-1])
 
@@ -361,25 +378,27 @@ class AnchorGenerator_v0(nn.Module):
         # grid_height = torch.tensor(grid_height)
         # grid_width = torch.tensor(grid_width)
 
-        anchors = tile_anchors(grid_height,
-                               grid_width,
-                               scales_grid,
-                               aspect_ratios_grid,
-                               self._base_anchor_size,
-                               self._anchor_stride,
-                               self._anchor_offset)
-        
+        anchors = tile_anchors(
+            grid_height,
+            grid_width,
+            scales_grid,
+            aspect_ratios_grid,
+            self._base_anchor_size,
+            self._anchor_stride,
+            self._anchor_offset,
+        )
+
         # add visibility information to anchors
         image_height, image_width = image_sizes
         inds_inside = (
-            (anchors[..., 0] >= -self.straddle_thresh) &
-            (anchors[..., 1] >= -self.straddle_thresh) &
-            (anchors[..., 2] < image_width + self.straddle_thresh) &
-            (anchors[..., 3] < image_height + self.straddle_thresh)
+            (anchors[..., 0] >= -self.straddle_thresh)
+            & (anchors[..., 1] >= -self.straddle_thresh)
+            & (anchors[..., 2] < image_width + self.straddle_thresh)
+            & (anchors[..., 3] < image_height + self.straddle_thresh)
         )
 
-        anchors = BBox(anchors, (image_width, image_height), mode='xyxy')
-        anchors.add_field('visibility', inds_inside)
+        anchors = BBox(anchors, (image_width, image_height), mode="xyxy")
+        anchors.add_field("visibility", inds_inside)
 
         # TODO check if want to return list of not
         # return [anchors]
@@ -394,8 +413,15 @@ class AnchorGenerator_v0(nn.Module):
 
 # copyied from tensorflow
 # @torch.jit.compile(nderivs=0)  # TODO JIT doesn't work
-def tile_anchors(grid_height, grid_width, scales, aspect_ratios, 
-        base_anchor_size, anchor_stride, anchor_offset):
+def tile_anchors(
+    grid_height,
+    grid_width,
+    scales,
+    aspect_ratios,
+    base_anchor_size,
+    anchor_stride,
+    anchor_offset,
+):
 
     device = scales.device
 
@@ -408,8 +434,8 @@ def tile_anchors(grid_height, grid_width, scales, aspect_ratios,
     print(heights, widths)
 
     # TODO extra here
-    #heights = heights.round()
-    #widths = widths.round()
+    # heights = heights.round()
+    # widths = widths.round()
 
     # TODO it seems that cuda arange is much slower?
     # TODO replace scale + shift with a single call to arange
@@ -428,25 +454,30 @@ def tile_anchors(grid_height, grid_width, scales, aspect_ratios,
     bbox_centers = torch.reshape(bbox_centers, [-1, 2])
     bbox_sizes = torch.reshape(bbox_sizes, [-1, 2])
     # bbox_corners = torch.cat([bbox_centers - .5 * bbox_sizes, bbox_centers + .5 * bbox_sizes], 1)
-    bbox_corners = torch.cat([bbox_centers - .5 * (bbox_sizes - 1), bbox_centers + .5 * (bbox_sizes - 1)], 1)
+    bbox_corners = torch.cat(
+        [bbox_centers - .5 * (bbox_sizes - 1), bbox_centers + .5 * (bbox_sizes - 1)], 1
+    )
     return bbox_corners
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     g = AnchorGenerator(anchor_offset=(8.5, 8.5))
     # g = AnchorGenerator(anchor_offset=(9., 9.))
     tt = g([[10, 10]], [torch.rand(1, 3, 1, 1)])
 
-    t = torch.tensor([
-        [ -83.,  -39.,  100.,   56.],
-        [-175.,  -87.,  192.,  104.],
-        [-359., -183.,  376.,  200.],
-        [ -55.,  -55.,   72.,   72.],
-        [-119., -119.,  136.,  136.],
-        [-247., -247.,  264.,  264.],
-        [ -35.,  -79.,   52.,   96.],
-        [ -79., -167.,   96.,  184.],
-        [-167., -343.,  184.,  360.]])
+    t = torch.tensor(
+        [
+            [-83., -39., 100., 56.],
+            [-175., -87., 192., 104.],
+            [-359., -183., 376., 200.],
+            [-55., -55., 72., 72.],
+            [-119., -119., 136., 136.],
+            [-247., -247., 264., 264.],
+            [-35., -79., 52., 96.],
+            [-79., -167., 96., 184.],
+            [-167., -343., 184., 360.],
+        ]
+    )
 
     print(t - tt[0].bbox)
     # from IPython import embed; embed()

@@ -20,61 +20,45 @@
 import os
 
 # Path to data dir
-_DATA_DIR = os.path.join(os.path.dirname(__file__), 'datasets')
+_DATA_DIR = os.path.join(os.path.dirname(__file__), "datasets")
 
 # Required dataset entry keys
-_IM_DIR = 'image_directory'
-_ANN_FN = 'annotation_file'
+_IM_DIR = "image_directory"
+_ANN_FN = "annotation_file"
 
 # Available datasets
 _DATASETS = {
-    'coco_2014_train': {
-        _IM_DIR:
-            _DATA_DIR + '/coco/train2014',
-        _ANN_FN:
-            _DATA_DIR + '/coco/annotations/instances_train2014.json'
+    "coco_2014_train": {
+        _IM_DIR: _DATA_DIR + "/coco/train2014",
+        _ANN_FN: _DATA_DIR + "/coco/annotations/instances_train2014.json",
     },
-    'coco_2014_val': {
-        _IM_DIR:
-            _DATA_DIR + '/coco/val2014',
-        _ANN_FN:
-            _DATA_DIR + '/coco/annotations/instances_val2014.json'
+    "coco_2014_val": {
+        _IM_DIR: _DATA_DIR + "/coco/val2014",
+        _ANN_FN: _DATA_DIR + "/coco/annotations/instances_val2014.json",
     },
-    'coco_2014_minival': {
-        _IM_DIR:
-            _DATA_DIR + '/coco/val2014',
-        _ANN_FN:
-            _DATA_DIR + '/coco/annotations/instances_minival2014.json'
+    "coco_2014_minival": {
+        _IM_DIR: _DATA_DIR + "/coco/val2014",
+        _ANN_FN: _DATA_DIR + "/coco/annotations/instances_minival2014.json",
     },
-    'coco_2014_valminusminival': {
-        _IM_DIR:
-            _DATA_DIR + '/coco/val2014',
-        _ANN_FN:
-            _DATA_DIR + '/coco/annotations/instances_valminusminival2014.json'
+    "coco_2014_valminusminival": {
+        _IM_DIR: _DATA_DIR + "/coco/val2014",
+        _ANN_FN: _DATA_DIR + "/coco/annotations/instances_valminusminival2014.json",
     },
-    'coco_2015_test': {
-        _IM_DIR:
-            _DATA_DIR + '/coco/test2015',
-        _ANN_FN:
-            _DATA_DIR + '/coco/annotations/image_info_test2015.json'
+    "coco_2015_test": {
+        _IM_DIR: _DATA_DIR + "/coco/test2015",
+        _ANN_FN: _DATA_DIR + "/coco/annotations/image_info_test2015.json",
     },
-    'coco_2015_test-dev': {
-        _IM_DIR:
-            _DATA_DIR + '/coco/test2015',
-        _ANN_FN:
-            _DATA_DIR + '/coco/annotations/image_info_test-dev2015.json'
+    "coco_2015_test-dev": {
+        _IM_DIR: _DATA_DIR + "/coco/test2015",
+        _ANN_FN: _DATA_DIR + "/coco/annotations/image_info_test-dev2015.json",
     },
-    'coco_2017_test': {  # 2017 test uses 2015 test images
-        _IM_DIR:
-            _DATA_DIR + '/coco/test2015',
-        _ANN_FN:
-            _DATA_DIR + '/coco/annotations/image_info_test2017.json',
+    "coco_2017_test": {  # 2017 test uses 2015 test images
+        _IM_DIR: _DATA_DIR + "/coco/test2015",
+        _ANN_FN: _DATA_DIR + "/coco/annotations/image_info_test2017.json",
     },
-    'coco_2017_test-dev': {  # 2017 test-dev uses 2015 test images
-        _IM_DIR:
-            _DATA_DIR + '/coco/test2015',
-        _ANN_FN:
-            _DATA_DIR + '/coco/annotations/image_info_test-dev2017.json',
+    "coco_2017_test-dev": {  # 2017 test-dev uses 2015 test images
+        _IM_DIR: _DATA_DIR + "/coco/test2015",
+        _ANN_FN: _DATA_DIR + "/coco/annotations/image_info_test-dev2017.json",
     },
 }
 

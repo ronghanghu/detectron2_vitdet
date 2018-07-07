@@ -16,6 +16,7 @@ class MaskTargetPreparator(TargetPreparator):
     This class aligns the ground-truth targets to the anchors that are
     passed to the image.
     """
+
     def __init__(self, proposal_matcher, discretization_size):
         super(MaskTargetPreparator, self).__init__(proposal_matcher, None)
         self.discretization_size = discretization_size
@@ -31,7 +32,7 @@ class MaskTargetPreparator(TargetPreparator):
             index (Tensor): the indices to select.
         """
 
-        target = target.copy_with_fields(['labels', 'masks'])
+        target = target.copy_with_fields(["labels", "masks"])
         return target[index]
 
     def prepare_labels(self, matched_targets_per_image, anchors_per_image):
@@ -47,8 +48,8 @@ class MaskTargetPreparator(TargetPreparator):
         This method should return a single tensor, containing the labels
         for each element in the anchors
         """
-        matched_idxs = matched_targets_per_image.get_field('matched_idxs')
-        labels_per_image = matched_targets_per_image.get_field('labels')
+        matched_idxs = matched_targets_per_image.get_field("matched_idxs")
+        labels_per_image = matched_targets_per_image.get_field("labels")
         labels_per_image = labels_per_image.to(dtype=torch.int64)
 
         # this can probably be removed, but is left here for clarity
@@ -59,14 +60,14 @@ class MaskTargetPreparator(TargetPreparator):
         # mask scores are only computed on positive samples
         positive_inds = nonzero(labels_per_image > 0)[0]
 
-        segmentation_masks = matched_targets_per_image.get_field('masks')
+        segmentation_masks = matched_targets_per_image.get_field("masks")
         segmentation_masks = segmentation_masks[positive_inds]
 
         positive_anchors = anchors_per_image[positive_inds]
 
         masks_per_image = self.project(segmentation_masks, positive_anchors)
         return masks_per_image, labels_per_image
-        
+
     def project(self, segmentation_masks, positive_anchors):
         """
         Given segmentation masks and the bounding boxes corresponding
@@ -82,25 +83,25 @@ class MaskTargetPreparator(TargetPreparator):
         masks = []
         M = self.discretization_size
         device = positive_anchors.bbox.device
-        positive_anchors = positive_anchors.convert('xyxy')
-        assert segmentation_masks.size == positive_anchors.size, '{}, {}'.format(
-                segmentation_masks, positive_anchors)
+        positive_anchors = positive_anchors.convert("xyxy")
+        assert segmentation_masks.size == positive_anchors.size, "{}, {}".format(
+            segmentation_masks, positive_anchors
+        )
         # TODO put the anchors on the CPU, as the representation for the
         # masks is not efficient GPU-wise (possibly several small tensors for
         # representing a single instance mask)
-        positive_anchors = positive_anchors.bbox.to(torch.device('cpu'))
+        positive_anchors = positive_anchors.bbox.to(torch.device("cpu"))
         for segmentation_mask, anchor in zip(segmentation_masks, positive_anchors):
             # crop the masks, resize them to the desired resolution and
             # then convert them to the tensor representation,
             # instead of the list representation that was used
             cropped_mask = segmentation_mask.crop(anchor)
             scaled_mask = cropped_mask.resize((M, M))
-            mask = scaled_mask.convert(mode='mask')
+            mask = scaled_mask.convert(mode="mask")
             masks.append(mask)
         if len(masks) == 0:
             return torch.empty(0, dtype=torch.float32, device=device)
         return torch.stack(masks, dim=0).to(device, dtype=torch.float32)
-
 
 
 class MaskRCNNLossComputation(object):
@@ -134,9 +135,11 @@ class MaskRCNNLossComputation(object):
         labels = []
         masks = []
         for matched_targets_per_image, anchors_per_image in zip(
-                matched_targets, anchors):
+            matched_targets, anchors
+        ):
             masks_per_image, labels_per_image = target_preparator.prepare_labels(
-                    matched_targets_per_image, anchors_per_image)
+                matched_targets_per_image, anchors_per_image
+            )
             labels.append(labels_per_image)
             masks.append(masks_per_image)
         return labels, masks
@@ -158,7 +161,7 @@ class MaskRCNNLossComputation(object):
         # flatten anchors into a single list
         flattened = [f for l in anchors for f in l]
         sizes = [i.bbox.shape[0] for i in flattened]
-        device = torch.device('cpu')
+        device = torch.device("cpu")
         # strategy: start from the identity permutation which has the final size
         # split it according to the sizes for each feature map / image, group the
         # indices according to a list of features of list of images, invert the
@@ -168,7 +171,7 @@ class MaskRCNNLossComputation(object):
         inds = split_with_sizes(inds, sizes)
         # grouped correspond to the linear indices split in
         # features first, and then images
-        grouped = [inds[i:i+num_images] for i in range(0, len(inds), num_images)]
+        grouped = [inds[i : i + num_images] for i in range(0, len(inds), num_images)]
         # convert to images first, then features by flipping the representation
         flip = list(zip(*grouped))
         # flatten the list of lists into a single list of tensors
@@ -193,7 +196,7 @@ class MaskRCNNLossComputation(object):
         # image-first representation
         permutation_inds = self.get_permutation_inds(anchors)
         mask_logits = mask_logits[permutation_inds]
-        
+
         labels = cat(labels, dim=0)
         mask_targets = cat(mask_targets, dim=0)
 
@@ -207,5 +210,6 @@ class MaskRCNNLossComputation(object):
             return torch.tensor(0., device=device, requires_grad=True)
 
         mask_loss = F.binary_cross_entropy_with_logits(
-                mask_logits[positive_inds, labels_pos], mask_targets)
+            mask_logits[positive_inds, labels_pos], mask_targets
+        )
         return mask_loss

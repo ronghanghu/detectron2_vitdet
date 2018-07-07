@@ -8,6 +8,7 @@ class GeneralizedRCNN(torch.nn.Module):
     """
     Model that implements the Generalized R-CNN framework.
     """
+
     def __init__(self, backbone, region_proposal, heads, rpn_only=False):
         super(GeneralizedRCNN, self).__init__()
         self.backbone = backbone
@@ -37,12 +38,22 @@ class GeneralizedRCNN(torch.nn.Module):
             return losses
 
         return result
-        
+
+
 class RPNModule(torch.nn.Module):
     """
     Module for RPN computation. Works for both FPN and non-FPN.
     """
-    def __init__(self, anchor_generator, heads, box_selector_train, box_selector_test, loss_evaluator, rpn_only):
+
+    def __init__(
+        self,
+        anchor_generator,
+        heads,
+        box_selector_train,
+        box_selector_test,
+        loss_evaluator,
+        rpn_only,
+    ):
         super(RPNModule, self).__init__()
         self.anchor_generator = anchor_generator
         self.heads = heads
@@ -70,7 +81,10 @@ class RPNModule(torch.nn.Module):
                 boxes = list(zip(*boxes))
                 boxes = [cat_bbox(box) for box in boxes]
                 # sort scores in decreasing order
-                inds = [box.get_field('objectness').sort(descending=True)[1] for box in boxes]
+                inds = [
+                    box.get_field("objectness").sort(descending=True)[1]
+                    for box in boxes
+                ]
                 boxes = [box[ind] for box, ind in zip(boxes, inds)]
             return boxes, {}
 
@@ -79,8 +93,12 @@ class RPNModule(torch.nn.Module):
             with torch.no_grad():
                 boxes = self.box_selector_train(anchors, objectness, rpn_box_regression)
         loss_objectness, loss_rpn_box_reg = self.loss_evaluator(
-                anchors, objectness, rpn_box_regression, targets)
-        return boxes, dict(loss_objectness=loss_objectness, loss_rpn_box_reg=loss_rpn_box_reg)
+            anchors, objectness, rpn_box_regression, targets
+        )
+        return (
+            boxes,
+            dict(loss_objectness=loss_objectness, loss_rpn_box_reg=loss_rpn_box_reg),
+        )
 
 
 class DetectionHead(torch.nn.Module):
@@ -88,6 +106,7 @@ class DetectionHead(torch.nn.Module):
     Baseline implementation for Detection Heads.
     Works for both FPN and non-FPN.
     """
+
     def __init__(self, pooler, heads, post_processor, loss_evaluator):
         super(DetectionHead, self).__init__()
         self.pooler = pooler
@@ -118,7 +137,8 @@ class DetectionHead(torch.nn.Module):
             return result, ()
 
         loss_classifier, loss_box_reg = self.loss_evaluator(
-                [class_logits], [box_regression])
+            [class_logits], [box_regression]
+        )
 
         return None, dict(loss_classifier=loss_classifier, loss_box_reg=loss_box_reg)
 
@@ -127,7 +147,18 @@ class DetectionAndMaskHead(torch.nn.Module):
     """
     Heads for Detection and Mask when no FPN is used.
     """
-    def __init__(self, pooler, heads, post_processor, loss_evaluator, classifier, heads_mask, loss_evaluator_mask, mask_post_processor):
+
+    def __init__(
+        self,
+        pooler,
+        heads,
+        post_processor,
+        loss_evaluator,
+        classifier,
+        heads_mask,
+        loss_evaluator_mask,
+        mask_post_processor,
+    ):
         super(DetectionAndMaskHead, self).__init__()
         self.pooler = pooler
         self.heads = heads
@@ -165,7 +196,7 @@ class DetectionAndMaskHead(torch.nn.Module):
             # so need to shortcut before
             if sum(r.bbox.shape[0] for r in result) == 0:
                 for r in result:
-                    r.add_field('mask', class_logits.new())
+                    r.add_field("mask", class_logits.new())
                 return result, ()
 
             pooled_features = self.pooler(features, [result])
@@ -177,12 +208,19 @@ class DetectionAndMaskHead(torch.nn.Module):
         mask_logits = self.mask_heads(x)
 
         loss_classifier, loss_box_reg = self.loss_evaluator(
-                [class_logits], [box_regression])
+            [class_logits], [box_regression]
+        )
 
-        loss_mask = self.loss_evaluator_mask(
-                proposals, mask_logits, targets)
+        loss_mask = self.loss_evaluator_mask(proposals, mask_logits, targets)
 
-        return None, dict(loss_classifier=loss_classifier, loss_box_reg=loss_box_reg, loss_mask=loss_mask)
+        return (
+            None,
+            dict(
+                loss_classifier=loss_classifier,
+                loss_box_reg=loss_box_reg,
+                loss_mask=loss_mask,
+            ),
+        )
 
 
 class DetectionAndMaskFPNHead(torch.nn.Module):
@@ -192,8 +230,18 @@ class DetectionAndMaskFPNHead(torch.nn.Module):
     the architecture is slightly different, as they reuse the heads
     for detection during mask training, in order to save memory and compute.
     """
-    def __init__(self, pooler, heads, post_processor, loss_evaluator,
-            heads_mask, mask_pooler, loss_evaluator_mask, mask_post_processor):
+
+    def __init__(
+        self,
+        pooler,
+        heads,
+        post_processor,
+        loss_evaluator,
+        heads_mask,
+        mask_pooler,
+        loss_evaluator_mask,
+        mask_post_processor,
+    ):
         super(DetectionAndMaskFPNHead, self).__init__()
         self.pooler = pooler
         self.heads = heads
@@ -230,7 +278,7 @@ class DetectionAndMaskFPNHead(torch.nn.Module):
             # so need to shortcut before
             if sum(r.bbox.shape[0] for r in result) == 0:
                 for r in result:
-                    r.add_field('mask', class_logits.new())
+                    r.add_field("mask", class_logits.new())
                 return result, ()
 
             pooled_features = self.mask_pooler(features, result)
@@ -242,9 +290,16 @@ class DetectionAndMaskFPNHead(torch.nn.Module):
         mask_logits = self.mask_heads(pooled_features_mask)
 
         loss_classifier, loss_box_reg = self.loss_evaluator(
-                [class_logits], [box_regression])
+            [class_logits], [box_regression]
+        )
 
-        loss_mask = self.loss_evaluator_mask(
-                proposals, mask_logits, targets)
+        loss_mask = self.loss_evaluator_mask(proposals, mask_logits, targets)
 
-        return None, dict(loss_classifier=loss_classifier, loss_box_reg=loss_box_reg, loss_mask=loss_mask)
+        return (
+            None,
+            dict(
+                loss_classifier=loss_classifier,
+                loss_box_reg=loss_box_reg,
+                loss_mask=loss_mask,
+            ),
+        )

@@ -13,13 +13,14 @@ class FastRCNNTargetPreparator(TargetPreparator):
     """
     This class returns labels and regression targets for Fast R-CNN
     """
+
     def index_target(self, target, index):
-        target = target.copy_with_fields('labels')
+        target = target.copy_with_fields("labels")
         return target[index]
 
     def prepare_labels(self, matched_targets_per_image, anchors_per_image):
-        matched_idxs = matched_targets_per_image.get_field('matched_idxs')
-        labels_per_image = matched_targets_per_image.get_field('labels')
+        matched_idxs = matched_targets_per_image.get_field("matched_idxs")
+        labels_per_image = matched_targets_per_image.get_field("labels")
         labels_per_image = labels_per_image.to(dtype=torch.int64)
 
         # discard indices that are between thresholds
@@ -36,6 +37,7 @@ class FastRCNNLossComputation(object):
     Computes the loss for Faster R-CNN.
     Also supports FPN
     """
+
     def __init__(self, target_preparator, fg_bg_sampler):
         """
         Arguments:
@@ -61,8 +63,12 @@ class FastRCNNLossComputation(object):
 
         # flip anchors to be images -> feature map levels
         anchors = list(zip(*anchors))
-        levels = [torch.tensor([i for i, n in enumerate(anchor)
-            for _ in range(n.bbox.shape[0])]) for anchor in anchors]
+        levels = [
+            torch.tensor(
+                [i for i, n in enumerate(anchor) for _ in range(n.bbox.shape[0])]
+            )
+            for anchor in anchors
+        ]
         num_levels = len(anchors[0])
         num_images = len(anchors)
         # concatenate all anchors for the same image
@@ -73,14 +79,15 @@ class FastRCNNLossComputation(object):
         # restrict the set of boxes to be used during other steps (Mask R-CNN
         # for example)
         for labels_per_image, anchors_per_image in zip(labels, anchors):
-            anchors_per_image.add_field('labels', labels_per_image)
+            anchors_per_image.add_field("labels", labels_per_image)
 
         sampled_inds = []
         sampled_image_levels = []
         # distributed sampled anchors, that were obtained on all feature maps
         # concatenated via the fg_bg_sampler, into individual feature map levels
         for img_idx, (pos_inds_img, neg_inds_img) in enumerate(
-                zip(sampled_pos_inds, sampled_neg_inds)):
+            zip(sampled_pos_inds, sampled_neg_inds)
+        ):
             img_sampled_inds = pos_inds_img | neg_inds_img
             anchors_per_image = anchors[img_idx][img_sampled_inds]
             sampled_levels = levels[img_idx][img_sampled_inds]
@@ -114,8 +121,13 @@ class FastRCNNLossComputation(object):
         # and then the images
         sampled_image_levels = list(zip(*sampled_image_levels))
         sampled_image_levels = cat([cat(l, dim=0) for l in sampled_image_levels], dim=0)
-        permute_inds = cat([nonzero(sampled_image_levels == img_idx)[0]
-                for img_idx in range(num_images)], dim=0)
+        permute_inds = cat(
+            [
+                nonzero(sampled_image_levels == img_idx)[0]
+                for img_idx in range(num_images)
+            ],
+            dim=0,
+        )
 
         self._permute_inds = permute_inds
 
@@ -135,8 +147,8 @@ class FastRCNNLossComputation(object):
         box_regression = cat(box_regression, dim=0)
         device = class_logits.device
 
-        if not hasattr(self, '_labels'):
-            raise RuntimeError('subsample needs to be called before')
+        if not hasattr(self, "_labels"):
+            raise RuntimeError("subsample needs to be called before")
         labels = self._labels
         regression_targets = self._regression_targets
         sampled_pos_inds = torch.cat(self._sampled_pos_inds, dim=0)
@@ -150,15 +162,21 @@ class FastRCNNLossComputation(object):
         box_regression = box_regression[permute_inds]
 
         # delete cached elements
-        for attr in ['_labels', '_regression_targets',
-                '_sampled_pos_inds', '_sampled_neg_inds', '_sampled_inds',
-                '_permute_inds']:
+        for attr in [
+            "_labels",
+            "_regression_targets",
+            "_sampled_pos_inds",
+            "_sampled_neg_inds",
+            "_sampled_inds",
+            "_permute_inds",
+        ]:
             delattr(self, attr)
 
         # get indices of the positive examples in the subsampled space
         markers = torch.arange(sampled_inds.sum(), device=device)
-        marked_sampled_inds = torch.zeros(sampled_inds.shape[0],
-                dtype=torch.int64, device=device)
+        marked_sampled_inds = torch.zeros(
+            sampled_inds.shape[0], dtype=torch.int64, device=device
+        )
         marked_sampled_inds[sampled_inds] = markers
         sampled_pos_inds_subset = marked_sampled_inds[sampled_pos_inds]
 
@@ -166,8 +184,7 @@ class FastRCNNLossComputation(object):
         sampled_neg_inds = nonzero(sampled_neg_inds)[0]
         sampled_inds = nonzero(sampled_inds)[0]
 
-        classification_loss = F.cross_entropy(
-                class_logits, labels[sampled_inds])
+        classification_loss = F.cross_entropy(class_logits, labels[sampled_inds])
 
         # FIXME workaround because can't unsqueeze empty tensor in PyTorch
         # when there are no positive labels
@@ -182,10 +199,11 @@ class FastRCNNLossComputation(object):
         map_inds = 4 * labels_pos[:, None] + torch.tensor([0, 1, 2, 3], device=device)
 
         box_loss = smooth_l1_loss(
-                box_regression[sampled_pos_inds_subset[:, None], map_inds],
-                regression_targets[sampled_pos_inds],
-                size_average=False,
-                beta=1) / (sampled_inds.numel())
+            box_regression[sampled_pos_inds_subset[:, None], map_inds],
+            regression_targets[sampled_pos_inds],
+            size_average=False,
+            beta=1,
+        ) / (sampled_inds.numel())
 
         return classification_loss, box_loss
 
@@ -196,13 +214,14 @@ class FastRCNNOHEMLossComputation(object):
     This class computes the Fast R-CNN loss
     In an OHEM manner.
     """
+
     def __init__(self, target_preparator, fg_bg_sampler):
         self.target_preparator = target_preparator
         self.fg_bg_sampler = fg_bg_sampler
 
     def __call__(self, anchors, class_logits, box_regression, targets):
-        assert len(anchors) == 1, 'only single feature map supported'
-        assert len(class_logits) == 1, 'only single feature map supported'
+        assert len(anchors) == 1, "only single feature map supported"
+        assert len(class_logits) == 1, "only single feature map supported"
         anchors = anchors[0]
         class_logits = class_logits[0]
         box_regression = box_regression[0]
@@ -223,9 +242,9 @@ class FastRCNNOHEMLossComputation(object):
         labels = torch.cat(labels, dim=0)
         regression_targets = torch.cat(regression_targets, dim=0)
 
-
         classification_loss = F.cross_entropy(
-                class_logits[sampled_inds], labels[sampled_inds])
+            class_logits[sampled_inds], labels[sampled_inds]
+        )
 
         # FIXME workaround because can't unsqueeze empty tensor in PyTorch
         # when there are no positive labels
@@ -240,9 +259,10 @@ class FastRCNNOHEMLossComputation(object):
         map_inds = 4 * labels_pos[:, None] + torch.tensor([0, 1, 2, 3], device=device)
 
         box_loss = smooth_l1_loss(
-                box_regression[sampled_pos_inds[:, None], map_inds],
-                regression_targets[sampled_pos_inds],
-                size_average=False,
-                beta=1) / (sampled_inds.numel())
+            box_regression[sampled_pos_inds[:, None], map_inds],
+            regression_targets[sampled_pos_inds],
+            size_average=False,
+            beta=1,
+        ) / (sampled_inds.numel())
 
         return classification_loss, box_loss

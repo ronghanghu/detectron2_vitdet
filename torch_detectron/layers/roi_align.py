@@ -16,8 +16,8 @@ class _ROIAlign(Function):
         ctx.sampling_ratio = sampling_ratio
         ctx.input_shape = input.size()
         output = _C.roi_align_forward(
-                input, roi, spatial_scale,
-                output_size[0], output_size[1], sampling_ratio)
+            input, roi, spatial_scale, output_size[0], output_size[1], sampling_ratio
+        )
         return output
 
     @staticmethod
@@ -29,8 +29,17 @@ class _ROIAlign(Function):
         sampling_ratio = ctx.sampling_ratio
         bs, ch, h, w = ctx.input_shape
         grad_input = _C.roi_align_backward(
-                grad_output, rois, spatial_scale,
-                output_size[0], output_size[1], bs, ch, h, w, sampling_ratio)
+            grad_output,
+            rois,
+            spatial_scale,
+            output_size[0],
+            output_size[1],
+            bs,
+            ch,
+            h,
+            w,
+            sampling_ratio,
+        )
         return grad_input, None, None, None, None
 
 
@@ -45,12 +54,14 @@ class ROIAlign(nn.Module):
         self.sampling_ratio = sampling_ratio
 
     def forward(self, input, rois):
-        return roi_align(input, rois, self.output_size, self.spatial_scale, self.sampling_ratio)
+        return roi_align(
+            input, rois, self.output_size, self.spatial_scale, self.sampling_ratio
+        )
 
     def __repr__(self):
-        tmpstr = self.__class__.__name__ + '('
-        tmpstr += 'output_size=' + str(self.output_size)
-        tmpstr += ', spatial_scale=' + str(self.spatial_scale)
-        tmpstr += ', sampling_ratio=' + str(self.sampling_ratio)
-        tmpstr += ')'
+        tmpstr = self.__class__.__name__ + "("
+        tmpstr += "output_size=" + str(self.output_size)
+        tmpstr += ", spatial_scale=" + str(self.spatial_scale)
+        tmpstr += ", sampling_ratio=" + str(self.sampling_ratio)
+        tmpstr += ")"
         return tmpstr

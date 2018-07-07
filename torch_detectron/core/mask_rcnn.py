@@ -16,6 +16,7 @@ class MaskRCNNHeads(nn.Module):
     """
     Heads for Mask R-CNN, equivalent to mask_rcnn_fcn_head_v1upXconvs plus the outputs.
     """
+
     def __init__(self, input_features, layers, num_classes):
         """
         Arguments:
@@ -28,24 +29,25 @@ class MaskRCNNHeads(nn.Module):
         next_feature = input_features
         self.blocks = []
         for layer_idx, layer_features in enumerate(layers, 1):
-            layer_name = 'mask_fcn{}'.format(layer_idx)
-            module = nn.Conv2d(next_feature, layer_features, 3,
-                    stride=1, padding=1)
-            nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
+            layer_name = "mask_fcn{}".format(layer_idx)
+            module = nn.Conv2d(next_feature, layer_features, 3, stride=1, padding=1)
+            nn.init.kaiming_normal_(module.weight, mode="fan_out", nonlinearity="relu")
             nn.init.constant_(module.bias, 0)
             self.add_module(layer_name, module)
             next_feature = layer_features
             self.blocks.append(layer_name)
 
         self.conv5_mask = nn.ConvTranspose2d(next_feature, next_feature, 2, stride=2)
-        nn.init.kaiming_normal_(self.conv5_mask.weight, mode='fan_out',
-                nonlinearity='relu')
+        nn.init.kaiming_normal_(
+            self.conv5_mask.weight, mode="fan_out", nonlinearity="relu"
+        )
         nn.init.constant_(self.conv5_mask.bias, 0)
 
         # TODO split classifier in different module
         self.mask_fcn_logits = nn.Conv2d(next_feature, num_classes, 1)
-        nn.init.kaiming_normal_(self.mask_fcn_logits.weight,
-                mode='fan_out', nonlinearity='relu')
+        nn.init.kaiming_normal_(
+            self.mask_fcn_logits.weight, mode="fan_out", nonlinearity="relu"
+        )
         nn.init.constant_(self.mask_fcn_logits.bias, 0)
 
     def forward(self, x):
@@ -59,7 +61,7 @@ class MaskRCNNHeads(nn.Module):
 
         # upsample
         x = self.conv5_mask(x)
-        
+
         x = self.mask_fcn_logits(x)
         return x
 
@@ -88,10 +90,13 @@ class MaskFPNPooler(FPNPooler):
     concatenates the results from all the levels and then permute
     the results so that they are in the original order.
     """
-    def __init__(self, output_size, scales, sampling_ratio,
-            drop_last, roi_to_fpn_level_mapper):
-        super(MaskFPNPooler, self).__init__(output_size, scales,
-                sampling_ratio, drop_last)
+
+    def __init__(
+        self, output_size, scales, sampling_ratio, drop_last, roi_to_fpn_level_mapper
+    ):
+        super(MaskFPNPooler, self).__init__(
+            output_size, scales, sampling_ratio, drop_last
+        )
         self.roi_to_fpn_level_mapper = roi_to_fpn_level_mapper
 
     def forward(self, x, boxes):
@@ -135,9 +140,13 @@ class MaskFPNPooler(FPNPooler):
             rois_idx_order_img = []
             for feat_lvl in range(lvl_min, lvl_max + 1):
                 lvl_idx_per_img = (levels == feat_lvl).nonzero()
-                lvl_idx_per_img = lvl_idx_per_img.squeeze(1) if lvl_idx_per_img.numel() else lvl_idx_per_img
+                lvl_idx_per_img = (
+                    lvl_idx_per_img.squeeze(1)
+                    if lvl_idx_per_img.numel()
+                    else lvl_idx_per_img
+                )
                 selected_boxes = box_data[lvl_idx_per_img]
-                bbox = BBox(selected_boxes, (width, height), mode='xyxy')
+                bbox = BBox(selected_boxes, (width, height), mode="xyxy")
                 for field in bboxes.fields():
                     data = bboxes.get_field(field)
                     data = data[lvl_idx_per_img]
@@ -176,6 +185,7 @@ class MaskPostProcessor(nn.Module):
     If a masker object is passed, it will additionally
     projecte the masks in the image according to the locations in boxes,
     """
+
     def __init__(self, masker=None):
         super(MaskPostProcessor, self).__init__()
         self.masker = masker
@@ -185,7 +195,7 @@ class MaskPostProcessor(nn.Module):
 
         # select masks coresponding to the predicted classes
         num_masks = x.shape[0]
-        labels = [bbox.get_field('labels') for bbox in boxes]
+        labels = [bbox.get_field("labels") for bbox in boxes]
         labels = torch.cat(labels)
         index = torch.arange(num_masks, device=labels.device)
         mask_prob = mask_prob[index, labels][:, None]
@@ -198,10 +208,10 @@ class MaskPostProcessor(nn.Module):
 
         results = []
         for prob, box in zip(mask_prob, boxes):
-            bbox = BBox(box.bbox, box.size, mode='xyxy')
+            bbox = BBox(box.bbox, box.size, mode="xyxy")
             for field in box.fields():
                 bbox.add_field(field, box.get_field(field))
-            bbox.add_field('mask', prob)
+            bbox.add_field("mask", prob)
             results.append(bbox)
 
         return results
@@ -213,17 +223,23 @@ class MaskPostProcessorCOCOFormat(MaskPostProcessor):
     so that the masks are pasted in the image, and
     additionally convert the results to COCO format.
     """
+
     def forward(self, x, boxes):
         import pycocotools.mask as mask_util
         import numpy as np
+
         results = super(MaskPostProcessorCOCOFormat, self).forward(x, boxes)
         for result in results:
-            masks = result.get_field('mask').cpu()
-            rles = [mask_util.encode(np.array(mask[0, :, :, np.newaxis], order='F'))[0] for mask in masks]
+            masks = result.get_field("mask").cpu()
+            rles = [
+                mask_util.encode(np.array(mask[0, :, :, np.newaxis], order="F"))[0]
+                for mask in masks
+            ]
             for rle in rles:
-                rle['counts'] = rle['counts'].decode('utf-8')
-            result.add_field('mask', rles)
+                rle["counts"] = rle["counts"].decode("utf-8")
+            result.add_field("mask", rles)
         return results
+
 
 # the next two functions should be merged inside Masker
 # but are kept here for the moment while we need them
@@ -244,6 +260,7 @@ def expand_boxes(boxes, scale):
     boxes_exp[:, 3] = y_c + h_half
     return boxes_exp
 
+
 def expand_masks(mask, padding):
     N = mask.shape[0]
     M = mask.shape[-1]
@@ -252,6 +269,7 @@ def expand_masks(mask, padding):
     padded_mask = mask.new_zeros((N, 1, M + pad2, M + pad2))
     padded_mask[:, :, padding:-padding, padding:-padding] = mask
     return padded_mask, scale
+
 
 # TODO remove this. This is just for exactly matching the
 # results from Detectron. Ideally, make it use the
@@ -287,8 +305,7 @@ def paste_mask_in_image(mask, box, im_h, im_w, M=14):
     y_1 = min(box[3] + 1, im_h)
 
     im_mask[y_0:y_1, x_0:x_1] = mask[
-        (y_0 - box[1]):(y_1 - box[1]),
-        (x_0 - box[0]):(x_1 - box[0])
+        (y_0 - box[1]) : (y_1 - box[1]), (x_0 - box[0]) : (x_1 - box[0])
     ]
     return im_mask
 
@@ -298,6 +315,7 @@ class Masker(object):
     Projects a set of masks in an image on the locations
     specified by the bounding boxes
     """
+
     def __init__(self, threshold=0.5, padding=0):
         self.threshold = threshold
         self.padding = padding
@@ -340,13 +358,18 @@ class Masker(object):
             x_1 = min(b[2] + 0, im_w)
             y_0 = max(b[1], 0)
             y_1 = min(b[3] + 0, im_h)
-            flow_field[i, y_0:y_1, x_0:x_1, 0] = x[(y_0 - b[1]):(y_1 - b[1]),(x_0 - b[0]):(x_1 - b[0])]
-            flow_field[i, y_0:y_1, x_0:x_1, 1] = y[(y_0 - b[1]):(y_1 - b[1]),(x_0 - b[0]):(x_1 - b[0])]
+            flow_field[i, y_0:y_1, x_0:x_1, 0] = x[
+                (y_0 - b[1]) : (y_1 - b[1]), (x_0 - b[0]) : (x_1 - b[0])
+            ]
+            flow_field[i, y_0:y_1, x_0:x_1, 1] = y[
+                (y_0 - b[1]) : (y_1 - b[1]), (x_0 - b[0]) : (x_1 - b[0])
+            ]
 
         return flow_field.to(device)
 
     def compute_flow_field_gpu(self, boxes):
         from torch_detectron import layers
+
         width, height = boxes.size
         flow_field = layers.compute_flow(boxes.bbox, height, width)
         return flow_field
@@ -358,7 +381,7 @@ class Masker(object):
 
     # TODO make it work better for batches
     def forward_single_image(self, masks, boxes):
-        boxes = boxes.convert('xyxy')
+        boxes = boxes.convert("xyxy")
         if self.padding:
             boxes = BBox(boxes.bbox.clone(), boxes.size, boxes.mode)
             masks, scale = expand_masks(masks, self.padding)
@@ -375,10 +398,13 @@ class Masker(object):
     # the compute_flow, which is batched and runs on the GPU, but this
     # gives slightly different (and worse) results.
     def forward_single_image_2(self, masks, boxes):
-        boxes = boxes.convert('xyxy')
+        boxes = boxes.convert("xyxy")
         im_w, im_h = boxes.size
         M = masks[0].shape[-1]
-        res = [paste_mask_in_image(mask[0], box, im_h, im_w, M) for mask, box in zip(masks, boxes.bbox)]
+        res = [
+            paste_mask_in_image(mask[0], box, im_h, im_w, M)
+            for mask, box in zip(masks, boxes.bbox)
+        ]
         res = torch.stack(res, dim=0)[:, None]
         return res
 

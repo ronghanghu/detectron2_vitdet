@@ -7,6 +7,7 @@ class BalancedPositiveNegativeSampler(object):
     """
     This class samples batches, ensuring that they contain a fixed proportion of positives
     """
+
     def __init__(self, batch_size_per_image, positive_fraction):
         """
         Arguments:
@@ -54,9 +55,11 @@ class BalancedPositiveNegativeSampler(object):
 
             # create binary mask from indices
             pos_idx_per_image_mask = torch.zeros_like(
-                    matched_idxs_per_image, dtype=torch.uint8)
+                matched_idxs_per_image, dtype=torch.uint8
+            )
             neg_idx_per_image_mask = torch.zeros_like(
-                    matched_idxs_per_image, dtype=torch.uint8)
+                matched_idxs_per_image, dtype=torch.uint8
+            )
             pos_idx_per_image_mask[pos_idx_per_image] = 1
             neg_idx_per_image_mask[neg_idx_per_image] = 1
 
