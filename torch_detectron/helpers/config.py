@@ -40,6 +40,7 @@ import torch_detectron.helpers.data as _data
 import torch_detectron.helpers.model as _model
 import torch_detectron.helpers.solver as _solver
 from torch_detectron.helpers.config_utils import AttrDict
+from torch_detectron.helpers.config_utils import link_nodes
 from torch_detectron.layers import ROIAlign as _ROIAlign
 
 _C = AttrDict()
@@ -59,6 +60,7 @@ _C.CHECKPOINT = None
 _C.MODEL = _model.ModelBuilder()
 _C.MODEL.RPN_ONLY = False
 _C.MODEL.USE_MASK = False
+_C.MODEL._INTERNAL_REPRESENTATION_SIZE = 256 * 4
 
 _C.MODEL.BACKBONE = _model.BackboneBuilder()
 _C.MODEL.BACKBONE.WEIGHTS = None
@@ -71,7 +73,6 @@ RPN.BASE_ANCHOR_SIZE = 256
 RPN.ANCHOR_STRIDE = 16
 RPN.ASPECT_RATIOS = (0.5, 1.0, 2.0)
 RPN.STRADDLE_THRESH = 0
-RPN.NUM_INPUT_FEATURES = 256 * 4
 RPN.MATCHED_THRESHOLD = 0.7
 RPN.UNMATCHED_THRESHOLD = 0.3
 RPN.BATCH_SIZE_PER_IMAGE = 256
@@ -117,6 +118,14 @@ HEADS.DETECTIONS_PER_IMG = 100
 _C.MODEL.REGION_PROPOSAL = RPN
 _C.MODEL.HEADS = HEADS
 
+
+# create links between nodes
+link_nodes(_C, 'MODEL.REGION_PROPOSAL.RPN_ONLY', 'MODEL.RPN_ONLY')
+link_nodes(_C, 'MODEL.HEADS.USE_MASK', 'MODEL.USE_MASK')
+
+link_nodes(_C, 'MODEL.BACKBONE.REPRESENTATION_SIZE', 'MODEL._INTERNAL_REPRESENTATION_SIZE')
+link_nodes(_C, 'MODEL.REGION_PROPOSAL.NUM_INPUT_FEATURES', 'MODEL._INTERNAL_REPRESENTATION_SIZE')
+link_nodes(_C, 'MODEL.HEADS.REPRESENTATION_SIZE', 'MODEL._INTERNAL_REPRESENTATION_SIZE')
 
 # ============================================================== #
 

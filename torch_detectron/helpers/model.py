@@ -26,6 +26,7 @@ from torch_detectron.core.proposal_matcher import Matcher
 from torch_detectron.core.rpn_losses import RPNLossComputation
 from torch_detectron.core.rpn_losses import RPNTargetPreparator
 from torch_detectron.helpers.config_utils import ConfigClass
+from torch_detectron.helpers.config_utils import get_attributes_of
 from torch_detectron.model_builder.resnet import resnet50_conv4_body
 from torch_detectron.model_builder.resnet import resnet50_conv5_head
 
@@ -34,10 +35,7 @@ class ModelBuilder(ConfigClass):
     def __call__(self):
         rpn_only = self.RPN_ONLY
         backbone = self.BACKBONE()
-        self.REGION_PROPOSAL.RPN_ONLY = rpn_only
         region_proposal = self.REGION_PROPOSAL()
-
-        self.HEADS.USE_MASK = self.USE_MASK
         heads = self.HEADS()
         return generalized_rcnn.GeneralizedRCNN(
             backbone, region_proposal, heads, rpn_only
@@ -48,7 +46,7 @@ class BackboneBuilder(ConfigClass):
     def __call__(self):
         weights = self.WEIGHTS
         model_builder = self.BUILDER
-        return model_builder(weights)
+        return model_builder(weights, **get_attributes_of(self))
 
 
 # FIXME use this or not
@@ -196,7 +194,8 @@ class DetectionAndMaskHeadsBuilder(ConfigClass):
             classifier = head_builder(num_classes, pretrained_weights)
         else:
             classifier_layers = module_builder(
-                num_classes=num_classes, pretrained=pretrained_weights
+                num_classes=num_classes, pretrained=pretrained_weights,
+                **get_attributes_of(self)
             )
 
         bbox_reg_weights = self.BBOX_REG_WEIGHTS

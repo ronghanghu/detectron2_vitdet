@@ -205,7 +205,7 @@ def resnet50_conv5_body():
     return model
 
 
-def fpn_resnet50_conv5_body(pretrained=None):
+def fpn_resnet50_conv5_body(pretrained=None, **kwargs):
     from ..core.fpn import FPN, LastLevelMaxPool
 
     body = ResNetBackbone(
@@ -213,7 +213,7 @@ def fpn_resnet50_conv5_body(pretrained=None):
     )
     fpn = FPN(
         layers=[256, 512, 1024, 2048],
-        representation_size=256,
+        representation_size=kwargs['REPRESENTATION_SIZE'],
         top_blocks=LastLevelMaxPool(),
     )
     if pretrained:
@@ -224,10 +224,10 @@ def fpn_resnet50_conv5_body(pretrained=None):
     return model
 
 
-def fpn_classification_head(num_classes, pretrained=None):
+def fpn_classification_head(num_classes, pretrained=None, **kwargs):
     from ..core.fpn import FPNHeadClassifier
-
-    model = FPNHeadClassifier(num_classes, 256 * 7 * 7, 1024)
+    representation_size = kwargs['REPRESENTATION_SIZE']
+    model = FPNHeadClassifier(num_classes, representation_size * 7 * 7, 1024)
     if pretrained:
         state_dict = torch.load(pretrained)
         model.load_state_dict(state_dict, strict=False)

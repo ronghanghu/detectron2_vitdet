@@ -88,3 +88,112 @@ class AttrDict(dict):
             s.append(attr_str)
 
         return r + "\n  " + "\n  ".join(s)
+
+
+def _walk_to(obj, path):
+    """
+    Given a nested object (that can be accessed via getattr),
+    iterates over a nested path defined by a string with dot
+    as a delimiter and returns the last object that should
+    be accessed, and the attribute that access this object.
+
+    For example, if path is 'MODEL.HEADS.NMS', then
+    the returned position will be the object represented by
+    MODEL.HEADS, and attr will be NMS.
+
+    Arguments:
+        obj: an arbitrarily-nested object with attributes
+        path (string)
+    """
+    path = path.split('.')
+    path, attr = path[:-1], path[-1]
+    position = obj
+    for step in path:
+        position = getattr(position, step)
+    return position, attr
+
+
+class LinkedNode(object):
+    """
+    Helper class that for creating linked nodes
+    """
+    def __init__(self, base_obj, name):
+        self.base_obj = base_obj
+        self.name = name
+
+    def __call__(self, obj):
+        attrs = self.name.split('.')
+        base_obj = self.base_obj
+        for attr in attrs:
+            base_obj = getattr(base_obj, attr)
+        return base_obj
+
+    def __repr__(self):
+        s = object.__repr__(self)
+        name = "{} (link to {}: {})".format(s, self.name, self.__call__(self))
+        return name
+
+
+class LinkedAttrProperty(object):
+    """
+    Helper class that for creating linked nodes
+    """
+    def __init__(self, obj, path_to_attribute_to_link):
+        self.obj = obj
+        self.path_to_attribute_to_link = path_to_attribute_to_link
+
+    def __call__(self, obj):
+        attr = self.path_to_attribute_to_link.split('.')[-1]
+        if attr in obj.__dict__:
+            return obj.__dict__[attr](obj)
+        raise RuntimeError("Internal error. Write a bug report")
+
+
+# inspired by
+# https://stackoverflow.com/questions/7117892/how-do-i-assign-a-property-to-an-instance-in-python
+def link_nodes(obj, attr_to_set, attr_to_link):
+    """
+    Function that links two arbitrary nodes in the graph, so that
+    once one of the nodes is queryied the returned object will be
+    the the other object.
+
+    This is useful to create graphs that do not represent a tree.
+
+    Note: this behavior is obtained via Python properties.
+    But Python properties need to be added to the `class`, and
+    not to instances of the class. Thus, in order to open the
+    possibility of having instance-level attributes, the attribute
+    in the base class will query for a specific element in the
+    instance object.
+    This enables both having a pretty-print that is compatible
+    with what we had before, but also to be able to have
+    different instances having different behaviors.
+
+    Arguments:
+        obj (AttrDict): the base config object
+        attr_to_set (string): the path to the attribute to be
+            set, using dot (.) as the separator
+        attr_to_link (string): the path to the attribute to be
+            linked against, using dot (.) as the separator
+    """
+    linked_attr_property = LinkedAttrProperty(obj, attr_to_set)
+    # iterate over obj until attr_to_set
+    target_obj, attr = _walk_to(obj, attr_to_set)
+    # set the property of the whole class
+    setattr(target_obj.__class__, attr, property(linked_attr_property))
+    # specialize the result value for the specific instance
+    target_obj.__dict__[attr] = LinkedNode(obj, attr_to_link)
+
+
+def get_attributes_of(self):
+    """
+    This function is equivalent to vars(self), but
+    replaces the instances of LinkedNode with the
+    linked values
+    """
+    attrs = vars(self)
+    for k, v in attrs.items():
+        if isinstance(v, LinkedNode):
+            dummy_value = 0
+            attrs[k] = v(dummy_value)
+    return attrs

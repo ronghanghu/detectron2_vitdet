@@ -50,6 +50,8 @@ class Pooler(ConfigClass):
 
 pretrained_path = catalog.ModelCatalog.get("R-50")
 
+config.MODEL._INTERNAL_REPRESENTATION_SIZE = 256
+
 config.MODEL.BACKBONE.WEIGHTS = pretrained_path
 config.MODEL.HEADS.WEIGHTS = pretrained_path
 
@@ -58,7 +60,6 @@ config.MODEL.HEADS.BUILDER = fpn_classification_head
 config.MODEL.HEADS.USE_FPN = True
 config.MODEL.HEADS.POOLER = Pooler()
 config.MODEL.REGION_PROPOSAL.USE_FPN = True
-config.MODEL.REGION_PROPOSAL.NUM_INPUT_FEATURES = 256
 config.MODEL.REGION_PROPOSAL.ANCHOR_STRIDE = (4, 8, 16, 32, 64)
 config.MODEL.REGION_PROPOSAL.PRE_NMS_TOP_N = 2000
 
