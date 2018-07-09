@@ -24,7 +24,6 @@ catalog = import_file(
 )
 
 # dataset
-
 config.TRAIN.DATA.DATASET.FILES = [
     catalog.DatasetCatalog.get("coco_2014_train"),
     catalog.DatasetCatalog.get("coco_2014_valminusminival"),
