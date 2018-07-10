@@ -20,16 +20,16 @@ config = get_default_config()
 
 # dataset
 
-dataset_catalog = import_file(
+catalog = import_file(
     "torch_detectron.dataset_catalog",
     os.path.join(os.path.dirname(__file__), "dataset_catalog.py"),
 )
 config.TRAIN.DATA.DATASET.FILES = [
-        dataset_catalog.get_annotation_and_image_dir("coco_2014_train"),
-        dataset_catalog.get_annotation_and_image_dir("coco_2014_valminusminival"),
+    catalog.DatasetCatalog.get("coco_2014_train"),
+    catalog.DatasetCatalog.get("coco_2014_valminusminival"),
 ]
 config.TEST.DATA.DATASET.FILES = [
-        dataset_catalog.get_annotation_and_image_dir("coco_2014_minival"),
+    catalog.DatasetCatalog.get("coco_2014_minival"),
 ]
 
 
@@ -47,12 +47,7 @@ class Pooler(ConfigClass):
             drop_last=True,
         )
 
-model_catalog = import_file(
-    "torch_detectron.model_catalog",
-    os.path.join(os.path.dirname(__file__), "model_catalog.py"),
-)
-
-pretrained_path = model_catalog.get_model_path('R-50')
+pretrained_path = catalog.ModelCatalog.get('R-50')
 
 config.MODEL.BACKBONE.WEIGHTS = pretrained_path
 config.MODEL.HEADS.WEIGHTS = pretrained_path
