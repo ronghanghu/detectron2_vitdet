@@ -13,32 +13,28 @@ import os
 import torch
 
 from torch_detectron.helpers.config import get_default_config
+from torch_detectron.helpers.config_utils import import_file
 
 config = get_default_config()
 
+catalog = import_file(
+    "torch_detectron.paths_catalog",
+    os.path.join(os.path.dirname(__file__), "paths_catalog.py"),
+)
+
 # dataset
+
 config.TRAIN.DATA.DATASET.FILES = [
-    (
-        "/datasets01/COCO/060817/annotations/instances_train2014.json",
-        "/datasets01/COCO/060817/train2014/",
-    ),
-    (
-        "/private/home/fmassa/coco_trainval2017/annotations/instances_valminusminival2017.json",
-        "/datasets01/COCO/060817/val2014/",
-    ),
+    catalog.DatasetCatalog.get("coco_2014_train"),
+    catalog.DatasetCatalog.get("coco_2014_valminusminival"),
 ]
 config.TEST.DATA.DATASET.FILES = [
-    (
-        "/private/home/fmassa/coco_trainval2017/annotations/instances_val2017_mod.json",
-        "/datasets01/COCO/060817/val2014/",
-    )
+    catalog.DatasetCatalog.get("coco_2014_minival"),
 ]
 
 
 # model
-pretrained_path = (
-    "/private/home/fmassa/github/detectron.pytorch/torch_detectron/core/models/r50.pth"
-)
+pretrained_path = catalog.ModelCatalog.get('R-50')
 config.MODEL.BACKBONE.WEIGHTS = pretrained_path
 config.MODEL.HEADS.WEIGHTS = pretrained_path
 
@@ -67,10 +63,7 @@ config.CHECKPOINT = (
 
 if "QUICK_SCHEDULE" in os.environ and os.environ["QUICK_SCHEDULE"]:
     config.TRAIN.DATA.DATASET.FILES = [
-        (
-            "/private/home/fmassa/coco_trainval2017/annotations/instances_val2017_mod.json",
-            "/datasets01/COCO/060817/val2014/",
-        )
+        catalog.DatasetCatalog.get("coco_2014_minival"),
     ]
 
     config.MODEL.HEADS.BATCH_SIZE_PER_IMAGE = 256

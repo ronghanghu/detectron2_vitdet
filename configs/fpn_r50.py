@@ -18,12 +18,13 @@ from torch_detectron.model_builder.resnet import fpn_resnet50_conv5_body
 
 config = get_default_config()
 
-# dataset
-
 catalog = import_file(
     "torch_detectron.paths_catalog",
     os.path.join(os.path.dirname(__file__), "paths_catalog.py"),
 )
+
+# dataset
+
 config.TRAIN.DATA.DATASET.FILES = [
     catalog.DatasetCatalog.get("coco_2014_train"),
     catalog.DatasetCatalog.get("coco_2014_valminusminival"),

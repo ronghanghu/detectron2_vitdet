@@ -15,28 +15,25 @@ import torch
 from torch_detectron.core.fpn import FPNPooler
 from torch_detectron.helpers.config import get_default_config
 from torch_detectron.helpers.config_utils import ConfigClass
+from torch_detectron.helpers.config_utils import import_file
 from torch_detectron.model_builder.resnet import fpn_classification_head
 from torch_detectron.model_builder.resnet import fpn_resnet50_conv5_body
 
 config = get_default_config()
 
-# dataset
-config.TRAIN.DATA.DATASET.FILES = [
-    (
-        "/datasets01/COCO/060817/annotations/instances_train2014.json",
-        "/datasets01/COCO/060817/train2014/",
-    ),
-    (
-        "/private/home/fmassa/coco_trainval2017/annotations/instances_valminusminival2017.json",
-        "/datasets01/COCO/060817/val2014/",
-    ),
-]
+catalog = import_file(
+    "torch_detectron.paths_catalog",
+    os.path.join(os.path.dirname(__file__), "paths_catalog.py"),
+)
 
+# dataset
+
+config.TRAIN.DATA.DATASET.FILES = [
+    catalog.DatasetCatalog.get("coco_2014_train"),
+    catalog.DatasetCatalog.get("coco_2014_valminusminival"),
+]
 config.TEST.DATA.DATASET.FILES = [
-    (
-        "/private/home/fmassa/coco_trainval2017/annotations/instances_val2017_mod.json",
-        "/datasets01/COCO/060817/val2014/",
-    )
+    catalog.DatasetCatalog.get("coco_2014_minival"),
 ]
 
 
@@ -45,9 +42,7 @@ config.TEST.DATA.DATALOADER.COLLATOR.SIZE_DIVISIBLE = 32
 
 # model
 
-pretrained_path = "/private/home/fmassa/github/detectron.pytorch/torch_detectron/core/models/r50_new.pth"
-# pretrained_path = '/private/home/fmassa/github/detectron.pytorch/torch_detectron/core/models/rpn_fpn_r50.pth'
-
+pretrained_path = catalog.ModelCatalog.get('R-50')
 
 config.MODEL.RPN_ONLY = True
 
@@ -90,10 +85,7 @@ config.CHECKPOINT = (
 if False:
 
     config.TRAIN.DATA.DATASET.FILES = [
-        (
-            "/private/home/fmassa/coco_trainval2017/annotations/instances_val2017_mod.json",
-            "/datasets01/COCO/060817/val2014/",
-        )
+        catalog.DatasetCatalog.get("coco_2014_minival"),
     ]
 
     config.MODEL.REGION_PROPOSAL.PRE_NMS_TOP_N = 12000
