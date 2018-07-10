@@ -8,31 +8,28 @@ import os
 
 import torch
 
-from configs import dataset_catalog
 from torch_detectron.core.fpn import FPNPooler
 from torch_detectron.helpers.config import get_default_config
 from torch_detectron.helpers.config_utils import ConfigClass
+from torch_detectron.helpers.config_utils import import_file
 from torch_detectron.model_builder.resnet import fpn_classification_head
 from torch_detectron.model_builder.resnet import fpn_resnet50_conv5_body
+
 
 config = get_default_config()
 
 # dataset
+
+dataset_catalog = import_file(
+    "torch_detectron.dataset_catalog",
+    os.path.join(os.path.dirname(__file__), "dataset_catalog.py"),
+)
 config.TRAIN.DATA.DATASET.FILES = [
-    (
-        dataset_catalog.get_annotation_filename("coco_2014_train"),
-        dataset_catalog.get_image_dir("coco_2014_train"),
-    ),
-    (
-        "/private/home/fmassa/coco_annotations/instances_valminusminival2017.json",
-        "/datasets01/COCO/060817/val2014/",
-    ),
+        dataset_catalog.get_annotation_and_image_dir("coco_2014_train"),
+        dataset_catalog.get_annotation_and_image_dir("coco_2014_valminusminival"),
 ]
 config.TEST.DATA.DATASET.FILES = [
-    (
-        "/private/home/fmassa/coco_trainval2017/annotations/instances_val2017_mod.json",
-        "/datasets01/COCO/060817/val2014/",
-    )
+        dataset_catalog.get_annotation_and_image_dir("coco_2014_minival"),
 ]
 
 
@@ -40,7 +37,6 @@ config.TRAIN.DATA.DATALOADER.COLLATOR.SIZE_DIVISIBLE = 32
 config.TEST.DATA.DATALOADER.COLLATOR.SIZE_DIVISIBLE = 32
 
 # model
-
 
 class Pooler(ConfigClass):
     def __call__(self):
@@ -51,8 +47,12 @@ class Pooler(ConfigClass):
             drop_last=True,
         )
 
+model_catalog = import_file(
+    "torch_detectron.model_catalog",
+    os.path.join(os.path.dirname(__file__), "model_catalog.py"),
+)
 
-pretrained_path = "/private/home/fmassa/models/r50_new.pth"
+pretrained_path = model_catalog.get_model_path('R-50')
 
 config.MODEL.BACKBONE.WEIGHTS = pretrained_path
 config.MODEL.HEADS.WEIGHTS = pretrained_path

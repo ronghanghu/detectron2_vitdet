@@ -7,11 +7,15 @@ import importlib.util
 
 
 # from https://stackoverflow.com/questions/67631/how-to-import-a-module-given-the-full-path?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
-def load_config(config_path):
-    spec = importlib.util.spec_from_file_location("torch_detectron.config", config_path)
+def import_file(module_name, file_path):
+    spec = importlib.util.spec_from_file_location(module_name, file_path)
     config = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(config)
     return config
+
+
+def load_config(config_path):
+    return import_file("torch_detectron.config", config_path)
 
 
 def _addindent(s_, numSpaces):

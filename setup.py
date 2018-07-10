@@ -54,7 +54,7 @@ setup(
     author="fmassa",
     url="https://github.com/fairinternal/detectron.pytorch",
     description="object detection in pytorch",
-    packages=find_packages(exclude=("test",)),
+    packages=find_packages(exclude=("configs", "examples", "test",)),
     # install_requires=requirements,
     ext_modules=get_extensions(),
     cmdclass={"build_ext": torch.utils.cpp_extension.BuildExtension},

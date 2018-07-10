@@ -81,3 +81,7 @@ def get_image_dir(name):
 def get_annotation_filename(name):
     """Retrieve the annotation file for the dataset."""
     return _DATASETS[name][_ANN_FN]
+
+def get_annotation_and_image_dir(name):
+    """Retrieve the annotation file and the image directory for the dataset"""
+    return get_annotation_filename(name), get_image_dir(name)
