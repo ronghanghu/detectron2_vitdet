@@ -32,9 +32,7 @@ config.TRAIN.DATA.DATASET.FILES = [
     catalog.DatasetCatalog.get("coco_2014_train"),
     catalog.DatasetCatalog.get("coco_2014_valminusminival"),
 ]
-config.TEST.DATA.DATASET.FILES = [
-    catalog.DatasetCatalog.get("coco_2014_minival"),
-]
+config.TEST.DATA.DATASET.FILES = [catalog.DatasetCatalog.get("coco_2014_minival")]
 
 
 config.TRAIN.DATA.DATALOADER.COLLATOR.SIZE_DIVISIBLE = 32
@@ -42,7 +40,7 @@ config.TEST.DATA.DATALOADER.COLLATOR.SIZE_DIVISIBLE = 32
 
 # model
 
-pretrained_path = catalog.ModelCatalog.get('R-50')
+pretrained_path = catalog.ModelCatalog.get("R-50")
 
 config.MODEL.RPN_ONLY = True
 
@@ -84,9 +82,7 @@ config.CHECKPOINT = (
 # quick schedule
 if False:
 
-    config.TRAIN.DATA.DATASET.FILES = [
-        catalog.DatasetCatalog.get("coco_2014_minival"),
-    ]
+    config.TRAIN.DATA.DATASET.FILES = [catalog.DatasetCatalog.get("coco_2014_minival")]
 
     config.MODEL.REGION_PROPOSAL.PRE_NMS_TOP_N = 12000
     config.MODEL.REGION_PROPOSAL.POST_NMS_TOP_N = 2000

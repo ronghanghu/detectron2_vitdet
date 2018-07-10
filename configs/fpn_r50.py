@@ -29,15 +29,14 @@ config.TRAIN.DATA.DATASET.FILES = [
     catalog.DatasetCatalog.get("coco_2014_train"),
     catalog.DatasetCatalog.get("coco_2014_valminusminival"),
 ]
-config.TEST.DATA.DATASET.FILES = [
-    catalog.DatasetCatalog.get("coco_2014_minival"),
-]
+config.TEST.DATA.DATASET.FILES = [catalog.DatasetCatalog.get("coco_2014_minival")]
 
 
 config.TRAIN.DATA.DATALOADER.COLLATOR.SIZE_DIVISIBLE = 32
 config.TEST.DATA.DATALOADER.COLLATOR.SIZE_DIVISIBLE = 32
 
 # model
+
 
 class Pooler(ConfigClass):
     def __call__(self):
@@ -48,7 +47,8 @@ class Pooler(ConfigClass):
             drop_last=True,
         )
 
-pretrained_path = catalog.ModelCatalog.get('R-50')
+
+pretrained_path = catalog.ModelCatalog.get("R-50")
 
 config.MODEL.BACKBONE.WEIGHTS = pretrained_path
 config.MODEL.HEADS.WEIGHTS = pretrained_path

@@ -24,13 +24,11 @@ config.TRAIN.DATA.DATASET.FILES = [
     catalog.DatasetCatalog.get("coco_2014_train"),
     catalog.DatasetCatalog.get("coco_2014_valminusminival"),
 ]
-config.TEST.DATA.DATASET.FILES = [
-    catalog.DatasetCatalog.get("coco_2014_minival"),
-]
+config.TEST.DATA.DATASET.FILES = [catalog.DatasetCatalog.get("coco_2014_minival")]
 
 
 # model
-pretrained_path = catalog.ModelCatalog.get('R-50')
+pretrained_path = catalog.ModelCatalog.get("R-50")
 config.MODEL.BACKBONE.WEIGHTS = pretrained_path
 config.MODEL.HEADS.WEIGHTS = pretrained_path
 config.MODEL.RPN_ONLY = True
@@ -62,9 +60,7 @@ config.CHECKPOINT = (
 )
 
 if "QUICK_SCHEDULE" in os.environ and os.environ["QUICK_SCHEDULE"]:
-    config.TRAIN.DATA.DATASET.FILES = [
-        catalog.DatasetCatalog.get("coco_2014_minival"),
-    ]
+    config.TRAIN.DATA.DATASET.FILES = [catalog.DatasetCatalog.get("coco_2014_minival")]
 
     config.MODEL.REGION_PROPOSAL.PRE_NMS_TOP_N_TEST = 10000
     config.MODEL.REGION_PROPOSAL.POST_NMS_TOP_N_TEST = 2000

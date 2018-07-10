@@ -29,9 +29,7 @@ config.TRAIN.DATA.DATASET.FILES = [
     catalog.DatasetCatalog.get("coco_2014_train"),
     catalog.DatasetCatalog.get("coco_2014_valminusminival"),
 ]
-config.TEST.DATA.DATASET.FILES = [
-    catalog.DatasetCatalog.get("coco_2014_minival"),
-]
+config.TEST.DATA.DATASET.FILES = [catalog.DatasetCatalog.get("coco_2014_minival")]
 
 
 def head_builder(pretrained_path):
@@ -77,7 +75,7 @@ def mask_classifier(num_classes, pretrained_path=None):
 
 
 # model
-pretrained_path = catalog.ModelCatalog.get('R-50')
+pretrained_path = catalog.ModelCatalog.get("R-50")
 config.MODEL.BACKBONE.WEIGHTS = pretrained_path
 config.MODEL.HEADS.WEIGHTS = pretrained_path
 config.MODEL.HEADS.BUILDER = head_builder
