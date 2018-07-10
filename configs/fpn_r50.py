@@ -21,8 +21,8 @@ config = get_default_config()
 # dataset
 
 catalog = import_file(
-    "torch_detectron.dataset_catalog",
-    os.path.join(os.path.dirname(__file__), "dataset_catalog.py"),
+    "torch_detectron.paths_catalog",
+    os.path.join(os.path.dirname(__file__), "paths_catalog.py"),
 )
 config.TRAIN.DATA.DATASET.FILES = [
     catalog.DatasetCatalog.get("coco_2014_train"),
