@@ -11,10 +11,10 @@ def train_one_epoch(
     model, data_loader, optimizer, scheduler, device, iteration, max_iter
 ):
     logger = logging.getLogger("torch_detectron.trainer")
-    meters = MetricLogger()
+    meters = MetricLogger(delimiter="  ")
     model.train()
     end = time.time()
-    for i, (images, targets) in enumerate(data_loader):
+    for _, (images, targets) in enumerate(data_loader):
         data_time = time.time() - end
 
         scheduler.step()
@@ -38,10 +38,9 @@ def train_one_epoch(
 
         if iteration % 20 == 0 or iteration == (max_iter - 1):
             logger.info(
-                "Iter: {0}\t"
-                "{meters}\t"
-                "lr {lr:.6f}\t"
-                "Max Memory {memory:.0f}".format(
+                meters.delimiter.join(
+                    ["iter: {0}", "{meters}", "lr: {lr:.6f}", "max mem: {memory:.0f}"]
+                ).format(
                     iteration,
                     meters=str(meters),
                     lr=optimizer.param_groups[0]["lr"],

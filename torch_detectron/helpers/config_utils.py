@@ -15,7 +15,8 @@ def import_file(module_name, file_path):
 
 
 def load_config(config_path):
-    return import_file("torch_detectron.config", config_path)
+    config_module = import_file("torch_detectron.config", config_path)
+    return config_module.config
 
 
 def _addindent(s_, numSpaces):

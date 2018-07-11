@@ -7,6 +7,7 @@ python -m torch_detectron.train --config-file path_to_config_file
 
 to perform training
 """
+import argparse
 import logging
 import os
 
@@ -21,23 +22,20 @@ from torch_detectron.utils.logging import setup_logger
 from torch_detectron.utils.miscellaneous import mkdir
 
 
-def train(config):
-    use_distributed = config.distributed
-    local_rank = config.local_rank
-
+def train(config, local_rank, distributed):
     # FIXME this is not great
-    config.config.TRAIN.DATA.DATALOADER.SAMPLER.DISTRIBUTED = use_distributed
-    data_loader = config.config.TRAIN.DATA()
+    config.TRAIN.DATA.DATALOADER.SAMPLER.DISTRIBUTED = distributed
+    data_loader = config.TRAIN.DATA()
 
-    model = config.config.MODEL()
-    device = config.config.DEVICE
+    model = config.MODEL()
+    device = config.DEVICE
     model.to(device)
 
-    optimizer = config.config.SOLVER.OPTIM(model)
-    scheduler = config.config.SOLVER.SCHEDULER(optimizer)
-    max_iter = config.config.SOLVER.MAX_ITER
+    optimizer = config.SOLVER.OPTIM(model)
+    scheduler = config.SOLVER.SCHEDULER(optimizer)
+    max_iter = config.SOLVER.MAX_ITER
 
-    if use_distributed:
+    if distributed:
         model = torch.nn.parallel.DistributedDataParallel(
             model, device_ids=[local_rank], output_device=local_rank
         )
@@ -45,8 +43,8 @@ def train(config):
     arguments = {}
     arguments["iteration"] = 0
 
-    save_dir = config.config.SAVE_DIR
-    checkpoint_file = config.config.CHECKPOINT
+    save_dir = config.SAVE_DIR
+    checkpoint_file = config.CHECKPOINT
 
     checkpointer = Checkpoint(model, optimizer, scheduler, save_dir, local_rank)
 
@@ -62,34 +60,28 @@ def train(config):
         checkpointer,
         max_iter,
         device,
-        use_distributed,
+        distributed,
         arguments,
     )
 
     return model
 
 
-def test(config, model):
-    use_distributed = config.distributed
-    config.config.TEST.DATA.DATALOADER.SAMPLER.DISTRIBUTED = False
-    data_loader_val = config.config.TEST.DATA()
-    if use_distributed:
+def test(config, model, distributed):
+    config.TEST.DATA.DATALOADER.SAMPLER.DISTRIBUTED = False
+    data_loader_val = config.TEST.DATA()
+    if distributed:
         model = model.module
     torch.cuda.empty_cache()  # TODO check if it helps
     iou_types = ("bbox",)
-    if config.config.MODEL.USE_MASK:
+    if config.MODEL.USE_MASK:
         iou_types = iou_types + ("segm",)
     inference(
-        model,
-        data_loader_val,
-        iou_types=iou_types,
-        box_only=config.config.MODEL.RPN_ONLY,
+        model, data_loader_val, iou_types=iou_types, box_only=config.MODEL.RPN_ONLY
     )
 
 
 def main():
-    import argparse
-
     parser = argparse.ArgumentParser(description="PyTorch Object Detection Training")
     parser.add_argument(
         "--config-file",
@@ -100,28 +92,26 @@ def main():
 
     parser.add_argument("--local_rank", type=int, default=0)
     parser.add_argument(
-        'opts',
-        help='Modify config options using the command-line',
+        "opts",
+        help="Modify config options using the command-line",
         default=None,
-        nargs=argparse.REMAINDER
+        nargs=argparse.REMAINDER,
     )
 
     args = parser.parse_args()
 
-    args.distributed = False
-    if "WORLD_SIZE" in os.environ:
-        args.distributed = int(os.environ["WORLD_SIZE"]) > 1
+    args.distributed = (
+        int(os.environ["WORLD_SIZE"]) > 1 if "WORLD_SIZE" in os.environ else False
+    )
 
     if args.distributed:
         torch.cuda.set_device(args.local_rank)
         torch.distributed.init_process_group(backend="nccl", init_method="env://")
 
     config = load_config(args.config_file)
-    config.local_rank = args.local_rank
-    config.distributed = args.distributed
-    update_config_with_args(config.config, args.opts)
+    update_config_with_args(config, args.opts)
 
-    save_dir = config.config.SAVE_DIR
+    save_dir = config.SAVE_DIR
     if save_dir:
         mkdir(save_dir)
 
@@ -134,12 +124,12 @@ def main():
     with open(args.config_file, "r") as cf:
         config_str = "\n" + cf.read()
         logger.info(config_str)
-    logger.info({k: v for k, v in config.__dict__.items() if not k.startswith("__")})
+    logger.info("Running with config:\n{}".format(config))
 
-    model = train(config)
+    model = train(config, args.local_rank, args.distributed)
 
-    if args.local_rank == 0 and config.config.DO_TEST:
-        test(config, model)
+    if args.local_rank == 0 and config.DO_TEST:
+        test(config, model, args.distributed)
 
 
 if __name__ == "__main__":

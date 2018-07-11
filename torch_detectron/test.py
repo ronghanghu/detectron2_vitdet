@@ -9,7 +9,6 @@ from torch_detectron.utils.logging import setup_logger
 
 
 def main():
-
     parser = argparse.ArgumentParser(description="PyTorch Object Detection Inference")
     parser.add_argument(
         "--config-file",
@@ -22,26 +21,26 @@ def main():
         "--checkpoint", default="", metavar="FILE", help="path to checkpoint file"
     )
     parser.add_argument(
-        'opts',
-        help='Modify config options using the command-line',
+        "opts",
+        help="Modify config options using the command-line",
         default=None,
-        nargs=argparse.REMAINDER
+        nargs=argparse.REMAINDER,
     )
 
     args = parser.parse_args()
     config = load_config(args.config_file)
-    update_config_with_args(config.config, args.opts)
+    update_config_with_args(config, args.opts)
 
     save_dir = ""
     local_rank = 0
     setup_logger("torch_detectron", save_dir, local_rank)
 
     # TODO this doesn't look great
-    config.config.TEST.DATA.DATALOADER.SAMPLER.DISTRIBUTED = False
-    data_loader_val = config.config.TEST.DATA()
+    config.TEST.DATA.DATALOADER.SAMPLER.DISTRIBUTED = False
+    data_loader_val = config.TEST.DATA()
 
-    device = config.config.DEVICE
-    model = config.config.MODEL()
+    device = config.DEVICE
+    model = config.MODEL()
     model.to(device)
 
     if args.checkpoint:
@@ -51,13 +50,10 @@ def main():
         model = model.module
 
     iou_types = ("bbox",)
-    if config.config.MODEL.USE_MASK:
+    if config.MODEL.USE_MASK:
         iou_types = iou_types + ("segm",)
     inference(
-        model,
-        data_loader_val,
-        iou_types=iou_types,
-        box_only=config.config.MODEL.RPN_ONLY,
+        model, data_loader_val, iou_types=iou_types, box_only=config.MODEL.RPN_ONLY
     )
 
 

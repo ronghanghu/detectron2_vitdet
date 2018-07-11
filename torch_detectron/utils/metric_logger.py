@@ -37,8 +37,9 @@ class SmoothedValue(object):
 
 
 class MetricLogger(object):
-    def __init__(self):
+    def __init__(self, delimiter="\t"):
         self.meters = defaultdict(SmoothedValue)
+        self.delimiter = delimiter
 
     def update(self, **kwargs):
         for k, v in kwargs.items():
@@ -53,4 +54,4 @@ class MetricLogger(object):
             loss_str.append(
                 "{}: {:.4f} ({:.4f})".format(name, meter.median, meter.global_avg)
             )
-        return "\t".join(loss_str)
+        return self.delimiter.join(loss_str)
