@@ -49,7 +49,7 @@ class Pooler(ConfigClass):
 
 pretrained_path = catalog.ModelCatalog.get("R-50")
 
-config.MODEL._INTERNAL_REPRESENTATION_SIZE = 256
+config.MODEL.INTERNAL_REPRESENTATION_SIZE = 256
 
 config.MODEL.BACKBONE.WEIGHTS = pretrained_path
 config.MODEL.HEADS.WEIGHTS = pretrained_path
