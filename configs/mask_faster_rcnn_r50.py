@@ -13,7 +13,6 @@ import os
 import torch
 
 from torch_detectron.helpers.config import get_default_config
-from torch_detectron.helpers.config_utils import ConfigClass
 from torch_detectron.helpers.config_utils import import_file
 
 config = get_default_config()
@@ -85,11 +84,11 @@ config.MODEL.HEADS.MASK_BUILDER = mask_classifier
 config.MODEL.USE_MASK = True
 
 
-config.MODEL.REGION_PROPOSAL.PRE_NMS_TOP_N = 12000
-config.MODEL.REGION_PROPOSAL.POST_NMS_TOP_N = 2000
+config.MODEL.RPN.PRE_NMS_TOP_N = 12000
+config.MODEL.RPN.POST_NMS_TOP_N = 2000
 
-config.MODEL.REGION_PROPOSAL.PRE_NMS_TOP_N_TEST = 6000
-config.MODEL.REGION_PROPOSAL.POST_NMS_TOP_N_TEST = 1000
+config.MODEL.RPN.PRE_NMS_TOP_N_TEST = 6000
+config.MODEL.RPN.POST_NMS_TOP_N_TEST = 1000
 
 if False:
     lr = 0.005

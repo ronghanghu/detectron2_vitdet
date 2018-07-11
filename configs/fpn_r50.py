@@ -12,9 +12,8 @@ from torch_detectron.core.fpn import FPNPooler
 from torch_detectron.helpers.config import get_default_config
 from torch_detectron.helpers.config_utils import ConfigClass
 from torch_detectron.helpers.config_utils import import_file
-from torch_detectron.model_builder.resnet import fpn_classification_head
-from torch_detectron.model_builder.resnet import fpn_resnet50_conv5_body
-
+from torch_detectron.helpers.model import fpn_classification_head
+from torch_detectron.helpers.model import fpn_resnet50_conv5_body
 
 config = get_default_config()
 
@@ -50,33 +49,32 @@ class Pooler(ConfigClass):
 
 pretrained_path = catalog.ModelCatalog.get("R-50")
 
-config.MODEL.INTERNAL_REPRESENTATION_SIZE = 256
-
 config.MODEL.BACKBONE.WEIGHTS = pretrained_path
 config.MODEL.HEADS.WEIGHTS = pretrained_path
 
 config.MODEL.BACKBONE.BUILDER = fpn_resnet50_conv5_body
+config.MODEL.BACKBONE.OUTPUT_DIM = 256
 config.MODEL.HEADS.BUILDER = fpn_classification_head
 config.MODEL.HEADS.USE_FPN = True
 config.MODEL.HEADS.POOLER = Pooler()
-config.MODEL.REGION_PROPOSAL.USE_FPN = True
-config.MODEL.REGION_PROPOSAL.ANCHOR_STRIDE = (4, 8, 16, 32, 64)
-config.MODEL.REGION_PROPOSAL.PRE_NMS_TOP_N = 2000
+config.MODEL.RPN.USE_FPN = True
+config.MODEL.RPN.ANCHOR_STRIDE = (4, 8, 16, 32, 64)
+config.MODEL.RPN.PRE_NMS_TOP_N = 2000
 
-config.MODEL.REGION_PROPOSAL.PRE_NMS_TOP_N_TEST = 1000
-config.MODEL.REGION_PROPOSAL.POST_NMS_TOP_N_TEST = 1000
-config.MODEL.REGION_PROPOSAL.FPN_POST_NMS_TOP_N_TEST = 1000
+config.MODEL.RPN.PRE_NMS_TOP_N_TEST = 1000
+config.MODEL.RPN.POST_NMS_TOP_N_TEST = 1000
+config.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST = 1000
 
 
 # only for quick
 
 if False:
-    config.MODEL.REGION_PROPOSAL.PRE_NMS_TOP_N = 12000
-    config.MODEL.REGION_PROPOSAL.POST_NMS_TOP_N = 2000
-    config.MODEL.REGION_PROPOSAL.POSITIVE_FRACTION = 0.25
-    config.MODEL.REGION_PROPOSAL.STRADDLE_THRESH = -1
-    config.MODEL.REGION_PROPOSAL.PRE_NMS_TOP_N_TEST = 1000
-    config.MODEL.REGION_PROPOSAL.POST_NMS_TOP_N_TEST = 2000
+    config.MODEL.RPN.PRE_NMS_TOP_N = 12000
+    config.MODEL.RPN.POST_NMS_TOP_N = 2000
+    config.MODEL.RPN.POSITIVE_FRACTION = 0.25
+    config.MODEL.RPN.STRADDLE_THRESH = -1
+    config.MODEL.RPN.PRE_NMS_TOP_N_TEST = 1000
+    config.MODEL.RPN.POST_NMS_TOP_N_TEST = 2000
     config.TRAIN.DATA.TRANSFORM.MIN_SIZE = 600
     config.TRAIN.DATA.TRANSFORM.MAX_SIZE = 1000
     config.TEST.DATA.TRANSFORM.MIN_SIZE = 600
@@ -90,7 +88,7 @@ if False:
         if k.startswith("rpn"):
             rpn_weights[k[4:]] = v
 
-    config.MODEL.REGION_PROPOSAL.WEIGHTS = rpn_weights
+    config.MODEL.RPN.WEIGHTS = rpn_weights
 
 
 num_gpus = 8

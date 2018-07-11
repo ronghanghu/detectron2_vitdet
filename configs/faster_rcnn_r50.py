@@ -10,8 +10,6 @@ arguments in the training code and use directly the config
 
 import os
 
-import torch
-
 from torch_detectron.helpers.config import get_default_config
 from torch_detectron.helpers.config_utils import import_file
 

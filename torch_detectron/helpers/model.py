@@ -2,8 +2,11 @@
 This file contains utility functions for building detection models from
 a configuration file.
 """
+import torch
+from torch import nn
 
 import torch_detectron.model_builder.generalized_rcnn as generalized_rcnn
+import torch_detectron.model_builder.resnet as resnet
 from torch_detectron.core.anchor_generator import AnchorGenerator
 from torch_detectron.core.anchor_generator import FPNAnchorGenerator
 from torch_detectron.core.balanced_positive_negative_sampler import (
@@ -17,6 +20,9 @@ from torch_detectron.core.fast_rcnn_losses import FastRCNNLossComputation
 from torch_detectron.core.fast_rcnn_losses import FastRCNNTargetPreparator
 from torch_detectron.core.faster_rcnn import Pooler
 from torch_detectron.core.faster_rcnn import RPNHeads
+from torch_detectron.core.fpn import FPN
+from torch_detectron.core.fpn import FPNHeadClassifier
+from torch_detectron.core.fpn import LastLevelMaxPool
 from torch_detectron.core.mask_rcnn import MaskPostProcessor
 from torch_detectron.core.mask_rcnn_losses import MaskRCNNLossComputation
 from torch_detectron.core.mask_rcnn_losses import MaskTargetPreparator
@@ -26,17 +32,14 @@ from torch_detectron.core.proposal_matcher import Matcher
 from torch_detectron.core.rpn_losses import RPNLossComputation
 from torch_detectron.core.rpn_losses import RPNTargetPreparator
 from torch_detectron.helpers.config_utils import ConfigClass
-from torch_detectron.helpers.config_utils import get_attributes_of
-from torch_detectron.model_builder.resnet import resnet50_conv4_body
-from torch_detectron.model_builder.resnet import resnet50_conv5_head
 
 
 class ModelBuilder(ConfigClass):
     def __call__(self):
-        rpn_only = self.RPN_ONLY
-        backbone = self.BACKBONE()
-        region_proposal = self.REGION_PROPOSAL()
-        heads = self.HEADS()
+        rpn_only = self.config.MODEL.RPN_ONLY
+        backbone = self.config.MODEL.BACKBONE()
+        region_proposal = self.config.MODEL.RPN()
+        heads = None if rpn_only else self.config.MODEL.HEADS()
         return generalized_rcnn.GeneralizedRCNN(
             backbone, region_proposal, heads, rpn_only
         )
@@ -44,9 +47,9 @@ class ModelBuilder(ConfigClass):
 
 class BackboneBuilder(ConfigClass):
     def __call__(self):
-        weights = self.WEIGHTS
-        model_builder = self.BUILDER
-        return model_builder(weights, **get_attributes_of(self))
+        weights = self.config.MODEL.BACKBONE.WEIGHTS
+        model_builder = self.config.MODEL.BACKBONE.BUILDER
+        return model_builder(self.config, pretrained=weights)
 
 
 # FIXME use this or not
@@ -67,13 +70,13 @@ class AnchorGeneratorBuilder(ConfigClass):
 
 class RPNBuilder(ConfigClass):
     def __call__(self):
-        use_fpn = self.USE_FPN
+        use_fpn = self.config.MODEL.RPN.USE_FPN
 
-        scales = self.SCALES
-        aspect_ratios = self.ASPECT_RATIOS
-        base_anchor_size = self.BASE_ANCHOR_SIZE
-        anchor_stride = self.ANCHOR_STRIDE
-        straddle_thresh = self.STRADDLE_THRESH
+        scales = self.config.MODEL.RPN.SCALES
+        aspect_ratios = self.config.MODEL.RPN.ASPECT_RATIOS
+        base_anchor_size = self.config.MODEL.RPN.BASE_ANCHOR_SIZE
+        anchor_stride = self.config.MODEL.RPN.ANCHOR_STRIDE
+        straddle_thresh = self.config.MODEL.RPN.STRADDLE_THRESH
 
         anchor_maker = AnchorGenerator if not use_fpn else FPNAnchorGenerator
         anchor_args = {}
@@ -88,11 +91,11 @@ class RPNBuilder(ConfigClass):
             anchor_args["anchor_stride"] = anchor_stride
         anchor_generator = anchor_maker(**anchor_args)
 
-        num_input_features = self.NUM_INPUT_FEATURES
+        num_input_features = self.config.MODEL.BACKBONE.OUTPUT_DIM
         rpn_heads = RPNHeads(
             num_input_features, anchor_generator.num_anchors_per_location()[0]
         )
-        weights = self.WEIGHTS
+        weights = self.config.MODEL.RPN.WEIGHTS
         if weights:
             rpn_heads.load_state_dict(weights)
 
@@ -108,10 +111,10 @@ class RPNBuilder(ConfigClass):
             fpn_post_nms_top_n = self.FPN_POST_NMS_TOP_N
             box_selector_args["fpn_post_nms_top_n"] = fpn_post_nms_top_n
 
-        pre_nms_top_n = self.PRE_NMS_TOP_N
-        post_nms_top_n = self.POST_NMS_TOP_N
-        nms_thresh = self.NMS_THRESH
-        min_size = self.MIN_SIZE
+        pre_nms_top_n = self.config.MODEL.RPN.PRE_NMS_TOP_N
+        post_nms_top_n = self.config.MODEL.RPN.POST_NMS_TOP_N
+        nms_thresh = self.config.MODEL.RPN.NMS_THRESH
+        min_size = self.config.MODEL.RPN.MIN_SIZE
         box_selector_train = box_selector_maker(
             pre_nms_top_n=pre_nms_top_n,
             post_nms_top_n=post_nms_top_n,
@@ -122,11 +125,11 @@ class RPNBuilder(ConfigClass):
         )
 
         if use_fpn:
-            fpn_post_nms_top_n = self.FPN_POST_NMS_TOP_N_TEST
+            fpn_post_nms_top_n = self.config.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST
             box_selector_args["fpn_post_nms_top_n"] = fpn_post_nms_top_n
 
-        pre_nms_top_n_test = self.PRE_NMS_TOP_N_TEST
-        post_nms_top_n_test = self.POST_NMS_TOP_N_TEST
+        pre_nms_top_n_test = self.config.MODEL.RPN.PRE_NMS_TOP_N_TEST
+        post_nms_top_n_test = self.config.MODEL.RPN.POST_NMS_TOP_N_TEST
         box_selector_test = box_selector_maker(
             pre_nms_top_n=pre_nms_top_n_test,
             post_nms_top_n=post_nms_top_n_test,
@@ -137,16 +140,16 @@ class RPNBuilder(ConfigClass):
         )
 
         # loss evaluation
-        matched_threshold = self.MATCHED_THRESHOLD
-        unmatched_threshold = self.UNMATCHED_THRESHOLD
+        matched_threshold = self.config.MODEL.RPN.MATCHED_THRESHOLD
+        unmatched_threshold = self.config.MODEL.RPN.UNMATCHED_THRESHOLD
         rpn_matcher = Matcher(
             matched_threshold, unmatched_threshold, force_match_for_each_row=True
         )
 
         rpn_target_preparator = RPNTargetPreparator(rpn_matcher, rpn_box_coder)
 
-        batch_size_per_image = self.BATCH_SIZE_PER_IMAGE
-        positive_fraction = self.POSITIVE_FRACTION
+        batch_size_per_image = self.config.MODEL.RPN.BATCH_SIZE_PER_IMAGE
+        positive_fraction = self.config.MODEL.RPN.POSITIVE_FRACTION
         rpn_fg_bg_sampler = BalancedPositiveNegativeSampler(
             batch_size_per_image=batch_size_per_image,
             positive_fraction=positive_fraction,
@@ -155,7 +158,7 @@ class RPNBuilder(ConfigClass):
             rpn_target_preparator, rpn_fg_bg_sampler
         )
 
-        rpn_only = self.RPN_ONLY
+        rpn_only = self.config.MODEL.RPN_ONLY
 
         module = generalized_rcnn.RPNModule(
             anchor_generator,
@@ -170,40 +173,39 @@ class RPNBuilder(ConfigClass):
 
 class PoolerBuilder(ConfigClass):
     def __call__(self):
-        module = self.MODULE
+        module = self.config.MODULE
         pooler = Pooler(module)
         return pooler
 
 
 class DetectionAndMaskHeadsBuilder(ConfigClass):
     def __call__(self):
-        use_fpn = self.USE_FPN
-        use_mask = self.USE_MASK
+        use_fpn = self.config.MODEL.HEADS.USE_FPN
+        use_mask = self.config.MODEL.USE_MASK
 
-        pooler = self.POOLER()
+        pooler = self.config.MODEL.HEADS.POOLER()
 
-        num_classes = self.NUM_CLASSES
-        pretrained_weights = self.WEIGHTS
-        module_builder = self.BUILDER
+        num_classes = self.config.MODEL.HEADS.NUM_CLASSES
+        pretrained_weights = self.config.MODEL.HEADS.WEIGHTS
+        module_builder = self.config.MODEL.HEADS.BUILDER
 
         # FIXME this is an ugly hack
         if use_mask and not use_fpn:
             classifier_layers = module_builder(pretrained_path=pretrained_weights)
 
-            head_builder = self.HEAD_BUILDER
+            head_builder = self.config.MODEL.HEADS.HEAD_BUILDER
             classifier = head_builder(num_classes, pretrained_weights)
         else:
             classifier_layers = module_builder(
-                num_classes=num_classes, pretrained=pretrained_weights,
-                **get_attributes_of(self)
+                self.config, num_classes=num_classes, pretrained=pretrained_weights
             )
 
-        bbox_reg_weights = self.BBOX_REG_WEIGHTS
+        bbox_reg_weights = self.config.MODEL.HEADS.BBOX_REG_WEIGHTS
         box_coder = BoxCoder(weights=bbox_reg_weights)
 
-        score_thresh = self.SCORE_THRESH
-        nms_thresh = self.NMS
-        detections_per_img = self.DETECTIONS_PER_IMG
+        score_thresh = self.config.MODEL.HEADS.SCORE_THRESH
+        nms_thresh = self.config.MODEL.HEADS.NMS
+        detections_per_img = self.config.MODEL.HEADS.DETECTIONS_PER_IMG
 
         postprocessor_maker = PostProcessor if not use_fpn else FPNPostProcessor
         postprocessor = postprocessor_maker(
@@ -211,14 +213,14 @@ class DetectionAndMaskHeadsBuilder(ConfigClass):
         )
 
         # loss evaluation
-        matched_threshold = self.MATCHED_THRESHOLD
-        unmatched_threshold = self.UNMATCHED_THRESHOLD
+        matched_threshold = self.config.MODEL.HEADS.MATCHED_THRESHOLD
+        unmatched_threshold = self.config.MODEL.HEADS.UNMATCHED_THRESHOLD
         matcher = Matcher(matched_threshold, unmatched_threshold)
 
         target_preparator = FastRCNNTargetPreparator(matcher, box_coder)
 
-        batch_size_per_image = self.BATCH_SIZE_PER_IMAGE
-        positive_fraction = self.POSITIVE_FRACTION
+        batch_size_per_image = self.config.MODEL.HEADS.BATCH_SIZE_PER_IMAGE
+        positive_fraction = self.config.MODEL.HEADS.POSITIVE_FRACTION
         fg_bg_sampler = BalancedPositiveNegativeSampler(
             batch_size_per_image=batch_size_per_image,
             positive_fraction=positive_fraction,
@@ -228,10 +230,10 @@ class DetectionAndMaskHeadsBuilder(ConfigClass):
         # mask
 
         if use_mask and not use_fpn:
-            mask_builder = self.MASK_BUILDER
+            mask_builder = self.config.MODEL.HEADS.MASK_BUILDER
             heads_mask = mask_builder(num_classes, pretrained_weights)
 
-            discretization_size = self.MASK_RESOLUTION
+            discretization_size = self.config.MODEL.HEADS.MASK_RESOLUTION
             mask_target_preparator = MaskTargetPreparator(matcher, discretization_size)
             mask_loss_evaluator = MaskRCNNLossComputation(mask_target_preparator)
 
@@ -253,12 +255,12 @@ class DetectionAndMaskHeadsBuilder(ConfigClass):
             # TODO there are a number of things that are implicit here.
             # for example, the mask_pooler should be subsampling the positive
             # boxes only, so that the loss evaluator knows that it should do the same
-            mask_builder = self.MASK_BUILDER
+            mask_builder = self.config.MODEL.HEADS.MASK_BUILDER
             heads_mask = mask_builder(num_classes, pretrained_weights)
 
-            mask_pooler = self.MASK_POOLER()
+            mask_pooler = self.config.MODEL.HEADS.MASK_POOLER()
 
-            discretization_size = self.MASK_RESOLUTION
+            discretization_size = self.config.MODEL.HEADS.MASK_RESOLUTION
             mask_target_preparator = MaskTargetPreparator(matcher, discretization_size)
             mask_loss_evaluator = MaskRCNNLossComputation(
                 mask_target_preparator, subsample_only_positive_boxes=True
@@ -281,3 +283,60 @@ class DetectionAndMaskHeadsBuilder(ConfigClass):
         return generalized_rcnn.DetectionHead(
             pooler, classifier_layers, postprocessor, loss_evaluator
         )
+
+
+def resnet50_conv4_body(config, pretrained=None):
+    model = resnet.ResNetBackbone(
+        resnet.Bottleneck, layers=[(2, 3, False), (3, 4, False), (4, 6, True)]
+    )
+    if pretrained:
+        state_dict = torch.load(pretrained)
+        model.load_state_dict(state_dict, strict=False)
+    return model
+
+
+def resnet50_conv5_head(config, num_classes, pretrained=None):
+    block = resnet.Bottleneck
+    head = resnet.ResNetHead(block, layers=[(5, 3)])
+    classifier = resnet.ClassifierHead(512 * block.expansion, num_classes)
+    if pretrained:
+        state_dict = torch.load(pretrained)
+        head.load_state_dict(state_dict, strict=False)
+        classifier.load_state_dict(state_dict, strict=False)
+    model = nn.Sequential(head, classifier)
+    return model
+
+
+def resnet50_conv5_body(config):
+    model = resnet.ResNetBackbone(
+        resnet.Bottleneck, layers=[(2, 3), (3, 4), (4, 6), (5, 3)]
+    )
+    return model
+
+
+def fpn_resnet50_conv5_body(config, pretrained=None):
+    representation_size = config.MODEL.BACKBONE.OUTPUT_DIM
+    body = resnet.ResNetBackbone(
+        resnet.Bottleneck,
+        layers=[(2, 3, True), (3, 4, True), (4, 6, True), (5, 3, True)],
+    )
+    fpn = FPN(
+        layers=[256, 512, 1024, 2048],
+        representation_size=representation_size,
+        top_blocks=LastLevelMaxPool(),
+    )
+    if pretrained:
+        state_dict = torch.load(pretrained)
+        body.load_state_dict(state_dict, strict=False)
+        fpn.load_state_dict(state_dict, strict=False)
+    model = nn.Sequential(body, fpn)
+    return model
+
+
+def fpn_classification_head(config, num_classes, pretrained=None):
+    representation_size = config.MODEL.BACKBONE.OUTPUT_DIM
+    model = FPNHeadClassifier(num_classes, representation_size * 7 * 7, 1024)
+    if pretrained:
+        state_dict = torch.load(pretrained)
+        model.load_state_dict(state_dict, strict=False)
+    return model

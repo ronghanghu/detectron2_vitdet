@@ -1,6 +1,5 @@
 import torch
 from torch import nn
-from torch.nn import functional as F
 
 
 class FixedBatchNorm2d(nn.Module):
@@ -176,59 +175,3 @@ class ClassifierHead(nn.Module):
         cls_logit = self.cls_score(x)
         bbox_pred = self.bbox_pred(x)
         return cls_logit, bbox_pred
-
-
-def resnet50_conv4_body(pretrained=None):
-    model = ResNetBackbone(
-        Bottleneck, layers=[(2, 3, False), (3, 4, False), (4, 6, True)]
-    )
-    if pretrained:
-        state_dict = torch.load(pretrained)
-        model.load_state_dict(state_dict, strict=False)
-    return model
-
-
-def resnet50_conv5_head(num_classes, pretrained=None):
-    block = Bottleneck
-    head = ResNetHead(block, layers=[(5, 3)])
-    classifier = ClassifierHead(512 * block.expansion, num_classes)
-    if pretrained:
-        state_dict = torch.load(pretrained)
-        head.load_state_dict(state_dict, strict=False)
-        classifier.load_state_dict(state_dict, strict=False)
-    model = nn.Sequential(head, classifier)
-    return model
-
-
-def resnet50_conv5_body():
-    model = ResNetBackbone(Bottleneck, layers=[(2, 3), (3, 4), (4, 6), (5, 3)])
-    return model
-
-
-def fpn_resnet50_conv5_body(pretrained=None, **kwargs):
-    from ..core.fpn import FPN, LastLevelMaxPool
-
-    body = ResNetBackbone(
-        Bottleneck, layers=[(2, 3, True), (3, 4, True), (4, 6, True), (5, 3, True)]
-    )
-    fpn = FPN(
-        layers=[256, 512, 1024, 2048],
-        representation_size=kwargs['REPRESENTATION_SIZE'],
-        top_blocks=LastLevelMaxPool(),
-    )
-    if pretrained:
-        state_dict = torch.load(pretrained)
-        body.load_state_dict(state_dict, strict=False)
-        fpn.load_state_dict(state_dict, strict=False)
-    model = nn.Sequential(body, fpn)
-    return model
-
-
-def fpn_classification_head(num_classes, pretrained=None, **kwargs):
-    from ..core.fpn import FPNHeadClassifier
-    representation_size = kwargs['REPRESENTATION_SIZE']
-    model = FPNHeadClassifier(num_classes, representation_size * 7 * 7, 1024)
-    if pretrained:
-        state_dict = torch.load(pretrained)
-        model.load_state_dict(state_dict, strict=False)
-    return model

@@ -10,8 +10,6 @@ arguments in the training code and use directly the config
 
 import os
 
-import torch
-
 from torch_detectron.core.box_selector import ROI2FPNLevelsMapper
 from torch_detectron.core.fpn import FPNPooler
 from torch_detectron.core.mask_rcnn import MaskFPNPooler
@@ -19,8 +17,8 @@ from torch_detectron.core.mask_rcnn import maskrcnn_head
 from torch_detectron.helpers.config import get_default_config
 from torch_detectron.helpers.config_utils import ConfigClass
 from torch_detectron.helpers.config_utils import import_file
-from torch_detectron.model_builder.resnet import fpn_classification_head
-from torch_detectron.model_builder.resnet import fpn_resnet50_conv5_body
+from torch_detectron.helpers.model import fpn_classification_head
+from torch_detectron.helpers.model import fpn_resnet50_conv5_body
 
 config = get_default_config()
 
@@ -67,14 +65,14 @@ class MaskPooler(ConfigClass):
 pretrained_path = catalog.ModelCatalog.get("R-50")
 config.MODEL.BACKBONE.WEIGHTS = pretrained_path
 # config.MODEL.HEADS.WEIGHTS = pretrained_path
-config.MODEL.INTERNAL_REPRESENTATION_SIZE = 256
 
 config.MODEL.BACKBONE.BUILDER = fpn_resnet50_conv5_body
+config.MODEL.BACKBONE.OUTPUT_DIM = 256
 config.MODEL.HEADS.BUILDER = fpn_classification_head
 config.MODEL.HEADS.USE_FPN = True
 config.MODEL.HEADS.POOLER = Pooler()
-config.MODEL.REGION_PROPOSAL.USE_FPN = True
-config.MODEL.REGION_PROPOSAL.ANCHOR_STRIDE = (4, 8, 16, 32, 64)
+config.MODEL.RPN.USE_FPN = True
+config.MODEL.RPN.ANCHOR_STRIDE = (4, 8, 16, 32, 64)
 
 
 config.MODEL.HEADS.MASK_POOLER = MaskPooler()
@@ -83,12 +81,12 @@ config.MODEL.HEADS.MASK_RESOLUTION = 28
 config.MODEL.HEADS.MASK_BUILDER = maskrcnn_head
 
 
-config.MODEL.REGION_PROPOSAL.PRE_NMS_TOP_N = 2000
-config.MODEL.REGION_PROPOSAL.POST_NMS_TOP_N = 2000
+config.MODEL.RPN.PRE_NMS_TOP_N = 2000
+config.MODEL.RPN.POST_NMS_TOP_N = 2000
 
-config.MODEL.REGION_PROPOSAL.PRE_NMS_TOP_N_TEST = 1000
-config.MODEL.REGION_PROPOSAL.POST_NMS_TOP_N_TEST = 1000
-config.MODEL.REGION_PROPOSAL.FPN_POST_NMS_TOP_N_TEST = 1000
+config.MODEL.RPN.PRE_NMS_TOP_N_TEST = 1000
+config.MODEL.RPN.POST_NMS_TOP_N_TEST = 1000
+config.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST = 1000
 
 num_gpus = 8
 

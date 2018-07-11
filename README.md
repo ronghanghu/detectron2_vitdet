@@ -328,8 +328,8 @@ config.TEST.DATA.DATASET.FILES = [
 ]
 
 # now change a few things about the model
-config.MODEL.REGION_PROPOSAL.PRE_NMS_TOP_N = 6000
-config.MODEL.REGION_PROPOSAL.POST_NMS_TOP_N = 1000
+config.MODEL.RPN.PRE_NMS_TOP_N = 6000
+config.MODEL.RPN.POST_NMS_TOP_N = 1000
 
 # now modify the optimizer
 config.SOLVER.MAX_ITER = 180000
@@ -406,7 +406,7 @@ config.SOLVER.OPTIM.LEARNING_RATE = 0.01
 
 Following the approach that we have just presented, it is possible
 to modify individual blocks of the MODEL (for example the `HEADS` or
-the `REGION_PROPOSAL`) in order to implement your model.
+the `RPN`) in order to implement your model.
 But if you want to create a completely new architecture which has
 never been tried before, you can do it without having to modify the
 `torch_detectron` files (but you _can_, if you want).
@@ -484,7 +484,7 @@ class MyModel(nn.Module):
         return dict(
                     loss_objectness=loss_objectness,
                     loss_box_reg=loss_box_reg)
-        
+
 # can add arbitrary attributes so that it can be configurable
 class ModelGetter(ConfigClass):
     def __call__(self):
@@ -498,3 +498,15 @@ The current constraint we impose to the model is that in `.train()` mode
 the mode should return a dict containing the losses, while in `.eval()` mode
 the model returns a `BBox` object with extra attributes (like `scores` or
 `masks`).
+
+## Style guide
+
+```bash
+cd ~/github/detectron.pytorch
+
+# First run isort
+isort -rc -sl -t 1 --atomic -p torch_detectron -o torch -o torchvision .
+
+# Then run black
+black --exclude configs/datasets .
+```
