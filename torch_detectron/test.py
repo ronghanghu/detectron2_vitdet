@@ -4,6 +4,7 @@ import torch
 
 from torch_detectron.core.inference import inference
 from torch_detectron.helpers.config_utils import load_config
+from torch_detectron.helpers.config_utils import update_config_with_args
 from torch_detectron.utils.logging import setup_logger
 
 
@@ -20,9 +21,16 @@ def main():
     parser.add_argument(
         "--checkpoint", default="", metavar="FILE", help="path to checkpoint file"
     )
+    parser.add_argument(
+        'opts',
+        help='Modify config options using the command-line',
+        default=None,
+        nargs=argparse.REMAINDER
+    )
 
     args = parser.parse_args()
     config = load_config(args.config_file)
+    update_config_with_args(config.config, args.opts)
 
     save_dir = ""
     local_rank = 0

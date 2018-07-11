@@ -15,6 +15,7 @@ import torch
 from torch_detectron.core.inference import inference
 from torch_detectron.core.trainer import do_train
 from torch_detectron.helpers.config_utils import load_config
+from torch_detectron.helpers.config_utils import update_config_with_args
 from torch_detectron.utils.checkpoint import Checkpoint
 from torch_detectron.utils.logging import setup_logger
 from torch_detectron.utils.miscellaneous import mkdir
@@ -98,6 +99,12 @@ def main():
     )
 
     parser.add_argument("--local_rank", type=int, default=0)
+    parser.add_argument(
+        'opts',
+        help='Modify config options using the command-line',
+        default=None,
+        nargs=argparse.REMAINDER
+    )
 
     args = parser.parse_args()
 
@@ -112,6 +119,7 @@ def main():
     config = load_config(args.config_file)
     config.local_rank = args.local_rank
     config.distributed = args.distributed
+    update_config_with_args(config.config, args.opts)
 
     save_dir = config.config.SAVE_DIR
     if save_dir:

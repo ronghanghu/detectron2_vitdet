@@ -122,11 +122,8 @@ class LinkedNode(object):
         self.name = name
 
     def __call__(self, obj):
-        attrs = self.name.split('.')
-        base_obj = self.base_obj
-        for attr in attrs:
-            base_obj = getattr(base_obj, attr)
-        return base_obj
+        base_obj, attr = _walk_to(self.base_obj, self.name)
+        return getattr(base_obj, attr)
 
     def __repr__(self):
         s = object.__repr__(self)
@@ -197,3 +194,14 @@ def get_attributes_of(self):
             dummy_value = 0
             attrs[k] = v(dummy_value)
     return attrs
+
+
+def update_config_with_args(config, args):
+    assert len(args) % 2 == 0
+    keys = args[::2]
+    values = args[1::2]
+    for k, v in zip(keys, values):
+        parent, attr = _walk_to(config, k)
+        attr_type = type(getattr(parent, attr))
+        # overwrite with new attribute
+        setattr(parent, attr, attr_type(v))
