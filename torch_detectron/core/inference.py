@@ -1,5 +1,6 @@
 import datetime
 import logging
+import tempfile
 import time
 
 import torch
@@ -282,10 +283,11 @@ def inference(
 
     logger.info("Evaluating predictions")
     for iou_type in iou_types:
-        res = evaluate_predictions_on_coco(
-            dataset.coco,
-            coco_results[iou_type],
-            "tmp_results/{}_{}.json".format(json_file, iou_type),
-            iou_type,
-        )
-        logger.info(res)
+        with tempfile.NamedTemporaryFile() as f:
+            res = evaluate_predictions_on_coco(
+                dataset.coco,
+                coco_results[iou_type],
+                f.name,
+                iou_type,
+            )
+            logger.info(res)

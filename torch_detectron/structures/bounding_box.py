@@ -56,6 +56,9 @@ class BBox(object):
             raise ValueError("mode should be 'xyxy' or 'xywh'")
         if mode == self.mode:
             return self
+        # FIXME workaround while tensors with 0 in its dimensions is not fully supported
+        if self.bbox.numel() == 0:
+            return self
         # we only have two modes, so don't need to check
         # self.mode
         xmin, ymin, xmax, ymax = self._split()
@@ -107,6 +110,9 @@ class BBox(object):
                 bbox.add_field(k, v)
             return bbox
 
+        # FIXME workaround while tensors with 0 in its dimensions is not fully supported
+        if self.bbox.numel() == 0:
+            return self
         ratio_width, ratio_height = ratios
         xmin, ymin, xmax, ymax = self._split()
         scaled_xmin = xmin * ratio_width
@@ -137,6 +143,10 @@ class BBox(object):
             raise NotImplementedError(
                 "Only FLIP_LEFT_RIGHT and FLIP_TOP_BOTTOM implemented"
             )
+
+        # FIXME workaround while tensors with 0 in its dimensions is not fully supported
+        if self.bbox.numel() == 0:
+            return self
         image_width, image_height = self.size
         xmin, ymin, xmax, ymax = self._split()
         if method == FLIP_LEFT_RIGHT:
@@ -168,6 +178,9 @@ class BBox(object):
         4-tuple defining the left, upper, right, and lower pixel
         coordinate.
         """
+        # FIXME workaround while tensors with 0 in its dimensions is not fully supported
+        if self.bbox.numel() == 0:
+            return self
         xmin, ymin, xmax, ymax = self._split()
         w, h = box[2] - box[0], box[3] - box[1]
         cropped_xmin = (xmin - box[0]).clamp(min=0, max=w)
@@ -207,6 +220,9 @@ class BBox(object):
         return bbox
 
     def clip_to_image(self, remove_empty=True):
+        # FIXME workaround while tensors with 0 in its dimensions is not fully supported
+        if self.bbox.numel() == 0:
+            return self
         TO_REMOVE = 1
         self.bbox[:, 0].clamp_(min=0, max=self.size[0] - TO_REMOVE)
         self.bbox[:, 1].clamp_(min=0, max=self.size[1] - TO_REMOVE)

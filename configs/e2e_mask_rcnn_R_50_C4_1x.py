@@ -126,15 +126,38 @@ config.CHECKPOINT = (
 )
 
 
-# TODO: remove?
-if False:
-    lr = 0.005
-    config.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 256
+# --------------------------------------------------------------------------------------
+# Quick config
+# --------------------------------------------------------------------------------------
+if "QUICK_SCHEDULE" in os.environ and os.environ["QUICK_SCHEDULE"]:
+    config.TRAIN.DATA.DATASET.FILES = [catalog.DatasetCatalog.get("coco_2014_minival")]
+
 
     import torch_detectron.layers
 
     config.MODEL.ROI_HEADS.POOLER.MODULE = torch_detectron.layers.ROIAlign(
         (7, 7), 1.0 / 16, 0
     )
-    # import os
-    # os.environ['SAVE_DIR'] = '/checkpoint02/fmassa/detectron_logs/mask_rcnn_quick_debug'
+
+    def head_builder(pretrained_path):
+        block = Bottleneck
+        head = ResNetHead(block, layers=[(5, 3)], stride_init=1)
+        # head = ResNetHead(block, layers=[(5, 3)])
+        if pretrained_path:
+            state_dict = torch.load(pretrained_path)
+            head.load_state_dict(state_dict, strict=False)
+        return head
+
+    config.MODEL.ROI_HEADS.BUILDER = head_builder
+    config.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 256
+
+
+    config.MODEL.RPN.PRE_NMS_TOP_N = 6000
+    config.MODEL.RPN.POST_NMS_TOP_N = 2000
+
+    lr = 0.005
+    config.SOLVER.MAX_ITER = 2000
+    config.SOLVER.OPTIM.BASE_LR = lr
+    config.SOLVER.OPTIM.BASE_LR_BIAS = 2 * lr
+
+    config.SOLVER.SCHEDULER.STEPS = [1000]
