@@ -99,6 +99,18 @@ _C.TRAIN.DATA.DATALOADER.SAMPLER = _data._DataSampler(_C)
 _C.TRAIN.DATA.DATALOADER.SAMPLER.SHUFFLE = True
 _C.TRAIN.DATA.DATALOADER.SAMPLER.DISTRIBUTED = False
 
+_C.TRAIN.DATA.DATALOADER.BATCH_SAMPLER = _data._BatchDataSampler(_C)
+_C.TRAIN.DATA.DATALOADER.BATCH_SAMPLER.IMAGES_PER_BATCH = 2
+# Make minibatches from images that have similar aspect ratios (i.e. both
+# tall and thin or both short and wide)
+# it accepts a tuple with aspect ratios that constitues different bins.
+# so if one wants two bins (aspect ratios < 1 and aspect ratios >= 1)
+# you should specify [1] (or 1 also work, as well as True).
+# for more fine-grained aspect ratios grouping, you could pass
+# [0.5, 1., 2.] for 4 different clusters
+# You can disable aspect ratio grouping by passing False or an empty list
+_C.TRAIN.DATA.DATALOADER.BATCH_SAMPLER.ASPECT_GROUPING = [1]
+
 _C.TRAIN.DATA.DATALOADER.COLLATOR = _data._Collator(_C)
 _C.TRAIN.DATA.DATALOADER.COLLATOR.SIZE_DIVISIBLE = 0
 
@@ -124,6 +136,18 @@ _C.TEST.DATA.DATALOADER.IMAGES_PER_BATCH = 1
 _C.TEST.DATA.DATALOADER.SAMPLER = _data._DataSampler(_C)
 _C.TEST.DATA.DATALOADER.SAMPLER.SHUFFLE = False
 _C.TEST.DATA.DATALOADER.SAMPLER.DISTRIBUTED = False
+
+_C.TEST.DATA.DATALOADER.BATCH_SAMPLER = _data._BatchDataSampler(_C)
+_C.TEST.DATA.DATALOADER.BATCH_SAMPLER.IMAGES_PER_BATCH = 2
+# Make minibatches from images that have similar aspect ratios (i.e. both
+# tall and thin or both short and wide)
+# it accepts a tuple with aspect ratios that constitues different bins.
+# so if one wants two bins (aspect ratios < 1 and aspect ratios >= 1)
+# you should specify [1] (or 1 also work, as well as True).
+# for more fine-grained aspect ratios grouping, you could pass
+# [0.5, 1., 2.] for 4 different clusters
+# You can disable aspect ratio grouping by passing False or an empty list
+_C.TEST.DATA.DATALOADER.BATCH_SAMPLER.ASPECT_GROUPING = [1]
 
 _C.TEST.DATA.DATALOADER.COLLATOR = _data._Collator(_C)
 _C.TEST.DATA.DATALOADER.COLLATOR.SIZE_DIVISIBLE = 0

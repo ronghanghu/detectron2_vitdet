@@ -26,7 +26,7 @@ class TestGroupedBatchSampler(unittest.TestCase):
         dataset = [i for i in range(40)]
         group_ids = [i // 10 for i in dataset]
         sampler = SequentialSampler(dataset)
-        for batch_size in [3, 5, 6]:
+        for batch_size in [1, 3, 5, 6]:
             batch_sampler = GroupedBatchSampler(
                 sampler, group_ids, batch_size, drop_uneven
             )
@@ -41,11 +41,12 @@ class TestGroupedBatchSampler(unittest.TestCase):
         sampler = SequentialSampler(dataset)
 
         expected = [
+            [[0], [1], [2], [3], [4], [5], [6], [7], [8], [9]],
             [[0, 1, 3], [2, 4, 5], [6, 9], [7, 8]],
             [[0, 1, 3, 6], [2, 4, 5, 7], [8], [9]],
         ]
 
-        for idx, batch_size in enumerate([3, 4]):
+        for idx, batch_size in enumerate([1, 3, 4]):
             batch_sampler = GroupedBatchSampler(
                 sampler, group_ids, batch_size, drop_uneven
             )
