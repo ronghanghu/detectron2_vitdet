@@ -40,7 +40,7 @@ config.TRAIN.DATA.DATASET.FILES = [
     catalog.DatasetCatalog.get("coco_2014_valminusminival"),
 ]
 config.TEST.DATA.DATASET.FILES = [catalog.DatasetCatalog.get("coco_2014_minival")]
-config.TRAIN.DATA.DATALOADER.IMAGES_PER_BATCH = 1
+config.TRAIN.DATA.DATALOADER.BATCH_SAMPLER.IMAGES_PER_BATCH = 1
 
 
 # --------------------------------------------------------------------------------------
@@ -113,7 +113,7 @@ config.MODEL.ROI_HEADS.MASK_BUILDER = mask_classifier
 # Solver
 # --------------------------------------------------------------------------------------
 num_gpus = 8
-lr = 0.00125 * num_gpus * config.TRAIN.DATA.DATALOADER.IMAGES_PER_BATCH
+lr = 0.00125 * num_gpus * config.TRAIN.DATA.DATALOADER.BATCH_SAMPLER.IMAGES_PER_BATCH
 config.SOLVER.OPTIM.BASE_LR = lr
 config.SOLVER.OPTIM.BASE_LR_BIAS = 2 * lr
 config.SOLVER.OPTIM.WEIGHT_DECAY = 0.0001

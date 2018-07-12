@@ -40,7 +40,7 @@ config.TRAIN.DATA.DATASET.FILES = [
     catalog.DatasetCatalog.get("coco_2014_valminusminival"),
 ]
 config.TEST.DATA.DATASET.FILES = [catalog.DatasetCatalog.get("coco_2014_minival")]
-config.TRAIN.DATA.DATALOADER.IMAGES_PER_BATCH = 2
+config.TRAIN.DATA.DATALOADER.BATCH_SAMPLER.IMAGES_PER_BATCH = 2
 config.TRAIN.DATA.DATALOADER.COLLATOR.SIZE_DIVISIBLE = 32
 config.TEST.DATA.DATALOADER.COLLATOR.SIZE_DIVISIBLE = 32
 
@@ -87,7 +87,7 @@ config.MODEL.ROI_HEADS.POOLER = Pooler()
 # Solver
 # --------------------------------------------------------------------------------------
 num_gpus = 8
-lr = 0.00125 * num_gpus * config.TRAIN.DATA.DATALOADER.IMAGES_PER_BATCH
+lr = 0.00125 * num_gpus * config.TRAIN.DATA.DATALOADER.BATCH_SAMPLER.IMAGES_PER_BATCH
 config.SOLVER.OPTIM.BASE_LR = lr
 config.SOLVER.OPTIM.BASE_LR_BIAS = 2 * lr
 config.SOLVER.OPTIM.WEIGHT_DECAY = 0.0001
@@ -104,6 +104,7 @@ config.CHECKPOINT = (
 # Quck config
 # --------------------------------------------------------------------------------------
 if "QUICK_SCHEDULE" in os.environ and os.environ["QUICK_SCHEDULE"]:
+    raise NotImplementedError("Not fully implemented")
     config.MODEL.RPN.PRE_NMS_TOP_N = 12000
     config.MODEL.RPN.POST_NMS_TOP_N = 2000
     config.MODEL.RPN.POSITIVE_FRACTION = 0.25
