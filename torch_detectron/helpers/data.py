@@ -35,9 +35,16 @@ class _COCODataset(ConfigClass):
         assert isinstance(dataset_files, (list, tuple))
         assert all(len(l) == 2 for l in dataset_files)
 
+        # keep all images for testing, and remove images that do not
+        # contain any positive instances during training
+        remove_images_without_annotations = self.config.TRAIN.DATA.DATASET == self
+        print(remove_images_without_annotations)
+
         dataset_list = []
         for ann_file, data_dir in dataset_files:
-            dataset = COCODataset(ann_file, data_dir, dataset_transform)
+            dataset = COCODataset(
+                ann_file, data_dir, remove_images_without_annotations, dataset_transform
+            )
             dataset_list.append(dataset)
 
         dataset = dataset_list[0]
