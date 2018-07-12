@@ -38,7 +38,6 @@ class _COCODataset(ConfigClass):
         # keep all images for testing, and remove images that do not
         # contain any positive instances during training
         remove_images_without_annotations = self.config.TRAIN.DATA.DATASET == self
-        print(remove_images_without_annotations)
 
         dataset_list = []
         for ann_file, data_dir in dataset_files:

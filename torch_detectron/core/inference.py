@@ -255,7 +255,7 @@ def inference(
 
     logger = logging.getLogger("torch_detectron.inference")
     dataset = data_loader.dataset
-    logger.info("Start evaluation")
+    logger.info("Start evaluation on {} images".format(len(dataset)))
     start_time = time.time()
     predictions = compute_on_dataset(model, data_loader, device)
     total_time = time.time() - start_time
