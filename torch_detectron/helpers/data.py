@@ -14,6 +14,9 @@ from torch_detectron.helpers.config_utils import ConfigClass
 from torch_detectron.utils import data_transforms as T
 from torch_detectron.utils.data_collate import BatchCollator
 
+MEAN = [102.9801, 115.9465, 122.7717]
+STD = [1., 1., 1.]
+
 
 class _COCODataset(ConfigClass):
     """

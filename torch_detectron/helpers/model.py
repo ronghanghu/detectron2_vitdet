@@ -39,9 +39,9 @@ class ModelBuilder(ConfigClass):
         rpn_only = self.config.MODEL.RPN_ONLY
         backbone = self.config.MODEL.BACKBONE()
         region_proposal = self.config.MODEL.RPN()
-        heads = None if rpn_only else self.config.MODEL.HEADS()
+        roi_heads = None if rpn_only else self.config.MODEL.ROI_HEADS()
         return generalized_rcnn.GeneralizedRCNN(
-            backbone, region_proposal, heads, rpn_only
+            backbone, region_proposal, roi_heads, rpn_only
         )
 
 
@@ -173,39 +173,39 @@ class RPNBuilder(ConfigClass):
 
 class PoolerBuilder(ConfigClass):
     def __call__(self):
-        module = self.config.MODULE
+        module = self.config.MODEL.ROI_HEADS.POOLER.MODULE
         pooler = Pooler(module)
         return pooler
 
 
 class DetectionAndMaskHeadsBuilder(ConfigClass):
     def __call__(self):
-        use_fpn = self.config.MODEL.HEADS.USE_FPN
+        use_fpn = self.config.MODEL.ROI_HEADS.USE_FPN
         use_mask = self.config.MODEL.USE_MASK
 
-        pooler = self.config.MODEL.HEADS.POOLER()
+        pooler = self.config.MODEL.ROI_HEADS.POOLER()
 
-        num_classes = self.config.MODEL.HEADS.NUM_CLASSES
-        pretrained_weights = self.config.MODEL.HEADS.WEIGHTS
-        module_builder = self.config.MODEL.HEADS.BUILDER
+        num_classes = self.config.MODEL.ROI_HEADS.NUM_CLASSES
+        pretrained_weights = self.config.MODEL.ROI_HEADS.WEIGHTS
+        module_builder = self.config.MODEL.ROI_HEADS.BUILDER
 
         # FIXME this is an ugly hack
         if use_mask and not use_fpn:
             classifier_layers = module_builder(pretrained_path=pretrained_weights)
 
-            head_builder = self.config.MODEL.HEADS.HEAD_BUILDER
+            head_builder = self.config.MODEL.ROI_HEADS.HEAD_BUILDER
             classifier = head_builder(num_classes, pretrained_weights)
         else:
             classifier_layers = module_builder(
                 self.config, num_classes=num_classes, pretrained=pretrained_weights
             )
 
-        bbox_reg_weights = self.config.MODEL.HEADS.BBOX_REG_WEIGHTS
+        bbox_reg_weights = self.config.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS
         box_coder = BoxCoder(weights=bbox_reg_weights)
 
-        score_thresh = self.config.MODEL.HEADS.SCORE_THRESH
-        nms_thresh = self.config.MODEL.HEADS.NMS
-        detections_per_img = self.config.MODEL.HEADS.DETECTIONS_PER_IMG
+        score_thresh = self.config.MODEL.ROI_HEADS.SCORE_THRESH
+        nms_thresh = self.config.MODEL.ROI_HEADS.NMS
+        detections_per_img = self.config.MODEL.ROI_HEADS.DETECTIONS_PER_IMG
 
         postprocessor_maker = PostProcessor if not use_fpn else FPNPostProcessor
         postprocessor = postprocessor_maker(
@@ -213,14 +213,14 @@ class DetectionAndMaskHeadsBuilder(ConfigClass):
         )
 
         # loss evaluation
-        matched_threshold = self.config.MODEL.HEADS.MATCHED_THRESHOLD
-        unmatched_threshold = self.config.MODEL.HEADS.UNMATCHED_THRESHOLD
+        matched_threshold = self.config.MODEL.ROI_HEADS.MATCHED_THRESHOLD
+        unmatched_threshold = self.config.MODEL.ROI_HEADS.UNMATCHED_THRESHOLD
         matcher = Matcher(matched_threshold, unmatched_threshold)
 
         target_preparator = FastRCNNTargetPreparator(matcher, box_coder)
 
-        batch_size_per_image = self.config.MODEL.HEADS.BATCH_SIZE_PER_IMAGE
-        positive_fraction = self.config.MODEL.HEADS.POSITIVE_FRACTION
+        batch_size_per_image = self.config.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE
+        positive_fraction = self.config.MODEL.ROI_HEADS.POSITIVE_FRACTION
         fg_bg_sampler = BalancedPositiveNegativeSampler(
             batch_size_per_image=batch_size_per_image,
             positive_fraction=positive_fraction,
@@ -230,10 +230,10 @@ class DetectionAndMaskHeadsBuilder(ConfigClass):
         # mask
 
         if use_mask and not use_fpn:
-            mask_builder = self.config.MODEL.HEADS.MASK_BUILDER
+            mask_builder = self.config.MODEL.ROI_HEADS.MASK_BUILDER
             heads_mask = mask_builder(num_classes, pretrained_weights)
 
-            discretization_size = self.config.MODEL.HEADS.MASK_RESOLUTION
+            discretization_size = self.config.MODEL.ROI_HEADS.MASK_RESOLUTION
             mask_target_preparator = MaskTargetPreparator(matcher, discretization_size)
             mask_loss_evaluator = MaskRCNNLossComputation(mask_target_preparator)
 
@@ -255,12 +255,12 @@ class DetectionAndMaskHeadsBuilder(ConfigClass):
             # TODO there are a number of things that are implicit here.
             # for example, the mask_pooler should be subsampling the positive
             # boxes only, so that the loss evaluator knows that it should do the same
-            mask_builder = self.config.MODEL.HEADS.MASK_BUILDER
+            mask_builder = self.config.MODEL.ROI_HEADS.MASK_BUILDER
             heads_mask = mask_builder(num_classes, pretrained_weights)
 
-            mask_pooler = self.config.MODEL.HEADS.MASK_POOLER()
+            mask_pooler = self.config.MODEL.ROI_HEADS.MASK_POOLER()
 
-            discretization_size = self.config.MODEL.HEADS.MASK_RESOLUTION
+            discretization_size = self.config.MODEL.ROI_HEADS.MASK_RESOLUTION
             mask_target_preparator = MaskTargetPreparator(matcher, discretization_size)
             mask_loss_evaluator = MaskRCNNLossComputation(
                 mask_target_preparator, subsample_only_positive_boxes=True

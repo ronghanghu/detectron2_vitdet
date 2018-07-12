@@ -65,53 +65,6 @@ _C.MODEL.BACKBONE.WEIGHTS = None
 _C.MODEL.BACKBONE.BUILDER = _model.resnet50_conv4_body
 _C.MODEL.BACKBONE.OUTPUT_DIM = 256 * 4
 
-_C.MODEL.RPN = _model.RPNBuilder(_C)
-_C.MODEL.RPN.USE_FPN = False
-_C.MODEL.RPN.SCALES = (0.125, 0.25, 0.5, 1., 2.)
-_C.MODEL.RPN.BASE_ANCHOR_SIZE = 256
-_C.MODEL.RPN.ANCHOR_STRIDE = 16
-_C.MODEL.RPN.ASPECT_RATIOS = (0.5, 1.0, 2.0)
-_C.MODEL.RPN.STRADDLE_THRESH = 0
-_C.MODEL.RPN.MATCHED_THRESHOLD = 0.7
-_C.MODEL.RPN.UNMATCHED_THRESHOLD = 0.3
-_C.MODEL.RPN.BATCH_SIZE_PER_IMAGE = 256
-_C.MODEL.RPN.POSITIVE_FRACTION = 0.5
-# TODO separate in train and test
-_C.MODEL.RPN.PRE_NMS_TOP_N = 12000
-_C.MODEL.RPN.POST_NMS_TOP_N = 2000
-# TODO this is not as nice
-_C.MODEL.RPN.PRE_NMS_TOP_N_TEST = 6000
-_C.MODEL.RPN.POST_NMS_TOP_N_TEST = 1000
-_C.MODEL.RPN.NMS_THRESH = 0.7
-_C.MODEL.RPN.MIN_SIZE = 0
-_C.MODEL.RPN.WEIGHTS = None
-_C.MODEL.RPN.FPN_POST_NMS_TOP_N = 2000
-_C.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST = 2000
-
-_C.MODEL.HEADS = _model.DetectionAndMaskHeadsBuilder(_C)
-_C.MODEL.HEADS.USE_FPN = False
-_C.MODEL.HEADS.POOLER = _model.PoolerBuilder(_C)
-# TODO decide if we want to decompose in elementary objects
-_C.MODEL.HEADS.POOLER.MODULE = _ROIAlign((14, 14), 1.0 / 16, 0)
-_C.MODEL.HEADS.MATCHED_THRESHOLD = 0.5
-_C.MODEL.HEADS.UNMATCHED_THRESHOLD = 0.0
-_C.MODEL.HEADS.BBOX_REG_WEIGHTS = (10., 10., 5., 5.)
-_C.MODEL.HEADS.BATCH_SIZE_PER_IMAGE = 512
-_C.MODEL.HEADS.POSITIVE_FRACTION = 0.25
-_C.MODEL.HEADS.NUM_CLASSES = 81
-_C.MODEL.HEADS.WEIGHTS = None
-_C.MODEL.HEADS.BUILDER = _model.resnet50_conv5_head
-
-_C.MODEL.HEADS.HEAD_BUILDER = None
-_C.MODEL.HEADS.MASK_BUILDER = None
-_C.MODEL.HEADS.MASK_RESOLUTION = 14
-_C.MODEL.HEADS.MASK_POOLER = None
-
-# Only used on test mode
-_C.MODEL.HEADS.SCORE_THRESH = 0.05
-_C.MODEL.HEADS.NMS = 0.5
-_C.MODEL.HEADS.DETECTIONS_PER_IMG = 100
-
 # ============================================================== #
 
 _C.SOLVER = AttrDict()
@@ -152,8 +105,8 @@ _C.TRAIN.DATA.DATALOADER.COLLATOR.SIZE_DIVISIBLE = 0
 _C.TRAIN.DATA.TRANSFORM = _data._DataTransform(_C)
 _C.TRAIN.DATA.TRANSFORM.MIN_SIZE = 800
 _C.TRAIN.DATA.TRANSFORM.MAX_SIZE = 1333
-_C.TRAIN.DATA.TRANSFORM.MEAN = [102.9801, 115.9465, 122.7717]
-_C.TRAIN.DATA.TRANSFORM.STD = [1, 1, 1]
+_C.TRAIN.DATA.TRANSFORM.MEAN = _data.MEAN
+_C.TRAIN.DATA.TRANSFORM.STD = _data.STD
 _C.TRAIN.DATA.TRANSFORM.TO_BGR255 = True
 _C.TRAIN.DATA.TRANSFORM.FLIP_PROB = 0.5
 
@@ -178,8 +131,8 @@ _C.TEST.DATA.DATALOADER.COLLATOR.SIZE_DIVISIBLE = 0
 _C.TEST.DATA.TRANSFORM = _data._DataTransform(_C)
 _C.TEST.DATA.TRANSFORM.MIN_SIZE = 800
 _C.TEST.DATA.TRANSFORM.MAX_SIZE = 1333
-_C.TEST.DATA.TRANSFORM.MEAN = [102.9801, 115.9465, 122.7717]
-_C.TEST.DATA.TRANSFORM.STD = [1, 1, 1]
+_C.TEST.DATA.TRANSFORM.MEAN = _data.MEAN
+_C.TEST.DATA.TRANSFORM.STD = _data.STD
 _C.TEST.DATA.TRANSFORM.TO_BGR255 = True
 _C.TEST.DATA.TRANSFORM.FLIP_PROB = 0
 
@@ -187,3 +140,59 @@ _C.TEST.DATA.TRANSFORM.FLIP_PROB = 0
 def get_default_config():
     """Return a config object populated with defaults."""
     return copy.deepcopy(_C)
+
+
+def set_rpn_defaults(config):
+    """Set default config options for models that use a Region Proposal Network."""
+    config.MODEL.RPN = _model.RPNBuilder(config)
+    config.MODEL.RPN.USE_FPN = False
+    config.MODEL.RPN.SCALES = (0.125, 0.25, 0.5, 1., 2.)
+    config.MODEL.RPN.BASE_ANCHOR_SIZE = 256
+    config.MODEL.RPN.ANCHOR_STRIDE = 16
+    config.MODEL.RPN.ASPECT_RATIOS = (0.5, 1.0, 2.0)
+    config.MODEL.RPN.STRADDLE_THRESH = 0
+    config.MODEL.RPN.MATCHED_THRESHOLD = 0.7
+    config.MODEL.RPN.UNMATCHED_THRESHOLD = 0.3
+    config.MODEL.RPN.BATCH_SIZE_PER_IMAGE = 256
+    config.MODEL.RPN.POSITIVE_FRACTION = 0.5
+    # TODO separate in train and test
+    config.MODEL.RPN.PRE_NMS_TOP_N = 12000
+    config.MODEL.RPN.POST_NMS_TOP_N = 2000
+    # TODO this is not as nice
+    config.MODEL.RPN.PRE_NMS_TOP_N_TEST = 6000
+    config.MODEL.RPN.POST_NMS_TOP_N_TEST = 1000
+    config.MODEL.RPN.NMS_THRESH = 0.7
+    config.MODEL.RPN.MIN_SIZE = 0
+    config.MODEL.RPN.WEIGHTS = None
+    config.MODEL.RPN.FPN_POST_NMS_TOP_N = 2000
+    config.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST = 2000
+
+
+def set_roi_heads_defaults(config):
+    """
+    Set default config options for models that use one or more roi heads (e.g.,
+    Fast/er/Mask R-CNN).
+    """
+    config.MODEL.ROI_HEADS = _model.DetectionAndMaskHeadsBuilder(config)
+    config.MODEL.ROI_HEADS.USE_FPN = False
+    config.MODEL.ROI_HEADS.POOLER = _model.PoolerBuilder(config)
+    # TODO decide if we want to decompose in elementary objects
+    config.MODEL.ROI_HEADS.POOLER.MODULE = _ROIAlign((14, 14), 1.0 / 16, 0)
+    config.MODEL.ROI_HEADS.MATCHED_THRESHOLD = 0.5
+    config.MODEL.ROI_HEADS.UNMATCHED_THRESHOLD = 0.0
+    config.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS = (10., 10., 5., 5.)
+    config.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 512
+    config.MODEL.ROI_HEADS.POSITIVE_FRACTION = 0.25
+    config.MODEL.ROI_HEADS.NUM_CLASSES = 81
+    config.MODEL.ROI_HEADS.WEIGHTS = None
+    config.MODEL.ROI_HEADS.BUILDER = _model.resnet50_conv5_head
+
+    config.MODEL.ROI_HEADS.HEAD_BUILDER = None
+    config.MODEL.ROI_HEADS.MASK_BUILDER = None
+    config.MODEL.ROI_HEADS.MASK_RESOLUTION = 14
+    config.MODEL.ROI_HEADS.MASK_POOLER = None
+
+    # Only used on test mode
+    config.MODEL.ROI_HEADS.SCORE_THRESH = 0.05
+    config.MODEL.ROI_HEADS.NMS = 0.5
+    config.MODEL.ROI_HEADS.DETECTIONS_PER_IMG = 100

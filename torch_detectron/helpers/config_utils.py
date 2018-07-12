@@ -105,9 +105,9 @@ def _walk_to(obj, path):
     as a delimiter and returns the last object that should
     be accessed, and the attribute that access this object.
 
-    For example, if path is 'MODEL.HEADS.NMS', then
+    For example, if path is 'MODEL.ROI_HEADS.NMS', then
     the returned position will be the object represented by
-    MODEL.HEADS, and attr will be NMS.
+    MODEL.ROI_HEADS, and attr will be NMS.
 
     Arguments:
         obj: an arbitrarily-nested object with attributes
