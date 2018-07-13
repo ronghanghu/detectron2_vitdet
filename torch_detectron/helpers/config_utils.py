@@ -68,36 +68,6 @@ class ConfigClass(object):
         return self._config
 
 
-class AttrDict(dict):
-    """
-    A simple attribute dictionary used for representing configuration options.
-    """
-
-    def __getattr__(self, name):
-        if name in self.__dict__:
-            return self.__dict__[name]
-        elif name in self:
-            return self[name]
-        else:
-            raise AttributeError(name)
-
-    def __setattr__(self, name, value):
-        if name in self.__dict__:
-            self.__dict__[name] = value
-        else:
-            self[name] = value
-
-    def __repr__(self):
-        r = object.__repr__(self)
-        s = []
-        for k, v in self.items():
-            attr_str = "{}: {}".format(repr(k), repr(v))
-            attr_str = _addindent(attr_str, 2)
-            s.append(attr_str)
-
-        return r + "\n  " + "\n  ".join(s)
-
-
 def _walk_to(obj, path):
     """
     Given a nested object (that can be accessed via getattr),

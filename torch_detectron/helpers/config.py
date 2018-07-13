@@ -39,10 +39,10 @@ import torch
 import torch_detectron.helpers.data as _data
 import torch_detectron.helpers.model as _model
 import torch_detectron.helpers.solver as _solver
-from torch_detectron.helpers.config_utils import AttrDict
+from torch_detectron.helpers.config_utils import ConfigClass
 from torch_detectron.layers import ROIAlign as _ROIAlign
 
-_C = AttrDict()
+_C = ConfigClass()
 
 _C.DEVICE = torch.device("cuda")
 _C.DO_TEST = True
@@ -67,7 +67,7 @@ _C.MODEL.BACKBONE.OUTPUT_DIM = 256 * 4
 
 # ============================================================== #
 
-_C.SOLVER = AttrDict()
+_C.SOLVER = ConfigClass(_C)
 _C.SOLVER.MAX_ITER = 40000
 _C.SOLVER.OPTIM = _solver._SGDOptimizer(_C)
 _C.SOLVER.OPTIM.BASE_LR = 0.001
@@ -85,7 +85,7 @@ _C.SOLVER.SCHEDULER.WARMUP_METHOD = "linear"
 
 # ============================================================== #
 
-_C.TRAIN = AttrDict()
+_C.TRAIN = ConfigClass(_C)
 
 _C.TRAIN.DATA = _data._Data(_C)
 _C.TRAIN.DATA.DATASET = _data._COCODataset(_C)
@@ -122,7 +122,7 @@ _C.TRAIN.DATA.TRANSFORM.TO_BGR255 = True
 _C.TRAIN.DATA.TRANSFORM.FLIP_PROB = 0.5
 
 # ============================================================== #
-_C.TEST = AttrDict()
+_C.TEST = ConfigClass(_C)
 
 _C.TEST.DATA = _data._Data(_C)
 _C.TEST.DATA.DATASET = _data._COCODataset(_C)
