@@ -36,12 +36,22 @@ def train_one_epoch(
         end = time.time()
         meters.update(time=batch_time, data=data_time)
 
+        eta_seconds = meters.time.global_avg * (max_iter - iteration)
+        eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
+
         if iteration % 20 == 0 or iteration == (max_iter - 1):
             logger.info(
                 meters.delimiter.join(
-                    ["iter: {0}", "{meters}", "lr: {lr:.6f}", "max mem: {memory:.0f}"]
+                    [
+                        "eta: {eta}",
+                        "iter: {iter}",
+                        "{meters}",
+                        "lr: {lr:.6f}",
+                        "max mem: {memory:.0f}",
+                    ]
                 ).format(
-                    iteration,
+                    eta=eta_string,
+                    iter=iteration,
                     meters=str(meters),
                     lr=optimizer.param_groups[0]["lr"],
                     memory=torch.cuda.max_memory_allocated() / 1024.0 / 1024.0,
