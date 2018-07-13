@@ -131,6 +131,7 @@ config.CHECKPOINT = (
 # --------------------------------------------------------------------------------------
 if "QUICK_SCHEDULE" in os.environ and os.environ["QUICK_SCHEDULE"]:
     config.TRAIN.DATA.DATASET.FILES = [catalog.DatasetCatalog.get("coco_2014_minival")]
+    config.TRAIN.DATA.DATALOADER.IMAGES_PER_BATCH = 2
 
 
     import torch_detectron.layers
