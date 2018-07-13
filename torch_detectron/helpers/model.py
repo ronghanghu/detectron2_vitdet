@@ -31,10 +31,10 @@ from torch_detectron.core.post_processor import PostProcessor
 from torch_detectron.core.proposal_matcher import Matcher
 from torch_detectron.core.rpn_losses import RPNLossComputation
 from torch_detectron.core.rpn_losses import RPNTargetPreparator
-from torch_detectron.helpers.config_utils import ConfigClass
+from torch_detectron.helpers.config_utils import ConfigNode
 
 
-class ModelBuilder(ConfigClass):
+class ModelBuilder(ConfigNode):
     def __call__(self):
         rpn_only = self.config.MODEL.RPN_ONLY
         backbone = self.config.MODEL.BACKBONE()
@@ -45,7 +45,7 @@ class ModelBuilder(ConfigClass):
         )
 
 
-class BackboneBuilder(ConfigClass):
+class BackboneBuilder(ConfigNode):
     def __call__(self):
         weights = self.config.MODEL.BACKBONE.WEIGHTS
         model_builder = self.config.MODEL.BACKBONE.BUILDER
@@ -53,7 +53,7 @@ class BackboneBuilder(ConfigClass):
 
 
 # FIXME use this or not
-class AnchorGeneratorBuilder(ConfigClass):
+class AnchorGeneratorBuilder(ConfigNode):
     def __call__(self):
         scales = self.SCALES
         aspect_ratios = self.ASPECT_RATIOS
@@ -68,7 +68,7 @@ class AnchorGeneratorBuilder(ConfigClass):
         return anchor_generator
 
 
-class RPNBuilder(ConfigClass):
+class RPNBuilder(ConfigNode):
     def __call__(self):
         use_fpn = self.config.MODEL.RPN.USE_FPN
 
@@ -171,14 +171,14 @@ class RPNBuilder(ConfigClass):
         return module
 
 
-class PoolerBuilder(ConfigClass):
+class PoolerBuilder(ConfigNode):
     def __call__(self):
         module = self.config.MODEL.ROI_HEADS.POOLER.MODULE
         pooler = Pooler(module)
         return pooler
 
 
-class DetectionAndMaskHeadsBuilder(ConfigClass):
+class DetectionAndMaskHeadsBuilder(ConfigNode):
     def __call__(self):
         use_fpn = self.config.MODEL.ROI_HEADS.USE_FPN
         use_mask = self.config.MODEL.USE_MASK

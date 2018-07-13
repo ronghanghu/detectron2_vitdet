@@ -13,7 +13,7 @@ from torch_detectron.core.mask_rcnn import maskrcnn_head
 from torch_detectron.helpers.config import get_default_config
 from torch_detectron.helpers.config import set_rpn_defaults
 from torch_detectron.helpers.config import set_roi_heads_defaults
-from torch_detectron.helpers.config_utils import ConfigClass
+from torch_detectron.helpers.config_utils import ConfigNode
 from torch_detectron.helpers.config_utils import import_file
 from torch_detectron.helpers.model import fpn_classification_head
 from torch_detectron.helpers.model import fpn_resnet50_conv5_body
@@ -75,7 +75,7 @@ config.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST = 1000
 # --------------------------------------------------------------------------------------
 # RoI heads
 # --------------------------------------------------------------------------------------
-class Pooler(ConfigClass):
+class Pooler(ConfigNode):
     def __call__(self):
         return FPNPooler(
             output_size=(7, 7),
@@ -85,7 +85,7 @@ class Pooler(ConfigClass):
         )
 
 
-class MaskPooler(ConfigClass):
+class MaskPooler(ConfigNode):
     def __call__(self):
         roi_to_fpn_level_mapper = ROI2FPNLevelsMapper(2, 5)
         return MaskFPNPooler(

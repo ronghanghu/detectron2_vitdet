@@ -439,7 +439,7 @@ does not fit with the COCO style. You can do it in the following manner:
 ```python
 from torch_detectron.helpers.config import get_default_config
 # this is just a helper class, it's not strictly needed
-from torch_detectron.helpers.config_utils import ConfigClass
+from torch_detectron.helpers.config_utils import ConfigNode
 
 class MyDataset(object):
     def __init__(self, transforms):
@@ -452,7 +452,7 @@ class MyDataset(object):
     def __len__(self):
         return ...
 
-class MyDatasetBuilder(ConfigClass):
+class MyDatasetBuilder(ConfigNode):
     def __call__(self, transforms):
         return MyDataset(transforms)
 
@@ -470,11 +470,11 @@ optimizer is simple:
 
 ```python
 from torch_detectron.helpers.config import get_default_config
-from torch_detectron.helpers.config_utils import ConfigClass
+from torch_detectron.helpers.config_utils import ConfigNode
 
 from torch.optim import Adam
 
-class MyOptimizer(ConfigClass):
+class MyOptimizer(ConfigNode):
     def __call__(self, model):
         lr = self.LEARNING_RATE
         optimizer = Adam(model.parameters(), lr=lr)
@@ -496,7 +496,7 @@ never been tried before, you can do it without having to modify the
 Here is a toy example:
 ```python
 from torch_detectron.helpers.config import get_default_config
-from torch_detectron.helpers.config_utils import ConfigClass
+from torch_detectron.helpers.config_utils import ConfigNode
 
 from torch_detectron.core.image_list import to_image_list
 
@@ -569,7 +569,7 @@ class MyModel(nn.Module):
                     loss_box_reg=loss_box_reg)
 
 # can add arbitrary attributes so that it can be configurable
-class ModelGetter(ConfigClass):
+class ModelGetter(ConfigNode):
     def __call__(self):
         return MyModel(self.WEIGHTS)
 

@@ -31,7 +31,7 @@ def _addindent(s_, numSpaces):
     return s
 
 
-class ConfigClass(object):
+class ConfigNode(object):
     """
     This is the base class that should be used when creating configuration
     classes.

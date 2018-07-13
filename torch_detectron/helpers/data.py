@@ -10,7 +10,7 @@ import torch.utils.data.distributed
 import torch.utils.data.sampler
 
 from torch_detectron.datasets.coco import COCODataset
-from torch_detectron.helpers.config_utils import ConfigClass
+from torch_detectron.helpers.config_utils import ConfigNode
 from torch_detectron.utils import data_transforms as T
 from torch_detectron.utils.concat_dataset import ConcatDataset
 from torch_detectron.utils.data_collate import BatchCollator
@@ -21,7 +21,7 @@ MEAN = [102.9801, 115.9465, 122.7717]
 STD = [1., 1., 1.]
 
 
-class _COCODataset(ConfigClass):
+class _COCODataset(ConfigNode):
     """
     FILES: a list of 2-element tuples, containing the
         path to the annotations file and the path to the
@@ -56,7 +56,7 @@ class _COCODataset(ConfigClass):
         return dataset
 
 
-class _DataLoader(ConfigClass):
+class _DataLoader(ConfigNode):
     """
     SAMPLER:
     IMAGES_PER_BATCH:
@@ -78,7 +78,7 @@ class _DataLoader(ConfigClass):
         return data_loader
 
 
-class _DataSampler(ConfigClass):
+class _DataSampler(ConfigNode):
     """
     SHUFFLE:
     DISTRIBUTED:
@@ -102,7 +102,7 @@ def _quantize(x, bins):
     return quantized
 
 
-class _BatchDataSampler(ConfigClass):
+class _BatchDataSampler(ConfigNode):
     def __call__(self, dataset, sampler):
         aspect_grouping = self.ASPECT_GROUPING
         images_per_batch = self.IMAGES_PER_BATCH
@@ -121,7 +121,7 @@ class _BatchDataSampler(ConfigClass):
         return batch_sampler
 
 
-class _Collator(ConfigClass):
+class _Collator(ConfigNode):
     """
     SIZE_DIVISIBLE:
     """
@@ -130,7 +130,7 @@ class _Collator(ConfigClass):
         return BatchCollator(self.SIZE_DIVISIBLE)
 
 
-class _DataTransform(ConfigClass):
+class _DataTransform(ConfigNode):
     def __call__(self):
         min_size = self.MIN_SIZE
         max_size = self.MAX_SIZE
@@ -153,7 +153,7 @@ class _DataTransform(ConfigClass):
         return transform
 
 
-class _Data(ConfigClass):
+class _Data(ConfigNode):
     def __call__(self):
         transform = self.TRANSFORM()
         dataset = self.DATASET(transform)

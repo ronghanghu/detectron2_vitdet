@@ -3,10 +3,10 @@ Utility functions for constructing the optimizers
 """
 import torch
 
-from torch_detectron.helpers.config_utils import ConfigClass
+from torch_detectron.helpers.config_utils import ConfigNode
 
 
-class _SGDOptimizer(ConfigClass):
+class _SGDOptimizer(ConfigNode):
     def __call__(self, model):
         params = []
         for key, value in model.named_parameters():
@@ -23,7 +23,7 @@ class _SGDOptimizer(ConfigClass):
         return optimizer
 
 
-class _WarmupMultiStepLR(ConfigClass):
+class _WarmupMultiStepLR(ConfigNode):
     def __call__(self, optimizer):
         from torch_detectron.utils.lr_scheduler import WarmupMultiStepLR
 
