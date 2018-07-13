@@ -21,16 +21,9 @@
 module purge
 
 module load anaconda3/5.0.1
-#module load cuda/8.0
 module load cuda/9.0
-#module load cudnn/v6.0
 module load cudnn/v7.0-cuda.9.0
-#module load NCCL/2.0.5
 module load NCCL/2.2.13-cuda.9.0
 
-source activate detectron_v2
-#source activate detectron_cuda8
-
 #srun env
-# srun --label wrapper.sh
 srun --label wrapper.sh $@
