@@ -72,7 +72,7 @@ def do_train(
         start_epoch_time = time.time()
         iteration = arguments["iteration"]
         if use_distributed:
-            data_loader.sampler.set_epoch(iteration)
+            data_loader.batch_sampler.sampler.set_epoch(iteration)
         try:
             iteration_end = train_one_epoch(
                 model, data_loader, optimizer, scheduler, device, iteration, max_iter
