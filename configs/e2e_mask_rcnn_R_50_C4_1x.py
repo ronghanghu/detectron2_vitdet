@@ -10,12 +10,11 @@ import torch
 from torch import nn
 
 from torch_detectron.helpers.config import get_default_config
-from torch_detectron.helpers.config import set_rpn_defaults
+from torch_detectron.helpers.config import set_resnet_defaults
 from torch_detectron.helpers.config import set_roi_heads_defaults
+from torch_detectron.helpers.config import set_rpn_defaults
 from torch_detectron.helpers.config_utils import import_file
-from torch_detectron.model_builder.resnet import Bottleneck, ClassifierHead
-from torch_detectron.model_builder.resnet import ResNetHead
-
+from torch_detectron.model_builder import resnet
 
 catalog = import_file(
     "torch_detectron.paths_catalog",
@@ -28,6 +27,7 @@ pretrained_path = catalog.ModelCatalog.get("R-50")
 # Default config options
 # --------------------------------------------------------------------------------------
 config = get_default_config()
+set_resnet_defaults(config)
 set_rpn_defaults(config)
 set_roi_heads_defaults(config)
 
@@ -67,25 +67,30 @@ config.MODEL.RPN.POST_NMS_TOP_N_TEST = 1000
 # --------------------------------------------------------------------------------------
 # RoI heads
 # --------------------------------------------------------------------------------------
-def head_builder(pretrained_path):
-    block = Bottleneck
-    # head = ResNetHead(block, layers=[(5, 3)], stride_init=1)
-    head = ResNetHead(block, layers=[(5, 3)])
+def head_builder(config, pretrained_path):
+    stage = resnet.StageSpec(index=5, block_count=3, return_features=False)
+    head = resnet.ResNetHead(
+        block_module=config.RESNET.BLOCK_MODULE,
+        stages=(stage,),
+        num_groups=config.RESNET.NUM_GROUPS,
+        width_per_group=config.RESNET.WIDTH_PER_GROUP,
+        stride_in_1x1=config.RESNET.STRIDE_IN_1X1,
+    )
     if pretrained_path:
         state_dict = torch.load(pretrained_path)
         head.load_state_dict(state_dict, strict=False)
     return head
 
 
-def classifier(num_classes, pretrained_path=None):
-    classifier = ClassifierHead(512 * Bottleneck.expansion, num_classes)
+def classifier(config, num_classes, pretrained_path=None):
+    classifier = resnet.ClassifierHead(2048, num_classes)
     if pretrained_path:
         state_dict = torch.load(pretrained_path)
         classifier.load_state_dict(state_dict, strict=False)
     return classifier
 
 
-def mask_classifier(num_classes, pretrained_path=None):
+def mask_classifier(config, num_classes, pretrained_path=None):
     model = nn.Sequential(
         nn.ConvTranspose2d(512 * 4, 256, 2, 2, 0),
         nn.ReLU(),
@@ -133,17 +138,22 @@ if "QUICK_SCHEDULE" in os.environ and os.environ["QUICK_SCHEDULE"]:
     config.TRAIN.DATA.DATASET.FILES = [catalog.DatasetCatalog.get("coco_2014_minival")]
     config.TRAIN.DATA.DATALOADER.BATCH_SAMPLER.IMAGES_PER_BATCH = 2
 
-
     import torch_detectron.layers
 
     config.MODEL.ROI_HEADS.POOLER.MODULE = torch_detectron.layers.ROIAlign(
         (7, 7), 1.0 / 16, 0
     )
 
-    def head_builder(pretrained_path):
-        block = Bottleneck
-        head = ResNetHead(block, layers=[(5, 3)], stride_init=1)
-        # head = ResNetHead(block, layers=[(5, 3)])
+    def head_builder(config, pretrained_path):
+        stage = resnet.StageSpec(index=5, block_count=3, return_features=False)
+        head = resnet.ResNetHead(
+            block_module=config.RESNET.BLOCK_MODULE,
+            stages=(stage,),
+            num_groups=config.RESNET.NUM_GROUPS,
+            width_per_group=config.RESNET.WIDTH_PER_GROUP,
+            stride_in_1x1=config.RESNET.STRIDE_IN_1X1,
+            stride_init=1,
+        )
         if pretrained_path:
             state_dict = torch.load(pretrained_path)
             head.load_state_dict(state_dict, strict=False)
@@ -151,7 +161,6 @@ if "QUICK_SCHEDULE" in os.environ and os.environ["QUICK_SCHEDULE"]:
 
     config.MODEL.ROI_HEADS.BUILDER = head_builder
     config.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 256
-
 
     config.MODEL.RPN.PRE_NMS_TOP_N = 6000
     config.MODEL.RPN.POST_NMS_TOP_N = 2000

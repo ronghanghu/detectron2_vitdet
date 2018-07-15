@@ -39,6 +39,7 @@ import torch
 import torch_detectron.helpers.data as _data
 import torch_detectron.helpers.model as _model
 import torch_detectron.helpers.solver as _solver
+import torch_detectron.model_builder.resnet as _resnet
 from torch_detectron.helpers.config_utils import ConfigNode
 from torch_detectron.layers import ROIAlign as _ROIAlign
 
@@ -211,3 +212,23 @@ def set_roi_heads_defaults(config):
     config.MODEL.ROI_HEADS.SCORE_THRESH = 0.05
     config.MODEL.ROI_HEADS.NMS = 0.5
     config.MODEL.ROI_HEADS.DETECTIONS_PER_IMG = 100
+
+
+def set_resnet_defaults(config):
+    """
+    Set default config options for models that use a ResNe[X]t backbone and/or head.
+    """
+    # The original MSRA ResNet models have stride in the first 1x1 conv
+    # The subsequent fb.torch.resnet and Caffe2 ResNe[X]t implementations have
+    # stride in the 3x3 conv
+    config.RESNET = ConfigNode(_C)
+    config.RESNET.STRIDE_IN_1X1 = True
+    # ResNet has NUM_GROUPS = 1
+    # ResNeXt has NUM_GROUPS > 1
+    config.RESNET.NUM_GROUPS = 1
+    # Number of channels ("width") in each group in stage 2
+    config.RESNET.WIDTH_PER_GROUP = 64
+    # Function that implements the ResNet "stem" (e.g., conv1 -> BN -> ReLu -> max pool)
+    config.RESNET.STEM_FUNCTION = _resnet.StemWithFixedBatchNorm
+    # nn.Module that implements the ResNet block
+    config.RESNET.BLOCK_MODULE = _resnet.BottleneckWithFixedBatchNorm

@@ -7,6 +7,7 @@ The goal is to have as much flexibility as possible.
 import os
 
 from torch_detectron.helpers.config import get_default_config
+from torch_detectron.helpers.config import set_resnet_defaults
 from torch_detectron.helpers.config import set_rpn_defaults
 from torch_detectron.helpers.config_utils import import_file
 
@@ -21,6 +22,7 @@ pretrained_path = catalog.ModelCatalog.get("R-50")
 # Default config options
 # --------------------------------------------------------------------------------------
 config = get_default_config()
+set_resnet_defaults(config)
 set_rpn_defaults(config)
 
 

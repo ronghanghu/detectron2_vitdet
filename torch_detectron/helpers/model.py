@@ -23,8 +23,8 @@ from torch_detectron.core.faster_rcnn import RPNHeads
 from torch_detectron.core.fpn import FPN
 from torch_detectron.core.fpn import FPNHeadClassifier
 from torch_detectron.core.fpn import LastLevelMaxPool
-from torch_detectron.core.mask_rcnn import MaskRCNNHeads
 from torch_detectron.core.mask_rcnn import MaskPostProcessor
+from torch_detectron.core.mask_rcnn import MaskRCNNHeads
 from torch_detectron.core.mask_rcnn_losses import MaskRCNNLossComputation
 from torch_detectron.core.mask_rcnn_losses import MaskTargetPreparator
 from torch_detectron.core.post_processor import FPNPostProcessor
@@ -193,10 +193,12 @@ class DetectionAndMaskHeadsBuilder(ConfigNode):
 
         # FIXME this is an ugly hack
         if use_mask and not use_fpn:
-            classifier_layers = module_builder(pretrained_path=pretrained_weights)
+            classifier_layers = module_builder(
+                self.config, pretrained_path=pretrained_weights
+            )
 
             head_builder = self.config.MODEL.ROI_HEADS.HEAD_BUILDER
-            classifier = head_builder(num_classes, pretrained_weights)
+            classifier = head_builder(self.config, num_classes, pretrained_weights)
         else:
             classifier_layers = module_builder(
                 self.config, num_classes=num_classes, pretrained=pretrained_weights
@@ -233,7 +235,7 @@ class DetectionAndMaskHeadsBuilder(ConfigNode):
 
         if use_mask and not use_fpn:
             mask_builder = self.config.MODEL.ROI_HEADS.MASK_BUILDER
-            heads_mask = mask_builder(num_classes, pretrained_weights)
+            heads_mask = mask_builder(self.config, num_classes, pretrained_weights)
 
             discretization_size = self.config.MODEL.ROI_HEADS.MASK_RESOLUTION
             mask_target_preparator = MaskTargetPreparator(matcher, discretization_size)
@@ -258,7 +260,7 @@ class DetectionAndMaskHeadsBuilder(ConfigNode):
             # for example, the mask_pooler should be subsampling the positive
             # boxes only, so that the loss evaluator knows that it should do the same
             mask_builder = self.config.MODEL.ROI_HEADS.MASK_BUILDER
-            heads_mask = mask_builder(num_classes, pretrained_weights)
+            heads_mask = mask_builder(self.config, num_classes, pretrained_weights)
 
             mask_pooler = self.config.MODEL.ROI_HEADS.MASK_POOLER()
 
@@ -289,7 +291,12 @@ class DetectionAndMaskHeadsBuilder(ConfigNode):
 
 def resnet50_conv4_body(config, pretrained=None):
     model = resnet.ResNetBackbone(
-        resnet.Bottleneck, layers=[(2, 3, False), (3, 4, False), (4, 6, True)]
+        stem_function=config.RESNET.STEM_FUNCTION,
+        block_module=config.RESNET.BLOCK_MODULE,
+        stages=resnet.ResNet50StagesTo4,
+        num_groups=config.RESNET.NUM_GROUPS,
+        width_per_group=config.RESNET.WIDTH_PER_GROUP,
+        stride_in_1x1=config.RESNET.STRIDE_IN_1X1,
     )
     if pretrained:
         state_dict = torch.load(pretrained)
@@ -298,9 +305,15 @@ def resnet50_conv4_body(config, pretrained=None):
 
 
 def resnet50_conv5_head(config, num_classes, pretrained=None):
-    block = resnet.Bottleneck
-    head = resnet.ResNetHead(block, layers=[(5, 3)])
-    classifier = resnet.ClassifierHead(512 * block.expansion, num_classes)
+    stage = resnet.StageSpec(index=5, block_count=3, return_features=False)
+    head = resnet.ResNetHead(
+        block_module=config.RESNET.BLOCK_MODULE,
+        stages=(stage,),
+        num_groups=config.RESNET.NUM_GROUPS,
+        width_per_group=config.RESNET.WIDTH_PER_GROUP,
+        stride_in_1x1=config.RESNET.STRIDE_IN_1X1,
+    )
+    classifier = resnet.ClassifierHead(2048, num_classes)
     if pretrained:
         state_dict = torch.load(pretrained)
         load_state_dict(head, state_dict, strict=False)
@@ -311,17 +324,26 @@ def resnet50_conv5_head(config, num_classes, pretrained=None):
 
 def resnet50_conv5_body(config):
     model = resnet.ResNetBackbone(
-        resnet.Bottleneck, layers=[(2, 3), (3, 4), (4, 6), (5, 3)]
+        stem_function=config.RESNET.STEM_FUNCTION,
+        block_module=config.RESNET.BLOCK_MODULE,
+        stages=resnet.ResNet50StagesTo5,
+        num_groups=config.RESNET.NUM_GROUPS,
+        width_per_group=config.RESNET.WIDTH_PER_GROUP,
+        stride_in_1x1=config.RESNET.STRIDE_IN_1X1,
     )
     return model
 
 
 def fpn_resnet50_conv5_body(config, pretrained=None):
-    representation_size = config.MODEL.BACKBONE.OUTPUT_DIM
     body = resnet.ResNetBackbone(
-        resnet.Bottleneck,
-        layers=[(2, 3, True), (3, 4, True), (4, 6, True), (5, 3, True)],
+        stem_function=config.RESNET.STEM_FUNCTION,
+        block_module=config.RESNET.BLOCK_MODULE,
+        stages=resnet.ResNet50FPNStagesTo5,
+        num_groups=config.RESNET.NUM_GROUPS,
+        width_per_group=config.RESNET.WIDTH_PER_GROUP,
+        stride_in_1x1=config.RESNET.STRIDE_IN_1X1,
     )
+    representation_size = config.MODEL.BACKBONE.OUTPUT_DIM
     fpn = FPN(
         layers=[256, 512, 1024, 2048],
         representation_size=representation_size,
@@ -344,7 +366,7 @@ def fpn_classification_head(config, num_classes, pretrained=None):
     return model
 
 
-def maskrcnn_head(num_classes, pretrained=None):
+def maskrcnn_head(config, num_classes, pretrained=None):
     model = MaskRCNNHeads(256, [256, 256, 256, 256], num_classes)
     if pretrained:
         state_dict = torch.load(pretrained)
