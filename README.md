@@ -188,6 +188,12 @@ file.
 ## Running jobs in the FAIR Cluster
 We provide a simple script to launch jobs on the FAIR Cluster
 ```bash
+# make sure that you have loaded the modules
+# so that you have the right python interpreter
+# no need to do this every time, but once per terminal session
+module load anaconda3/5.0.1 cuda/9.0 cudnn/v7.0-cuda.9.0 NCCL/2.2.13-cuda.9.0
+source activate pytorch_detection
+
 cd ~/github/detectron.pytorch/torch_detectron
 sbatch launch_jobs.sh --config-file "path/to/config/file.py"
 ```
