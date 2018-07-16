@@ -3,6 +3,7 @@ import argparse
 import torch
 
 from torch_detectron.core.inference import inference
+from torch_detectron.core.utils import load_state_dict
 from torch_detectron.helpers.config_utils import load_config
 from torch_detectron.helpers.config_utils import update_config_with_args
 from torch_detectron.utils.logging import setup_logger
@@ -46,7 +47,7 @@ def main():
     if args.checkpoint:
         checkpoint = torch.load(args.checkpoint)
         model = torch.nn.DataParallel(model)
-        model.load_state_dict(checkpoint["model"])
+        load_state_dict(model, checkpoint["model"])
         model = model.module
 
     iou_types = ("bbox",)

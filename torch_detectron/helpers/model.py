@@ -23,6 +23,7 @@ from torch_detectron.core.faster_rcnn import RPNHeads
 from torch_detectron.core.fpn import FPN
 from torch_detectron.core.fpn import FPNHeadClassifier
 from torch_detectron.core.fpn import LastLevelMaxPool
+from torch_detectron.core.mask_rcnn import MaskRCNNHeads
 from torch_detectron.core.mask_rcnn import MaskPostProcessor
 from torch_detectron.core.mask_rcnn_losses import MaskRCNNLossComputation
 from torch_detectron.core.mask_rcnn_losses import MaskTargetPreparator
@@ -31,6 +32,7 @@ from torch_detectron.core.post_processor import PostProcessor
 from torch_detectron.core.proposal_matcher import Matcher
 from torch_detectron.core.rpn_losses import RPNLossComputation
 from torch_detectron.core.rpn_losses import RPNTargetPreparator
+from torch_detectron.core.utils import load_state_dict
 from torch_detectron.helpers.config_utils import ConfigNode
 
 
@@ -291,7 +293,7 @@ def resnet50_conv4_body(config, pretrained=None):
     )
     if pretrained:
         state_dict = torch.load(pretrained)
-        model.load_state_dict(state_dict, strict=False)
+        load_state_dict(model, state_dict, strict=False)
     return model
 
 
@@ -301,8 +303,8 @@ def resnet50_conv5_head(config, num_classes, pretrained=None):
     classifier = resnet.ClassifierHead(512 * block.expansion, num_classes)
     if pretrained:
         state_dict = torch.load(pretrained)
-        head.load_state_dict(state_dict, strict=False)
-        classifier.load_state_dict(state_dict, strict=False)
+        load_state_dict(head, state_dict, strict=False)
+        load_state_dict(classifier, state_dict, strict=False)
     model = nn.Sequential(head, classifier)
     return model
 
@@ -327,8 +329,8 @@ def fpn_resnet50_conv5_body(config, pretrained=None):
     )
     if pretrained:
         state_dict = torch.load(pretrained)
-        body.load_state_dict(state_dict, strict=False)
-        fpn.load_state_dict(state_dict, strict=False)
+        load_state_dict(body, state_dict, strict=False)
+        load_state_dict(fpn, state_dict, strict=False)
     model = nn.Sequential(body, fpn)
     return model
 
@@ -338,5 +340,13 @@ def fpn_classification_head(config, num_classes, pretrained=None):
     model = FPNHeadClassifier(num_classes, representation_size * 7 * 7, 1024)
     if pretrained:
         state_dict = torch.load(pretrained)
-        model.load_state_dict(state_dict, strict=False)
+        load_state_dict(model, state_dict, strict=False)
+    return model
+
+
+def maskrcnn_head(num_classes, pretrained=None):
+    model = MaskRCNNHeads(256, [256, 256, 256, 256], num_classes)
+    if pretrained:
+        state_dict = torch.load(pretrained)
+        load_state_dict(model, state_dict, strict=False)
     return model

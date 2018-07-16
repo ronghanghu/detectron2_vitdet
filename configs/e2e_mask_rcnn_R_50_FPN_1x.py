@@ -9,7 +9,6 @@ import os
 from torch_detectron.core.box_selector import ROI2FPNLevelsMapper
 from torch_detectron.core.fpn import FPNPooler
 from torch_detectron.core.mask_rcnn import MaskFPNPooler
-from torch_detectron.core.mask_rcnn import maskrcnn_head
 from torch_detectron.helpers.config import get_default_config
 from torch_detectron.helpers.config import set_rpn_defaults
 from torch_detectron.helpers.config import set_roi_heads_defaults
@@ -17,6 +16,7 @@ from torch_detectron.helpers.config_utils import ConfigNode
 from torch_detectron.helpers.config_utils import import_file
 from torch_detectron.helpers.model import fpn_classification_head
 from torch_detectron.helpers.model import fpn_resnet50_conv5_body
+from torch_detectron.helpers.model import maskrcnn_head
 
 catalog = import_file(
     "torch_detectron.paths_catalog",

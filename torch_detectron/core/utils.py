@@ -2,6 +2,8 @@
 Miscellaneous utility functions
 """
 
+import logging
+
 import torch
 
 from ..structures.bounding_box import BBox
@@ -171,3 +173,21 @@ def meshgrid_new(x, y):
     ygrid = ygrid.reshape(new_shape)
 
     return xgrid, ygrid
+
+
+def load_state_dict(model, state_dict, strict=True):
+    """
+    Very similar to model.load_state_dict, but which logs
+    as well which parameters have been loaded
+    """
+    # perform the loading
+    model.load_state_dict(state_dict, strict)
+    logger = logging.getLogger("torch_detectron.core.utils.load_state_dict")
+    # get the names of the parameters that were loaded
+    local_state_dict_keys = model.state_dict().keys()
+    state_dict_keys = state_dict.keys()
+    loaded_keys = [k for k in local_state_dict_keys if k in state_dict_keys]
+    max_size = max([len(key) for key in loaded_keys]) if loaded_keys else 1
+    log_str_template = "{: <{}} loaded from weights file: {}"
+    for key in sorted(loaded_keys):
+        logger.debug(log_str_template.format(key, max_size, tuple(state_dict[key].shape)))

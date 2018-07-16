@@ -66,14 +66,6 @@ class MaskRCNNHeads(nn.Module):
         return x
 
 
-def maskrcnn_head(num_classes, pretrained=None):
-    model = MaskRCNNHeads(256, [256, 256, 256, 256], num_classes)
-    if pretrained:
-        state_dict = torch.load(pretrained)
-        model.load_state_dict(state_dict, strict=False)
-    return model
-
-
 class MaskFPNPooler(FPNPooler):
     """
     This pooler is used for both training and inference.
