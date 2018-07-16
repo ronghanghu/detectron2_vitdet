@@ -190,4 +190,6 @@ def load_state_dict(model, state_dict, strict=True):
     max_size = max([len(key) for key in loaded_keys]) if loaded_keys else 1
     log_str_template = "{: <{}} loaded from weights file: {}"
     for key in sorted(loaded_keys):
-        logger.debug(log_str_template.format(key, max_size, tuple(state_dict[key].shape)))
+        logger.debug(
+            log_str_template.format(key, max_size, tuple(state_dict[key].shape))
+        )
