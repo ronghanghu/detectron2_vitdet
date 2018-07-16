@@ -185,6 +185,16 @@ to launch two processes in python with `-m` flag, so that in the
 multi-gpu case we need to specify the full path of the detectron `train.py`
 file.
 
+## Running jobs in the FAIR Cluster
+We provide a simple script to launch jobs on the FAIR Cluster
+```bash
+cd ~/github/detectron.pytorch/torch_detectron
+sbatch launch_jobs.sh --config-file "path/to/config/file.py"
+```
+
+If you want to change the number of GPUs used / paths where to save the data, you currently
+need to modify the `launch_jobs.sh` and `wrapper.sh` scripts.
+
 ## Model Zoo and Baselines
 
 The numbers below were obtaining by running the code on 8 V100 GPUs, using Cuda 8.0 and CUDNN 6.0.
