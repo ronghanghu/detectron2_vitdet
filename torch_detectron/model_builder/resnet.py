@@ -80,6 +80,7 @@ class BottleneckWithFixedBatchNorm(nn.Module):
             stride=stride_3x3,
             padding=1,
             bias=False,
+            groups=num_groups,
         )
         self.branch2b_bn = FixedBatchNorm2d(bottleneck_channels)
         self.branch2c = nn.Conv2d(
@@ -89,12 +90,7 @@ class BottleneckWithFixedBatchNorm(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         if in_channels != out_channels:
             self.branch1 = nn.Conv2d(
-                in_channels,
-                out_channels,
-                kernel_size=1,
-                stride=stride,
-                bias=False,
-                groups=num_groups,
+                in_channels, out_channels, kernel_size=1, stride=stride, bias=False
             )
             self.branch1_bn = FixedBatchNorm2d(out_channels)
 

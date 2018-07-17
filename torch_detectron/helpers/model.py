@@ -291,12 +291,12 @@ class DetectionAndMaskHeadsBuilder(ConfigNode):
 
 def resnet50_conv4_body(config, pretrained=None):
     model = resnet.ResNetBackbone(
-        stem_function=config.RESNET.STEM_FUNCTION,
-        block_module=config.RESNET.BLOCK_MODULE,
+        stem_function=config.MODEL.RESNET.STEM_FUNCTION,
+        block_module=config.MODEL.RESNET.BLOCK_MODULE,
         stages=resnet.ResNet50StagesTo4,
-        num_groups=config.RESNET.NUM_GROUPS,
-        width_per_group=config.RESNET.WIDTH_PER_GROUP,
-        stride_in_1x1=config.RESNET.STRIDE_IN_1X1,
+        num_groups=config.MODEL.RESNET.NUM_GROUPS,
+        width_per_group=config.MODEL.RESNET.WIDTH_PER_GROUP,
+        stride_in_1x1=config.MODEL.RESNET.STRIDE_IN_1X1,
     )
     if pretrained:
         state_dict = torch.load(pretrained)
@@ -307,11 +307,11 @@ def resnet50_conv4_body(config, pretrained=None):
 def resnet50_conv5_head(config, num_classes, pretrained=None):
     stage = resnet.StageSpec(index=5, block_count=3, return_features=False)
     head = resnet.ResNetHead(
-        block_module=config.RESNET.BLOCK_MODULE,
+        block_module=config.MODEL.RESNET.BLOCK_MODULE,
         stages=(stage,),
-        num_groups=config.RESNET.NUM_GROUPS,
-        width_per_group=config.RESNET.WIDTH_PER_GROUP,
-        stride_in_1x1=config.RESNET.STRIDE_IN_1X1,
+        num_groups=config.MODEL.RESNET.NUM_GROUPS,
+        width_per_group=config.MODEL.RESNET.WIDTH_PER_GROUP,
+        stride_in_1x1=config.MODEL.RESNET.STRIDE_IN_1X1,
     )
     classifier = resnet.ClassifierHead(2048, num_classes)
     if pretrained:
@@ -324,24 +324,24 @@ def resnet50_conv5_head(config, num_classes, pretrained=None):
 
 def resnet50_conv5_body(config):
     model = resnet.ResNetBackbone(
-        stem_function=config.RESNET.STEM_FUNCTION,
-        block_module=config.RESNET.BLOCK_MODULE,
+        stem_function=config.MODEL.RESNET.STEM_FUNCTION,
+        block_module=config.MODEL.RESNET.BLOCK_MODULE,
         stages=resnet.ResNet50StagesTo5,
-        num_groups=config.RESNET.NUM_GROUPS,
-        width_per_group=config.RESNET.WIDTH_PER_GROUP,
-        stride_in_1x1=config.RESNET.STRIDE_IN_1X1,
+        num_groups=config.MODEL.RESNET.NUM_GROUPS,
+        width_per_group=config.MODEL.RESNET.WIDTH_PER_GROUP,
+        stride_in_1x1=config.MODEL.RESNET.STRIDE_IN_1X1,
     )
     return model
 
 
 def fpn_resnet50_conv5_body(config, pretrained=None):
     body = resnet.ResNetBackbone(
-        stem_function=config.RESNET.STEM_FUNCTION,
-        block_module=config.RESNET.BLOCK_MODULE,
+        stem_function=config.MODEL.RESNET.STEM_FUNCTION,
+        block_module=config.MODEL.RESNET.BLOCK_MODULE,
         stages=resnet.ResNet50FPNStagesTo5,
-        num_groups=config.RESNET.NUM_GROUPS,
-        width_per_group=config.RESNET.WIDTH_PER_GROUP,
-        stride_in_1x1=config.RESNET.STRIDE_IN_1X1,
+        num_groups=config.MODEL.RESNET.NUM_GROUPS,
+        width_per_group=config.MODEL.RESNET.WIDTH_PER_GROUP,
+        stride_in_1x1=config.MODEL.RESNET.STRIDE_IN_1X1,
     )
     representation_size = config.MODEL.BACKBONE.OUTPUT_DIM
     fpn = FPN(

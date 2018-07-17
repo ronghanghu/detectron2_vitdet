@@ -70,11 +70,11 @@ config.MODEL.RPN.POST_NMS_TOP_N_TEST = 1000
 def head_builder(config, pretrained_path):
     stage = resnet.StageSpec(index=5, block_count=3, return_features=False)
     head = resnet.ResNetHead(
-        block_module=config.RESNET.BLOCK_MODULE,
+        block_module=config.MODEL.RESNET.BLOCK_MODULE,
         stages=(stage,),
-        num_groups=config.RESNET.NUM_GROUPS,
-        width_per_group=config.RESNET.WIDTH_PER_GROUP,
-        stride_in_1x1=config.RESNET.STRIDE_IN_1X1,
+        num_groups=config.MODEL.RESNET.NUM_GROUPS,
+        width_per_group=config.MODEL.RESNET.WIDTH_PER_GROUP,
+        stride_in_1x1=config.MODEL.RESNET.STRIDE_IN_1X1,
     )
     if pretrained_path:
         state_dict = torch.load(pretrained_path)
@@ -147,11 +147,11 @@ if "QUICK_SCHEDULE" in os.environ and os.environ["QUICK_SCHEDULE"]:
     def head_builder(config, pretrained_path):
         stage = resnet.StageSpec(index=5, block_count=3, return_features=False)
         head = resnet.ResNetHead(
-            block_module=config.RESNET.BLOCK_MODULE,
+            block_module=config.MODEL.RESNET.BLOCK_MODULE,
             stages=(stage,),
-            num_groups=config.RESNET.NUM_GROUPS,
-            width_per_group=config.RESNET.WIDTH_PER_GROUP,
-            stride_in_1x1=config.RESNET.STRIDE_IN_1X1,
+            num_groups=config.MODEL.RESNET.NUM_GROUPS,
+            width_per_group=config.MODEL.RESNET.WIDTH_PER_GROUP,
+            stride_in_1x1=config.MODEL.RESNET.STRIDE_IN_1X1,
             stride_init=1,
         )
         if pretrained_path:

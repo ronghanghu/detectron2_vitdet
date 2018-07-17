@@ -221,14 +221,14 @@ def set_resnet_defaults(config):
     # The original MSRA ResNet models have stride in the first 1x1 conv
     # The subsequent fb.torch.resnet and Caffe2 ResNe[X]t implementations have
     # stride in the 3x3 conv
-    config.RESNET = ConfigNode(_C)
-    config.RESNET.STRIDE_IN_1X1 = True
+    config.MODEL.RESNET = ConfigNode(config)
+    config.MODEL.RESNET.STRIDE_IN_1X1 = True
     # ResNet has NUM_GROUPS = 1
     # ResNeXt has NUM_GROUPS > 1
-    config.RESNET.NUM_GROUPS = 1
+    config.MODEL.RESNET.NUM_GROUPS = 1
     # Number of channels ("width") in each group in stage 2
-    config.RESNET.WIDTH_PER_GROUP = 64
+    config.MODEL.RESNET.WIDTH_PER_GROUP = 64
     # Function that implements the ResNet "stem" (e.g., conv1 -> BN -> ReLu -> max pool)
-    config.RESNET.STEM_FUNCTION = _resnet.StemWithFixedBatchNorm
+    config.MODEL.RESNET.STEM_FUNCTION = _resnet.StemWithFixedBatchNorm
     # nn.Module that implements the ResNet block
-    config.RESNET.BLOCK_MODULE = _resnet.BottleneckWithFixedBatchNorm
+    config.MODEL.RESNET.BLOCK_MODULE = _resnet.BottleneckWithFixedBatchNorm
