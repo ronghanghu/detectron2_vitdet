@@ -520,7 +520,7 @@ from torch_detectron.model_builder.resnet import resnet50_conv4_body
 from torch_detectron.core.anchor_generator import AnchorGenerator
 from torch_detectron.core.rpn_losses import (RPNLossComputation,
             RPNTargetPreparator)
-from torch_detectron.core.proposal_matcher import Matcher
+from torch_detectron.core.matcher import Matcher
 from torch_detectron.core.box_selector import RPNBoxSelector
 from torch_detectron.core.balanced_positive_negative_sampler import (
             BalancedPositiveNegativeSampler)
@@ -542,7 +542,7 @@ class MyModel(nn.Module):
 
         # Those are classes that helps matching / sampling and creating
         # the targets for the detection models
-        matcher = Matcher(0.7, 0.3, force_match_for_each_row=True)
+        matcher = Matcher(0.7, 0.3, allow_low_quality_matches=True)
         box_coder = BoxCoder(weights=(1., 1., 1., 1.))
         target_preparator = RPNTargetPreparator(matcher, box_coder)
         fg_bg_sampler = BalancedPositiveNegativeSampler(

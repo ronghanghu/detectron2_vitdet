@@ -27,9 +27,9 @@ from torch_detectron.core.mask_rcnn import MaskPostProcessor
 from torch_detectron.core.mask_rcnn import MaskRCNNHeads
 from torch_detectron.core.mask_rcnn_losses import MaskRCNNLossComputation
 from torch_detectron.core.mask_rcnn_losses import MaskTargetPreparator
+from torch_detectron.core.matcher import Matcher
 from torch_detectron.core.post_processor import FPNPostProcessor
 from torch_detectron.core.post_processor import PostProcessor
-from torch_detectron.core.proposal_matcher import Matcher
 from torch_detectron.core.rpn_losses import RPNLossComputation
 from torch_detectron.core.rpn_losses import RPNTargetPreparator
 from torch_detectron.core.utils import load_state_dict
@@ -145,7 +145,7 @@ class RPNBuilder(ConfigNode):
         matched_threshold = self.config.MODEL.RPN.MATCHED_THRESHOLD
         unmatched_threshold = self.config.MODEL.RPN.UNMATCHED_THRESHOLD
         rpn_matcher = Matcher(
-            matched_threshold, unmatched_threshold, force_match_for_each_row=True
+            matched_threshold, unmatched_threshold, allow_low_quality_matches=True
         )
 
         rpn_target_preparator = RPNTargetPreparator(rpn_matcher, rpn_box_coder)

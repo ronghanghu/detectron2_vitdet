@@ -6,7 +6,7 @@ file
 import torch
 from torch.nn import functional as F
 
-from .proposal_matcher import Matcher
+from .matcher import Matcher
 from .target_preparator import TargetPreparator
 from .utils import cat
 from .utils import nonzero
