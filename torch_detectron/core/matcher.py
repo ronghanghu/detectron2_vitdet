@@ -16,24 +16,28 @@ class Matcher(object):
     is returned.
     """
 
-    BELOW_UNMATCHED_THRESHOLD = -1
+    BELOW_LOW_THRESHOLD = -1
     BETWEEN_THRESHOLDS = -2
 
     def __init__(
-        self, matched_threshold, unmatched_threshold, allow_low_quality_matches=False
+        self, high_threshold, low_threshold, allow_low_quality_matches=False
     ):
         """
         Args:
-            matched_threshold (float): quality values greater than or equal to
+            high_threshold (float): quality values greater than or equal to
                 this value are candidate matches.
-            unmatched_threshold (float): quality values smaller than
-                unmatched_threshold are not candidates for matches.
+            low_threshold (float): a lower quality threshold used to stratify
+                matches into three levels:
+                1) matches >= high_threshold
+                2) BETWEEN_THRESHOLDS matches in [low_threshold, high_threshold)
+                3) BELOW_LOW_THRESHOLD matches in [0, low_threshold)
             allow_low_quality_matches (bool): if True, produce additional matches
                 for predictions that have only low-quality match candidates. See
                 set_low_quality_matches_ for more details.
         """
-        self.matched_threshold = matched_threshold
-        self.unmatched_threshold = unmatched_threshold
+        assert low_threshold <= high_threshold
+        self.high_threshold = high_threshold
+        self.low_threshold = low_threshold
         self.allow_low_quality_matches = allow_low_quality_matches
 
     def __call__(self, match_quality_matrix):
@@ -54,11 +58,11 @@ class Matcher(object):
             all_matches = matches.clone()
 
         # Assign candidate matches with low quality to negative (unassigned) values
-        below_unmatched_threshold = matched_vals < self.unmatched_threshold
-        between_thresholds = (matched_vals >= self.unmatched_threshold) & (
-            matched_vals < self.matched_threshold
+        below_low_threshold = matched_vals < self.low_threshold
+        between_thresholds = (matched_vals >= self.low_threshold) & (
+            matched_vals < self.high_threshold
         )
-        matches[below_unmatched_threshold] = Matcher.BELOW_UNMATCHED_THRESHOLD
+        matches[below_low_threshold] = Matcher.BELOW_LOW_THRESHOLD
         matches[between_thresholds] = Matcher.BETWEEN_THRESHOLDS
 
         if self.allow_low_quality_matches:

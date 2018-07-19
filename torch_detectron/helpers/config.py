@@ -167,8 +167,14 @@ def set_rpn_defaults(config):
     config.MODEL.RPN.ANCHOR_STRIDE = 16
     config.MODEL.RPN.ASPECT_RATIOS = (0.5, 1.0, 2.0)
     config.MODEL.RPN.STRADDLE_THRESH = 0
-    config.MODEL.RPN.MATCHED_THRESHOLD = 0.7
-    config.MODEL.RPN.UNMATCHED_THRESHOLD = 0.3
+    # Minimum overlap required between an anchor and ground-truth box for the
+    # (anchor, gt box) pair to be a positive example (IoU >= FG_IOU_THRESHOLD
+    # ==> positive RPN example)
+    config.MODEL.RPN.FG_IOU_THRESHOLD = 0.7
+    # Maximum overlap allowed between an anchor and ground-truth box for the
+    # (anchor, gt box) pair to be a negative examples (IoU < BG_IOU_THRESHOLD
+    # ==> negative RPN example)
+    config.MODEL.RPN.BG_IOU_THRESHOLD = 0.3
     config.MODEL.RPN.BATCH_SIZE_PER_IMAGE = 256
     config.MODEL.RPN.POSITIVE_FRACTION = 0.5
     # TODO separate in train and test
@@ -194,8 +200,11 @@ def set_roi_heads_defaults(config):
     config.MODEL.ROI_HEADS.POOLER = _model.PoolerBuilder(config)
     # TODO decide if we want to decompose in elementary objects
     config.MODEL.ROI_HEADS.POOLER.MODULE = _ROIAlign((14, 14), 1.0 / 16, 0)
-    config.MODEL.ROI_HEADS.MATCHED_THRESHOLD = 0.5
-    config.MODEL.ROI_HEADS.UNMATCHED_THRESHOLD = 0.0
+    # Overlap threshold for an RoI to be considered foreground (if >= FG_IOU_THRESHOLD)
+    config.MODEL.ROI_HEADS.FG_IOU_THRESHOLD = 0.5
+    # Overlap threshold for an RoI to be considered background
+    # (class = 0 if overlap in [0, BG_IOU_THRESHOLD))
+    config.MODEL.ROI_HEADS.BG_IOU_THRESHOLD = 0.5
     config.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS = (10., 10., 5., 5.)
     config.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 512
     config.MODEL.ROI_HEADS.POSITIVE_FRACTION = 0.25

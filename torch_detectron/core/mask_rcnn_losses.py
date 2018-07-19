@@ -54,7 +54,7 @@ class MaskTargetPreparator(TargetPreparator):
 
         # this can probably be removed, but is left here for clarity
         # and completeness
-        neg_inds = matched_idxs == Matcher.BETWEEN_THRESHOLDS
+        neg_inds = (matched_idxs == Matcher.BELOW_LOW_THRESHOLD)
         labels_per_image[neg_inds] = 0
 
         # mask scores are only computed on positive samples

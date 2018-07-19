@@ -142,10 +142,10 @@ class RPNBuilder(ConfigNode):
         )
 
         # loss evaluation
-        matched_threshold = self.config.MODEL.RPN.MATCHED_THRESHOLD
-        unmatched_threshold = self.config.MODEL.RPN.UNMATCHED_THRESHOLD
+        fg_iou_threshold = self.config.MODEL.RPN.FG_IOU_THRESHOLD
+        bg_iou_threshold = self.config.MODEL.RPN.BG_IOU_THRESHOLD
         rpn_matcher = Matcher(
-            matched_threshold, unmatched_threshold, allow_low_quality_matches=True
+            fg_iou_threshold, bg_iou_threshold, allow_low_quality_matches=True
         )
 
         rpn_target_preparator = RPNTargetPreparator(rpn_matcher, rpn_box_coder)
@@ -217,9 +217,9 @@ class DetectionAndMaskHeadsBuilder(ConfigNode):
         )
 
         # loss evaluation
-        matched_threshold = self.config.MODEL.ROI_HEADS.MATCHED_THRESHOLD
-        unmatched_threshold = self.config.MODEL.ROI_HEADS.UNMATCHED_THRESHOLD
-        matcher = Matcher(matched_threshold, unmatched_threshold)
+        fg_iou_threshold = self.config.MODEL.ROI_HEADS.FG_IOU_THRESHOLD
+        bg_iou_threshold = self.config.MODEL.ROI_HEADS.BG_IOU_THRESHOLD
+        matcher = Matcher(fg_iou_threshold, bg_iou_threshold)
 
         target_preparator = FastRCNNTargetPreparator(matcher, box_coder)
 
