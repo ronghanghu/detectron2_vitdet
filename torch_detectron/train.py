@@ -68,7 +68,10 @@ def train(config, local_rank, distributed):
 
 
 def test(config, model, distributed):
-    config.TEST.DATA.DATALOADER.SAMPLER.DISTRIBUTED = False
+    config.TEST.DATA.DATALOADER.SAMPLER.DISTRIBUTED = distributed
+    if distributed:
+        # TODO distributed sampler doesn't support shuffle=False
+        config.TEST.DATA.DATALOADER.SAMPLER.SHUFFLE = True
     data_loader_val = config.TEST.DATA()
     if distributed:
         model = model.module
@@ -128,7 +131,7 @@ def main():
 
     model = train(config, args.local_rank, args.distributed)
 
-    if args.local_rank == 0 and config.DO_TEST:
+    if config.DO_TEST:
         test(config, model, args.distributed)
 
 

@@ -1,4 +1,5 @@
 import argparse
+import os
 
 import torch
 
@@ -21,6 +22,7 @@ def main():
     parser.add_argument(
         "--checkpoint", default="", metavar="FILE", help="path to checkpoint file"
     )
+    parser.add_argument("--local_rank", type=int, default=0)
     parser.add_argument(
         "opts",
         help="Modify config options using the command-line",
@@ -29,16 +31,28 @@ def main():
     )
 
     args = parser.parse_args()
+
+    args.distributed = (
+        int(os.environ["WORLD_SIZE"]) > 1 if "WORLD_SIZE" in os.environ else False
+    )
+
+    if args.distributed:
+        torch.cuda.set_device(args.local_rank)
+        torch.distributed.init_process_group(backend="nccl", init_method="env://")
+
     config = load_config(args.config_file)
     update_config_with_args(config, args.opts)
 
     save_dir = ""
-    local_rank = 0
-    setup_logger("torch_detectron", save_dir, local_rank)
+    setup_logger("torch_detectron", save_dir, args.local_rank)
 
     # TODO this doesn't look great
-    config.TEST.DATA.DATALOADER.SAMPLER.DISTRIBUTED = False
+    if args.distributed:
+        # TODO distributed sampler doesn't support shuffle=False
+        config.TEST.DATA.DATALOADER.SAMPLER.SHUFFLE = True
+    config.TEST.DATA.DATALOADER.SAMPLER.DISTRIBUTED = args.distributed
     data_loader_val = config.TEST.DATA()
+    print('size', len(data_loader_val), args.distributed)
 
     device = config.DEVICE
     model = config.MODEL()
@@ -46,6 +60,8 @@ def main():
 
     if args.checkpoint:
         checkpoint = torch.load(args.checkpoint)
+        # TODO find a better way of serializing the weights
+        # that avoids this ugly workaround
         model = torch.nn.DataParallel(model)
         load_state_dict(model, checkpoint["model"])
         model = model.module

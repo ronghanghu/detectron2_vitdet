@@ -14,7 +14,7 @@ def train_one_epoch(
     meters = MetricLogger(delimiter="  ")
     model.train()
     end = time.time()
-    for _, (images, targets) in enumerate(data_loader):
+    for _, (images, targets, _) in enumerate(data_loader):
         data_time = time.time() - end
 
         scheduler.step()

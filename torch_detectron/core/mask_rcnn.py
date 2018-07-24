@@ -7,8 +7,10 @@ from PIL import Image
 
 from ..structures.bounding_box import BBox
 from .fpn import FPNPooler
+from .utils import cat
 from .utils import keep_only_positive_boxes
 from .utils import nonzero
+from .utils import split_with_sizes
 
 
 # TODO remove num_classes and add in a separate class
@@ -122,39 +124,27 @@ class MaskFPNPooler(FPNPooler):
         lvl_max = self.roi_to_fpn_level_mapper.k_max
         fpn_boxes = []
 
+        # get the permutation order to revert the fpn grouping
+        box_data = cat([bbox.bbox for bbox in boxes], dim=0)
+        levels = self.roi_to_fpn_level_mapper(box_data)
+        rois_idx_order = [nonzero(levels == feat_lvl)[0] for feat_lvl in range(lvl_min, lvl_max + 1)]
+
         # for each image, split in different fpn levels
-        rois_idx_order = []
         for img_idx, bboxes in enumerate(boxes):
-            width, height = bboxes.size
             box_data = bboxes.bbox
             per_img_boxes = []
             levels = self.roi_to_fpn_level_mapper(box_data)
-            rois_idx_order_img = []
             for feat_lvl in range(lvl_min, lvl_max + 1):
-                lvl_idx_per_img = (levels == feat_lvl).nonzero()
-                lvl_idx_per_img = (
-                    lvl_idx_per_img.squeeze(1)
-                    if lvl_idx_per_img.numel()
-                    else lvl_idx_per_img
-                )
-                selected_boxes = box_data[lvl_idx_per_img]
-                bbox = BBox(selected_boxes, (width, height), mode="xyxy")
-                for field in bboxes.fields():
-                    data = bboxes.get_field(field)
-                    data = data[lvl_idx_per_img]
-                    bbox.add_field(field, data)
+                # TODO this can probably be optimized as has already been computed just before
+                lvl_idx_per_img = nonzero(levels == feat_lvl)[0]
+                bbox = bboxes[lvl_idx_per_img]
                 per_img_boxes.append(bbox)
-                rois_idx_order_img.append(lvl_idx_per_img)
             fpn_boxes.append(per_img_boxes)
-            rois_idx_order.append(rois_idx_order_img)
 
         # invert box representation to be first number of levels, and then
         # number of images
         fpn_boxes = list(zip(*fpn_boxes))
-        rois_idx_order = list(zip(*rois_idx_order))
 
-        # flat the list
-        rois_idx_order = [item for sublist in rois_idx_order for item in sublist]
         if all(t.numel() == 0 for t in rois_idx_order):
             rois_idx_restore = rois_idx_order[0].new()
         else:
@@ -196,7 +186,7 @@ class MaskPostProcessor(nn.Module):
             mask_prob = self.masker(mask_prob, boxes)
 
         boxes_per_image = [box.bbox.size(0) for box in boxes]
-        mask_prob = mask_prob.split(boxes_per_image, dim=0)
+        mask_prob = split_with_sizes(mask_prob, boxes_per_image, dim=0)
 
         results = []
         for prob, box in zip(mask_prob, boxes):
@@ -404,7 +394,7 @@ class Masker(object):
         # TODO do this properly
         if isinstance(boxes, BBox):
             boxes = [boxes]
-        assert len(boxes) == 1
+        assert len(boxes) == 1, "Only single image batch supported"
         # result = self.forward_single_image(masks, boxes[0])
         result = self.forward_single_image_2(masks, boxes[0])
         return result

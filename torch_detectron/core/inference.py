@@ -8,21 +8,25 @@ import torchvision
 
 from tqdm import tqdm
 
+from .comm import scatter_gather
+from .comm import synchronize
 from ..structures.bounding_box import BBox
 
 
 def compute_on_dataset(model, data_loader, device):
     model.eval()
-    results = []
+    results_dict = {}
     cpu_device = torch.device("cpu")
     for i, batch in tqdm(enumerate(data_loader)):
-        images, targets = batch
+        images, targets, image_ids = batch
         images = images.to(device)
         with torch.no_grad():
             output = model(images)
             output = [o.to(cpu_device) for o in output]
-        results.extend(output)
-    return results
+        results_dict.update(
+            {img_id: result for img_id, result in zip(image_ids, output)}
+        )
+    return results_dict
 
 
 def prepare_for_coco_detection(predictions, dataset):
@@ -245,27 +249,63 @@ def evaluate_predictions_on_coco(
     return coco_eval.summarize()
 
 
+def _is_main_process():
+    if not torch.distributed.is_initialized():
+        return True
+    return torch.distributed.get_rank() == 0
+
+
+def _accumulate_predictions_from_multiple_gpus(predictions_per_gpu):
+    all_predictions = scatter_gather(predictions_per_gpu)
+    if not _is_main_process():
+        return
+    # merge the list of dicts
+    predictions = {}
+    for p in all_predictions:
+        predictions.update(p)
+    # convert a dict where the key is the index in a list
+    image_ids = list(sorted(predictions.keys()))
+    if len(image_ids) != image_ids[-1] + 1:
+        logger = logging.getLogger("torch_detectron.inference")
+        logger.warning(
+            "Number of images that were gathered from multiple processes is not "
+            "a contiguous set. Some images might be missing from the evaluation"
+        )
+
+    # convert to a list
+    predictions = [predictions[i] for i in image_ids]
+    return predictions
+
+
 def inference(
     model,
     data_loader,
     iou_types=("bbox",),  # 'segm'),
     box_only=False,
     device=torch.device("cuda"),
-    json_file=None,
 ):
 
+    num_devices = (
+        torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
+    )
     logger = logging.getLogger("torch_detectron.inference")
     dataset = data_loader.dataset
     logger.info("Start evaluation on {} images".format(len(dataset)))
     start_time = time.time()
     predictions = compute_on_dataset(model, data_loader, device)
+    # wait for all processes to complete before measuring the time
+    synchronize()
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=total_time))
     logger.info(
-        "Total inference time: {} ({} s / img)".format(
-            total_time_str, total_time / len(dataset)
+        "Total inference time: {} ({} s / img per device, on {} devices)".format(
+            total_time_str, total_time * num_devices / len(dataset), num_devices
         )
     )
+
+    predictions = _accumulate_predictions_from_multiple_gpus(predictions)
+    if not _is_main_process():
+        return
 
     if box_only:
         logger.info("Evaluating bbox proposals")
@@ -285,9 +325,6 @@ def inference(
     for iou_type in iou_types:
         with tempfile.NamedTemporaryFile() as f:
             res = evaluate_predictions_on_coco(
-                dataset.coco,
-                coco_results[iou_type],
-                f.name,
-                iou_type,
+                dataset.coco, coco_results[iou_type], f.name, iou_type
             )
             logger.info(res)

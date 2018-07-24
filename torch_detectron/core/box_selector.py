@@ -5,11 +5,12 @@ from torch_detectron.layers import nms as box_nms
 from ..structures.bounding_box import BBox
 from .box_coder import BoxCoder
 from .box_ops import boxes_area
+from .utils import cat
 from .utils import nonzero
 
 
 # TODO add option for different params in train / test
-class RPNBoxSelector(object):
+class RPNBoxSelector(torch.nn.Module):
     """
     Performs post-processing on the outputs of the RPN boxes, before feeding the proposals
     to the heads
@@ -31,6 +32,7 @@ class RPNBoxSelector(object):
             min_size (int)
             box_coder (BoxCoder)
         """
+        super(RPNBoxSelector, self).__init__()
         # TODO ATTENTION, as those numbers are for single-image in Detectron, and here it's for the batch
         self.pre_nms_top_n = pre_nms_top_n
         self.post_nms_top_n = post_nms_top_n
@@ -103,7 +105,7 @@ class RPNBoxSelector(object):
 
         return sampled_bboxes
 
-    def __call__(self, anchors, objectness, box_regression):
+    def forward(self, anchors, objectness, box_regression):
         """
         Arguments:
             anchors: list[list[BBox]]
@@ -174,9 +176,24 @@ class FPNRPNBoxSelector(RPNBoxSelector):
             )
 
         post_nms_top_n = min(self.fpn_post_nms_top_n, concat_boxes.shape[0])
-        _, inds_sorted = torch.topk(
-            extra_fields["objectness"], post_nms_top_n, dim=0, sorted=True
-        )
+        # different behavior during training and during testing:
+        # during training, post_nms_top_n is over *all* the proposals combined, while
+        # during testing, it is over the proposals for each image
+        # TODO resolve this difference and make it consistent. It should be per image,
+        # and not per batch
+        if self.training:
+            _, inds_sorted = torch.topk(
+                extra_fields["objectness"], post_nms_top_n, dim=0, sorted=True
+            )
+        else:
+            inds_sorted = []
+            for i in range(num_images):
+                objectness = extra_fields["objectness"].clone()
+                objectness[indices != i] = -1
+                _, inds_sorted_img = torch.topk(objectness, post_nms_top_n, dim=0, sorted=True)
+                inds_sorted.append(inds_sorted_img)
+            inds_sorted = cat(inds_sorted, dim=0)
+
 
         concat_boxes = concat_boxes[inds_sorted]
         indices = indices[inds_sorted]
