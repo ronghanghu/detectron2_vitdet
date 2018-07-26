@@ -45,6 +45,9 @@ pip install ninja
 mkdir ~/github && cd ~/github
 git clone --recursive git@github.com:pytorch/pytorch.git
 cd pytorch
+# pin the PyTorch version to avoid breakages
+# due to BC changes, see https://github.com/fairinternal/detectron.pytorch/issues/53
+git checkout 1003ccfa15e944251a65ba2289f25e8f1ed14a46^
 # compile for several GPU architectures
 TORCH_CUDA_ARCH_LIST="3.5;5.0+PTX;6.0;6.1;7.0" python setup.py build develop
 
@@ -127,6 +130,10 @@ pip install ninja
 mkdir ~/local/github && cd ~/local/github
 git clone --recursive git@github.com:pytorch/pytorch.git
 cd pytorch
+
+# pin the PyTorch version to avoid breakages
+# due to BC changes, see https://github.com/fairinternal/detectron.pytorch/issues/53
+git checkout 1003ccfa15e944251a65ba2289f25e8f1ed14a46^
 
 # compile for several GPU architectures using NCCL2
 NCCL_ROOT_DIR=/usr/local/cuda/ TORCH_CUDA_ARCH_LIST="3.5;5.0+PTX;6.0;6.1;7.0" \
