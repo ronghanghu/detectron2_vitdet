@@ -10,8 +10,9 @@ import torch
 
 from torch_detectron.core.fpn import FPNPooler
 from torch_detectron.helpers.config import get_default_config
-from torch_detectron.helpers.config import set_rpn_defaults
+from torch_detectron.helpers.config import set_resnet_defaults
 from torch_detectron.helpers.config import set_roi_heads_defaults
+from torch_detectron.helpers.config import set_rpn_defaults
 from torch_detectron.helpers.config_utils import ConfigNode
 from torch_detectron.helpers.config_utils import import_file
 from torch_detectron.helpers.model import fpn_classification_head
@@ -28,6 +29,7 @@ pretrained_path = catalog.ModelCatalog.get("R-50")
 # Default config options
 # --------------------------------------------------------------------------------------
 config = get_default_config()
+set_resnet_defaults(config)
 set_rpn_defaults(config)
 set_roi_heads_defaults(config)
 
@@ -104,24 +106,20 @@ config.CHECKPOINT = (
 # Quck config
 # --------------------------------------------------------------------------------------
 if "QUICK_SCHEDULE" in os.environ and os.environ["QUICK_SCHEDULE"]:
-    raise NotImplementedError("Not fully implemented")
-    config.MODEL.RPN.PRE_NMS_TOP_N = 12000
-    config.MODEL.RPN.POST_NMS_TOP_N = 2000
-    config.MODEL.RPN.POSITIVE_FRACTION = 0.25
-    config.MODEL.RPN.STRADDLE_THRESH = -1
-    config.MODEL.RPN.PRE_NMS_TOP_N_TEST = 1000
-    config.MODEL.RPN.POST_NMS_TOP_N_TEST = 2000
+    config.TRAIN.DATA.DATASET.FILES = [catalog.DatasetCatalog.get("coco_2014_minival")]
+
+    config.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 256
+
     config.TRAIN.DATA.TRANSFORM.MIN_SIZE = 600
     config.TRAIN.DATA.TRANSFORM.MAX_SIZE = 1000
-    config.TEST.DATA.TRANSFORM.MIN_SIZE = 600
+    config.TEST.DATA.TRANSFORM.MIN_SIZE = 800
     config.TEST.DATA.TRANSFORM.MAX_SIZE = 1000
 
-    loaded_weights = torch.load(pretrained_path)
-    from collections import OrderedDict
+    lr = 0.005
+    config.SOLVER.MAX_ITER = 2000
+    config.SOLVER.OPTIM.BASE_LR = lr
+    config.SOLVER.OPTIM.BASE_LR_BIAS = 2 * lr
 
-    rpn_weights = OrderedDict()
-    for k, v in loaded_weights.items():
-        if k.startswith("rpn"):
-            rpn_weights[k[4:]] = v
+    config.SOLVER.SCHEDULER.STEPS = [1500]
 
-    config.MODEL.RPN.WEIGHTS = rpn_weights
+    config.TEST.EXPECTED_RESULTS: [['bbox', 'AP', [0.059686, 0.002296]], ['segm', 'AP', [0.058490, 0.002348]]]

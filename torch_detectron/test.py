@@ -52,7 +52,6 @@ def main():
         config.TEST.DATA.DATALOADER.SAMPLER.SHUFFLE = True
     config.TEST.DATA.DATALOADER.SAMPLER.DISTRIBUTED = args.distributed
     data_loader_val = config.TEST.DATA()
-    print('size', len(data_loader_val), args.distributed)
 
     device = config.DEVICE
     model = config.MODEL()
@@ -70,7 +69,12 @@ def main():
     if config.MODEL.USE_MASK:
         iou_types = iou_types + ("segm",)
     inference(
-        model, data_loader_val, iou_types=iou_types, box_only=config.MODEL.RPN_ONLY
+        model,
+        data_loader_val,
+        iou_types=iou_types,
+        box_only=config.MODEL.RPN_ONLY,
+        expected_results=config.TEST.EXPECTED_RESULTS,
+        expected_results_sigma_tol=config.TEST.EXPECTED_RESULTS_SIGMA_TOL,
     )
 
 

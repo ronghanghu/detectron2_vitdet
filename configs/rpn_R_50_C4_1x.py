@@ -79,12 +79,16 @@ config.CHECKPOINT = (
 if "QUICK_SCHEDULE" in os.environ and os.environ["QUICK_SCHEDULE"]:
     config.TRAIN.DATA.DATASET.FILES = [catalog.DatasetCatalog.get("coco_2014_minival")]
 
-    config.MODEL.RPN.PRE_NMS_TOP_N_TEST = 10000
-    config.MODEL.RPN.POST_NMS_TOP_N_TEST = 2000
+    config.TRAIN.DATA.TRANSFORM.MIN_SIZE = 600
+    config.TRAIN.DATA.TRANSFORM.MAX_SIZE = 1000
+    config.TEST.DATA.TRANSFORM.MIN_SIZE = 800
+    config.TEST.DATA.TRANSFORM.MAX_SIZE = 1000
 
-    lr = 0.01
+    lr = 0.005
     config.SOLVER.MAX_ITER = 2000
     config.SOLVER.OPTIM.BASE_LR = lr
     config.SOLVER.OPTIM.BASE_LR_BIAS = 2 * lr
 
-    config.SOLVER.SCHEDULER.STEPS = [1000]
+    config.SOLVER.SCHEDULER.STEPS = [1500]
+
+    config.TEST.EXPECTED_RESULTS = [["box_proposal", "AR@1000", [0.374526, 0.001159]]]

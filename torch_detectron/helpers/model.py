@@ -99,7 +99,7 @@ class RPNBuilder(ConfigNode):
         )
         weights = self.config.MODEL.RPN.WEIGHTS
         if weights:
-            rpn_heads.load_state_dict(weights)
+            load_state_dict(rpn_heads, weights)
 
         rpn_box_coder = BoxCoder(weights=(1., 1., 1., 1.))
 

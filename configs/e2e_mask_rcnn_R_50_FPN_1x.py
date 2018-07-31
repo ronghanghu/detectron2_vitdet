@@ -129,11 +129,20 @@ config.CHECKPOINT = (
 # Quick config
 # --------------------------------------------------------------------------------------
 if "QUICK_SCHEDULE" in os.environ and os.environ["QUICK_SCHEDULE"]:
-    raise NotImplementedError("Not fully implemented")
     config.TRAIN.DATA.DATASET.FILES = [catalog.DatasetCatalog.get("coco_2014_minival")]
+
+    config.TRAIN.DATA.TRANSFORM.MIN_SIZE = 600
+    config.TRAIN.DATA.TRANSFORM.MAX_SIZE = 1000
+    config.TEST.DATA.TRANSFORM.MIN_SIZE = 800
+    config.TEST.DATA.TRANSFORM.MAX_SIZE = 1000
+
+    config.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 256
+
     lr = 0.005
+    config.SOLVER.MAX_ITER = 2000
     config.SOLVER.OPTIM.BASE_LR = lr
     config.SOLVER.OPTIM.BASE_LR_BIAS = 2 * lr
 
-    config.SOLVER.MAX_ITER = 2000
-    config.SOLVER.SCHEDULER.STEPS = [1000]
+    config.SOLVER.SCHEDULER.STEPS = [1500]
+
+    config.TEST.EXPECTED_RESULTS: [['bbox', 'AP', [0.059686, 0.002296]], ['segm', 'AP', [0.058490, 0.002348]]]

@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import datetime
 import logging
 import tempfile
@@ -171,6 +172,9 @@ def evaluate_box_proposals(
             "xyxy"
         )
 
+        if gt_boxes.bbox.shape[0] == 0:
+            continue
+
         # FIXME Detectron C2 uses segment area, and not box area
         gt_areas = boxes_area(gt_boxes.bbox)
         valid_gt_inds = (gt_areas >= area_range[0]) & (gt_areas <= area_range[1])
@@ -277,12 +281,81 @@ def _accumulate_predictions_from_multiple_gpus(predictions_per_gpu):
     return predictions
 
 
+class COCOResults(object):
+    METRICS = {
+        "bbox": ["AP", "AP50", "AP75", "APs", "APm", "APl"],
+        "segm": ["AP", "AP50", "AP75", "APs", "APm", "APl"],
+        "box_proposal": [
+            "AR@100",
+            "ARs@100",
+            "ARm@100",
+            "ARl@100",
+            "AR@1000",
+            "ARs@1000",
+            "ARm@1000",
+            "ARl@1000",
+        ],
+        "keypoint": ["AP", "AP50", "AP75", "APm", "APl"],
+    }
+
+    def __init__(self, *iou_types):
+        allowed_types = ("box_proposal", "bbox", "segm")
+        assert all(iou_type in allowed_types for iou_type in iou_types)
+        results = OrderedDict()
+        for iou_type in iou_types:
+            results[iou_type] = OrderedDict(
+                [(metric, -1) for metric in COCOResults.METRICS[iou_type]]
+            )
+        self.results = results
+
+    def update(self, coco_eval):
+        if coco_eval is None:
+            return
+        from pycocotools.cocoeval import COCOeval
+
+        assert isinstance(coco_eval, COCOeval)
+        s = coco_eval.stats
+        iou_type = coco_eval.params.iouType
+        res = self.results[iou_type]
+        metrics = COCOResults.METRICS[iou_type]
+        for idx, metric in enumerate(metrics):
+            res[metric] = s[idx]
+
+    def __repr__(self):
+        # TODO make it pretty
+        return repr(self.results)
+
+
+def check_expected_results(results, expected_results, sigma_tol):
+    if not expected_results:
+        return
+
+    logger = logging.getLogger("torch_detectron.inference")
+    for task, metric, (mean, std) in expected_results:
+        actual_val = results.results[task][metric]
+        lo = mean - sigma_tol * std
+        hi = mean + sigma_tol * std
+        ok = (lo < actual_val) and (actual_val < hi)
+        msg = (
+            "{} > {} sanity check (actual vs. expected): "
+            "{:.3f} vs. mean={:.4f}, std={:.4}, range=({:.4f}, {:.4f})"
+        ).format(task, metric, actual_val, mean, std, lo, hi)
+        if not ok:
+            msg = "FAIL: " + msg
+            logger.error(msg)
+        else:
+            msg = "PASS: " + msg
+            logger.info(msg)
+
+
 def inference(
     model,
     data_loader,
-    iou_types=("bbox",),  # 'segm'),
+    iou_types=("bbox",),
     box_only=False,
     device=torch.device("cuda"),
+    expected_results=(),
+    expected_results_sigma_tol=4,
 ):
 
     num_devices = (
@@ -309,8 +382,18 @@ def inference(
 
     if box_only:
         logger.info("Evaluating bbox proposals")
-        results = evaluate_box_proposals(predictions, dataset, area="all", limit=1000)
-        logger.info("AR@1000: {}".format(results["ar"].item()))
+        areas = {"all": "", "small": "s", "medium": "m", "large": "l"}
+        res = COCOResults("box_proposal")
+        for limit in [100, 1000]:
+            for area, suffix in areas.items():
+                stats = evaluate_box_proposals(
+                    predictions, dataset, area=area, limit=limit
+                )
+                key = "AR{}@{:d}".format(suffix, limit)
+                res.results["box_proposal"][key] = stats["ar"].item()
+        # logger.info("AR@1000: {}".format(results["ar"].item()))
+        logger.info(res)
+        check_expected_results(res, expected_results, expected_results_sigma_tol)
         return
     logger.info("Preparing results for COCO format")
     coco_results = {}
@@ -321,6 +404,7 @@ def inference(
         logger.info("Preparing segm results")
         coco_results["segm"] = prepare_for_coco_segmentation(predictions, dataset)
 
+    results = COCOResults(*iou_types)
     logger.info("Evaluating predictions")
     for iou_type in iou_types:
         with tempfile.NamedTemporaryFile() as f:
@@ -328,3 +412,5 @@ def inference(
                 dataset.coco, coco_results[iou_type], f.name, iou_type
             )
             logger.info(res)
+            results.update(res)
+    check_expected_results(res, expected_results, expected_results_sigma_tol)

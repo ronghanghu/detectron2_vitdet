@@ -87,32 +87,15 @@ config.CHECKPOINT = (
 # Quick config
 # --------------------------------------------------------------------------------------
 if "QUICK_SCHEDULE" in os.environ and os.environ["QUICK_SCHEDULE"]:
-    raise NotImplementedError("Not fully implemented")
     config.TRAIN.DATA.DATASET.FILES = [catalog.DatasetCatalog.get("coco_2014_minival")]
 
-    config.MODEL.RPN.PRE_NMS_TOP_N = 12000
-    config.MODEL.RPN.POST_NMS_TOP_N = 2000
-    config.MODEL.RPN.POSITIVE_FRACTION = 0.25
-    config.MODEL.RPN.STRADDLE_THRESH = -1
-    config.MODEL.RPN.PRE_NMS_TOP_N_TEST = 1000
-    config.MODEL.RPN.POST_NMS_TOP_N_TEST = 2000
     config.TRAIN.DATA.TRANSFORM.MIN_SIZE = 600
     config.TRAIN.DATA.TRANSFORM.MAX_SIZE = 1000
-    config.TEST.DATA.TRANSFORM.MIN_SIZE = 600
+    config.TEST.DATA.TRANSFORM.MIN_SIZE = 800
     config.TEST.DATA.TRANSFORM.MAX_SIZE = 1000
 
     lr = 0.005
     config.SOLVER.MAX_ITER = 2000
     config.SOLVER.OPTIM.BASE_LR = lr
     config.SOLVER.OPTIM.BASE_LR_BIAS = 2 * lr
-    config.SOLVER.SCHEDULER.STEPS = [1000]
-
-    _loaded_weights = torch.load(pretrained_path)
-    from collections import OrderedDict
-
-    _rpn_weights = OrderedDict()
-    for k, _v in _loaded_weights.items():
-        if k.startswith("rpn"):
-            _rpn_weights[k[4:]] = _v
-
-    config.MODEL.RPN.WEIGHTS = _rpn_weights
+    config.SOLVER.SCHEDULER.STEPS = [1500]

@@ -136,38 +136,19 @@ config.CHECKPOINT = (
 # --------------------------------------------------------------------------------------
 if "QUICK_SCHEDULE" in os.environ and os.environ["QUICK_SCHEDULE"]:
     config.TRAIN.DATA.DATASET.FILES = [catalog.DatasetCatalog.get("coco_2014_minival")]
-    config.TRAIN.DATA.DATALOADER.BATCH_SAMPLER.IMAGES_PER_BATCH = 2
 
-    import torch_detectron.layers
+    config.TRAIN.DATA.TRANSFORM.MIN_SIZE = 600
+    config.TRAIN.DATA.TRANSFORM.MAX_SIZE = 1000
+    config.TEST.DATA.TRANSFORM.MIN_SIZE = 800
+    config.TEST.DATA.TRANSFORM.MAX_SIZE = 1000
 
-    config.MODEL.ROI_HEADS.POOLER.MODULE = torch_detectron.layers.ROIAlign(
-        (7, 7), 1.0 / 16, 0
-    )
-
-    def head_builder(config, pretrained_path):
-        stage = resnet.StageSpec(index=5, block_count=3, return_features=False)
-        head = resnet.ResNetHead(
-            block_module=config.MODEL.RESNET.BLOCK_MODULE,
-            stages=(stage,),
-            num_groups=config.MODEL.RESNET.NUM_GROUPS,
-            width_per_group=config.MODEL.RESNET.WIDTH_PER_GROUP,
-            stride_in_1x1=config.MODEL.RESNET.STRIDE_IN_1X1,
-            stride_init=1,
-        )
-        if pretrained_path:
-            state_dict = torch.load(pretrained_path)
-            head.load_state_dict(state_dict, strict=False)
-        return head
-
-    config.MODEL.ROI_HEADS.BUILDER = head_builder
     config.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 256
-
-    config.MODEL.RPN.PRE_NMS_TOP_N = 6000
-    config.MODEL.RPN.POST_NMS_TOP_N = 2000
 
     lr = 0.005
     config.SOLVER.MAX_ITER = 2000
     config.SOLVER.OPTIM.BASE_LR = lr
     config.SOLVER.OPTIM.BASE_LR_BIAS = 2 * lr
 
-    config.SOLVER.SCHEDULER.STEPS = [1000]
+    config.SOLVER.SCHEDULER.STEPS = [1500]
+
+    config.TEST.EXPECTED_RESULTS: [['bbox', 'AP', [0.035681, 0.000825]], ['segm', 'AP', [0.043628, 0.000940]]]

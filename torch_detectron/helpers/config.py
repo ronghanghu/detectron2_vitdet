@@ -152,6 +152,8 @@ _C.TEST.DATA.TRANSFORM.STD = _data.STD
 _C.TEST.DATA.TRANSFORM.TO_BGR255 = True
 _C.TEST.DATA.TRANSFORM.FLIP_PROB = 0
 
+_C.TEST.EXPECTED_RESULTS = []
+_C.TEST.EXPECTED_RESULTS_SIGMA_TOL = 4
 
 def get_default_config():
     """Return a config object populated with defaults."""
