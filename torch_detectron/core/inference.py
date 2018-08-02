@@ -171,12 +171,11 @@ def evaluate_box_proposals(
         gt_boxes = BBox(gt_boxes, (image_width, image_height), mode="xywh").convert(
             "xyxy"
         )
+        gt_areas = torch.as_tensor([obj["area"] for obj in anno if obj["iscrowd"] == 0])
 
         if gt_boxes.bbox.shape[0] == 0:
             continue
 
-        # FIXME Detectron C2 uses segment area, and not box area
-        gt_areas = boxes_area(gt_boxes.bbox)
         valid_gt_inds = (gt_areas >= area_range[0]) & (gt_areas <= area_range[1])
         gt_boxes = gt_boxes[valid_gt_inds]
 
