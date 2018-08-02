@@ -150,7 +150,7 @@ def evaluate_box_proposals(
     area_range = area_ranges[areas[area]]
     gt_overlaps = []
     num_pos = 0
-    from .box_ops import boxes_iou, boxes_area
+    from .box_ops import boxes_iou
 
     for image_id, prediction in enumerate(predictions):
         original_id = dataset.id_to_img_map[image_id]
