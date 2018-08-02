@@ -61,7 +61,7 @@ class BBox(object):
             return self
         # we only have two modes, so don't need to check
         # self.mode
-        xmin, ymin, xmax, ymax = self._split()
+        xmin, ymin, xmax, ymax = self._split_into_xyxy()
         if mode == "xyxy":
             bbox = torch.cat((xmin, ymin, xmax, ymax), dim=-1)
             bbox = BBox(bbox, self.size, mode=mode)
@@ -74,7 +74,7 @@ class BBox(object):
         bbox._copy_extra_fields(self)
         return bbox
 
-    def _split(self):
+    def _split_into_xyxy(self):
         if self.mode == "xyxy":
             xmin, ymin, xmax, ymax = self.bbox.split(1, dim=-1)
             return xmin, ymin, xmax, ymax
@@ -84,8 +84,8 @@ class BBox(object):
             return (
                 xmin,
                 ymin,
-                (xmin + w - TO_REMOVE).clamp(min=0),
-                (ymin + h - TO_REMOVE).clamp(min=0),
+                xmin + (w - TO_REMOVE).clamp(min=0),
+                ymin + (h - TO_REMOVE).clamp(min=0),
             )
         else:
             raise RuntimeError("Should not be here")
@@ -114,7 +114,7 @@ class BBox(object):
         if self.bbox.numel() == 0:
             return self
         ratio_width, ratio_height = ratios
-        xmin, ymin, xmax, ymax = self._split()
+        xmin, ymin, xmax, ymax = self._split_into_xyxy()
         scaled_xmin = xmin * ratio_width
         scaled_xmax = xmax * ratio_width
         scaled_ymin = ymin * ratio_height
@@ -148,7 +148,7 @@ class BBox(object):
         if self.bbox.numel() == 0:
             return self
         image_width, image_height = self.size
-        xmin, ymin, xmax, ymax = self._split()
+        xmin, ymin, xmax, ymax = self._split_into_xyxy()
         if method == FLIP_LEFT_RIGHT:
             TO_REMOVE = 1
             transposed_xmin = image_width - xmax - TO_REMOVE
@@ -181,7 +181,7 @@ class BBox(object):
         # FIXME workaround while tensors with 0 in its dimensions is not fully supported
         if self.bbox.numel() == 0:
             return self
-        xmin, ymin, xmax, ymax = self._split()
+        xmin, ymin, xmax, ymax = self._split_into_xyxy()
         w, h = box[2] - box[0], box[3] - box[1]
         cropped_xmin = (xmin - box[0]).clamp(min=0, max=w)
         cropped_ymin = (ymin - box[1]).clamp(min=0, max=h)
