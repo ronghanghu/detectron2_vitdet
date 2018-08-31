@@ -1,3 +1,4 @@
+import torch
 from .compute_flow import compute_flow
 from .nms import nms
 from .roi_align import ROIAlign

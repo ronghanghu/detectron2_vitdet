@@ -1,8 +1,9 @@
 #include <ATen/ATen.h>
+#include <ATen/cuda/CUDAContext.h>
 
 #include <THC/THC.h>
 #include "THCDeviceTensor.cuh"
-#include "THCDeviceTensorUtils.cuh"
+//#include "THCDeviceTensorUtils.cuh"
 #include "THCDeviceUtils.cuh"
 
 #define CUDA_1D_KERNEL_LOOP(i, n)                            \
@@ -77,9 +78,10 @@ at::Tensor compute_flow_cuda(const at::Tensor& boxes,
 
 
   THCState *state = at::globalContext().lazyInitCUDA(); // TODO replace with getTHCState
-  cudaStream_t stream = at::globalContext().getCurrentCUDAStream();
+  cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
   //AT_DISPATCH_FLOATING_TYPES(boxes.type(), "compute_flow", [&] {
+  /*
   using scalar_t = float;
   using THCTensor = THCudaTensor;
     THCDeviceTensor<scalar_t, 2> devBoxes = toDeviceTensor<scalar_t, 2>(state, (THCTensor *) boxes.unsafeGetTH(false));
@@ -90,6 +92,7 @@ at::Tensor compute_flow_cuda(const at::Tensor& boxes,
       devOutput);
 
   //});
+  */
   THCudaCheck(cudaGetLastError());
   return output;
 }
