@@ -66,12 +66,12 @@ class GeneralizedRCNN(nn.Module):
 # Those generic classes shows that it's possible to plug both Mask R-CNN C4
 # and Mask R-CNN FPN with generic containers
 ################################################################################
-class ParallelHead(torch.nn.Module):
+class CascadedHeads(torch.nn.Module):
     """
     For Mask R-CNN FPN
     """
     def __init__(self, heads):
-        super(ParallelHead, self).__init__()
+        super(CascadedHeads, self).__init__()
         self.heads = torch.nn.ModuleList(heads)
 
     def forward(self, features, proposals, targets=None):
@@ -83,12 +83,12 @@ class ParallelHead(torch.nn.Module):
         return x, proposals, losses
 
 
-class SequentialHead(torch.nn.Module):
+class SharedROIHeads(torch.nn.Module):
     """
     For Mask R-CNN C4
     """
     def __init__(self, heads):
-        super(SequentialHead, self).__init__()
+        super(SharedROIHeads, self).__init__()
         self.heads = torch.nn.ModuleList(heads)
 
     def forward(self, features, proposals, targets=None):
@@ -110,9 +110,9 @@ def combine_roi_heads(cfg, roi_heads):
     It also support feature sharing, for example during
     Mask R-CNN C4.
     """
-    constructor = ParallelHead
+    constructor = CascadedHeads
     if cfg.MODEL.SHARE_FEATURES_DURING_TRAINING:
-        constructor = SequentialHead
+        constructor = SharedROIHeads
     # can also use getfunc to query a function by name
     return constructor(roi_heads)
 
@@ -281,7 +281,7 @@ class ResNet50Conv5ROIFeatureExtractor(nn.Module):
             num_groups=config.MODEL.RESNET.NUM_GROUPS,
             width_per_group=config.MODEL.RESNET.WIDTH_PER_GROUP,
             stride_in_1x1=config.MODEL.RESNET.STRIDE_IN_1X1,
-            stride_init=1 if "QUICK_SCHEDULE" in os.environ and os.environ["QUICK_SCHEDULE"] else None,
+            stride_init=None,
         )
 
         if pretrained:
