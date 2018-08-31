@@ -7,8 +7,31 @@ or can be accessed by a string
 import torch
 from torch import nn
 
-import torch_detectron.modeling as M
+
+from ..structures.image_list import to_image_list
+
+# import torch_detectron.modeling as M
 from torch_detectron.modeling import resnet
+
+from torch_detectron.modeling.anchor_generator import AnchorGenerator, FPNAnchorGenerator
+from torch_detectron.modeling.box_selector import RPNBoxSelector, FPNRPNBoxSelector
+
+from torch_detectron.modeling.box_selector import ROI2FPNLevelsMapper
+
+from torch_detectron.modeling.box_coder import BoxCoder
+from torch_detectron.modeling.faster_rcnn import RPNHeads
+
+from torch_detectron.modeling.matcher import Matcher
+from torch_detectron.modeling.rpn_losses import RPNTargetPreparator, RPNLossComputation
+
+from torch_detectron.modeling.balanced_positive_negative_sampler import BalancedPositiveNegativeSampler
+
+from torch_detectron.modeling.fast_rcnn_losses import FastRCNNTargetPreparator, FastRCNNLossComputation
+from torch_detectron.modeling.faster_rcnn import Pooler
+
+from torch_detectron.modeling.post_processor import PostProcessor, FPNPostProcessor
+
+from torch_detectron.modeling.utils import cat_bbox
 
 
 class GeneralizedRCNN(nn.Module):
@@ -20,7 +43,7 @@ class GeneralizedRCNN(nn.Module):
     def __init__(self, cfg):
         super(GeneralizedRCNN, self).__init__()
 
-        self.cfg = cfg.copy()
+        self.cfg = cfg.clone()
         
         # not implemented yet, but follows exactly Ross' implementation
         self.backbone = build_backbone(cfg)
@@ -36,7 +59,8 @@ class GeneralizedRCNN(nn.Module):
             roi_heads.append(build_roi_mask_head(cfg))
 
         # combine individual heads in a single module
-        self.roi_heads = combine_roi_heads(cfg, roi_heads)
+        if roi_heads:
+            self.roi_heads = combine_roi_heads(cfg, roi_heads)
 
     def forward(self, images, targets=None):
         """
@@ -44,10 +68,12 @@ class GeneralizedRCNN(nn.Module):
             images (list[Tensor] or ImageList): images to be processed
             targets (list[BBox]): ground-truth boxes present in the image (optional)
         """
+        if self.training and targets is None:
+            raise ValueError("In training mode, targets should be passed")
         images = to_image_list(images)
         features = self.backbone(images.tensors)
         proposals, proposal_losses = self.rpn(images, features, targets)
-        if self.cfg.RPN_ONLY:
+        if self.cfg.MODEL.RPN_ONLY:
             x = features
             result = proposals
             detector_losses = {}
@@ -117,6 +143,18 @@ def combine_roi_heads(cfg, roi_heads):
     return constructor(roi_heads)
 
 
+
+################################################################################
+# Backbone
+################################################################################
+
+def build_backbone(cfg):
+    """Variant of the above in which the cfg is passed and used inside
+    the library.
+    """
+    return resnet.ResNet(cfg)
+
+
 ################################################################################
 # Create RPN
 ################################################################################
@@ -130,7 +168,7 @@ def make_anchor_generator(config):
     anchor_stride = config.MODEL.RPN.ANCHOR_STRIDE
     straddle_thresh = config.MODEL.RPN.STRADDLE_THRESH
 
-    anchor_maker = M.AnchorGenerator if not use_fpn else M.FPNAnchorGenerator
+    anchor_maker = AnchorGenerator if not use_fpn else FPNAnchorGenerator
     anchor_args = {}
     # FIXME unify the args of AnchorGenerator and FPNAnchorGenerator?
     anchor_args["scales"] = scales
@@ -148,12 +186,12 @@ def make_anchor_generator(config):
 # copied from the previous implementation
 def make_box_selector(config, rpn_box_coder, is_train):
     use_fpn = config.MODEL.RPN.USE_FPN
-    box_selector_maker = M.RPNBoxSelector
+    box_selector_maker = RPNBoxSelector
     box_selector_args = {}
     if use_fpn:
         # TODO expose those options
-        roi_to_fpn_level_mapper = M.ROI2FPNLevelsMapper(2, 5)
-        box_selector_maker = M.FPNRPNBoxSelector
+        roi_to_fpn_level_mapper = ROI2FPNLevelsMapper(2, 5)
+        box_selector_maker = FPNRPNBoxSelector
         box_selector_args["roi_to_fpn_level_mapper"] = roi_to_fpn_level_mapper
         fpn_post_nms_top_n = config.MODEL.RPN.FPN_POST_NMS_TOP_N
         if not is_train:
@@ -178,25 +216,95 @@ def make_box_selector(config, rpn_box_coder, is_train):
     return box_selector
 
 
-def make_rpn(cfg):
+class RPNModule(torch.nn.Module):
+    """
+    Module for RPN computation. Works for both FPN and non-FPN.
+    """
+    def __init__(self, cfg):
+        super(RPNModule, self).__init__()
+
+        self.cfg = cfg.clone()
+
+        anchor_generator = make_anchor_generator(cfg)
+
+        num_input_features = cfg.MODEL.BACKBONE.OUTPUT_DIM
+        heads = RPNHeads(
+            num_input_features, anchor_generator.num_anchors_per_location()[0]
+        )
+        # weights = cfg.MODEL.RPN.WEIGHTS
+        # if weights:
+        #     rpn_heads.load_state_dict(weights)
+
+        rpn_box_coder = BoxCoder(weights=(1., 1., 1., 1.))
+
+        box_selector_train = make_box_selector(cfg, rpn_box_coder, is_train=True)
+        box_selector_test = make_box_selector(cfg, rpn_box_coder, is_train=False)
+
+        loss_evaluator = make_rpn_loss_evaluator(cfg, rpn_box_coder)
+
+        self.anchor_generator = anchor_generator
+        self.heads = heads
+        self.box_selector_train = box_selector_train
+        self.box_selector_test = box_selector_test
+        self.loss_evaluator = loss_evaluator
+
+
+    def forward(self, images, features, targets=None):
+        """
+        Arguments:
+            images (ImageList): images for which we want to compute the predictions
+            features (list[Tensor]): features computed from the images that are
+                used for computing the predictions. Each tensor in the list
+                correspond to different feature levels
+            targets (list[BBox): ground-truth boxes present in the image (optional)
+        """
+        objectness, rpn_box_regression = self.heads(features)
+        anchors = self.anchor_generator(images.image_sizes, features)
+
+        if not self.training:
+            boxes = self.box_selector_test(anchors, objectness, rpn_box_regression)
+            if self.cfg.MODEL.RPN_ONLY:
+                # concatenate all boxes from different levels if in inference and rpn_only
+                boxes = list(zip(*boxes))
+                boxes = [cat_bbox(box) for box in boxes]
+                # sort scores in decreasing order
+                inds = [
+                    box.get_field("objectness").sort(descending=True)[1]
+                    for box in boxes
+                ]
+                boxes = [box[ind] for box, ind in zip(boxes, inds)]
+            return boxes, {}
+
+        boxes = anchors
+        if not self.cfg.MODEL.RPN_ONLY:
+            with torch.no_grad():
+                boxes = self.box_selector_train(anchors, objectness, rpn_box_regression)
+        loss_objectness, loss_rpn_box_reg = self.loss_evaluator(
+            anchors, objectness, rpn_box_regression, targets
+        )
+        return (
+            boxes,
+            dict(loss_objectness=loss_objectness, loss_rpn_box_reg=loss_rpn_box_reg),
+        )
+
+
+def build_rpn(cfg):
     """
     This gives the gist of it. Not super important because it doesn't change as much
     """
-    anchor_generator = make_anchor_generator(cfg)
-    ...
-    return rpn
+    return RPNModule(cfg)
 
 
 ################################################################################
 # RoiBoxHead
 ################################################################################
 def make_roi_box_feature_extractor(cfg):
-    func = getfunc(cfg.MODEL.ROI_BOX.FEATURE_EXTRACTOR)
+    func = _ROI_BOX_FEATURE_EXTRACTORS[cfg.MODEL.ROI_BOX_HEAD.FEATURE_EXTRACTOR]
     # e.g., cfg.MODEL.ROI_BOX.FEATURE_EXTRACTOR = "ResNet50Conv5ROIFeatureExtractor"
     return func(cfg)
 
 def make_roi_box_predictor(cfg):
-    func = getfunc(cfg.MODEL.ROI_BOX.PREDICTOR)
+    func = _ROI_BOX_PREDICTOR[cfg.MODEL.ROI_BOX_HEAD.PREDICTOR]
     # e.g., cfg.MODEL.ROI_BOX.PREDICTOR = "FastRCNNPredictor"
     return func(cfg)
 
@@ -205,13 +313,13 @@ def make_roi_box_post_processor(cfg):
     use_fpn = cfg.MODEL.ROI_HEADS.USE_FPN
 
     bbox_reg_weights = cfg.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS
-    box_coder = M.BoxCoder(weights=bbox_reg_weights)
+    box_coder = BoxCoder(weights=bbox_reg_weights)
 
     score_thresh = cfg.MODEL.ROI_HEADS.SCORE_THRESH
     nms_thresh = cfg.MODEL.ROI_HEADS.NMS
     detections_per_img = cfg.MODEL.ROI_HEADS.DETECTIONS_PER_IMG
 
-    postprocessor_maker = M.PostProcessor if not use_fpn else M.FPNPostProcessor
+    postprocessor_maker = PostProcessor if not use_fpn else FPNPostProcessor
     postprocessor = postprocessor_maker(
 	score_thresh, nms_thresh, detections_per_img, box_coder
     )
@@ -267,7 +375,7 @@ class ResNet50Conv5ROIFeatureExtractor(nn.Module):
         resolution = config.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
         scales = config.MODEL.ROI_BOX_HEAD.POOLER_SCALES
         sampling_ratio = config.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
-        pooler = M.Pooler(
+        pooler = Pooler(
             output_size=(resolution, resolution),
             scales=scales,
             sampling_ratio=sampling_ratio,
@@ -276,11 +384,11 @@ class ResNet50Conv5ROIFeatureExtractor(nn.Module):
 
         stage = resnet.StageSpec(index=5, block_count=3, return_features=False)
         head = resnet.ResNetHead(
-            block_module=config.MODEL.RESNET.BLOCK_MODULE,
+            block_module=config.RESNETS.TRANS_FUNC,
             stages=(stage,),
-            num_groups=config.MODEL.RESNET.NUM_GROUPS,
-            width_per_group=config.MODEL.RESNET.WIDTH_PER_GROUP,
-            stride_in_1x1=config.MODEL.RESNET.STRIDE_IN_1X1,
+            num_groups=config.RESNETS.NUM_GROUPS,
+            width_per_group=config.RESNETS.WIDTH_PER_GROUP,
+            stride_in_1x1=config.RESNETS.STRIDE_IN_1X1,
             stride_init=None,
         )
 
@@ -319,6 +427,13 @@ class FastRCNNPredictor(nn.Module):
         bbox_pred = self.bbox_pred(x)
         return cls_logit, bbox_pred
 
+_ROI_BOX_FEATURE_EXTRACTORS = {
+    "ResNet50Conv5ROIFeatureExtractor": ResNet50Conv5ROIFeatureExtractor,
+}
+
+_ROI_BOX_PREDICTOR = {
+    "FastRCNNPredictor": FastRCNNPredictor,
+}
 
 
 ################################################################################
@@ -376,7 +491,7 @@ def make_standard_loss_evaluator(
 ):
     assert loss_type in ("rpn", "fast_rcnn", "mask_rcnn")
     allow_low_quality_matches = loss_type == "rpn"
-    matcher = M.Matcher(
+    matcher = Matcher(
         fg_iou_threshold,
         bg_iou_threshold,
         allow_low_quality_matches=allow_low_quality_matches,
@@ -386,7 +501,7 @@ def make_standard_loss_evaluator(
         assert isinstance(batch_size_per_image, int)
         assert isinstance(positive_fraction, (int, float))
         assert isinstance(box_coder, BoxCoder)
-        fg_bg_sampler = M.BalancedPositiveNegativeSampler(
+        fg_bg_sampler = BalancedPositiveNegativeSampler(
             batch_size_per_image=batch_size_per_image,
             positive_fraction=positive_fraction,
         )
@@ -394,13 +509,13 @@ def make_standard_loss_evaluator(
     if loss_type == "rpn":
         for arg in (mask_resolution, mask_subsample_only_positive_boxes):
             assert arg is None
-        target_preparator = M.RPNTargetPreparator(matcher, box_coder)
-        loss_evaluator = M.RPNLossComputation(target_preparator, fg_bg_sampler)
+        target_preparator = RPNTargetPreparator(matcher, box_coder)
+        loss_evaluator = RPNLossComputation(target_preparator, fg_bg_sampler)
     elif loss_type == "fast_rcnn":
         for arg in (mask_resolution, mask_subsample_only_positive_boxes):
             assert arg is None
-        target_preparator = M.FastRCNNTargetPreparator(matcher, box_coder)
-        loss_evaluator = M.FastRCNNLossComputation(target_preparator, fg_bg_sampler)
+        target_preparator = FastRCNNTargetPreparator(matcher, box_coder)
+        loss_evaluator = FastRCNNLossComputation(target_preparator, fg_bg_sampler)
     elif loss_type == "mask_rcnn":
         for arg in (batch_size_per_image, positive_fraction):
             assert arg is None
@@ -415,8 +530,7 @@ def make_standard_loss_evaluator(
     return loss_evaluator
 
 
-def make_rpn_loss_evaluator(cfg):
-    rpn_box_coder = M.BoxCoder(weights=(1., 1., 1., 1.))
+def make_rpn_loss_evaluator(cfg, rpn_box_coder):
     return make_standard_loss_evaluator(
             "rpn",
             cfg.MODEL.RPN.FG_IOU_THRESHOLD,
@@ -428,7 +542,7 @@ def make_rpn_loss_evaluator(cfg):
 
 def make_roi_box_loss_evaluator(cfg):
     bbox_reg_weights = cfg.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS
-    box_coder = M.BoxCoder(weights=bbox_reg_weights)
+    box_coder = BoxCoder(weights=bbox_reg_weights)
     return make_standard_loss_evaluator(
             "fast_rcnn",
             cfg.MODEL.ROI_HEADS.FG_IOU_THRESHOLD,

@@ -117,6 +117,48 @@ class ResNet(nn.Module):
                 outputs.append(x)
         return outputs
 
+class ResNetHead(nn.Module):
+    def __init__(
+        self,
+        block_module,
+        stages,
+        num_groups=1,
+        width_per_group=64,
+        stride_in_1x1=True,
+        stride_init=None,
+    ):
+        in_channels = 1024  # TODO make it generic
+        out_channels = 2048  # TODO make it generic
+        bottleneck_channels = 512  # TODO make it generic
+        super(ResNetHead, self).__init__()
+
+        block_module = _TRANSFORMATION_MODULES[block_module]
+
+        self.stages = []
+        stride = stride_init
+        for stage in stages:
+            name = "res" + str(stage.index)
+            if not stride:
+                stride = int(stage.index > 2) + 1
+            module = _make_stage(
+                block_module,
+                in_channels,
+                bottleneck_channels,
+                out_channels,
+                stage.block_count,
+                num_groups,
+                stride_in_1x1,
+                first_stride=stride,
+            )
+            stride = None
+            self.add_module(name, module)
+            self.stages.append(name)
+
+    def forward(self, x):
+        for stage in self.stages:
+            x = getattr(self, stage)(x)
+        return x
+
 
 def _make_stage(
     transformation_module,
@@ -244,7 +286,7 @@ class StemWithFixedBatchNorm(nn.Module):
         x = self.conv1(x)
         x = self.conv1_bn(x)
         x = F.relu_(x)
-        x = F.maxpool(x, kernel_size=3, stride=2, padding=1)
+        x = F.max_pool2d(x, kernel_size=3, stride=2, padding=1)
         return x
 
 
