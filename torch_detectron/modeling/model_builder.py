@@ -88,6 +88,16 @@ class GeneralizedRCNN(nn.Module):
 
         return result
 
+
+_DETECTION_META_ARCHITECTURES = {
+    "GeneralizedRCNN": GeneralizedRCNN,
+}
+
+def build_detection_model(cfg):
+    meta_arch = _DETECTION_META_ARCHITECTURES[cfg.MODEL.META_ARCHITECTURE]
+    return meta_arch(cfg)
+
+
 ################################################################################
 # Those generic classes shows that it's possible to plug both Mask R-CNN C4
 # and Mask R-CNN FPN with generic containers

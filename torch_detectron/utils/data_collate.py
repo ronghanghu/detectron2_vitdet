@@ -1,4 +1,4 @@
-from torch_detectron.core.image_list import to_image_list
+from torch_detectron.structures.image_list import to_image_list
 
 
 class BatchCollator(object):

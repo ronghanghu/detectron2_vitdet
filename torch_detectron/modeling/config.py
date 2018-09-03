@@ -5,6 +5,8 @@ _C = CN()
 _C.MODEL = CN()
 _C.MODEL.RPN_ONLY = False
 _C.MODEL.MASK_ON = False
+_C.MODEL.DEVICE = "cuda"
+_C.MODEL.META_ARCHITECTURE = "GeneralizedRCNN"
 
 
 # -----------------------------------------------------------------------------
@@ -18,6 +20,16 @@ _C.INPUT.MAX_SIZE_TEST = 1333
 _C.INPUT.SIZE_DIVISIBILITY = 0
 _C.INPUT.PIXEL_MEAN = [102.9801, 115.9465, 122.7717]
 _C.INPUT.PIXEL_STD = [1., 1., 1.]
+
+
+# -----------------------------------------------------------------------------
+# DataLoader
+# -----------------------------------------------------------------------------
+_C.DATALOADER = CN()
+_C.DATALOADER.NUM_WORKERS = 4
+_C.DATALOADER.SIZE_DIVISIBILITY = 0
+_C.DATALOADER.IMAGES_PER_BATCH_TRAIN = 2
+_C.DATALOADER.IMAGES_PER_BATCH_TEST = 1
 
 # ---------------------------------------------------------------------------- #
 # Backbone options
@@ -129,3 +141,10 @@ _C.RESNETS.STEM_FUNC = "StemWithFixedBatchNorm"
 
 # Apply dilation in stage "res5"
 _C.RESNETS.RES5_DILATION = 1
+
+
+
+# ---------------------------------------------------------------------------- #
+# Exporting the config
+# ---------------------------------------------------------------------------- #
+cfg = _C
