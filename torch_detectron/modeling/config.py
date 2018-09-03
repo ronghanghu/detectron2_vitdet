@@ -6,6 +6,19 @@ _C.MODEL = CN()
 _C.MODEL.RPN_ONLY = False
 _C.MODEL.MASK_ON = False
 
+
+# -----------------------------------------------------------------------------
+# INPUT
+# -----------------------------------------------------------------------------
+_C.INPUT = CN()
+_C.INPUT.MIN_SIZE_TRAIN = 800#(800,)
+_C.INPUT.MAX_SIZE_TRAIN = 1333
+_C.INPUT.MIN_SIZE_TEST = 800
+_C.INPUT.MAX_SIZE_TEST = 1333
+_C.INPUT.SIZE_DIVISIBILITY = 0
+_C.INPUT.PIXEL_MEAN = [102.9801, 115.9465, 122.7717]
+_C.INPUT.PIXEL_STD = [1., 1., 1.]
+
 # ---------------------------------------------------------------------------- #
 # Backbone options
 # ---------------------------------------------------------------------------- #
@@ -19,12 +32,12 @@ _C.BACKBONE.CONV_BODY = "R-50-C4"
 
 # Add StopGrad at a specified stage so the bottom layers are frozen
 _C.BACKBONE.FREEZE_CONV_BODY_AT = 2
+_C.BACKBONE.OUTPUT_DIM = 256 * 4
 
 
-_C.MODEL.BACKBONE = CN()
-_C.MODEL.BACKBONE.BUILDER = ""
-_C.MODEL.BACKBONE.OUTPUT_DIM = 256 * 4
-
+# ---------------------------------------------------------------------------- #
+# RPN options
+# ---------------------------------------------------------------------------- #
 _C.MODEL.RPN = CN()
 _C.MODEL.RPN.USE_FPN = False
 _C.MODEL.RPN.SCALES = (0.125, 0.25, 0.5, 1., 2.)
@@ -55,15 +68,12 @@ _C.MODEL.RPN.FPN_POST_NMS_TOP_N = 2000
 _C.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST = 2000
 
 
+# ---------------------------------------------------------------------------- #
+# ROI HEADS options
+# ---------------------------------------------------------------------------- #
 _C.MODEL.ROI_HEADS = CN()
 _C.MODEL.ROI_HEADS.USE_FPN = False
-_C.MODEL.ROI_HEADS.POOLER = CN()
-_C.MODEL.ROI_HEADS.POOLER.RESOLUTION = 14
-_C.MODEL.ROI_HEADS.POOLER.SAMPLING_RATIO = 0
-# TODO infer the scales from the feature map / image sizes
-_C.MODEL.ROI_HEADS.POOLER.SCALES = (1.0 / 16,)
-# TODO make this option more generic?
-_C.MODEL.ROI_HEADS.POOLER.DROP_LAST = False
+# _C.MODEL.ROI_HEADS.POOLER.DROP_LAST = False
 # Overlap threshold for an RoI to be considered foreground (if >= FG_IOU_THRESHOLD)
 _C.MODEL.ROI_HEADS.FG_IOU_THRESHOLD = 0.5
 # Overlap threshold for an RoI to be considered background
@@ -72,9 +82,6 @@ _C.MODEL.ROI_HEADS.BG_IOU_THRESHOLD = 0.5
 _C.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS = (10., 10., 5., 5.)
 _C.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 512
 _C.MODEL.ROI_HEADS.POSITIVE_FRACTION = 0.25
-_C.MODEL.ROI_HEADS.NUM_CLASSES = 81
-#_C.MODEL.ROI_HEADS.WEIGHTS = None
-_C.MODEL.ROI_HEADS.BUILDER = ""
 
 #_C.MODEL.ROI_HEADS.HEAD_BUILDER = None
 #_C.MODEL.ROI_HEADS.MASK_BUILDER = None

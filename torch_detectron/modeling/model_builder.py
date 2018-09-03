@@ -227,7 +227,7 @@ class RPNModule(torch.nn.Module):
 
         anchor_generator = make_anchor_generator(cfg)
 
-        num_input_features = cfg.MODEL.BACKBONE.OUTPUT_DIM
+        num_input_features = cfg.BACKBONE.OUTPUT_DIM
         heads = RPNHeads(
             num_input_features, anchor_generator.num_anchors_per_location()[0]
         )
