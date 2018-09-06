@@ -117,6 +117,7 @@ class ResNet(nn.Module):
                 outputs.append(x)
         return outputs
 
+
 class ResNetHead(nn.Module):
     def __init__(
         self,

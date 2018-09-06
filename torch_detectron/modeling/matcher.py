@@ -19,9 +19,7 @@ class Matcher(object):
     BELOW_LOW_THRESHOLD = -1
     BETWEEN_THRESHOLDS = -2
 
-    def __init__(
-        self, high_threshold, low_threshold, allow_low_quality_matches=False
-    ):
+    def __init__(self, high_threshold, low_threshold, allow_low_quality_matches=False):
         """
         Args:
             high_threshold (float): quality values greater than or equal to

@@ -13,7 +13,10 @@ from ..structures.image_list import to_image_list
 # import torch_detectron.modeling as M
 from torch_detectron.modeling import resnet
 
-from torch_detectron.modeling.anchor_generator import AnchorGenerator, FPNAnchorGenerator
+from torch_detectron.modeling.anchor_generator import (
+    AnchorGenerator,
+    FPNAnchorGenerator,
+)
 from torch_detectron.modeling.box_selector import RPNBoxSelector, FPNRPNBoxSelector
 
 from torch_detectron.modeling.box_selector import ROI2FPNLevelsMapper
@@ -24,9 +27,14 @@ from torch_detectron.modeling.faster_rcnn import RPNHeads
 from torch_detectron.modeling.matcher import Matcher
 from torch_detectron.modeling.rpn_losses import RPNTargetPreparator, RPNLossComputation
 
-from torch_detectron.modeling.balanced_positive_negative_sampler import BalancedPositiveNegativeSampler
+from torch_detectron.modeling.balanced_positive_negative_sampler import (
+    BalancedPositiveNegativeSampler
+)
 
-from torch_detectron.modeling.fast_rcnn_losses import FastRCNNTargetPreparator, FastRCNNLossComputation
+from torch_detectron.modeling.fast_rcnn_losses import (
+    FastRCNNTargetPreparator,
+    FastRCNNLossComputation,
+)
 from torch_detectron.modeling.faster_rcnn import Pooler
 
 from torch_detectron.modeling.post_processor import PostProcessor, FPNPostProcessor
@@ -40,11 +48,12 @@ class GeneralizedRCNN(nn.Module):
     This is very similar to what we had before, the difference being that now
     we construct the modules in __init__, instead of passing them as arguments
     """
+
     def __init__(self, cfg):
         super(GeneralizedRCNN, self).__init__()
 
         self.cfg = cfg.clone()
-        
+
         # not implemented yet, but follows exactly Ross' implementation
         self.backbone = build_backbone(cfg)
 
@@ -89,9 +98,8 @@ class GeneralizedRCNN(nn.Module):
         return result
 
 
-_DETECTION_META_ARCHITECTURES = {
-    "GeneralizedRCNN": GeneralizedRCNN,
-}
+_DETECTION_META_ARCHITECTURES = {"GeneralizedRCNN": GeneralizedRCNN}
+
 
 def build_detection_model(cfg):
     meta_arch = _DETECTION_META_ARCHITECTURES[cfg.MODEL.META_ARCHITECTURE]
@@ -106,6 +114,7 @@ class CascadedHeads(torch.nn.Module):
     """
     For Mask R-CNN FPN
     """
+
     def __init__(self, heads):
         super(CascadedHeads, self).__init__()
         self.heads = torch.nn.ModuleList(heads)
@@ -123,6 +132,7 @@ class SharedROIHeads(torch.nn.Module):
     """
     For Mask R-CNN C4
     """
+
     def __init__(self, heads):
         super(SharedROIHeads, self).__init__()
         self.heads = torch.nn.ModuleList(heads)
@@ -153,10 +163,10 @@ def combine_roi_heads(cfg, roi_heads):
     return constructor(roi_heads)
 
 
-
 ################################################################################
 # Backbone
 ################################################################################
+
 
 def build_backbone(cfg):
     """Variant of the above in which the cfg is passed and used inside
@@ -230,6 +240,7 @@ class RPNModule(torch.nn.Module):
     """
     Module for RPN computation. Works for both FPN and non-FPN.
     """
+
     def __init__(self, cfg):
         super(RPNModule, self).__init__()
 
@@ -257,7 +268,6 @@ class RPNModule(torch.nn.Module):
         self.box_selector_train = box_selector_train
         self.box_selector_test = box_selector_test
         self.loss_evaluator = loss_evaluator
-
 
     def forward(self, images, features, targets=None):
         """
@@ -313,6 +323,7 @@ def make_roi_box_feature_extractor(cfg):
     # e.g., cfg.MODEL.ROI_BOX.FEATURE_EXTRACTOR = "ResNet50Conv5ROIFeatureExtractor"
     return func(cfg)
 
+
 def make_roi_box_predictor(cfg):
     func = _ROI_BOX_PREDICTOR[cfg.MODEL.ROI_BOX_HEAD.PREDICTOR]
     # e.g., cfg.MODEL.ROI_BOX.PREDICTOR = "FastRCNNPredictor"
@@ -331,14 +342,16 @@ def make_roi_box_post_processor(cfg):
 
     postprocessor_maker = PostProcessor if not use_fpn else FPNPostProcessor
     postprocessor = postprocessor_maker(
-	score_thresh, nms_thresh, detections_per_img, box_coder
+        score_thresh, nms_thresh, detections_per_img, box_coder
     )
     return postprocessor
+
 
 class ROIBoxHead(torch.nn.Module):
     """
     Generic Box Head class.
     """
+
     def __init__(self, cfg):
         super(ROIBoxHead, self).__init__()
         self.feature_extractor = make_roi_box_feature_extractor(cfg)
@@ -357,11 +370,15 @@ class ROIBoxHead(torch.nn.Module):
         if not self.training:
             result = self.post_processor((class_logits, box_regression), proposals)
             return x, result, {}
-        
+
         loss_classifier, loss_box_reg = self.loss_evaluator(
             [class_logits], [box_regression]
         )
-        return x, proposals, dict(loss_classifier=loss_classifier, loss_box_reg=loss_box_reg)
+        return (
+            x,
+            proposals,
+            dict(loss_classifier=loss_classifier, loss_box_reg=loss_box_reg),
+        )
 
 
 def build_roi_box_head(cfg):
@@ -377,6 +394,7 @@ def build_roi_box_head(cfg):
 # Those implementations are here for illustrative purposes, and they will be in separate files
 # depending on the application
 ###
+
 
 class ResNet50Conv5ROIFeatureExtractor(nn.Module):
     def __init__(self, config, pretrained=None):
@@ -405,7 +423,7 @@ class ResNet50Conv5ROIFeatureExtractor(nn.Module):
         if pretrained:
             state_dict = torch.load(pretrained)
             load_state_dict(head, state_dict, strict=False)
-        
+
         self.pooler = pooler
         self.head = head
 
@@ -437,13 +455,12 @@ class FastRCNNPredictor(nn.Module):
         bbox_pred = self.bbox_pred(x)
         return cls_logit, bbox_pred
 
+
 _ROI_BOX_FEATURE_EXTRACTORS = {
-    "ResNet50Conv5ROIFeatureExtractor": ResNet50Conv5ROIFeatureExtractor,
+    "ResNet50Conv5ROIFeatureExtractor": ResNet50Conv5ROIFeatureExtractor
 }
 
-_ROI_BOX_PREDICTOR = {
-    "FastRCNNPredictor": FastRCNNPredictor,
-}
+_ROI_BOX_PREDICTOR = {"FastRCNNPredictor": FastRCNNPredictor}
 
 
 ################################################################################
@@ -542,25 +559,27 @@ def make_standard_loss_evaluator(
 
 def make_rpn_loss_evaluator(cfg, rpn_box_coder):
     return make_standard_loss_evaluator(
-            "rpn",
-            cfg.MODEL.RPN.FG_IOU_THRESHOLD,
-            cfg.MODEL.RPN.BG_IOU_THRESHOLD,
-            cfg.MODEL.RPN.BATCH_SIZE_PER_IMAGE,
-            cfg.MODEL.RPN.POSITIVE_FRACTION,
-            rpn_box_coder,
-        )
+        "rpn",
+        cfg.MODEL.RPN.FG_IOU_THRESHOLD,
+        cfg.MODEL.RPN.BG_IOU_THRESHOLD,
+        cfg.MODEL.RPN.BATCH_SIZE_PER_IMAGE,
+        cfg.MODEL.RPN.POSITIVE_FRACTION,
+        rpn_box_coder,
+    )
+
 
 def make_roi_box_loss_evaluator(cfg):
     bbox_reg_weights = cfg.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS
     box_coder = BoxCoder(weights=bbox_reg_weights)
     return make_standard_loss_evaluator(
-            "fast_rcnn",
-            cfg.MODEL.ROI_HEADS.FG_IOU_THRESHOLD,
-            cfg.MODEL.ROI_HEADS.BG_IOU_THRESHOLD,
-            cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE,
-            cfg.MODEL.ROI_HEADS.POSITIVE_FRACTION,
-            box_coder,
-        )
+        "fast_rcnn",
+        cfg.MODEL.ROI_HEADS.FG_IOU_THRESHOLD,
+        cfg.MODEL.ROI_HEADS.BG_IOU_THRESHOLD,
+        cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE,
+        cfg.MODEL.ROI_HEADS.POSITIVE_FRACTION,
+        box_coder,
+    )
+
 
 def make_roi_mask_loss_evaluator(cfg):
     return make_standard_loss_evaluator(

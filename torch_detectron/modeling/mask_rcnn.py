@@ -127,7 +127,9 @@ class MaskFPNPooler(FPNPooler):
         # get the permutation order to revert the fpn grouping
         box_data = cat([bbox.bbox for bbox in boxes], dim=0)
         levels = self.roi_to_fpn_level_mapper(box_data)
-        rois_idx_order = [nonzero(levels == feat_lvl)[0] for feat_lvl in range(lvl_min, lvl_max + 1)]
+        rois_idx_order = [
+            nonzero(levels == feat_lvl)[0] for feat_lvl in range(lvl_min, lvl_max + 1)
+        ]
 
         # for each image, split in different fpn levels
         for img_idx, bboxes in enumerate(boxes):

@@ -4,7 +4,9 @@ import os
 
 
 class DatasetCatalog(object):
-    DATA_DIR = os.path.join(os.path.dirname(__file__), "../../../detectron.pytorch/configs/datasets")
+    DATA_DIR = os.path.join(
+        os.path.dirname(__file__), "../../../detectron.pytorch/configs/datasets"
+    )
 
     DATASETS = {
         "coco_2014_train": (
@@ -37,4 +39,3 @@ class ModelCatalog(object):
     @staticmethod
     def get(name):
         return os.path.join(ModelCatalog.DATA_DIR, ModelCatalog.MODELS[name])
-

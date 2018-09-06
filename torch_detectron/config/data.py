@@ -25,7 +25,9 @@ def make_transform(cfg, is_train=True):
     resize_transform = T.Resize(min_size, max_size)
 
     to_bgr255 = True
-    normalize_transform = T.Normalize(mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD, to_bgr255=to_bgr255)
+    normalize_transform = T.Normalize(
+        mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD, to_bgr255=to_bgr255
+    )
 
     transform = T.Compose(
         [
@@ -52,7 +54,7 @@ def make_coco_dataset(cfg, is_train=True):
             annotation_path,
             folder,
             remove_images_without_annotations=is_train,
-            transforms=transforms
+            transforms=transforms,
         )
         datasets.append(dataset)
 
@@ -69,7 +71,9 @@ def make_data_sampler(dataset, shuffle, distributed):
         if distributed:
             sampler = torch.utils.data.distributed.DistributedSampler(dataset)
     else:
-        assert distributed == False, "Distributed with no shuffling on the dataset not supported"
+        assert (
+            distributed == False
+        ), "Distributed with no shuffling on the dataset not supported"
         sampler = torch.utils.data.sampler.SequentialSampler(dataset)
     return sampler
 
@@ -109,7 +113,9 @@ def make_data_loader(cfg, is_train=True):
 
     dataset = make_coco_dataset(cfg, is_train)
     sampler = make_data_sampler(dataset, shuffle, distributed)
-    batch_sampler = make_batch_data_sampler(dataset, sampler, aspect_grouping, images_per_batch)
+    batch_sampler = make_batch_data_sampler(
+        dataset, sampler, aspect_grouping, images_per_batch
+    )
     collator = BatchCollator(cfg.DATALOADER.SIZE_DIVISIBILITY)
     num_workers = cfg.DATALOADER.NUM_WORKERS
     data_loader = torch.utils.data.DataLoader(
@@ -119,4 +125,3 @@ def make_data_loader(cfg, is_train=True):
         collate_fn=collator,
     )
     return data_loader
-

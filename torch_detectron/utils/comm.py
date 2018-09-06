@@ -22,6 +22,7 @@ def synchronize():
     rank = torch.distributed.get_rank()
     if world_size == 1:
         return
+
     def _send_and_wait(r):
         if rank == r:
             tensor = torch.tensor(0, device="cuda")
@@ -30,6 +31,7 @@ def synchronize():
         torch.distributed.broadcast(tensor, r)
         while tensor.item() == 1:
             time.sleep(1)
+
     _send_and_wait(0)
     # now sync on the main process
     _send_and_wait(1)

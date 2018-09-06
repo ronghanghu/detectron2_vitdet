@@ -2,7 +2,7 @@ import argparse
 import os
 import torch
 
-from torch_detectron.utils.c2_model_loading import load_c2_weights_faster_rcnn_resnet50_c4
+from torch_detectron.utils.c2_model_loading import load_from_c2
 from torch_detectron.config import cfg
 from torch_detectron.config.data import make_data_loader
 from torch_detectron.engine.inference import inference
@@ -10,11 +10,18 @@ from torch_detectron.engine.logger import setup_logger
 from torch_detectron.modeling.model_builder import build_detection_model
 
 
-def load_from_c2(model, weights_file):
-    pass
+def load_from_checkpoint(cfg, model, checkpoint):
+    if cfg.MODEL.C2_COMPAT.ENABLED:
+        load_from_c2(cfg, model, checkpoint)
+        return
 
-def load_from_checkpoint(model, checkpoint):
-    pass
+    # do standard loading here
+    checkpoint = torch.load(checkpoint)
+    # TODO find a better way of serializing the weights
+    # that avoids this ugly workaround
+    model = torch.nn.DataParallel(model)
+    load_state_dict(model, checkpoint["model"])
+    model = model.module
 
 
 def main():
@@ -54,31 +61,18 @@ def main():
     save_dir = ""
     logger = setup_logger("torch_detectron", save_dir, args.local_rank)
     logger.info(cfg)
-    
+
     model = build_detection_model(cfg)
     model.to(cfg.MODEL.DEVICE)
 
-    load_c2_weights_faster_rcnn_resnet50_c4(model, "/private/home/fmassa/model_final_faster_rcnn.pkl")
-
-    if args.checkpoint:
-        checkpoint = torch.load(args.checkpoint)
-        # TODO find a better way of serializing the weights
-        # that avoids this ugly workaround
-        model = torch.nn.DataParallel(model)
-        load_state_dict(model, checkpoint["model"])
-        model = model.module
+    load_from_checkpoint(cfg, model, args.checkpoint)
 
     data_loader_val = make_data_loader(cfg, is_train=False)
 
     iou_types = ("bbox",)
     if cfg.MODEL.MASK_ON:
         iou_types = iou_types + ("segm",)
-    inference(
-        model,
-        data_loader_val,
-        iou_types=iou_types,
-        box_only=cfg.MODEL.RPN_ONLY,
-    )
+    inference(model, data_loader_val, iou_types=iou_types, box_only=cfg.MODEL.RPN_ONLY)
 
 
 if __name__ == "__main__":

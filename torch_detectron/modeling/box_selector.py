@@ -190,10 +190,11 @@ class FPNRPNBoxSelector(RPNBoxSelector):
             for i in range(num_images):
                 objectness = extra_fields["objectness"].clone()
                 objectness[indices != i] = -1
-                _, inds_sorted_img = torch.topk(objectness, post_nms_top_n, dim=0, sorted=True)
+                _, inds_sorted_img = torch.topk(
+                    objectness, post_nms_top_n, dim=0, sorted=True
+                )
                 inds_sorted.append(inds_sorted_img)
             inds_sorted = cat(inds_sorted, dim=0)
-
 
         concat_boxes = concat_boxes[inds_sorted]
         indices = indices[inds_sorted]

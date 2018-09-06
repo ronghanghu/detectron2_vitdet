@@ -8,12 +8,16 @@ _C.MODEL.MASK_ON = False
 _C.MODEL.DEVICE = "cuda"
 _C.MODEL.META_ARCHITECTURE = "GeneralizedRCNN"
 
+_C.MODEL.C2_COMPAT = CN()
+_C.MODEL.C2_COMPAT.WEIGHTS = ""
+_C.MODEL.C2_COMPAT.WEIGHT_LOADER = ""
+_C.MODEL.C2_COMPAT.ENABLED = False
 
 # -----------------------------------------------------------------------------
 # INPUT
 # -----------------------------------------------------------------------------
 _C.INPUT = CN()
-_C.INPUT.MIN_SIZE_TRAIN = 800#(800,)
+_C.INPUT.MIN_SIZE_TRAIN = 800  # (800,)
 _C.INPUT.MAX_SIZE_TRAIN = 1333
 _C.INPUT.MIN_SIZE_TEST = 800
 _C.INPUT.MAX_SIZE_TEST = 1333
@@ -103,10 +107,10 @@ _C.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS = (10., 10., 5., 5.)
 _C.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 512
 _C.MODEL.ROI_HEADS.POSITIVE_FRACTION = 0.25
 
-#_C.MODEL.ROI_HEADS.HEAD_BUILDER = None
-#_C.MODEL.ROI_HEADS.MASK_BUILDER = None
+# _C.MODEL.ROI_HEADS.HEAD_BUILDER = None
+# _C.MODEL.ROI_HEADS.MASK_BUILDER = None
 _C.MODEL.ROI_HEADS.MASK_RESOLUTION = 14
-#_C.MODEL.ROI_HEADS.MASK_POOLER = None
+# _C.MODEL.ROI_HEADS.MASK_POOLER = None
 
 # Only used on test mode
 _C.MODEL.ROI_HEADS.SCORE_THRESH = 0.05
@@ -149,7 +153,6 @@ _C.RESNETS.STEM_FUNC = "StemWithFixedBatchNorm"
 
 # Apply dilation in stage "res5"
 _C.RESNETS.RES5_DILATION = 1
-
 
 
 # ---------------------------------------------------------------------------- #

@@ -10,6 +10,7 @@ torch_detectron/legacy/
 *.pkl
 *.npy
 *.ipynb
+*.so
 
 # Editor temporaries
 *.swn

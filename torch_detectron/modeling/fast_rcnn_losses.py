@@ -24,11 +24,11 @@ class FastRCNNTargetPreparator(TargetPreparator):
         labels_per_image = labels_per_image.to(dtype=torch.int64)
 
         # Label background (below the low threshold)
-        bg_inds = (matched_idxs == Matcher.BELOW_LOW_THRESHOLD)
+        bg_inds = matched_idxs == Matcher.BELOW_LOW_THRESHOLD
         labels_per_image[bg_inds] = 0
 
         # Label ignore proposals (between low and high thresholds)
-        ignore_inds = (matched_idxs == Matcher.BETWEEN_THRESHOLDS)
+        ignore_inds = matched_idxs == Matcher.BETWEEN_THRESHOLDS
         labels_per_image[ignore_inds] = -1  # -1 is ignored by sampler
         return labels_per_image
 
