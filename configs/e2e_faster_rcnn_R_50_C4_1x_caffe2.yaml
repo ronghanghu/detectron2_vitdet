@@ -1,2 +1,4 @@
 MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
+DATASETS:
+  TEST: ("coco_2014_minival",)

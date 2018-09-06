@@ -23,6 +23,13 @@ _C.INPUT.PIXEL_STD = [1., 1., 1.]
 
 
 # -----------------------------------------------------------------------------
+# Dataset
+# -----------------------------------------------------------------------------
+_C.DATASETS = CN()
+_C.DATASETS.TRAIN = ()
+_C.DATASETS.TEST = ()
+
+# -----------------------------------------------------------------------------
 # DataLoader
 # -----------------------------------------------------------------------------
 _C.DATALOADER = CN()
@@ -30,6 +37,7 @@ _C.DATALOADER.NUM_WORKERS = 4
 _C.DATALOADER.SIZE_DIVISIBILITY = 0
 _C.DATALOADER.IMAGES_PER_BATCH_TRAIN = 2
 _C.DATALOADER.IMAGES_PER_BATCH_TEST = 1
+_C.DATALOADER.ASPECT_RATIO_GROUPING = True
 
 # ---------------------------------------------------------------------------- #
 # Backbone options
