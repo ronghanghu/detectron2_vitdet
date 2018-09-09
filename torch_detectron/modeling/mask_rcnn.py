@@ -6,7 +6,7 @@ import numpy as np
 from PIL import Image
 
 from ..structures.bounding_box import BBox
-from .fpn import FPNPooler
+from .faster_rcnn import Pooler
 from .utils import cat
 from .utils import keep_only_positive_boxes
 from .utils import nonzero
@@ -68,7 +68,7 @@ class MaskRCNNHeads(nn.Module):
         return x
 
 
-class MaskFPNPooler(FPNPooler):
+class MaskFPNPooler(Pooler):
     """
     This pooler is used for both training and inference.
     The behavior of the pooler changes if it's in training or inference.

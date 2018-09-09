@@ -17,9 +17,7 @@ def nonzero(tensor):
     This should maybe be sent to core pytorch
     """
     result = tensor.nonzero()
-    if result.numel() > 0:
-        return torch.unbind(result, 1)
-    return (result,) * tensor.dim()
+    return torch.unbind(result, 1)
 
 
 # TODO maybe push this to nn?

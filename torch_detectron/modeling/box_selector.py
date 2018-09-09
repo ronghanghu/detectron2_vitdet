@@ -219,7 +219,6 @@ class FPNRPNBoxSelector(RPNBoxSelector):
                     bbox.add_field(field, data[lvl_idx_per_img])
                 per_feat_boxes.append(bbox)
             boxes.append(per_feat_boxes)
-
         return boxes
 
 

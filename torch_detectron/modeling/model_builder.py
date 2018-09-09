@@ -11,7 +11,7 @@ from torch import nn
 from ..structures.image_list import to_image_list
 
 # import torch_detectron.modeling as M
-from torch_detectron.modeling import resnet
+
 
 from torch_detectron.modeling.anchor_generator import (
     AnchorGenerator,
@@ -35,11 +35,22 @@ from torch_detectron.modeling.fast_rcnn_losses import (
     FastRCNNTargetPreparator,
     FastRCNNLossComputation,
 )
-from torch_detectron.modeling.faster_rcnn import Pooler
+
+from torch_detectron.modeling.mask_rcnn_losses import (
+    MaskTargetPreparator,
+    MaskRCNNLossComputation,
+)
 
 from torch_detectron.modeling.post_processor import PostProcessor, FPNPostProcessor
+from torch_detectron.modeling.mask_rcnn import MaskPostProcessor
 
 from torch_detectron.modeling.utils import cat_bbox
+
+from torch_detectron.modeling.roi_box_feature_extractors import make_roi_box_feature_extractor
+from torch_detectron.modeling.roi_box_predictors import make_roi_box_predictor
+from torch_detectron.modeling.roi_mask_feature_extractors import make_roi_mask_feature_extractor
+from torch_detectron.modeling.roi_mask_predictors import make_roi_mask_predictor
+from torch_detectron.modeling.backbones import build_backbone
 
 
 class GeneralizedRCNN(nn.Module):
@@ -136,6 +147,10 @@ class SharedROIHeads(torch.nn.Module):
     def __init__(self, heads):
         super(SharedROIHeads, self).__init__()
         self.heads = torch.nn.ModuleList(heads)
+        # manually share feature extractor
+        shared_feature_extractor = self.heads[0].feature_extractor
+        for head in self.heads[1:]:
+            head.feature_extractor = shared_feature_extractor
 
     def forward(self, features, proposals, targets=None):
         losses = {}
@@ -147,6 +162,30 @@ class SharedROIHeads(torch.nn.Module):
             losses.update(loss)
 
         return x, proposals, losses
+
+"""
+class SharedROIHeads(torch.nn.Module):
+
+    def __init__(self, heads):
+        super(SharedROIHeads, self).__init__()
+        self.heads = torch.nn.ModuleList(heads)
+        shared_feature_extractor = self.heads[0].feature_extractor
+        for head in self.heads[1:]:
+            head.feature_extractor = shared_feature_extractor
+
+    def forward(self, features, proposals, targets=None):
+        losses = {}
+        x, proposals, loss = self.heads[0](features, proposals, targets)
+        losses.update(loss)
+        if self.training:
+            features = x
+        else:
+            features = self.heads[0].feature_extractor(features, proposals)
+        x, proposals, loss = self.heads[1](features, proposals, targets)
+        losses.update(loss)
+
+        return x, proposals, losses
+"""
 
 
 def combine_roi_heads(cfg, roi_heads):
@@ -161,18 +200,6 @@ def combine_roi_heads(cfg, roi_heads):
         constructor = SharedROIHeads
     # can also use getfunc to query a function by name
     return constructor(roi_heads)
-
-
-################################################################################
-# Backbone
-################################################################################
-
-
-def build_backbone(cfg):
-    """Variant of the above in which the cfg is passed and used inside
-    the library.
-    """
-    return resnet.ResNet(cfg)
 
 
 ################################################################################
@@ -198,7 +225,7 @@ def make_anchor_generator(config):
     if use_fpn:
         anchor_args["anchor_strides"] = anchor_stride
     else:
-        anchor_args["anchor_stride"] = anchor_stride
+        anchor_args["anchor_stride"] = anchor_stride[0]
     anchor_generator = anchor_maker(**anchor_args)
     return anchor_generator
 
@@ -318,17 +345,6 @@ def build_rpn(cfg):
 ################################################################################
 # RoiBoxHead
 ################################################################################
-def make_roi_box_feature_extractor(cfg):
-    func = _ROI_BOX_FEATURE_EXTRACTORS[cfg.MODEL.ROI_BOX_HEAD.FEATURE_EXTRACTOR]
-    # e.g., cfg.MODEL.ROI_BOX.FEATURE_EXTRACTOR = "ResNet50Conv5ROIFeatureExtractor"
-    return func(cfg)
-
-
-def make_roi_box_predictor(cfg):
-    func = _ROI_BOX_PREDICTOR[cfg.MODEL.ROI_BOX_HEAD.PREDICTOR]
-    # e.g., cfg.MODEL.ROI_BOX.PREDICTOR = "FastRCNNPredictor"
-    return func(cfg)
-
 
 def make_roi_box_post_processor(cfg):
     use_fpn = cfg.MODEL.ROI_HEADS.USE_FPN
@@ -390,85 +406,19 @@ def build_roi_box_head(cfg):
     return ROIBoxHead(cfg)
 
 
-###
-# Those implementations are here for illustrative purposes, and they will be in separate files
-# depending on the application
-###
-
-
-class ResNet50Conv5ROIFeatureExtractor(nn.Module):
-    def __init__(self, config, pretrained=None):
-        super(ResNet50Conv5ROIFeatureExtractor, self).__init__()
-
-        resolution = config.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
-        scales = config.MODEL.ROI_BOX_HEAD.POOLER_SCALES
-        sampling_ratio = config.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
-        pooler = Pooler(
-            output_size=(resolution, resolution),
-            scales=scales,
-            sampling_ratio=sampling_ratio,
-            drop_last=False,
-        )
-
-        stage = resnet.StageSpec(index=5, block_count=3, return_features=False)
-        head = resnet.ResNetHead(
-            block_module=config.RESNETS.TRANS_FUNC,
-            stages=(stage,),
-            num_groups=config.RESNETS.NUM_GROUPS,
-            width_per_group=config.RESNETS.WIDTH_PER_GROUP,
-            stride_in_1x1=config.RESNETS.STRIDE_IN_1X1,
-            stride_init=None,
-        )
-
-        if pretrained:
-            state_dict = torch.load(pretrained)
-            load_state_dict(head, state_dict, strict=False)
-
-        self.pooler = pooler
-        self.head = head
-
-    def forward(self, x, proposals):
-        x = self.pooler(x, proposals)
-        x = self.head(x)
-        return x
-
-
-class FastRCNNPredictor(nn.Module):
-    def __init__(self, config, pretrained=None):
-        super(FastRCNNPredictor, self).__init__()
-        num_inputs = 2048  # config.MODEL.ROI_BOX_HEAD.something
-        num_classes = config.MODEL.ROI_BOX_HEAD.NUM_CLASSES
-        self.avgpool = torch.nn.AvgPool2d(kernel_size=7, stride=7)
-        self.cls_score = nn.Linear(num_inputs, num_classes)
-        self.bbox_pred = nn.Linear(num_inputs, num_classes * 4)
-
-        nn.init.normal_(self.cls_score.weight, mean=0, std=0.01)
-        nn.init.constant_(self.cls_score.weight, 0)
-
-        nn.init.normal_(self.bbox_pred.weight, mean=0, std=0.001)
-        nn.init.constant_(self.bbox_pred.weight, 0)
-
-    def forward(self, x):
-        x = self.avgpool(x)
-        x = x.view(x.size(0), -1)
-        cls_logit = self.cls_score(x)
-        bbox_pred = self.bbox_pred(x)
-        return cls_logit, bbox_pred
-
-
-_ROI_BOX_FEATURE_EXTRACTORS = {
-    "ResNet50Conv5ROIFeatureExtractor": ResNet50Conv5ROIFeatureExtractor
-}
-
-_ROI_BOX_PREDICTOR = {"FastRCNNPredictor": FastRCNNPredictor}
-
-
 ################################################################################
 # RoiMaskHead
 ################################################################################
+
+def make_roi_mask_post_processor(cfg):
+    masker = None
+    mask_post_processor = MaskPostProcessor(masker)
+    return mask_post_processor
+
 class ROIMaskHead(torch.nn.Module):
-    def __init__(self, feature_extractor, predictor, post_processor, loss_evaluator):
+    def __init__(self, cfg):
         super(ROIMaskHead, self).__init__()
+        self.cfg = cfg.clone()
         self.feature_extractor = make_roi_mask_feature_extractor(cfg)
         self.predictor = make_roi_mask_predictor(cfg)
         self.post_processor = make_roi_mask_post_processor(cfg)
@@ -484,10 +434,20 @@ class ROIMaskHead(torch.nn.Module):
                     r.add_field("mask", features[0].new())
                 return features, proposals, {}
 
-        x = self.feature_extractor(features, proposals)
+        if self.training and self.cfg.MODEL.SHARE_FEATURES_DURING_TRAINING:
+            x = features
+        else:
+            if self.cfg.MODEL.SHARE_FEATURES_DURING_TRAINING:
+                # proposals have been flattened by this point, so aren't
+                # in the format of list[list[BBox]] anymore. Add one more level to it
+                proposals = [proposals]
+            x = self.feature_extractor(features, proposals)
         mask_logits = self.predictor(x)
 
         if not self.training:
+            # TODO Fix this horrible hack
+            if self.cfg.MODEL.SHARE_FEATURES_DURING_TRAINING:
+                proposals = proposals[0]
             result = self.post_processor(mask_logits, proposals)
             return x, result, {}
 
@@ -548,8 +508,8 @@ def make_standard_loss_evaluator(
             assert arg is None
         assert isinstance(mask_resolution, (int, float))
         assert isinstance(mask_subsample_only_positive_boxes, bool)
-        target_preparator = M.MaskTargetPreparator(matcher, mask_resolution)
-        loss_evaluator = M.MaskRCNNLossComputation(
+        target_preparator = MaskTargetPreparator(matcher, mask_resolution)
+        loss_evaluator = MaskRCNNLossComputation(
             target_preparator,
             subsample_only_positive_boxes=mask_subsample_only_positive_boxes,
         )
@@ -587,5 +547,5 @@ def make_roi_mask_loss_evaluator(cfg):
         cfg.MODEL.ROI_HEADS.FG_IOU_THRESHOLD,
         cfg.MODEL.ROI_HEADS.BG_IOU_THRESHOLD,
         mask_resolution=cfg.MODEL.ROI_HEADS.MASK_RESOLUTION,
-        mask_subsample_only_positive_boxes=(not cfg.MODEL.USE_FPN),
+        mask_subsample_only_positive_boxes=(not cfg.MODEL.ROI_HEADS.USE_FPN),
     )

@@ -65,7 +65,7 @@ def prepare_for_coco_detection(predictions, dataset):
 
 
 def prepare_for_coco_segmentation(predictions, dataset):
-    from .mask_rcnn import Masker
+    from torch_detectron.modeling.mask_rcnn import Masker
     import pycocotools.mask as mask_util
     import numpy as np
 
@@ -150,7 +150,7 @@ def evaluate_box_proposals(
     area_range = area_ranges[areas[area]]
     gt_overlaps = []
     num_pos = 0
-    from .box_ops import boxes_iou
+    from torch_detectron.modeling.box_ops import boxes_iou
 
     for image_id, prediction in enumerate(predictions):
         original_id = dataset.id_to_img_map[image_id]

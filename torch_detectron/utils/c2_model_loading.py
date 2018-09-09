@@ -81,11 +81,7 @@ def _load_c2_pickled_weights(file_path):
     weights = data["blobs"]
     return weights
 
-
-def load_c2_weights_faster_rcnn_resnet50_c4(model, file_path):
-    state_dict = _load_c2_pickled_weights(file_path)
-    state_dict = _rename_weights_for_R50(state_dict)
-
+def _get_rpn_state_dict(state_dict):
     rpn_state_dict = OrderedDict()
     rpn_mapping = {
         "rpn.conv.weight": "conv.weight",
@@ -98,6 +94,16 @@ def load_c2_weights_faster_rcnn_resnet50_c4(model, file_path):
     for k, v in rpn_mapping.items():
         rpn_state_dict[v] = state_dict[k]
 
+    return rpn_state_dict
+
+
+
+def load_c2_weights_faster_rcnn_resnet50_c4(model, file_path):
+    state_dict = _load_c2_pickled_weights(file_path)
+    state_dict = _rename_weights_for_R50(state_dict)
+
+    rpn_state_dict = _get_rpn_state_dict(state_dict)
+
     model.backbone.stem.load_state_dict(state_dict, strict=False)
     model.backbone.load_state_dict(state_dict, strict=False)
     model.rpn.heads.load_state_dict(rpn_state_dict)
@@ -108,7 +114,75 @@ def load_c2_weights_faster_rcnn_resnet50_c4(model, file_path):
     model.roi_heads.heads[0].predictor.load_state_dict(state_dict, strict=False)
 
 
-_C2_WEIGHT_LOADER = {"faster_rcnn_R_50_C4": load_c2_weights_faster_rcnn_resnet50_c4}
+def load_c2_weights_faster_rcnn_resnet50_fpn(model, file_path):
+    state_dict = _load_c2_pickled_weights(file_path)
+    state_dict = _rename_weights_for_R50(state_dict)
+
+    rpn_state_dict = _get_rpn_state_dict(state_dict)
+
+    model.backbone[0].stem.load_state_dict(state_dict, strict=False)
+    model.backbone[0].load_state_dict(state_dict, strict=False)
+    # FPN
+    model.backbone[1].load_state_dict(state_dict, strict=False)
+
+    model.rpn.heads.load_state_dict(rpn_state_dict)
+
+    model.roi_heads.heads[0].feature_extractor.load_state_dict(
+        state_dict, strict=False
+    )
+    model.roi_heads.heads[0].predictor.load_state_dict(state_dict, strict=False)
+
+
+def load_c2_weights_mask_rcnn_resnet50_c4(model, file_path):
+    state_dict = _load_c2_pickled_weights(file_path)
+    state_dict = _rename_weights_for_R50(state_dict)
+
+    rpn_state_dict = _get_rpn_state_dict(state_dict)
+
+    model.backbone.stem.load_state_dict(state_dict, strict=False)
+    model.backbone.load_state_dict(state_dict, strict=False)
+    model.rpn.heads.load_state_dict(rpn_state_dict)
+
+    model.roi_heads.heads[0].feature_extractor.head.load_state_dict(
+        state_dict, strict=False
+    )
+    model.roi_heads.heads[0].predictor.load_state_dict(state_dict, strict=False)
+
+    model.roi_heads.heads[1].predictor.load_state_dict(state_dict, strict=False)
+
+
+def load_c2_weights_mask_rcnn_resnet50_fpn(model, file_path):
+    state_dict = _load_c2_pickled_weights(file_path)
+    state_dict = _rename_weights_for_R50(state_dict)
+
+    rpn_state_dict = _get_rpn_state_dict(state_dict)
+
+    model.backbone[0].stem.load_state_dict(state_dict, strict=False)
+    model.backbone[0].load_state_dict(state_dict, strict=False)
+    # FPN
+    model.backbone[1].load_state_dict(state_dict, strict=False)
+
+    model.rpn.heads.load_state_dict(rpn_state_dict)
+
+    model.roi_heads.heads[0].feature_extractor.load_state_dict(
+        state_dict, strict=False
+    )
+    model.roi_heads.heads[0].predictor.load_state_dict(state_dict, strict=False)
+
+    model.roi_heads.heads[1].feature_extractor.load_state_dict(
+        state_dict, strict=False
+    )
+    model.roi_heads.heads[1].predictor.load_state_dict(state_dict, strict=False)
+
+
+
+
+_C2_WEIGHT_LOADER = {
+    "faster_rcnn_R_50_C4": load_c2_weights_faster_rcnn_resnet50_c4,
+    "faster_rcnn_R_50_FPN": load_c2_weights_faster_rcnn_resnet50_fpn,
+    "mask_rcnn_R_50_C4": load_c2_weights_mask_rcnn_resnet50_c4,
+    "mask_rcnn_R_50_FPN": load_c2_weights_mask_rcnn_resnet50_fpn,
+}
 
 
 def load_from_c2(cfg, model, weights_file):

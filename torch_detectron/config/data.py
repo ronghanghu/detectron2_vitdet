@@ -24,7 +24,7 @@ def make_transform(cfg, is_train=True):
 
     resize_transform = T.Resize(min_size, max_size)
 
-    to_bgr255 = True
+    to_bgr255 = True  # TODO make this an option?
     normalize_transform = T.Normalize(
         mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD, to_bgr255=to_bgr255
     )
@@ -47,7 +47,6 @@ def make_coco_dataset(cfg, is_train=True):
     transforms = make_transform(cfg, is_train)
 
     datasets = []
-
     for dataset_name in dataset_list:
         annotation_path, folder = DatasetCatalog.get(dataset_name)
         dataset = COCODataset(
