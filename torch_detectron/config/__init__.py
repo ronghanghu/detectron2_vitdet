@@ -85,10 +85,17 @@ _C.BACKBONE.OUTPUT_DIM = 256 * 4
 # ---------------------------------------------------------------------------- #
 _C.MODEL.RPN = CN()
 _C.MODEL.RPN.USE_FPN = False
+# RPN anchor sizes given in relative size w.r.t. BASE_ANCHOR_SIZE
 _C.MODEL.RPN.SCALES = (0.125, 0.25, 0.5, 1., 2.)
+# Base RPN anchor size given in absolute pixels w.r.t. the scaled network input
 _C.MODEL.RPN.BASE_ANCHOR_SIZE = 256
+# Stride of the feature map that RPN is attached.
+# For FPN, number of strides should match number of scales
 _C.MODEL.RPN.ANCHOR_STRIDE = (16,)
+# RPN anchor aspect ratios
 _C.MODEL.RPN.ASPECT_RATIOS = (0.5, 1.0, 2.0)
+# Remove RPN anchors that go outside the image by RPN_STRADDLE_THRESH pixels
+# Set to -1 or a large value, e.g. 100000, to disable pruning anchors
 _C.MODEL.RPN.STRADDLE_THRESH = 0
 # Minimum overlap required between an anchor and ground-truth box for the
 # (anchor, gt box) pair to be a positive example (IoU >= FG_IOU_THRESHOLD
@@ -98,17 +105,24 @@ _C.MODEL.RPN.FG_IOU_THRESHOLD = 0.7
 # (anchor, gt box) pair to be a negative examples (IoU < BG_IOU_THRESHOLD
 # ==> negative RPN example)
 _C.MODEL.RPN.BG_IOU_THRESHOLD = 0.3
+# Total number of RPN examples per image
 _C.MODEL.RPN.BATCH_SIZE_PER_IMAGE = 256
+# Target fraction of foreground (positive) examples per RPN minibatch
 _C.MODEL.RPN.POSITIVE_FRACTION = 0.5
-# TODO separate in train and test
+# Number of top scoring RPN proposals to keep before applying NMS
+# When FPN is used, this is *per FPN level* (not total)
 _C.MODEL.RPN.PRE_NMS_TOP_N = 12000
+# Number of top scoring RPN proposals to keep after applying NMS
 _C.MODEL.RPN.POST_NMS_TOP_N = 2000
-# TODO this is not as nice
 _C.MODEL.RPN.PRE_NMS_TOP_N_TEST = 6000
 _C.MODEL.RPN.POST_NMS_TOP_N_TEST = 1000
+# NMS threshold used on RPN proposals
 _C.MODEL.RPN.NMS_THRESH = 0.7
+# Proposal height and width both need to be greater than RPN_MIN_SIZE
+# (a the scale used during training or inference)
 _C.MODEL.RPN.MIN_SIZE = 0
-# _C.MODEL.RPN.WEIGHTS = None
+# Number of top scoring RPN proposals to keep after combining proposals from
+# all FPN levels
 _C.MODEL.RPN.FPN_POST_NMS_TOP_N = 2000
 _C.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST = 2000
 
@@ -123,13 +137,28 @@ _C.MODEL.ROI_HEADS.FG_IOU_THRESHOLD = 0.5
 # Overlap threshold for an RoI to be considered background
 # (class = 0 if overlap in [0, BG_IOU_THRESHOLD))
 _C.MODEL.ROI_HEADS.BG_IOU_THRESHOLD = 0.5
+# Default weights on (dx, dy, dw, dh) for normalizing bbox regression targets
+# These are empirically chosen to approximately lead to unit variance targets
 _C.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS = (10., 10., 5., 5.)
+# RoI minibatch size *per image* (number of regions of interest [ROIs])
+# Total number of RoIs per training minibatch =
+#   TRAIN.BATCH_SIZE_PER_IM * TRAIN.IMS_PER_BATCH * NUM_GPUS
+# E.g., a common configuration is: 512 * 2 * 8 = 8192
 _C.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 512
+# Target fraction of RoI minibatch that is labeled foreground (i.e. class > 0)
 _C.MODEL.ROI_HEADS.POSITIVE_FRACTION = 0.25
 
 # Only used on test mode
+
+# Minimum score threshold (assuming scores in a [0, 1] range); a value chosen to
+# balance obtaining high recall with not having too many low precision
+# detections that will slow down inference post processing steps (like NMS)
 _C.MODEL.ROI_HEADS.SCORE_THRESH = 0.05
+# Overlap threshold used for non-maximum suppression (suppress boxes with
+# IoU >= this threshold)
 _C.MODEL.ROI_HEADS.NMS = 0.5
+# Maximum number of detections to return per image (100 is based on the limit
+# established for the COCO dataset)
 _C.MODEL.ROI_HEADS.DETECTIONS_PER_IMG = 100
 
 
@@ -140,6 +169,7 @@ _C.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION = 14
 _C.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO = 0
 _C.MODEL.ROI_BOX_HEAD.POOLER_SCALES = (1.0 / 16,)
 _C.MODEL.ROI_BOX_HEAD.NUM_CLASSES = 81
+# Hidden layer dimension when using an MLP for the RoI box head
 _C.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM = 1024
 
 

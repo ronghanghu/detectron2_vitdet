@@ -204,7 +204,9 @@ def make_anchor_generator(config):
     anchor_args["straddle_thresh"] = straddle_thresh
     if use_fpn:
         anchor_args["anchor_strides"] = anchor_stride
+        assert len(anchor_stride) == len(scales), "FPN should have len(ANCHOR_STRIDE) == len(SCALES)"
     else:
+        assert len(anchor_sride) == 1, "Non-FPN should have a single ANCHOR_STRIDE"
         anchor_args["anchor_stride"] = anchor_stride[0]
     anchor_generator = anchor_maker(**anchor_args)
     return anchor_generator
