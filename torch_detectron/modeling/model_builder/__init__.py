@@ -39,7 +39,6 @@ class GeneralizedRCNN(nn.Module):
 
         self.cfg = cfg.clone()
 
-        # not implemented yet, but follows exactly Ross' implementation
         self.backbone = build_backbone(cfg)
 
         self.rpn = build_rpn(cfg)

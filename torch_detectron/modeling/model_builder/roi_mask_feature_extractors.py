@@ -4,7 +4,7 @@ from torch.nn import functional as F
 from torch_detectron.modeling.model_builder.roi_box_feature_extractors import (
     ResNet50Conv5ROIFeatureExtractor
 )
-from torch_detectron.modeling.mask_rcnn import MaskFPNPooler
+from torch_detectron.modeling.poolers import MaskFPNPooler
 
 from torch_detectron.modeling.box_selector import ROI2FPNLevelsMapper
 
