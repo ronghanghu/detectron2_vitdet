@@ -65,7 +65,7 @@ def prepare_for_coco_detection(predictions, dataset):
 
 
 def prepare_for_coco_segmentation(predictions, dataset):
-    from torch_detectron.modeling.mask_rcnn import Masker
+    from torch_detectron.modeling.post_processors.mask_rcnn import Masker
     import pycocotools.mask as mask_util
     import numpy as np
 
@@ -352,11 +352,13 @@ def inference(
     data_loader,
     iou_types=("bbox",),
     box_only=False,
-    device=torch.device("cuda"),
+    device="cuda",
     expected_results=(),
     expected_results_sigma_tol=4,
 ):
 
+    # convert to a torch.device for efficiency
+    device = torch.device(device)
     num_devices = (
         torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
     )

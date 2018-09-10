@@ -73,7 +73,7 @@ def main():
     iou_types = ("bbox",)
     if cfg.MODEL.MASK_ON:
         iou_types = iou_types + ("segm",)
-    inference(model, data_loader_val, iou_types=iou_types, box_only=cfg.MODEL.RPN_ONLY)
+    inference(model, data_loader_val, iou_types=iou_types, box_only=cfg.MODEL.RPN_ONLY, device=cfg.MODEL.DEVICE)
 
 
 if __name__ == "__main__":
