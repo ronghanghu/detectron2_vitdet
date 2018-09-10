@@ -10,8 +10,6 @@ from torch import nn
 
 from ..structures.image_list import to_image_list
 
-# import torch_detectron.modeling as M
-
 
 from torch_detectron.modeling.anchor_generator import (
     AnchorGenerator,
@@ -22,7 +20,7 @@ from torch_detectron.modeling.box_selector import RPNBoxSelector, FPNRPNBoxSelec
 from torch_detectron.modeling.box_selector import ROI2FPNLevelsMapper
 
 from torch_detectron.modeling.box_coder import BoxCoder
-from torch_detectron.modeling.faster_rcnn import RPNHeads
+from torch_detectron.modeling.faster_rcnn import RPNPredictor
 
 from torch_detectron.modeling.matcher import Matcher
 from torch_detectron.modeling.rpn_losses import RPNTargetPreparator, RPNLossComputation
@@ -185,7 +183,6 @@ def combine_roi_heads(cfg, roi_heads):
 ################################################################################
 # Create RPN
 ################################################################################
-# copied from the previous implementation
 def make_anchor_generator(config):
     use_fpn = config.MODEL.RPN.USE_FPN
 
@@ -212,7 +209,6 @@ def make_anchor_generator(config):
     return anchor_generator
 
 
-# copied from the previous implementation
 def make_box_selector(config, rpn_box_coder, is_train):
     use_fpn = config.MODEL.RPN.USE_FPN
     box_selector_maker = RPNBoxSelector
@@ -258,7 +254,7 @@ class RPNModule(torch.nn.Module):
         anchor_generator = make_anchor_generator(cfg)
 
         num_input_features = cfg.BACKBONE.OUTPUT_DIM
-        heads = RPNHeads(
+        heads = RPNPredictor(
             num_input_features, anchor_generator.num_anchors_per_location()[0]
         )
 

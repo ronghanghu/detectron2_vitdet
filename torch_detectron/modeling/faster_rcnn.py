@@ -8,7 +8,7 @@ from .utils import cat
 
 
 # FIXME Rename to RPNOutputs
-class RPNHeads(nn.Module):
+class RPNPredictor(nn.Module):
     """
     Adds a simple RPN Head with classification and regression heads
     """
@@ -19,7 +19,7 @@ class RPNHeads(nn.Module):
             inplanes (int): number of channels of the input feature
             num_anchors (int): number of anchors to be predicted
         """
-        super(RPNHeads, self).__init__()
+        super(RPNPredictor, self).__init__()
         self.conv = nn.Conv2d(inplanes, inplanes, kernel_size=3, stride=1, padding=1)
         self.cls_logits = nn.Conv2d(inplanes, num_anchors, kernel_size=1, stride=1)
         self.bbox_pred = nn.Conv2d(inplanes, num_anchors * 4, kernel_size=1, stride=1)
