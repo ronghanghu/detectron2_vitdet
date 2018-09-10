@@ -1,6 +1,6 @@
 import torch
 
-from .utils import nonzero
+from ..utils import nonzero
 
 
 class BalancedPositiveNegativeSampler(object):

@@ -8,9 +8,9 @@ from torch.nn import functional as F
 
 from .matcher import Matcher
 from .target_preparator import TargetPreparator
-from .utils import cat
-from .utils import nonzero
-from .utils import smooth_l1_loss
+from ..utils import cat
+from ..utils import nonzero
+from ..utils import smooth_l1_loss
 
 
 class RPNTargetPreparator(TargetPreparator):

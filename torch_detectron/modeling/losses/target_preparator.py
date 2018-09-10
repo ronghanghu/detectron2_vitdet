@@ -1,7 +1,7 @@
 import torch
 
-from .box_ops import boxes_iou
-from .utils import cat_bbox
+from ..box_ops import boxes_iou
+from ..utils import cat_bbox
 
 
 class TargetPreparator(object):
