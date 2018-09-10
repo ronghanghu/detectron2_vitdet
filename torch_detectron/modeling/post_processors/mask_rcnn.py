@@ -4,8 +4,8 @@ from torch import nn
 import numpy as np
 from PIL import Image
 
-from ..structures.bounding_box import BBox
-from .utils import split_with_sizes
+from torch_detectron.structures.bounding_box import BBox
+from ..utils import split_with_sizes
 
 
 # TODO check if want to return a single BBox or a composite

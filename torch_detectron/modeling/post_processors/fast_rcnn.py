@@ -4,9 +4,9 @@ from torch import nn
 
 from torch_detectron.layers import nms as box_nms
 
-from ..structures.bounding_box import BBox
-from .box_coder import BoxCoder
-from .box_selector import _clip_boxes_to_image
+from torch_detectron.structures.bounding_box import BBox
+from ..box_coder import BoxCoder
+from ..box_selector import _clip_boxes_to_image
 
 
 def box_results_with_nms_and_limit(

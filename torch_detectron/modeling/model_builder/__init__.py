@@ -10,8 +10,12 @@ from torch import nn
 from torch_detectron.structures.image_list import to_image_list
 
 from torch_detectron.modeling.box_coder import BoxCoder
-from torch_detectron.modeling.post_processor import PostProcessor, FPNPostProcessor
-from torch_detectron.modeling.mask_rcnn import MaskPostProcessor
+
+from torch_detectron.modeling.post_processors.fast_rcnn import PostProcessor, FPNPostProcessor
+from torch_detectron.modeling.post_processors.mask_rcnn import MaskPostProcessor
+
+# from torch_detectron.modeling.post_processor import PostProcessor, FPNPostProcessor
+# from torch_detectron.modeling.mask_rcnn import MaskPostProcessor
 
 from .roi_box_feature_extractors import (
     make_roi_box_feature_extractor
