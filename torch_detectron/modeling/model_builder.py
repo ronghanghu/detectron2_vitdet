@@ -546,6 +546,6 @@ def make_roi_mask_loss_evaluator(cfg):
         "mask_rcnn",
         cfg.MODEL.ROI_HEADS.FG_IOU_THRESHOLD,
         cfg.MODEL.ROI_HEADS.BG_IOU_THRESHOLD,
-        mask_resolution=cfg.MODEL.ROI_HEADS.MASK_RESOLUTION,
+        mask_resolution=cfg.MODEL.ROI_MASK_HEAD.RESOLUTION,
         mask_subsample_only_positive_boxes=(not cfg.MODEL.ROI_HEADS.USE_FPN),
     )

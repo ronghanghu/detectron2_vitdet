@@ -8,21 +8,33 @@ _C.MODEL.MASK_ON = False
 _C.MODEL.DEVICE = "cuda"
 _C.MODEL.META_ARCHITECTURE = "GeneralizedRCNN"
 
+
+# -----------------------------------------------------------------------------
+# Load pre-trained models from C2 Detectron
+# -----------------------------------------------------------------------------
 _C.MODEL.C2_COMPAT = CN()
+# Weight file from C2 Detectron. Should be in .pkl format
 _C.MODEL.C2_COMPAT.WEIGHTS = ""
+# Name of the function that loads the C2 weights into our PyTorch model
 _C.MODEL.C2_COMPAT.WEIGHT_LOADER = ""
+# Load from C2 Detectron or not
 _C.MODEL.C2_COMPAT.ENABLED = False
 
 # -----------------------------------------------------------------------------
 # INPUT
 # -----------------------------------------------------------------------------
 _C.INPUT = CN()
+# Size of the smallest side of the image during training
 _C.INPUT.MIN_SIZE_TRAIN = 800  # (800,)
+# Maximum size of the side of the image during training
 _C.INPUT.MAX_SIZE_TRAIN = 1333
+# Size of the smallest side of the image during testing
 _C.INPUT.MIN_SIZE_TEST = 800
+# Maximum size of the side of the image during testing
 _C.INPUT.MAX_SIZE_TEST = 1333
-# _C.INPUT.SIZE_DIVISIBILITY = 0
+# Values to be used for image normalization
 _C.INPUT.PIXEL_MEAN = [102.9801, 115.9465, 122.7717]
+# Values to be used for image normalization
 _C.INPUT.PIXEL_STD = [1., 1., 1.]
 
 
@@ -30,17 +42,26 @@ _C.INPUT.PIXEL_STD = [1., 1., 1.]
 # Dataset
 # -----------------------------------------------------------------------------
 _C.DATASETS = CN()
+# List of the dataset names for training, as present in paths_catalog.py
 _C.DATASETS.TRAIN = ()
+# List of the dataset names for testing, as present in paths_catalog.py
 _C.DATASETS.TEST = ()
 
 # -----------------------------------------------------------------------------
 # DataLoader
 # -----------------------------------------------------------------------------
 _C.DATALOADER = CN()
+# Number of data loading threads
 _C.DATALOADER.NUM_WORKERS = 4
+# If > 0, this enforces that each collated batch should have a size divisible
+# by SIZE_DIVISIBILITY
 _C.DATALOADER.SIZE_DIVISIBILITY = 0
+# Number of images per batch
 _C.DATALOADER.IMAGES_PER_BATCH_TRAIN = 2
 _C.DATALOADER.IMAGES_PER_BATCH_TEST = 1
+# If True, each batch should contain only images for which the aspect ratio
+# is compatible. This groups portrait images together, and landscape images
+# are not batched with portrait images.
 _C.DATALOADER.ASPECT_RATIO_GROUPING = True
 
 # ---------------------------------------------------------------------------- #
@@ -97,7 +118,6 @@ _C.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST = 2000
 # ---------------------------------------------------------------------------- #
 _C.MODEL.ROI_HEADS = CN()
 _C.MODEL.ROI_HEADS.USE_FPN = False
-# _C.MODEL.ROI_HEADS.POOLER.DROP_LAST = False
 # Overlap threshold for an RoI to be considered foreground (if >= FG_IOU_THRESHOLD)
 _C.MODEL.ROI_HEADS.FG_IOU_THRESHOLD = 0.5
 # Overlap threshold for an RoI to be considered background
@@ -106,11 +126,6 @@ _C.MODEL.ROI_HEADS.BG_IOU_THRESHOLD = 0.5
 _C.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS = (10., 10., 5., 5.)
 _C.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 512
 _C.MODEL.ROI_HEADS.POSITIVE_FRACTION = 0.25
-
-# _C.MODEL.ROI_HEADS.HEAD_BUILDER = None
-# _C.MODEL.ROI_HEADS.MASK_BUILDER = None
-_C.MODEL.ROI_HEADS.MASK_RESOLUTION = 14
-# _C.MODEL.ROI_HEADS.MASK_POOLER = None
 
 # Only used on test mode
 _C.MODEL.ROI_HEADS.SCORE_THRESH = 0.05
@@ -134,12 +149,11 @@ _C.MODEL.ROI_MASK_HEAD.PREDICTOR = "MaskRCNNC4Predictor"
 _C.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION = 14
 _C.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO = 0
 _C.MODEL.ROI_MASK_HEAD.POOLER_SCALES = (1.0 / 16,)
-_C.MODEL.ROI_MASK_HEAD.NUM_CLASSES = 81
 _C.MODEL.ROI_MASK_HEAD.MLP_HEAD_DIM = 1024
 _C.MODEL.ROI_MASK_HEAD.CONV_LAYERS = (256, 256, 256, 256)
+_C.MODEL.ROI_MASK_HEAD.RESOLUTION = 14
 
 _C.MODEL.SHARE_FEATURES_DURING_TRAINING = True
-
 
 # ---------------------------------------------------------------------------- #
 # ResNe[X]t options (ResNets = {ResNet, ResNeXt}
