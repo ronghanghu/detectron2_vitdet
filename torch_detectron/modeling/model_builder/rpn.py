@@ -6,10 +6,10 @@ from torch_detectron.modeling.anchor_generator import (
     AnchorGenerator,
     FPNAnchorGenerator,
 )
-from torch_detectron.modeling.box_selector import ROI2FPNLevelsMapper
+from torch_detectron.modeling.post_processors.rpn import ROI2FPNLevelsMapper
 from torch_detectron.modeling.utils import cat_bbox
 from torch_detectron.modeling.box_coder import BoxCoder
-from torch_detectron.modeling.box_selector import RPNBoxSelector, FPNRPNBoxSelector
+from torch_detectron.modeling.post_processors.rpn import RPNBoxSelector, FPNRPNBoxSelector
 
 from .loss_evaluators import make_rpn_loss_evaluator
 
