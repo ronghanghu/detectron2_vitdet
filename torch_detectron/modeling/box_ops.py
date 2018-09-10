@@ -18,8 +18,8 @@ def boxes_iou(box1, box2):
     The box order must be (xmin, ymin, xmax, ymax).
 
     Arguments:
-      box1: (tensor) bounding boxes, sized [N,4].
-      box2: (tensor) bounding boxes, sized [M,4].
+      box1: (BBox) bounding boxes, sized [N,4].
+      box2: (BBox) bounding boxes, sized [M,4].
 
     Returns:
       (tensor) iou, sized [N,M].
@@ -27,6 +27,8 @@ def boxes_iou(box1, box2):
     Reference:
       https://github.com/chainer/chainercv/blob/master/chainercv/utils/bbox/bbox_iou.py
     """
+    assert box1.size == box2.size
+    box1, box2 = box1.bbox, box2.bbox
     N = box1.size(0)
     M = box2.size(0)
 

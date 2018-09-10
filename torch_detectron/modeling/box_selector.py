@@ -166,6 +166,8 @@ class FPNRPNBoxSelector(RPNBoxSelector):
         ]
 
         # TODO make these concatenations a helper function?
+        # once we make train and test consistent, this can be greatly
+        # simplified, as it will go per image, and not per batch
         concat_boxes = torch.cat([b.bbox for b in merged_lists], dim=0)
         indices = torch.cat(indices, dim=0)
         extra_fields = {}
@@ -276,8 +278,8 @@ class ROI2FPNLevelsMapper(object):
             rois: tensor
         """
         # handle empty tensors
-        if rois.numel() == 0:
-            return rois.new()
+        # if rois.numel() == 0:
+        #     return rois.new()
         # Compute level ids
         s = torch.sqrt(boxes_area(rois))
 

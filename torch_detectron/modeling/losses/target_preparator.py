@@ -32,9 +32,8 @@ class TargetPreparator(object):
         """
         results = []
         for anchor, target in zip(anchors, targets):
-            # TODO pass the BBox object to boxes_iou?
             if anchor.bbox.numel() > 0:
-                match_quality_matrix = boxes_iou(target.bbox, anchor.bbox)
+                match_quality_matrix = boxes_iou(target, anchor)
                 matched_idxs = self.proposal_matcher(match_quality_matrix)
             else:
                 matched_idxs = torch.empty(

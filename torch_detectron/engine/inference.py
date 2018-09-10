@@ -190,7 +190,7 @@ def evaluate_box_proposals(
         if limit is not None and prediction.bbox.shape[0] > limit:
             prediction = prediction[:limit]
 
-        overlaps = boxes_iou(prediction.bbox, gt_boxes.bbox)
+        overlaps = boxes_iou(prediction, gt_boxes)
 
         _gt_overlaps = torch.zeros(gt_boxes.bbox.shape[0])
         for j in range(min(prediction.bbox.shape[0], gt_boxes.bbox.shape[0])):
