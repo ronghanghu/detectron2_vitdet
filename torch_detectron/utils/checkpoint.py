@@ -3,8 +3,6 @@ import os
 
 import torch
 
-from torch_detectron.core.utils import load_state_dict
-
 
 class Checkpoint(object):
     def __init__(self, model, optimizer, scheduler, save_dir, local_rank):
@@ -37,9 +35,9 @@ class Checkpoint(object):
         logger = logging.getLogger(__name__)
         logger.info("Loading checkpoint from {}".format(f))
         checkpoint = torch.load(f)
-        load_state_dict(self.model, checkpoint.pop("model"))
+        self.model.load_state_dict(checkpoint.pop("model"))
         self.optimizer.load_state_dict(checkpoint.pop("optimizer"))
         self.scheduler.load_state_dict(checkpoint.pop("scheduler"))
 
-        # extra arguments taht were stored
+        # extra arguments that were stored
         return checkpoint

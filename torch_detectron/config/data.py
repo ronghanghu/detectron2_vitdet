@@ -15,7 +15,7 @@ def make_transform(cfg, is_train=True):
     if is_train:
         min_size = cfg.INPUT.MIN_SIZE_TRAIN
         max_size = cfg.INPUT.MAX_SIZE_TRAIN
-        flip_prob = cfg.INPUT.FLIP_PROB_TRAIN
+        flip_prob = 0.5  # cfg.INPUT.FLIP_PROB_TRAIN
     else:
         min_size = cfg.INPUT.MIN_SIZE_TEST
         max_size = cfg.INPUT.MAX_SIZE_TEST
@@ -98,19 +98,18 @@ def make_batch_data_sampler(dataset, sampler, aspect_grouping, images_per_batch)
     return batch_sampler
 
 
-def make_data_loader(cfg, is_train=True):
+def make_data_loader(cfg, is_train=True, is_distributed=False):
     if is_train:
         images_per_batch = cfg.DATALOADER.IMAGES_PER_BATCH_TRAIN
         shuffle = True
     else:
         images_per_batch = cfg.DATALOADER.IMAGES_PER_BATCH_TEST
-        shuffle = False
+        shuffle = False if not is_distributed else True
 
     aspect_grouping = [1] if cfg.DATALOADER.ASPECT_RATIO_GROUPING else []
-    distributed = False  # FIXME
 
     dataset = make_coco_dataset(cfg, is_train)
-    sampler = make_data_sampler(dataset, shuffle, distributed)
+    sampler = make_data_sampler(dataset, shuffle, is_distributed)
     batch_sampler = make_batch_data_sampler(
         dataset, sampler, aspect_grouping, images_per_batch
     )
