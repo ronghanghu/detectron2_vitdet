@@ -49,6 +49,7 @@ _ROI_BOX_PREDICTOR = {
     "FPNPredictor": FPNPredictor,
 }
 
+
 def make_roi_box_predictor(cfg):
     func = _ROI_BOX_PREDICTOR[cfg.MODEL.ROI_BOX_HEAD.PREDICTOR]
     return func(cfg)

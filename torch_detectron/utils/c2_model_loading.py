@@ -81,6 +81,7 @@ def _load_c2_pickled_weights(file_path):
     weights = data["blobs"]
     return weights
 
+
 def _get_rpn_state_dict(state_dict):
     rpn_state_dict = OrderedDict()
     rpn_mapping = {
@@ -95,7 +96,6 @@ def _get_rpn_state_dict(state_dict):
         rpn_state_dict[v] = state_dict[k]
 
     return rpn_state_dict
-
 
 
 def load_c2_weights_faster_rcnn_resnet50_c4(model, file_path):
@@ -127,9 +127,7 @@ def load_c2_weights_faster_rcnn_resnet50_fpn(model, file_path):
 
     model.rpn.heads.load_state_dict(rpn_state_dict)
 
-    model.roi_heads.heads[0].feature_extractor.load_state_dict(
-        state_dict, strict=False
-    )
+    model.roi_heads.heads[0].feature_extractor.load_state_dict(state_dict, strict=False)
     model.roi_heads.heads[0].predictor.load_state_dict(state_dict, strict=False)
 
 
@@ -164,17 +162,11 @@ def load_c2_weights_mask_rcnn_resnet50_fpn(model, file_path):
 
     model.rpn.heads.load_state_dict(rpn_state_dict)
 
-    model.roi_heads.heads[0].feature_extractor.load_state_dict(
-        state_dict, strict=False
-    )
+    model.roi_heads.heads[0].feature_extractor.load_state_dict(state_dict, strict=False)
     model.roi_heads.heads[0].predictor.load_state_dict(state_dict, strict=False)
 
-    model.roi_heads.heads[1].feature_extractor.load_state_dict(
-        state_dict, strict=False
-    )
+    model.roi_heads.heads[1].feature_extractor.load_state_dict(state_dict, strict=False)
     model.roi_heads.heads[1].predictor.load_state_dict(state_dict, strict=False)
-
-
 
 
 _C2_WEIGHT_LOADER = {

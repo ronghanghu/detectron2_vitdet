@@ -7,6 +7,7 @@ from torch_detectron.modeling import fpn
 def build_resnet_backbone(cfg):
     return resnet.ResNet(cfg)
 
+
 def build_resnet_fpn_backbone(cfg):
     body = resnet.ResNet(cfg)
     representation_size = cfg.BACKBONE.OUTPUT_DIM
@@ -19,10 +20,7 @@ def build_resnet_fpn_backbone(cfg):
     return model
 
 
-_BACKBONES = {
-    "resnet": build_resnet_backbone,
-    "resnet-fpn": build_resnet_fpn_backbone,
-}
+_BACKBONES = {"resnet": build_resnet_backbone, "resnet-fpn": build_resnet_fpn_backbone}
 
 
 def build_backbone(cfg):
@@ -30,5 +28,3 @@ def build_backbone(cfg):
     if "FPN" in cfg.BACKBONE.CONV_BODY:
         return build_resnet_fpn_backbone(cfg)
     return build_resnet_backbone(cfg)
-
-

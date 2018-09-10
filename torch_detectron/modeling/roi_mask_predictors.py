@@ -7,7 +7,9 @@ class MaskRCNNC4Predictor(nn.Module):
         super(MaskRCNNC4Predictor, self).__init__()
         num_classes = cfg.MODEL.ROI_BOX_HEAD.NUM_CLASSES
         dim_reduced = cfg.MODEL.ROI_MASK_HEAD.CONV_LAYERS[-1]
-        num_inputs = dim_reduced if cfg.MODEL.ROI_HEADS.USE_FPN else 512 * 4  # TODO improve
+        num_inputs = (
+            dim_reduced if cfg.MODEL.ROI_HEADS.USE_FPN else 512 * 4
+        )  # TODO improve
         self.conv5_mask = nn.ConvTranspose2d(num_inputs, dim_reduced, 2, 2, 0)
         self.mask_fcn_logits = nn.Conv2d(dim_reduced, num_classes, 1, 1, 0)
 
@@ -22,9 +24,8 @@ class MaskRCNNC4Predictor(nn.Module):
         return self.mask_fcn_logits(x)
 
 
-_ROI_MASK_PREDICTOR = {
-    "MaskRCNNC4Predictor": MaskRCNNC4Predictor,
-}
+_ROI_MASK_PREDICTOR = {"MaskRCNNC4Predictor": MaskRCNNC4Predictor}
+
 
 def make_roi_mask_predictor(cfg):
     func = _ROI_MASK_PREDICTOR[cfg.MODEL.ROI_MASK_HEAD.PREDICTOR]

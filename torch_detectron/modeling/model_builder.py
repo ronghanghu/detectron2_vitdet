@@ -46,9 +46,13 @@ from torch_detectron.modeling.mask_rcnn import MaskPostProcessor
 
 from torch_detectron.modeling.utils import cat_bbox
 
-from torch_detectron.modeling.roi_box_feature_extractors import make_roi_box_feature_extractor
+from torch_detectron.modeling.roi_box_feature_extractors import (
+    make_roi_box_feature_extractor
+)
 from torch_detectron.modeling.roi_box_predictors import make_roi_box_predictor
-from torch_detectron.modeling.roi_mask_feature_extractors import make_roi_mask_feature_extractor
+from torch_detectron.modeling.roi_mask_feature_extractors import (
+    make_roi_mask_feature_extractor
+)
 from torch_detectron.modeling.roi_mask_predictors import make_roi_mask_predictor
 from torch_detectron.modeling.backbones import build_backbone
 
@@ -163,30 +167,6 @@ class SharedROIHeads(torch.nn.Module):
 
         return x, proposals, losses
 
-"""
-class SharedROIHeads(torch.nn.Module):
-
-    def __init__(self, heads):
-        super(SharedROIHeads, self).__init__()
-        self.heads = torch.nn.ModuleList(heads)
-        shared_feature_extractor = self.heads[0].feature_extractor
-        for head in self.heads[1:]:
-            head.feature_extractor = shared_feature_extractor
-
-    def forward(self, features, proposals, targets=None):
-        losses = {}
-        x, proposals, loss = self.heads[0](features, proposals, targets)
-        losses.update(loss)
-        if self.training:
-            features = x
-        else:
-            features = self.heads[0].feature_extractor(features, proposals)
-        x, proposals, loss = self.heads[1](features, proposals, targets)
-        losses.update(loss)
-
-        return x, proposals, losses
-"""
-
 
 def combine_roi_heads(cfg, roi_heads):
     """
@@ -279,9 +259,6 @@ class RPNModule(torch.nn.Module):
         heads = RPNHeads(
             num_input_features, anchor_generator.num_anchors_per_location()[0]
         )
-        # weights = cfg.MODEL.RPN.WEIGHTS
-        # if weights:
-        #     rpn_heads.load_state_dict(weights)
 
         rpn_box_coder = BoxCoder(weights=(1., 1., 1., 1.))
 
@@ -345,6 +322,7 @@ def build_rpn(cfg):
 ################################################################################
 # RoiBoxHead
 ################################################################################
+
 
 def make_roi_box_post_processor(cfg):
     use_fpn = cfg.MODEL.ROI_HEADS.USE_FPN
@@ -410,10 +388,12 @@ def build_roi_box_head(cfg):
 # RoiMaskHead
 ################################################################################
 
+
 def make_roi_mask_post_processor(cfg):
     masker = None
     mask_post_processor = MaskPostProcessor(masker)
     return mask_post_processor
+
 
 class ROIMaskHead(torch.nn.Module):
     def __init__(self, cfg):
@@ -459,8 +439,6 @@ class ROIMaskHead(torch.nn.Module):
 def build_roi_mask_head(cfg):
     return ROIMaskHead(cfg)
 
-
-# the rest follows a similar pattern as the one from RoiBoxHead
 
 ################################################################################
 # functions for creating loss evaluators. The structore of loss evaluators
