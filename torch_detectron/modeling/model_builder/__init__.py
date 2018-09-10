@@ -8,7 +8,7 @@ import torch
 from torch import nn
 
 
-from ..structures.image_list import to_image_list
+from torch_detectron.structures.image_list import to_image_list
 
 
 from torch_detectron.modeling.anchor_generator import (
@@ -44,15 +44,15 @@ from torch_detectron.modeling.mask_rcnn import MaskPostProcessor
 
 from torch_detectron.modeling.utils import cat_bbox
 
-from torch_detectron.modeling.roi_box_feature_extractors import (
+from torch_detectron.modeling.model_builder.roi_box_feature_extractors import (
     make_roi_box_feature_extractor
 )
-from torch_detectron.modeling.roi_box_predictors import make_roi_box_predictor
-from torch_detectron.modeling.roi_mask_feature_extractors import (
+from torch_detectron.modeling.model_builder.roi_box_predictors import make_roi_box_predictor
+from torch_detectron.modeling.model_builder.roi_mask_feature_extractors import (
     make_roi_mask_feature_extractor
 )
-from torch_detectron.modeling.roi_mask_predictors import make_roi_mask_predictor
-from torch_detectron.modeling.backbones import build_backbone
+from torch_detectron.modeling.model_builder.roi_mask_predictors import make_roi_mask_predictor
+from torch_detectron.modeling.model_builder.backbones import build_backbone
 
 
 class GeneralizedRCNN(nn.Module):
@@ -203,7 +203,7 @@ def make_anchor_generator(config):
         anchor_args["anchor_strides"] = anchor_stride
         assert len(anchor_stride) == len(scales), "FPN should have len(ANCHOR_STRIDE) == len(SCALES)"
     else:
-        assert len(anchor_sride) == 1, "Non-FPN should have a single ANCHOR_STRIDE"
+        assert len(anchor_stride) == 1, "Non-FPN should have a single ANCHOR_STRIDE"
         anchor_args["anchor_stride"] = anchor_stride[0]
     anchor_generator = anchor_maker(**anchor_args)
     return anchor_generator

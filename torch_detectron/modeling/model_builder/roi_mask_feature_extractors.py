@@ -1,7 +1,7 @@
 from torch import nn
 from torch.nn import functional as F
 
-from torch_detectron.modeling.roi_box_feature_extractors import (
+from torch_detectron.modeling.model_builder.roi_box_feature_extractors import (
     ResNet50Conv5ROIFeatureExtractor
 )
 from torch_detectron.modeling.mask_rcnn import MaskFPNPooler
