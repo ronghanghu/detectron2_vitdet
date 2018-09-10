@@ -7,37 +7,6 @@ from torch_detectron.layers import ROIAlign
 from .utils import cat
 
 
-# FIXME Rename to RPNOutputs
-class RPNPredictor(nn.Module):
-    """
-    Adds a simple RPN Head with classification and regression heads
-    """
-
-    def __init__(self, inplanes, num_anchors):
-        """
-        Arguments:
-            inplanes (int): number of channels of the input feature
-            num_anchors (int): number of anchors to be predicted
-        """
-        super(RPNPredictor, self).__init__()
-        self.conv = nn.Conv2d(inplanes, inplanes, kernel_size=3, stride=1, padding=1)
-        self.cls_logits = nn.Conv2d(inplanes, num_anchors, kernel_size=1, stride=1)
-        self.bbox_pred = nn.Conv2d(inplanes, num_anchors * 4, kernel_size=1, stride=1)
-
-        for l in [self.conv, self.cls_logits, self.bbox_pred]:
-            torch.nn.init.normal_(l.weight, std=0.01)
-            torch.nn.init.constant_(l.bias, 0)
-
-    def forward(self, x):
-        logits = []
-        bbox_reg = []
-        for feature in x:
-            t = F.relu(self.conv(feature))
-            logits.append(self.cls_logits(t))
-            bbox_reg.append(self.bbox_pred(t))
-        return logits, bbox_reg
-
-
 class Pooler(nn.Module):
     """
     Pooler for Detection with or without FPN.
