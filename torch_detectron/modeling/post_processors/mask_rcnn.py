@@ -1,10 +1,10 @@
+import numpy as np
 import torch
+from PIL import Image
 from torch import nn
 
-import numpy as np
-from PIL import Image
-
 from torch_detectron.structures.bounding_box import BBox
+
 from ..utils import split_with_sizes
 
 

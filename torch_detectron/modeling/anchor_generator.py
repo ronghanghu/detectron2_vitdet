@@ -1,9 +1,8 @@
 import math
 
+import numpy as np
 import torch
 from torch import nn
-
-import numpy as np
 
 from ..structures.bounding_box import BBox
 from .utils import meshgrid

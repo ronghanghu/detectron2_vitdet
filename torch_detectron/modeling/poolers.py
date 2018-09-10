@@ -157,5 +157,3 @@ class MaskFPNPooler(Pooler):
         result = super(MaskFPNPooler, self).forward(x, fpn_boxes)
         result = result[rois_idx_restore]
         return result
-
-

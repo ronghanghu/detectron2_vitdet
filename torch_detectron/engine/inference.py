@@ -1,17 +1,17 @@
-from collections import OrderedDict
 import datetime
 import logging
 import tempfile
 import time
+from collections import OrderedDict
 
 import torch
 import torchvision
 
 from tqdm import tqdm
 
+from ..structures.bounding_box import BBox
 from ..utils.comm import scatter_gather
 from ..utils.comm import synchronize
-from ..structures.bounding_box import BBox
 
 
 def compute_on_dataset(model, data_loader, device):

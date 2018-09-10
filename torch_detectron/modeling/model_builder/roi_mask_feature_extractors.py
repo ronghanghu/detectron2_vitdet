@@ -5,7 +5,6 @@ from torch_detectron.modeling.model_builder.roi_box_feature_extractors import (
     ResNet50Conv5ROIFeatureExtractor
 )
 from torch_detectron.modeling.poolers import MaskFPNPooler
-
 from torch_detectron.modeling.post_processors.rpn import ROI2FPNLevelsMapper
 
 

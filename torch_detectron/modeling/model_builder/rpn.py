@@ -2,14 +2,13 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from torch_detectron.modeling.anchor_generator import (
-    AnchorGenerator,
-    FPNAnchorGenerator,
-)
-from torch_detectron.modeling.post_processors.rpn import ROI2FPNLevelsMapper
-from torch_detectron.modeling.utils import cat_bbox
+from torch_detectron.modeling.anchor_generator import AnchorGenerator
+from torch_detectron.modeling.anchor_generator import FPNAnchorGenerator
 from torch_detectron.modeling.box_coder import BoxCoder
-from torch_detectron.modeling.post_processors.rpn import RPNBoxSelector, FPNRPNBoxSelector
+from torch_detectron.modeling.post_processors.rpn import FPNRPNBoxSelector
+from torch_detectron.modeling.post_processors.rpn import ROI2FPNLevelsMapper
+from torch_detectron.modeling.post_processors.rpn import RPNBoxSelector
+from torch_detectron.modeling.utils import cat_bbox
 
 from .loss_evaluators import make_rpn_loss_evaluator
 
@@ -32,7 +31,9 @@ def make_anchor_generator(config):
     anchor_args["straddle_thresh"] = straddle_thresh
     if use_fpn:
         anchor_args["anchor_strides"] = anchor_stride
-        assert len(anchor_stride) == len(scales), "FPN should have len(ANCHOR_STRIDE) == len(SCALES)"
+        assert len(anchor_stride) == len(
+            scales
+        ), "FPN should have len(ANCHOR_STRIDE) == len(SCALES)"
     else:
         assert len(anchor_stride) == 1, "Non-FPN should have a single ANCHOR_STRIDE"
         anchor_args["anchor_stride"] = anchor_stride[0]
@@ -100,7 +101,6 @@ class RPNPredictor(nn.Module):
             logits.append(self.cls_logits(t))
             bbox_reg.append(self.bbox_pred(t))
         return logits, bbox_reg
-
 
 
 class RPNModule(torch.nn.Module):
@@ -177,5 +177,3 @@ def build_rpn(cfg):
     This gives the gist of it. Not super important because it doesn't change as much
     """
     return RPNModule(cfg)
-
-

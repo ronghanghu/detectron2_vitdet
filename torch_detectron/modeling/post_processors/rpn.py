@@ -1,8 +1,8 @@
 import torch
 
 from torch_detectron.layers import nms as box_nms
-
 from torch_detectron.structures.bounding_box import BBox
+
 from ..box_coder import BoxCoder
 from ..box_ops import boxes_area
 from ..utils import cat

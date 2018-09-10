@@ -1,7 +1,7 @@
-import torch
+import pickle
 from collections import OrderedDict
 
-import pickle
+import torch
 
 
 def _rename_weights_for_R50(weights):

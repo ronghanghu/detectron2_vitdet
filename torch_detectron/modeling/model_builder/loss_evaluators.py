@@ -1,23 +1,17 @@
 """
 Functions for creating loss evaluators
 """
+from torch_detectron.modeling.box_coder import BoxCoder
 from torch_detectron.modeling.losses.balanced_positive_negative_sampler import (
     BalancedPositiveNegativeSampler
 )
-
-from torch_detectron.modeling.losses.rpn import RPNTargetPreparator, RPNLossComputation
-from torch_detectron.modeling.losses.fast_rcnn import (
-    FastRCNNTargetPreparator,
-    FastRCNNLossComputation,
-)
-
-from torch_detectron.modeling.losses.mask_rcnn import (
-    MaskTargetPreparator,
-    MaskRCNNLossComputation,
-)
-
-from torch_detectron.modeling.box_coder import BoxCoder
+from torch_detectron.modeling.losses.fast_rcnn import FastRCNNLossComputation
+from torch_detectron.modeling.losses.fast_rcnn import FastRCNNTargetPreparator
+from torch_detectron.modeling.losses.mask_rcnn import MaskRCNNLossComputation
+from torch_detectron.modeling.losses.mask_rcnn import MaskTargetPreparator
 from torch_detectron.modeling.losses.matcher import Matcher
+from torch_detectron.modeling.losses.rpn import RPNLossComputation
+from torch_detectron.modeling.losses.rpn import RPNTargetPreparator
 
 
 def make_standard_loss_evaluator(

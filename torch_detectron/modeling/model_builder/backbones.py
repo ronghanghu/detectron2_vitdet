@@ -1,7 +1,7 @@
 from torch import nn
 
-from torch_detectron.modeling import resnet
 from torch_detectron.modeling import fpn
+from torch_detectron.modeling import resnet
 
 
 def build_resnet_backbone(cfg):

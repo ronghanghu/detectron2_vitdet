@@ -1,8 +1,8 @@
 from torch import nn
 from torch.nn import functional as F
 
-from torch_detectron.modeling.poolers import Pooler
 from torch_detectron.modeling import resnet
+from torch_detectron.modeling.poolers import Pooler
 
 
 class ResNet50Conv5ROIFeatureExtractor(nn.Module):

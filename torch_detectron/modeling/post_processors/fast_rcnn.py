@@ -3,8 +3,8 @@ import torch.nn.functional as F
 from torch import nn
 
 from torch_detectron.layers import nms as box_nms
-
 from torch_detectron.structures.bounding_box import BBox
+
 from ..box_coder import BoxCoder
 from .rpn import _clip_boxes_to_image
 

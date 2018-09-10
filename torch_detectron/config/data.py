@@ -2,14 +2,13 @@ import bisect
 
 import torch.utils.data
 
-from torch_detectron.utils.data_collate import BatchCollator
-from torch_detectron.utils.data_samplers import GroupedBatchSampler
-from torch_detectron.utils.data_samplers import compute_aspect_ratios
+from torch_detectron.config.paths_catalog import DatasetCatalog
 from torch_detectron.datasets.coco import COCODataset
 from torch_detectron.utils import data_transforms as T
 from torch_detectron.utils.concat_dataset import ConcatDataset
-
-from torch_detectron.config.paths_catalog import DatasetCatalog
+from torch_detectron.utils.data_collate import BatchCollator
+from torch_detectron.utils.data_samplers import GroupedBatchSampler
+from torch_detectron.utils.data_samplers import compute_aspect_ratios
 
 
 def make_transform(cfg, is_train=True):
