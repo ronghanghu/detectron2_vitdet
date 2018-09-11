@@ -187,12 +187,6 @@ class FastRCNNLossComputation(object):
 
         classification_loss = F.cross_entropy(class_logits, labels[sampled_inds])
 
-        # FIXME workaround because can't unsqueeze empty tensor in PyTorch
-        # when there are no positive labels
-        if len(sampled_pos_inds) == 0:
-            box_loss = torch.tensor(0., device=device, requires_grad=True)
-            return classification_loss, box_loss
-
         # get indices that correspond to the regression targets for
         # the corresponding ground truth labels, to be used with
         # advanced indexing
