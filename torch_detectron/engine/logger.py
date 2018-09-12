@@ -8,7 +8,7 @@ def setup_logger(name, save_dir, local_rank):
     logger.setLevel(logging.DEBUG)
     # don't log results for the non-master process
     if local_rank > 0:
-        return
+        return logger
     ch = logging.StreamHandler(stream=sys.stdout)
     ch.setLevel(logging.DEBUG)
     formatter = logging.Formatter("%(asctime)s %(name)s %(levelname)s: %(message)s")
