@@ -3,6 +3,8 @@
 This project aims at providing the necessary building blocks for easily
 creating detection and segmentation models.
 
+### Note: For the previous implementation of this code, see https://github.com/facebookexternal/detectron.pytorch/tree/my_proposal_branch
+
 ## Installation
 
 ### Requirements:
