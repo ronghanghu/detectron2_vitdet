@@ -136,14 +136,14 @@ std::tuple<at::Tensor, at::Tensor> ROIPool_forward_cuda(const at::Tensor& input,
   AT_DISPATCH_FLOATING_TYPES(input.type(), "ROIPool_forward", [&] {
     RoIPoolFForward<scalar_t><<<grid, block, 0, stream>>>(
          output_size,
-         input.data<scalar_t>(),
+         input.contiguous().data<scalar_t>(),
          spatial_scale,
          channels,
          height,
          width,
          pooled_height,
          pooled_width,
-         rois.data<scalar_t>(),
+         rois.contiguous().data<scalar_t>(),
          output.data<scalar_t>(),
          argmax.data<int>());
   });
@@ -184,7 +184,7 @@ at::Tensor ROIPool_backward_cuda(const at::Tensor& grad,
   AT_DISPATCH_FLOATING_TYPES(grad.type(), "ROIPool_backward", [&] {
     RoIPoolFBackward<scalar_t><<<grid, block, 0, stream>>>(
          grad.numel(),
-         grad.data<scalar_t>(),
+         grad.contiguous().data<scalar_t>(),
          argmax.data<int>(),
          num_rois,
          spatial_scale,
@@ -194,7 +194,7 @@ at::Tensor ROIPool_backward_cuda(const at::Tensor& grad,
          pooled_height,
          pooled_width,
          grad_input.data<scalar_t>(),
-         rois.data<scalar_t>());
+         rois.contiguous().data<scalar_t>());
   });
   THCudaCheck(cudaGetLastError());
   return grad_input;

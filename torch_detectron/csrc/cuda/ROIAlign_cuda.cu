@@ -283,7 +283,7 @@ at::Tensor ROIAlign_forward_cuda(const at::Tensor& input,
   AT_DISPATCH_FLOATING_TYPES(input.type(), "ROIAlign_forward", [&] {
     RoIAlignForward<scalar_t><<<grid, block, 0, stream>>>(
          output_size,
-         input.data<scalar_t>(),
+         input.contiguous().data<scalar_t>(),
          spatial_scale,
          channels,
          height,
@@ -291,7 +291,7 @@ at::Tensor ROIAlign_forward_cuda(const at::Tensor& input,
          pooled_height,
          pooled_width,
          sampling_ratio,
-         rois.data<scalar_t>(),
+         rois.contiguous().data<scalar_t>(),
          output.data<scalar_t>());
   });
   THCudaCheck(cudaGetLastError());
@@ -329,7 +329,7 @@ at::Tensor ROIAlign_backward_cuda(const at::Tensor& grad,
   AT_DISPATCH_FLOATING_TYPES(grad.type(), "ROIAlign_backward", [&] {
     RoIAlignBackwardFeature<scalar_t><<<grid, block, 0, stream>>>(
          grad.numel(),
-         grad.data<scalar_t>(),
+         grad.contiguous().data<scalar_t>(),
          num_rois,
          spatial_scale,
          channels,
@@ -339,7 +339,7 @@ at::Tensor ROIAlign_backward_cuda(const at::Tensor& grad,
          pooled_width,
          sampling_ratio,
          grad_input.data<scalar_t>(),
-         rois.data<scalar_t>());
+         rois.contiguous().data<scalar_t>());
   });
   THCudaCheck(cudaGetLastError());
   return grad_input;
