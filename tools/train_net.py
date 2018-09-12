@@ -142,9 +142,7 @@ def main():
     if output_dir:
         mkdir(output_dir)
 
-    setup_logger("torch_detectron", output_dir, args.local_rank)
-
-    logger = logging.getLogger("torch_detectron")
+    logger = setup_logger("torch_detectron", output_dir, args.local_rank)
     logger.info(args)
 
     logger.info("Loaded configuration file {}".format(args.config_file))

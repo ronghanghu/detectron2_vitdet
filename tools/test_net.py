@@ -47,11 +47,11 @@ def main():
 
     args = parser.parse_args()
 
-    args.distributed = (
+    distributed = (
         int(os.environ["WORLD_SIZE"]) > 1 if "WORLD_SIZE" in os.environ else False
     )
 
-    if args.distributed:
+    if distributed:
         torch.cuda.set_device(args.local_rank)
         torch.distributed.init_process_group(backend="nccl", init_method="env://")
 
@@ -68,7 +68,7 @@ def main():
 
     load_from_checkpoint(cfg, model, args.checkpoint)
 
-    data_loader_val = make_data_loader(cfg, is_train=False)
+    data_loader_val = make_data_loader(cfg, is_train=False, is_distributed=distributed)
 
     iou_types = ("bbox",)
     if cfg.MODEL.MASK_ON:
