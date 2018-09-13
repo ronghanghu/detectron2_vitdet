@@ -18,7 +18,6 @@ class BBox(object):
     def __init__(self, bbox, image_size, mode="xyxy"):
         device = bbox.device if isinstance(bbox, torch.Tensor) else torch.device("cpu")
         bbox = torch.tensor(bbox, dtype=torch.float32, device=device)
-        """
         if bbox.ndimension() != 2:
             raise ValueError(
                     "bbox should have 2 dimensions, got {}".format(bbox.ndimension()))
@@ -26,7 +25,6 @@ class BBox(object):
             raise ValueError(
                     "last dimenion of bbox should have a "
                     "size of 4, got {}".format(bbox.size(-1)))
-        """
         if mode not in ("xyxy", "xywh"):
             raise ValueError("mode should be 'xyxy' or 'xywh'")
 
@@ -55,9 +53,6 @@ class BBox(object):
         if mode not in ("xyxy", "xywh"):
             raise ValueError("mode should be 'xyxy' or 'xywh'")
         if mode == self.mode:
-            return self
-        # FIXME workaround while tensors with 0 in its dimensions is not fully supported
-        if self.bbox.numel() == 0:
             return self
         # we only have two modes, so don't need to check
         # self.mode
@@ -110,9 +105,6 @@ class BBox(object):
                 bbox.add_field(k, v)
             return bbox
 
-        # FIXME workaround while tensors with 0 in its dimensions is not fully supported
-        if self.bbox.numel() == 0:
-            return self
         ratio_width, ratio_height = ratios
         xmin, ymin, xmax, ymax = self._split_into_xyxy()
         scaled_xmin = xmin * ratio_width
@@ -144,9 +136,6 @@ class BBox(object):
                 "Only FLIP_LEFT_RIGHT and FLIP_TOP_BOTTOM implemented"
             )
 
-        # FIXME workaround while tensors with 0 in its dimensions is not fully supported
-        if self.bbox.numel() == 0:
-            return self
         image_width, image_height = self.size
         xmin, ymin, xmax, ymax = self._split_into_xyxy()
         if method == FLIP_LEFT_RIGHT:
@@ -178,9 +167,6 @@ class BBox(object):
         4-tuple defining the left, upper, right, and lower pixel
         coordinate.
         """
-        # FIXME workaround while tensors with 0 in its dimensions is not fully supported
-        if self.bbox.numel() == 0:
-            return self
         xmin, ymin, xmax, ymax = self._split_into_xyxy()
         w, h = box[2] - box[0], box[3] - box[1]
         cropped_xmin = (xmin - box[0]).clamp(min=0, max=w)
@@ -220,9 +206,6 @@ class BBox(object):
         return bbox
 
     def clip_to_image(self, remove_empty=True):
-        # FIXME workaround while tensors with 0 in its dimensions is not fully supported
-        if self.bbox.numel() == 0:
-            return self
         TO_REMOVE = 1
         self.bbox[:, 0].clamp_(min=0, max=self.size[0] - TO_REMOVE)
         self.bbox[:, 1].clamp_(min=0, max=self.size[1] - TO_REMOVE)

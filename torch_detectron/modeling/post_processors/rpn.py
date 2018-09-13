@@ -277,9 +277,6 @@ class ROI2FPNLevelsMapper(object):
         Arguments:
             rois: tensor
         """
-        # handle empty tensors
-        # if rois.numel() == 0:
-        #     return rois.new()
         # Compute level ids
         s = torch.sqrt(boxes_area(rois))
 

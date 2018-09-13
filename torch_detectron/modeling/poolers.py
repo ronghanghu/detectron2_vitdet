@@ -61,12 +61,8 @@ class Pooler(nn.Module):
             ]
             concat_boxes = torch.cat([b.bbox for b in per_level_boxes], dim=0)
             ids = concat_boxes.new_tensor(ids)
-            if ids.numel() == 0:
-                continue
             concat_boxes = torch.cat([ids[:, None], concat_boxes], dim=1)
             result.append(pooler(per_level_feature, concat_boxes))
-        if not result:  # empty
-            return x[0].new()
         return cat(result, dim=0)
 
 
@@ -149,10 +145,7 @@ class MaskFPNPooler(Pooler):
         # number of images
         fpn_boxes = list(zip(*fpn_boxes))
 
-        if all(t.numel() == 0 for t in rois_idx_order):
-            rois_idx_restore = rois_idx_order[0].new()
-        else:
-            _, rois_idx_restore = torch.sort(torch.cat(rois_idx_order, 0))
+        _, rois_idx_restore = torch.sort(torch.cat(rois_idx_order, 0))
 
         result = super(MaskFPNPooler, self).forward(x, fpn_boxes)
         result = result[rois_idx_restore]

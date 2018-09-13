@@ -24,9 +24,10 @@ def box_results_with_nms_and_limit(
     box at `boxes[i, j * 4:(j + 1) * 4]`.
     """
     num_classes = scores.shape[1]
-    cls_boxes = [[] for _ in range(num_classes)]
-    cls_scores = [[] for _ in range(num_classes)]
-    labels = [[] for _ in range(num_classes)]
+    cls_boxes = []
+    cls_scores = []
+    labels = []
+    device = scores.device
     # Apply threshold on detection probabilities and apply NMS
     # Skip j = 0, because it's the background class
     for j in range(1, num_classes):
@@ -34,24 +35,14 @@ def box_results_with_nms_and_limit(
         scores_j = scores[inds, j]
         boxes_j = boxes[inds, j * 4 : (j + 1) * 4]
         keep = box_nms(boxes_j, scores_j, nms)
-        cls_boxes[j] = boxes_j[keep]
-        cls_scores[j] = scores_j[keep]
-        labels[j] = torch.full_like(keep, j)
+        cls_boxes.append(boxes_j[keep])
+        cls_scores.append(scores_j[keep])
+        # TODO see why we need the device argument
+        labels.append(torch.full_like(keep, j, device=device))
 
-    cls_scores = [s for s in cls_scores if len(s) > 0]
-    cls_boxes = [s for s in cls_boxes if len(s) > 0]
-    labels = [s for s in labels if len(s) > 0]
-
-    if len(cls_scores) > 0:
-        cls_scores = torch.cat(cls_scores, dim=0)
-        cls_boxes = torch.cat(cls_boxes, dim=0)
-        labels = torch.cat(labels, dim=0)
-    else:
-        device = scores.device
-        cls_scores = scores.new()
-        cls_boxes = boxes.new()
-        labels = torch.empty(0, dtype=torch.int64, device=device)
-
+    cls_scores = torch.cat(cls_scores, dim=0)
+    cls_boxes = torch.cat(cls_boxes, dim=0)
+    labels = torch.cat(labels, dim=0)
     number_of_detections = len(cls_scores)
 
     # Limit to max_per_image detections **over all classes**

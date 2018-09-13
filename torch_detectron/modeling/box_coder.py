@@ -27,9 +27,6 @@ class BoxCoder(object):
             boxes (Tensor): reference boxes
             anchors (Tensor): boxes to be encoded
         """
-        # FIXME PyTorch desn't handle empty tensors well
-        if anchors.shape[0] == 0:
-            return anchors.new_zeros(0, 4)
 
         TO_REMOVE = 1  # TODO remove
         ex_widths = anchors[:, 2] - anchors[:, 0] + TO_REMOVE
@@ -60,12 +57,8 @@ class BoxCoder(object):
             rel_codes (Tensor): encoded boxes
             anchors (Tensor): reference anchors.
         """
-        if anchors.shape[0] == 0:
-            # TODO this might crash
-            # return torch.zeros(0, rel_codes.shape[1], dtype=rel_codes.dtype)
-            return rel_codes.new_zeros(0, rel_codes.shape[1])
 
-        anchors = anchors.type(rel_codes.dtype)
+        anchors = anchors.to(rel_codes.dtype)
 
         TO_REMOVE = 1  # TODO remove
         widths = anchors[:, 2] - anchors[:, 0] + TO_REMOVE
@@ -88,7 +81,6 @@ class BoxCoder(object):
         pred_w = torch.exp(dw) * widths[:, None]
         pred_h = torch.exp(dh) * heights[:, None]
 
-        # pred_boxes = torch.zeros(rel_codes.shape, dtype=rel_codes.dtype)
         pred_boxes = torch.zeros_like(rel_codes)
         # x1
         pred_boxes[:, 0::4] = pred_ctr_x - 0.5 * pred_w
