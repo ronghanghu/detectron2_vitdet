@@ -33,8 +33,9 @@ class FPNPredictor(nn.Module):
         self.cls_score = nn.Linear(representation_size, num_classes)
         self.bbox_pred = nn.Linear(representation_size, num_classes * 4)
 
+        nn.init.normal_(self.cls_score.weight, std=0.01)
+        nn.init.normal_(self.bbox_pred.weight, std=0.001)
         for l in [self.cls_score, self.bbox_pred]:
-            nn.init.normal_(l.weight, std=0.001)
             nn.init.constant_(l.bias, 0)
 
     def forward(self, x):
