@@ -8,6 +8,8 @@ MODEL:
     PREDICTOR: "MaskRCNNC4Predictor"
   SHARE_FEATURES_DURING_TRAINING: True
   MASK_ON: True
+DATALOADER:
+  IMAGES_PER_BATCH_TRAIN: 1
 DATASETS:
   TRAIN: ("coco_2014_train", "coco_2014_valminusminival")
   TEST: ("coco_2014_minival",)
