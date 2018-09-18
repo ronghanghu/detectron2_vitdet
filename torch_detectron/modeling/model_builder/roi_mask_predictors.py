@@ -1,6 +1,9 @@
 from torch import nn
 from torch.nn import functional as F
 
+from torch_detectron.modeling.utils import Conv2d
+from torch_detectron.modeling.utils import ConvTranspose2d
+
 
 class MaskRCNNC4Predictor(nn.Module):
     def __init__(self, cfg):
@@ -10,8 +13,8 @@ class MaskRCNNC4Predictor(nn.Module):
         num_inputs = (
             dim_reduced if cfg.MODEL.ROI_HEADS.USE_FPN else 512 * 4
         )  # TODO improve
-        self.conv5_mask = nn.ConvTranspose2d(num_inputs, dim_reduced, 2, 2, 0)
-        self.mask_fcn_logits = nn.Conv2d(dim_reduced, num_classes, 1, 1, 0)
+        self.conv5_mask = ConvTranspose2d(num_inputs, dim_reduced, 2, 2, 0)
+        self.mask_fcn_logits = Conv2d(dim_reduced, num_classes, 1, 1, 0)
 
         for name, param in self.named_parameters():
             if "bias" in name:

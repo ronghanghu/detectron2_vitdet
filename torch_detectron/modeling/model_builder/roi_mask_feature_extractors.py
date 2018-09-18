@@ -7,6 +7,8 @@ from torch_detectron.modeling.model_builder.roi_box_feature_extractors import (
 from torch_detectron.modeling.poolers import MaskFPNPooler
 from torch_detectron.modeling.post_processors.rpn import ROI2FPNLevelsMapper
 
+from torch_detectron.modeling.utils import Conv2d
+
 
 class MaskRCNNFPNFeatureExtractor(nn.Module):
     """
@@ -42,7 +44,7 @@ class MaskRCNNFPNFeatureExtractor(nn.Module):
         self.blocks = []
         for layer_idx, layer_features in enumerate(layers, 1):
             layer_name = "mask_fcn{}".format(layer_idx)
-            module = nn.Conv2d(next_feature, layer_features, 3, stride=1, padding=1)
+            module = Conv2d(next_feature, layer_features, 3, stride=1, padding=1)
             nn.init.kaiming_normal_(module.weight, mode="fan_out", nonlinearity="relu")
             nn.init.constant_(module.bias, 0)
             self.add_module(layer_name, module)
