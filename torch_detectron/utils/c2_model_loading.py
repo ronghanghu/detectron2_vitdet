@@ -78,7 +78,10 @@ def _rename_weights_for_R50(weights):
 def _load_c2_pickled_weights(file_path):
     with open(file_path, "rb") as f:
         data = pickle.load(f, encoding="latin1")
-    weights = data["blobs"]
+    if "blobs" in data:
+        weights = data["blobs"]
+    else:
+        weights = data
     return weights
 
 
