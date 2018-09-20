@@ -40,8 +40,7 @@ def make_transform(cfg, is_train=True):
 
 
 def make_coco_dataset(cfg, is_train=True):
-    key = "TRAIN" if is_train else "TEST"
-    dataset_list = getattr(cfg.DATASETS, key)
+    dataset_list = cfg.DATASETS.TRAIN if is_train else cfg.DATASETS.TEST
 
     transforms = make_transform(cfg, is_train)
 
