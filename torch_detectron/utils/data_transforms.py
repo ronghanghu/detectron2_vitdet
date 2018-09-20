@@ -90,26 +90,3 @@ class Normalize(object):
             image = image[[2, 1, 0]] * 255
         image = F.normalize(image, mean=self.mean, std=self.std)
         return image, target
-
-
-class ImageTransform(object):
-    """
-    Data transformations to be performed in the image and the targets.
-    The normalization is specific for the C2 pretrained models
-    """
-
-    def __init__(self, flip_prob=0.5):
-        self.flip_prob = flip_prob
-
-    def __call__(self, x, target):
-        x = F.resize(x, 800, max_size=1333)
-        target = target.resize(x.size)
-        if random.random() < self.flip_prob:
-            x = F.hflip(x)
-            target = target.transpose(0)
-        x = F.to_tensor(x)
-
-        x = x[[2, 1, 0]] * 255
-        x -= torch.tensor([102.9801, 115.9465, 122.7717]).view(3, 1, 1)
-
-        return x, target
