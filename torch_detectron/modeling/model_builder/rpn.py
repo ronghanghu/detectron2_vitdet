@@ -50,13 +50,13 @@ def make_box_selector(config, rpn_box_coder, is_train):
         roi_to_fpn_level_mapper = ROI2FPNLevelsMapper(2, 5)
         box_selector_maker = FPNRPNBoxSelector
         box_selector_args["roi_to_fpn_level_mapper"] = roi_to_fpn_level_mapper
-        fpn_post_nms_top_n = config.MODEL.RPN.FPN_POST_NMS_TOP_N
+        fpn_post_nms_top_n = config.MODEL.RPN.FPN_POST_NMS_TOP_N_TRAIN
         if not is_train:
             fpn_post_nms_top_n = config.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST
         box_selector_args["fpn_post_nms_top_n"] = fpn_post_nms_top_n
 
-    pre_nms_top_n = config.MODEL.RPN.PRE_NMS_TOP_N
-    post_nms_top_n = config.MODEL.RPN.POST_NMS_TOP_N
+    pre_nms_top_n = config.MODEL.RPN.PRE_NMS_TOP_N_TRAIN
+    post_nms_top_n = config.MODEL.RPN.POST_NMS_TOP_N_TRAIN
     if not is_train:
         pre_nms_top_n = config.MODEL.RPN.PRE_NMS_TOP_N_TEST
         post_nms_top_n = config.MODEL.RPN.POST_NMS_TOP_N_TEST

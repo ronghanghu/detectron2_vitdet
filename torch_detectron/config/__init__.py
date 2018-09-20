@@ -1,5 +1,20 @@
 from yacs.config import CfgNode as CN
 
+
+# -----------------------------------------------------------------------------
+# Convention about Training / Test specific parameters
+# -----------------------------------------------------------------------------
+# Whenever an argument can be either used for training or for testing, the
+# corresponding name will be post-fixed by a _TRAIN for a training parameter,
+# or _TEST for a test-specific parameter.
+# For example, the number of images during training will be
+# IMAGES_PER_BATCH_TRAIN, while the number of images for testing will be
+# IMAGES_PER_BATCH_TEST
+
+# -----------------------------------------------------------------------------
+# Config definition
+# -----------------------------------------------------------------------------
+
 _C = CN()
 
 _C.MODEL = CN()
@@ -113,10 +128,10 @@ _C.MODEL.RPN.BATCH_SIZE_PER_IMAGE = 256
 _C.MODEL.RPN.POSITIVE_FRACTION = 0.5
 # Number of top scoring RPN proposals to keep before applying NMS
 # When FPN is used, this is *per FPN level* (not total)
-_C.MODEL.RPN.PRE_NMS_TOP_N = 12000
-# Number of top scoring RPN proposals to keep after applying NMS
-_C.MODEL.RPN.POST_NMS_TOP_N = 2000
+_C.MODEL.RPN.PRE_NMS_TOP_N_TRAIN = 12000
 _C.MODEL.RPN.PRE_NMS_TOP_N_TEST = 6000
+# Number of top scoring RPN proposals to keep after applying NMS
+_C.MODEL.RPN.POST_NMS_TOP_N_TRAIN = 2000
 _C.MODEL.RPN.POST_NMS_TOP_N_TEST = 1000
 # NMS threshold used on RPN proposals
 _C.MODEL.RPN.NMS_THRESH = 0.7
@@ -125,7 +140,7 @@ _C.MODEL.RPN.NMS_THRESH = 0.7
 _C.MODEL.RPN.MIN_SIZE = 0
 # Number of top scoring RPN proposals to keep after combining proposals from
 # all FPN levels
-_C.MODEL.RPN.FPN_POST_NMS_TOP_N = 2000
+_C.MODEL.RPN.FPN_POST_NMS_TOP_N_TRAIN = 2000
 _C.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST = 2000
 
 
