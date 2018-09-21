@@ -4,7 +4,9 @@ import os
 
 
 class DatasetCatalog(object):
-    DATA_DIR = os.path.join(os.path.dirname(__file__), "/datasets")
+    DATA_DIR = os.path.join(
+        os.path.dirname(__file__), "../../../detectron.pytorch/configs/datasets"
+    )
 
     DATASETS = {
         "coco_2014_train": (
@@ -31,7 +33,7 @@ class DatasetCatalog(object):
 
 
 class ModelCatalog(object):
-    DATA_DIR = os.path.join(os.path.dirname(__file__), "models")
+    DATA_DIR = "/private/home/fmassa/imagenet_detectron_models/"
     MODELS = {"R-50": "R-50.pth"}
 
     @staticmethod

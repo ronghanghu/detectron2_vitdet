@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# This script needs to be run from the base folder
+
 echo Running Job $SLURMD_NODENAME $SLURM_JOB_ID $CUDA_VISIBLE_DEVICES
 
 # if running from slurm

@@ -21,4 +21,4 @@
 #SBATCH --time=72:00:00
 
 #srun env
-srun --label wrapper.sh $@
+srun --label infra/fair/wrapper.sh $@
