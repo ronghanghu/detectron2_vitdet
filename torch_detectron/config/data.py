@@ -2,7 +2,7 @@ import bisect
 
 import torch.utils.data
 
-from torch_detectron.config.paths_catalog import DatasetCatalog
+from torch_detectron.config.utils import import_file
 from torch_detectron.datasets.coco import COCODataset
 from torch_detectron.utils import data_transforms as T
 from torch_detectron.utils.concat_dataset import ConcatDataset
@@ -40,6 +40,8 @@ def make_transform(cfg, is_train=True):
 
 
 def make_coco_dataset(cfg, is_train=True):
+    paths_catalog = import_file("torch_detectron.config.paths_catalog", cfg.PATHS_CATALOG, True)
+    DatasetCatalog = paths_catalog.DatasetCatalog
     dataset_list = cfg.DATASETS.TRAIN if is_train else cfg.DATASETS.TEST
 
     transforms = make_transform(cfg, is_train)

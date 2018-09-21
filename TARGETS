@@ -1,0 +1,21 @@
+python_binary(
+    name = "train_net",
+    srcs = ["tools/train_net.py"],
+    main_module = "experimental.deeplearning.vision.detectron_pytorch.tools.train_net",
+    deps = [
+        "//experimental/deeplearning/vision/detectron_pytorch/torch_detectron:torch_detectron",
+        "//caffe2:torch",
+    ],
+    par_style = "xar",
+)
+
+
+python_binary(
+    name = "distributed_launch",
+    srcs = ["infra/fb/distributed_launch.py"],
+    main_module = "experimental.deeplearning.vision.detectron_pytorch.distributed_launch",
+    par_style = "xar",
+    deps = [
+        "//caffe2:torch",
+    ],
+)

@@ -5,7 +5,6 @@ import time
 from collections import OrderedDict
 
 import torch
-import torchvision
 
 from tqdm import tqdm
 

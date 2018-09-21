@@ -1,3 +1,5 @@
+import os
+
 from yacs.config import CfgNode as CN
 
 
@@ -23,6 +25,9 @@ _C.MODEL.MASK_ON = False
 _C.MODEL.DEVICE = "cuda"
 _C.MODEL.META_ARCHITECTURE = "GeneralizedRCNN"
 
+# If the WEIGHT starts with a catalog://, like :R-50, the code will look for
+# the path in paths_catalog. Else, it will use it as the specified absolute
+# path
 _C.MODEL.WEIGHT = ""
 
 
@@ -264,6 +269,8 @@ _C.TEST.EXPECTED_RESULTS_SIGMA_TOL = 4
 # ---------------------------------------------------------------------------- #
 _C.OUTPUT_DIR = ""
 _C.CHECKPOINT = ""
+
+_C.PATHS_CATALOG = os.path.join(os.path.dirname(__file__), "paths_catalog.py")
 
 # ---------------------------------------------------------------------------- #
 # Exporting the config
