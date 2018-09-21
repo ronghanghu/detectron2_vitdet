@@ -13,7 +13,7 @@ python_binary(
 python_binary(
     name = "distributed_launch",
     srcs = ["infra/fb/distributed_launch.py"],
-    main_module = "experimental.deeplearning.vision.detectron_pytorch.distributed_launch",
+    main_module = "experimental.deeplearning.vision.detectron_pytorch.infra.fb.distributed_launch",
     par_style = "xar",
     deps = [
         "//caffe2:torch",
