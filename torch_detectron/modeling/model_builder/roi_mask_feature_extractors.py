@@ -35,7 +35,7 @@ class MaskRCNNFPNFeatureExtractor(nn.Module):
             drop_last=True,
             roi_to_fpn_level_mapper=roi_to_fpn_level_mapper,
         )
-        input_size = cfg.BACKBONE.OUTPUT_DIM
+        input_size = cfg.BACKBONE.OUT_CHANNELS
         self.pooler = pooler
 
         layers = cfg.MODEL.ROI_MASK_HEAD.CONV_LAYERS

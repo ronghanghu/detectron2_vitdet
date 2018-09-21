@@ -65,7 +65,7 @@ class FPN2MLPFeatureExtractor(nn.Module):
             sampling_ratio=sampling_ratio,
             drop_last=True,
         )
-        input_size = cfg.BACKBONE.OUTPUT_DIM * resolution ** 2
+        input_size = cfg.BACKBONE.OUT_CHANNELS * resolution ** 2
         representation_size = cfg.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM
         self.pooler = pooler
         self.fc6 = nn.Linear(input_size, representation_size)

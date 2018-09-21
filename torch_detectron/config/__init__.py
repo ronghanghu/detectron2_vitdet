@@ -99,7 +99,7 @@ _C.BACKBONE.CONV_BODY = "R-50-C4"
 
 # Add StopGrad at a specified stage so the bottom layers are frozen
 _C.BACKBONE.FREEZE_CONV_BODY_AT = 2
-_C.BACKBONE.OUTPUT_DIM = 256 * 4
+_C.BACKBONE.OUT_CHANNELS = 256 * 4
 
 
 # ---------------------------------------------------------------------------- #

@@ -10,7 +10,7 @@ def build_resnet_backbone(cfg):
 
 def build_resnet_fpn_backbone(cfg):
     body = resnet.ResNet(cfg)
-    representation_size = cfg.BACKBONE.OUTPUT_DIM
+    representation_size = cfg.BACKBONE.OUT_CHANNELS
     fpn_top = fpn.FPN(
         layers=[256, 512, 1024, 2048],
         representation_size=representation_size,
