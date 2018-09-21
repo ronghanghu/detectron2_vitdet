@@ -19,7 +19,7 @@ ENTITLEMENT=${ENTITLEMENT-gpu_fair}
 GPU_TYPE=${GPU_TYPE-P100}
 CAPABILITIES="GPU_${GPU_TYPE}_HOST"
 
-TOOLS=experimental/deeplearning/vision/detectron_pytorch
+TOOLS=//experimental/deeplearning/vision/detectron_pytorch/tools
 TOOL=${TOOL-train_net}
 
 if [ "${BUILD}" == "build" ]
