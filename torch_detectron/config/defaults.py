@@ -212,25 +212,25 @@ _C.MODEL.SHARE_FEATURES_DURING_TRAINING = True
 # Note that parts of a resnet may be used for both the backbone and the head
 # These options apply to both
 # ---------------------------------------------------------------------------- #
-_C.RESNETS = CN()
+_C.MODEL.RESNETS = CN()
 
 # Number of groups to use; 1 ==> ResNet; > 1 ==> ResNeXt
-_C.RESNETS.NUM_GROUPS = 1
+_C.MODEL.RESNETS.NUM_GROUPS = 1
 
 # Baseline width of each group
-_C.RESNETS.WIDTH_PER_GROUP = 64
+_C.MODEL.RESNETS.WIDTH_PER_GROUP = 64
 
 # Place the stride 2 conv on the 1x1 filter
 # Use True only for the original MSRA ResNet; use False for C2 and Torch models
-_C.RESNETS.STRIDE_IN_1X1 = True
+_C.MODEL.RESNETS.STRIDE_IN_1X1 = True
 
 # Residual transformation function
-_C.RESNETS.TRANS_FUNC = "BottleneckWithFixedBatchNorm"
+_C.MODEL.RESNETS.TRANS_FUNC = "BottleneckWithFixedBatchNorm"
 # ResNet's stem function (conv1 and pool1)
-_C.RESNETS.STEM_FUNC = "StemWithFixedBatchNorm"
+_C.MODEL.RESNETS.STEM_FUNC = "StemWithFixedBatchNorm"
 
 # Apply dilation in stage "res5"
-_C.RESNETS.RES5_DILATION = 1
+_C.MODEL.RESNETS.RES5_DILATION = 1
 
 
 # ---------------------------------------------------------------------------- #

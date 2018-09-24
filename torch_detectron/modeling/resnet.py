@@ -61,16 +61,16 @@ class ResNet(nn.Module):
         self.load_pretrained_state = True
 
         # Translate string names to implementations
-        stem_module = _STEM_MODULES[cfg.RESNETS.STEM_FUNC]
+        stem_module = _STEM_MODULES[cfg.MODEL.RESNETS.STEM_FUNC]
         stage_specs = _STAGE_SPECS[cfg.MODEL.BACKBONE.CONV_BODY]
-        transformation_module = _TRANSFORMATION_MODULES[cfg.RESNETS.TRANS_FUNC]
+        transformation_module = _TRANSFORMATION_MODULES[cfg.MODEL.RESNETS.TRANS_FUNC]
 
         # Construct the stem module
         self.stem = stem_module()
 
         # Constuct the specified ResNet stages
-        num_groups = cfg.RESNETS.NUM_GROUPS
-        width_per_group = cfg.RESNETS.WIDTH_PER_GROUP
+        num_groups = cfg.MODEL.RESNETS.NUM_GROUPS
+        width_per_group = cfg.MODEL.RESNETS.WIDTH_PER_GROUP
         in_channels = STEM_OUT_CHANNELS
         stage2_bottleneck_channels = num_groups * width_per_group
         stage2_out_channels = RES2_OUT_CHANNELS
@@ -88,7 +88,7 @@ class ResNet(nn.Module):
                 out_channels,
                 stage_spec.block_count,
                 num_groups,
-                cfg.RESNETS.STRIDE_IN_1X1,
+                cfg.MODEL.RESNETS.STRIDE_IN_1X1,
                 first_stride=int(stage_spec.index > 2) + 1,
             )
             in_channels = out_channels

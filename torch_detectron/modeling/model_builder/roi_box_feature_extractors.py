@@ -21,11 +21,11 @@ class ResNet50Conv5ROIFeatureExtractor(nn.Module):
 
         stage = resnet.StageSpec(index=5, block_count=3, return_features=False)
         head = resnet.ResNetHead(
-            block_module=config.RESNETS.TRANS_FUNC,
+            block_module=config.MODEL.RESNETS.TRANS_FUNC,
             stages=(stage,),
-            num_groups=config.RESNETS.NUM_GROUPS,
-            width_per_group=config.RESNETS.WIDTH_PER_GROUP,
-            stride_in_1x1=config.RESNETS.STRIDE_IN_1X1,
+            num_groups=config.MODEL.RESNETS.NUM_GROUPS,
+            width_per_group=config.MODEL.RESNETS.WIDTH_PER_GROUP,
+            stride_in_1x1=config.MODEL.RESNETS.STRIDE_IN_1X1,
             stride_init=None,
         )
 
