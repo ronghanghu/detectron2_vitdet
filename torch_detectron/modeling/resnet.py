@@ -62,7 +62,7 @@ class ResNet(nn.Module):
 
         # Translate string names to implementations
         stem_module = _STEM_MODULES[cfg.RESNETS.STEM_FUNC]
-        stage_specs = _STAGE_SPECS[cfg.BACKBONE.CONV_BODY]
+        stage_specs = _STAGE_SPECS[cfg.MODEL.BACKBONE.CONV_BODY]
         transformation_module = _TRANSFORMATION_MODULES[cfg.RESNETS.TRANS_FUNC]
 
         # Construct the stem module
@@ -97,7 +97,7 @@ class ResNet(nn.Module):
             self.return_features[name] = stage_spec.return_features
 
         # Optionally freeze (requires_grad=False) parts of the backbone
-        self._freeze_backbone(cfg.BACKBONE.FREEZE_CONV_BODY_AT)
+        self._freeze_backbone(cfg.MODEL.BACKBONE.FREEZE_CONV_BODY_AT)
 
     def _freeze_backbone(self, freeze_at):
         for stage_index in range(1, freeze_at + 1):

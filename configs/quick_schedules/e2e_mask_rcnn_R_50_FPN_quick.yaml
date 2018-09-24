@@ -1,6 +1,9 @@
 MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
   WEIGHT: "catalog://R-50"
+  BACKBONE:
+    CONV_BODY: "R-50-FPN"
+    OUT_CHANNELS: 256
   RPN:
     USE_FPN: True
     ANCHOR_STRIDE: (4, 8, 16, 32, 64)
@@ -29,9 +32,6 @@ MODEL:
 DATASETS:
   TRAIN: ("coco_2014_minival",)
   TEST: ("coco_2014_minival",)
-BACKBONE:
-  CONV_BODY: "R-50-FPN"
-  OUT_CHANNELS: 256
 INPUT:
   MIN_SIZE_TRAIN: 600
   MAX_SIZE_TRAIN: 1000

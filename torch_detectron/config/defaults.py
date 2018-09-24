@@ -89,17 +89,17 @@ _C.DATALOADER.ASPECT_RATIO_GROUPING = True
 # ---------------------------------------------------------------------------- #
 # Backbone options
 # ---------------------------------------------------------------------------- #
-_C.BACKBONE = CN()
+_C.MODEL.BACKBONE = CN()
 
 # The backbone conv body to use
 # The string must match a function that is imported in modeling.model_builder
 # (e.g., 'FPN.add_fpn_ResNet101_conv5_body' to specify a ResNet-101-FPN
 # backbone)
-_C.BACKBONE.CONV_BODY = "R-50-C4"
+_C.MODEL.BACKBONE.CONV_BODY = "R-50-C4"
 
 # Add StopGrad at a specified stage so the bottom layers are frozen
-_C.BACKBONE.FREEZE_CONV_BODY_AT = 2
-_C.BACKBONE.OUT_CHANNELS = 256 * 4
+_C.MODEL.BACKBONE.FREEZE_CONV_BODY_AT = 2
+_C.MODEL.BACKBONE.OUT_CHANNELS = 256 * 4
 
 
 # ---------------------------------------------------------------------------- #
