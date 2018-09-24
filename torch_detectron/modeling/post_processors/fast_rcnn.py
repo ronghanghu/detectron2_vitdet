@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from torch_detectron.layers import nms as box_nms
-from torch_detectron.structures.bounding_box import BBox
+from torch_detectron.structures.bounding_box import BoxList
 
 from ..box_coder import BoxCoder
 from .rpn import _clip_boxes_to_image
@@ -91,12 +91,12 @@ class PostProcessor(nn.Module):
         Arguments:
             x (tuple[tensor, tensor]): x contains the class logits
                 and the box_regression from the model
-            boxes (list[list[BBox]]): bounding boxes that are used as
+            boxes (list[list[BoxList]]): bounding boxes that are used as
                 reference. The first level correspond to the feature maps,
                 and the second level to the images.
 
         Returns:
-            results (list[BBox]): one BBox for each image, containing
+            results (list[BoxList]): one BoxList for each image, containing
                 the extra fields labels and scores
         """
         assert len(boxes) == 1, "Only single feature"
@@ -126,7 +126,7 @@ class PostProcessor(nn.Module):
                 self.nms,
                 self.detections_per_img,
             )
-            bbox = BBox(cls_boxes, (width, height), mode="xyxy")
+            bbox = BoxList(cls_boxes, (width, height), mode="xyxy")
             bbox.add_field("scores", cls_scores)
             bbox.add_field("labels", labels)
             results.append(bbox)
@@ -167,12 +167,12 @@ class FPNPostProcessor(nn.Module):
         Arguments:
             x (tuple[tensor, tensor]): x contains the class logits
                 and the box_regression from the model
-            boxes (list[list[BBox]]): bounding boxes that are used as
+            boxes (list[list[BoxList]]): bounding boxes that are used as
                 reference. The first level correspond to the feature maps,
                 and the second level to the images.
 
         Returns:
-            results (list[BBox]): one BBox for each image, containing
+            results (list[BoxList]): one BoxList for each image, containing
                 the extra fields labels and scores
         """
         class_logits, box_regression = x
@@ -221,7 +221,7 @@ class FPNPostProcessor(nn.Module):
                 self.nms,
                 self.detections_per_img,
             )
-            bbox = BBox(cls_boxes, (width, height), mode="xyxy")
+            bbox = BoxList(cls_boxes, (width, height), mode="xyxy")
             bbox.add_field("scores", cls_scores)
             bbox.add_field("labels", labels)
             results.append(bbox)

@@ -3,19 +3,19 @@ import torch
 from PIL import Image
 from torch import nn
 
-from torch_detectron.structures.bounding_box import BBox
+from torch_detectron.structures.bounding_box import BoxList
 
 from ..utils import split_with_sizes
 
 
-# TODO check if want to return a single BBox or a composite
+# TODO check if want to return a single BoxList or a composite
 # object
 class MaskPostProcessor(nn.Module):
     """
     From the results of the CNN, post process the masks
     by taking the mask corresponding to the class with max
     probability (which are of fixed size and directly output
-    by the CNN) and return the masks in the mask field of the BBox.
+    by the CNN) and return the masks in the mask field of the BoxList.
 
     If a masker object is passed, it will additionally
     projecte the masks in the image according to the locations in boxes,
@@ -43,7 +43,7 @@ class MaskPostProcessor(nn.Module):
 
         results = []
         for prob, box in zip(mask_prob, boxes):
-            bbox = BBox(box.bbox, box.size, mode="xyxy")
+            bbox = BoxList(box.bbox, box.size, mode="xyxy")
             for field in box.fields():
                 bbox.add_field(field, box.get_field(field))
             bbox.add_field("mask", prob)
@@ -218,7 +218,7 @@ class Masker(object):
     def forward_single_image(self, masks, boxes):
         boxes = boxes.convert("xyxy")
         if self.padding:
-            boxes = BBox(boxes.bbox.clone(), boxes.size, boxes.mode)
+            boxes = BoxList(boxes.bbox.clone(), boxes.size, boxes.mode)
             masks, scale = expand_masks(masks, self.padding)
             boxes.bbox = expand_boxes(boxes.bbox, scale)
 
@@ -245,7 +245,7 @@ class Masker(object):
 
     def __call__(self, masks, boxes):
         # TODO do this properly
-        if isinstance(boxes, BBox):
+        if isinstance(boxes, BoxList):
             boxes = [boxes]
         assert len(boxes) == 1, "Only single image batch supported"
         # result = self.forward_single_image(masks, boxes[0])

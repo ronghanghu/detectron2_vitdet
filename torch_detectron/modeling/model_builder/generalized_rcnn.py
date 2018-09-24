@@ -59,7 +59,7 @@ class GeneralizedRCNN(nn.Module):
         """
         Arguments:
             images (list[Tensor] or ImageList): images to be processed
-            targets (list[BBox]): ground-truth boxes present in the image (optional)
+            targets (list[BoxList]): ground-truth boxes present in the image (optional)
         """
         if self.training and targets is None:
             raise ValueError("In training mode, targets should be passed")
@@ -251,7 +251,7 @@ class ROIMaskHead(torch.nn.Module):
         else:
             if self.cfg.MODEL.SHARE_FEATURES_DURING_TRAINING:
                 # proposals have been flattened by this point, so aren't
-                # in the format of list[list[BBox]] anymore. Add one more level to it
+                # in the format of list[list[BoxList]] anymore. Add one more level to it
                 proposals = [proposals]
             x = self.feature_extractor(features, proposals)
         mask_logits = self.predictor(x)

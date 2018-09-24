@@ -28,7 +28,7 @@ class MaskTargetPreparator(TargetPreparator):
         labels and masks.
 
         Arguments:
-            target (BBox): an arbitrary bbox object, containing many possible fields
+            target (BoxList): an arbitrary bbox object, containing many possible fields
             index (Tensor): the indices to select.
         """
 
@@ -38,12 +38,12 @@ class MaskTargetPreparator(TargetPreparator):
     def prepare_labels(self, matched_targets_per_image, anchors_per_image):
         """
         Arguments:
-            matched_targets_per_image (BBox): a BBox with the 'matched_idx' field set,
+            matched_targets_per_image (BoxList): a BoxList with the 'matched_idx' field set,
                 containing the ground-truth targets aligned to the anchors,
                 i.e., it contains the same number of elements as the number of anchors,
                 and contains de best-matching ground-truth target element. This is
                 returned by match_targets_to_anchors
-            anchors_per_image (a BBox object)
+            anchors_per_image (a BoxList object)
 
         This method should return a single tensor, containing the labels
         for each element in the anchors
@@ -78,7 +78,7 @@ class MaskTargetPreparator(TargetPreparator):
 
         Arguments:
             segmentation_masks: an instance of SegmentationMask
-            positive_anchors: an instance of BBox
+            positive_anchors: an instance of BoxList
         """
         masks = []
         M = self.discretization_size
@@ -150,7 +150,7 @@ class MaskRCNNLossComputation(object):
         image - features order
 
         Arguments:
-            anchors (list[list[BBox]]): first level corresponds to the feature maps,
+            anchors (list[list[BoxList]]): first level corresponds to the feature maps,
                 and the second to the images.
 
         Returns:
@@ -181,9 +181,9 @@ class MaskRCNNLossComputation(object):
     def __call__(self, anchors, mask_logits, targets):
         """
         Arguments:
-            anchors (list[list[BBox]))
+            anchors (list[list[BoxList]))
             mask_logits (Tensor)
-            targets (list[BBox])
+            targets (list[BoxList])
 
         Return:
             mask_loss (Tensor): scalar tensor containing the loss

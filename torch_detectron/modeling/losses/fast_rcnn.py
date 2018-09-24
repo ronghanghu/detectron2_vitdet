@@ -55,8 +55,8 @@ class FastRCNNLossComputation(object):
         Note: this function keeps a state.
 
         Arguments:
-            anchors (list of list of BBox)
-            targets (list of BBox)
+            anchors (list of list of BoxList)
+            targets (list of BoxList)
         """
 
         labels, regression_targets = self.target_preparator(anchors, targets)

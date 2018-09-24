@@ -16,7 +16,7 @@ class Pooler(nn.Module):
     but that can be made more generic later on.
     Also, the requirement of passing the scales is not strictly necessary, as they
     can be inferred from the size of the feature map / size of original image,
-    which is available thanks to the BBox.
+    which is available thanks to the BoxList.
     """
 
     def __init__(self, output_size, scales, sampling_ratio, drop_last):
@@ -42,7 +42,7 @@ class Pooler(nn.Module):
         """
         Arguments:
             x (list[Tensor]): feature maps for each level
-            boxes (list[list[BBox]]): boxes to be used to perform the pooling operation.
+            boxes (list[list[BoxList]]): boxes to be used to perform the pooling operation.
                 The first level corresponds to the feature map level, and the second
                 to different input images.
         Returns:
@@ -95,12 +95,12 @@ class MaskFPNPooler(Pooler):
         """
         Arguments:
             x (list[Tensor]): feature maps for each level
-            boxes (list[list[BBox]] or list[BBox]): boxes
+            boxes (list[list[BoxList]] or list[BoxList]): boxes
                 to be used to perform the cropping.
-                If in training mode, boxes is a list[list[BBox]],
+                If in training mode, boxes is a list[list[BoxList]],
                 where the first dimension is the feature maps,
                 and the second is the image.
-                In in eval mode, boxes is a list[BBox], where
+                In in eval mode, boxes is a list[BoxList], where
                 each element in the list correspond to a different
                 image.
         """

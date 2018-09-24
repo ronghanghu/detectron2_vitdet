@@ -4,7 +4,7 @@ Simple dataset class that wraps a list of path names
 
 from PIL import Image
 
-from ..structures.bounding_box import BBox
+from ..structures.bounding_box import BoxList
 
 
 class ListDataset(object):
@@ -17,7 +17,7 @@ class ListDataset(object):
 
         # dummy target
         w, h = img.size
-        target = BBox([[0, 0, w, h]], img.size, mode="xyxy")
+        target = BoxList([[0, 0, w, h]], img.size, mode="xyxy")
 
         if self.transforms is not None:
             img, target = self.transforms(img, target)

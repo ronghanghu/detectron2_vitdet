@@ -27,12 +27,12 @@ class RPNTargetPreparator(TargetPreparator):
     def prepare_labels(self, matched_targets_per_image, anchors_per_image):
         """
         Arguments:
-            matched_targets_per_image (BBox): a BBox with the 'matched_idx' field set,
+            matched_targets_per_image (BoxList): a BoxList with the 'matched_idx' field set,
                 containing the ground-truth targets aligned to the anchors,
                 i.e., it contains the same number of elements as the number of anchors,
                 and contains de best-matching ground-truth target element. This is
                 returned by match_targets_to_anchors
-            anchors_per_image (BBox object)
+            anchors_per_image (BoxList object)
         """
         matched_idxs = matched_targets_per_image.get_field("matched_idxs")
         labels_per_image = matched_idxs >= 0
@@ -63,10 +63,10 @@ class RPNLossComputation(object):
     def __call__(self, anchors, objectness, box_regression, targets):
         """
         Arguments:
-            anchors (list of list of BBox)
+            anchors (list of list of BoxList)
             objectness (list of tensor)
             box_regression (list of tensor)
-            targets (list of BBox)
+            targets (list of BoxList)
         """
         assert len(anchors) == len(objectness)
         labels, regression_targets = self.target_preparator(anchors, targets)

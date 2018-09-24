@@ -8,7 +8,7 @@ import torch
 
 from tqdm import tqdm
 
-from ..structures.bounding_box import BBox
+from ..structures.bounding_box import BoxList
 from ..utils.comm import scatter_gather
 from ..utils.comm import synchronize
 
@@ -167,7 +167,7 @@ def evaluate_box_proposals(
         ann_ids = dataset.coco.getAnnIds(imgIds=original_id)
         anno = dataset.coco.loadAnns(ann_ids)
         gt_boxes = [obj["bbox"] for obj in anno if obj["iscrowd"] == 0]
-        gt_boxes = BBox(gt_boxes, (image_width, image_height), mode="xywh").convert(
+        gt_boxes = BoxList(gt_boxes, (image_width, image_height), mode="xywh").convert(
             "xyxy"
         )
         gt_areas = torch.as_tensor([obj["area"] for obj in anno if obj["iscrowd"] == 0])

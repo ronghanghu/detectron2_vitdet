@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch import nn
 
-from ..structures.bounding_box import BBox
+from ..structures.bounding_box import BoxList
 from .utils import meshgrid
 
 # meshgrid = torch.meshgrid
@@ -75,7 +75,7 @@ class AnchorGenerator(nn.Module):
         else:
             inds_inside = torch.ones(anchors.shape[0], dtype=torch.uint8, device=device)
 
-        anchors = BBox(anchors, (image_width, image_height), mode="xyxy")
+        anchors = BoxList(anchors, (image_width, image_height), mode="xyxy")
         anchors.add_field("visibility", inds_inside)
 
         # TODO check if want to return list of not
@@ -161,7 +161,7 @@ class FPNAnchorGenerator(nn.Module):
         else:
             inds_inside = torch.ones(anchors.shape[0], dtype=torch.uint8, device=device)
 
-        anchors = BBox(anchors, (image_width, image_height), mode="xyxy")
+        anchors = BoxList(anchors, (image_width, image_height), mode="xyxy")
         anchors.add_field("visibility", inds_inside)
 
         # TODO check if want to return list of not
@@ -398,7 +398,7 @@ class AnchorGenerator_v0(nn.Module):
             & (anchors[..., 3] < image_height + self.straddle_thresh)
         )
 
-        anchors = BBox(anchors, (image_width, image_height), mode="xyxy")
+        anchors = BoxList(anchors, (image_width, image_height), mode="xyxy")
         anchors.add_field("visibility", inds_inside)
 
         # TODO check if want to return list of not

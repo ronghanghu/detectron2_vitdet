@@ -7,7 +7,7 @@ from ..utils import cat_bbox
 class TargetPreparator(object):
     """
     Base class for aligning the ground-truth targets to the anchors.
-    Given a BBox anchor and a BBox target, this class performs the correspondences
+    Given a BoxList anchor and a BoxList target, this class performs the correspondences
     between the anchors and the targets, and returns the labels and the regression
     targets for all the anchors.
 
@@ -27,8 +27,8 @@ class TargetPreparator(object):
     def match_targets_to_anchors(self, anchors, targets):
         """
         Arguments:
-            anchors: list of BBox, one for each image
-            targets: list of BBox, one for each image
+            anchors: list of BoxList, one for each image
+            targets: list of BoxList, one for each image
         """
         results = []
         for anchor, target in zip(anchors, targets):
@@ -54,7 +54,7 @@ class TargetPreparator(object):
         fields of target (instead of them all)
 
         Arguments:
-            target (BBox): an arbitrary bbox object, containing many possible fields
+            target (BoxList): an arbitrary bbox object, containing many possible fields
             index (tensor): the indices to select.
         """
         return target[index]
@@ -62,12 +62,12 @@ class TargetPreparator(object):
     def prepare_labels(self, matched_targets_per_image, anchors_per_image):
         """
         Arguments:
-            matched_targets_per_image (BBox): a BBox with the 'matched_idx' field set,
+            matched_targets_per_image (BoxList): a BoxList with the 'matched_idx' field set,
                 containing the ground-truth targets aligned to the anchors,
                 i.e., it contains the same number of elements as the number of anchors,
                 and contains de best-matching ground-truth target element. This is
                 returned by match_targets_to_anchors
-            anchors_per_image (a BBox object)
+            anchors_per_image (a BoxList object)
 
         This method should return a single tensor, containing the labels
         for each element in the anchors
@@ -77,9 +77,9 @@ class TargetPreparator(object):
     def __call__(self, anchors, targets):
         """
         Arguments:
-            anchors: a list of list of BBoxes. The first level correspond to the different
+            anchors: a list of list of BoxList. The first level correspond to the different
                 feature levels, and the second correspond to the images
-            targets: a list of BBoxes, one for each image
+            targets: a list of BoxList, one for each image
         """
         # flip anchors so that first level correspond to images, and second to
         # feature levels

@@ -18,8 +18,8 @@ def boxes_iou(box1, box2):
     The box order must be (xmin, ymin, xmax, ymax).
 
     Arguments:
-      box1: (BBox) bounding boxes, sized [N,4].
-      box2: (BBox) bounding boxes, sized [M,4].
+      box1: (BoxList) bounding boxes, sized [N,4].
+      box2: (BoxList) bounding boxes, sized [M,4].
 
     Returns:
       (tensor) iou, sized [N,M].

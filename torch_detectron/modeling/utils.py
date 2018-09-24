@@ -6,7 +6,7 @@ import logging
 
 import torch
 
-from ..structures.bounding_box import BBox
+from ..structures.bounding_box import BoxList
 
 
 def nonzero(tensor):
@@ -46,14 +46,14 @@ def cat(tensors, dim=0):
 
 def cat_bbox(bboxes):
     """
-    Concatenates a list of BBox (having the same image size) into a
-    single BBox
+    Concatenates a list of BoxList (having the same image size) into a
+    single BoxList
 
     Arguments:
-        bboxes (list of BBox)
+        bboxes (list of BoxList)
     """
     assert isinstance(bboxes, (list, tuple))
-    assert all(isinstance(bbox, BBox) for bbox in bboxes)
+    assert all(isinstance(bbox, BoxList) for bbox in bboxes)
 
     size = bboxes[0].size
     assert all(bbox.size == size for bbox in bboxes)
@@ -64,7 +64,7 @@ def cat_bbox(bboxes):
     fields = set(bboxes[0].fields())
     assert all(set(bbox.fields()) == fields for bbox in bboxes)
 
-    cat_boxes = BBox(cat([bbox.bbox for bbox in bboxes], dim=0), size, mode)
+    cat_boxes = BoxList(cat([bbox.bbox for bbox in bboxes], dim=0), size, mode)
 
     for field in fields:
         data = cat([bbox.get_field(field) for bbox in bboxes], dim=0)
@@ -74,7 +74,7 @@ def cat_bbox(bboxes):
 
 
 def split_bbox(bbox, split_size_or_sections):
-    assert isinstance(bbox, BBox)
+    assert isinstance(bbox, BoxList)
 
     boxes = bbox.bbox.split(split_size_or_sections, dim=0)
     size = bbox.size
@@ -83,7 +83,7 @@ def split_bbox(bbox, split_size_or_sections):
     fields_data = {
         field: bbox.get_field(field).split(split_size_or_sections) for field in fields
     }
-    bboxes = [BBox(box, size, mode) for box in boxes]
+    bboxes = [BoxList(box, size, mode) for box in boxes]
     for i, box in enumerate(bboxes):
         [
             box.add_field(field, field_data[i])
@@ -113,15 +113,15 @@ def split_with_sizes(tensor, split_sizes, dim=0):
 
 def keep_only_positive_boxes(boxes):
     """
-    Given a set of BBoxes containing the `labels` field,
-    return a set of BBoxes for which `labels > 0`.
+    Given a set of BoxList containing the `labels` field,
+    return a set of BoxList for which `labels > 0`.
 
     Arguments:
-        boxes (list of list of BBox)
+        boxes (list of list of BoxList)
     """
     assert isinstance(boxes, (list, tuple))
     assert isinstance(boxes[0], (list, tuple))
-    assert isinstance(boxes[0][0], BBox)
+    assert isinstance(boxes[0][0], BoxList)
     assert boxes[0][0].has_field("labels")
     positive_boxes = []
     num_boxes = 0

@@ -1,7 +1,7 @@
 import torch
 import torchvision
 
-from ..structures.bounding_box import BBox
+from ..structures.bounding_box import BoxList
 from ..structures.segmentation_mask import SegmentationMask
 
 
@@ -40,7 +40,7 @@ class COCODataset(torchvision.datasets.coco.CocoDetection):
 
         boxes = [obj["bbox"] for obj in anno]
         boxes = torch.as_tensor(boxes).reshape(-1, 4)  # guard against no boxes
-        target = BBox(boxes, img.size, mode="xywh").convert("xyxy")
+        target = BoxList(boxes, img.size, mode="xywh").convert("xyxy")
 
         classes = [obj["category_id"] for obj in anno]
         classes = [self.json_category_id_to_contiguous_id[c] for c in classes]

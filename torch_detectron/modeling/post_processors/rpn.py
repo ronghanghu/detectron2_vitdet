@@ -1,7 +1,7 @@
 import torch
 
 from torch_detectron.layers import nms as box_nms
-from torch_detectron.structures.bounding_box import BBox
+from torch_detectron.structures.bounding_box import BoxList
 
 from ..box_coder import BoxCoder
 from ..box_ops import boxes_area
@@ -44,7 +44,7 @@ class RPNBoxSelector(torch.nn.Module):
     def forward_for_single_feature_map(self, anchors, objectness, box_regression):
         """
         Arguments:
-            anchors: list of BBox
+            anchors: list of BoxList
             objectness: tensor of size N, A, H, W
             box_regression: tensor of size N, A * 4, H, W
         """
@@ -98,7 +98,7 @@ class RPNBoxSelector(torch.nn.Module):
                     keep = keep[: self.post_nms_top_n]
                 p = p[keep]
                 score = score[keep]
-            sampled_bbox = BBox(p, (width, height), mode="xyxy")
+            sampled_bbox = BoxList(p, (width, height), mode="xyxy")
             sampled_bbox.add_field("objectness", score)
             sampled_bboxes.append(sampled_bbox)
             # TODO maybe also copy the other fields that were originally present?
@@ -108,7 +108,7 @@ class RPNBoxSelector(torch.nn.Module):
     def forward(self, anchors, objectness, box_regression):
         """
         Arguments:
-            anchors: list[list[BBox]]
+            anchors: list[list[BoxList]]
             objectness: list[tensor]
             box_regression: list[tensor]
         """
@@ -135,7 +135,7 @@ class FPNRPNBoxSelector(RPNBoxSelector):
     def __call__(self, anchors, objectness, box_regression):
         """
         Arguments:
-            anchors: list[list[BBox]]
+            anchors: list[list[BoxList]]
             objectness: list[tensor]
             box_regression: list[tensor]
         """
@@ -216,7 +216,7 @@ class FPNRPNBoxSelector(RPNBoxSelector):
                     0
                 ]
                 selected_boxes = concat_boxes[lvl_idx_per_img]
-                bbox = BBox(selected_boxes, image_sizes[img_idx], mode="xyxy")
+                bbox = BoxList(selected_boxes, image_sizes[img_idx], mode="xyxy")
                 for field, data in extra_fields.items():
                     bbox.add_field(field, data[lvl_idx_per_img])
                 per_feat_boxes.append(bbox)

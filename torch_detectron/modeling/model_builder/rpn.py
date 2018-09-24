@@ -140,7 +140,7 @@ class RPNModule(torch.nn.Module):
             features (list[Tensor]): features computed from the images that are
                 used for computing the predictions. Each tensor in the list
                 correspond to different feature levels
-            targets (list[BBox): ground-truth boxes present in the image (optional)
+            targets (list[BoxList): ground-truth boxes present in the image (optional)
         """
         objectness, rpn_box_regression = self.heads(features)
         anchors = self.anchor_generator(images.image_sizes, features)
