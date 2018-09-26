@@ -7,6 +7,7 @@ CFG=$1
 NAME="${2}_${CFG}"
 BUILD=${3-build}
 PATHS_CATALOG=infra/fb/paths_catalog.py
+ENV=infra/fb/env.py
 
 # Resources
 GPU=${GPU-8}
@@ -44,9 +45,10 @@ fry flow-gpu --name "${NAME}" \
   --flow-entitlement "${ENTITLEMENT}" \
   --resources '{"gpu": '$GPU', "cpu_core": '$CPU', "ram_gb": '$MEM'}' \
   --capabilities '["'$CAPABILITIES'"]' \
-  --environment "{\"PYTHONUNBUFFERED\": \"True\"}" \
+  --environment "{\"PYTHONUNBUFFERED\": \"True\", \"TORCH_DETECTRON_ENV_MODULE\": \"$(basename "${ENV}")\"}" \
   --copy-file "${CFG}" . \
   --copy-file "${PATHS_CATALOG}" . \
+  --copy-file "${ENV}" . \
   --binary-type local \
   --disable-source-snapshot true \
   --retry 9 \

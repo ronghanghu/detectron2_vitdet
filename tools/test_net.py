@@ -1,8 +1,11 @@
+# Set up custom environment before nearly anything else is imported
+# NOTE: this should be the first import (no not reorder)
+from torch_detectron.utils.env import setup_environment  # noqa F401 isort:skip
+
 import argparse
 import os
 
 import torch
-
 from torch_detectron.config import cfg
 from torch_detectron.config.data import make_data_loader
 from torch_detectron.engine.inference import inference
@@ -33,7 +36,6 @@ def main():
         metavar="FILE",
         help="path to config file",
     )
-
     parser.add_argument(
         "--checkpoint", default="", metavar="FILE", help="path to checkpoint file"
     )
@@ -73,7 +75,13 @@ def main():
     iou_types = ("bbox",)
     if cfg.MODEL.MASK_ON:
         iou_types = iou_types + ("segm",)
-    inference(model, data_loader_val, iou_types=iou_types, box_only=cfg.MODEL.RPN_ONLY, device=cfg.MODEL.DEVICE)
+    inference(
+        model,
+        data_loader_val,
+        iou_types=iou_types,
+        box_only=cfg.MODEL.RPN_ONLY,
+        device=cfg.MODEL.DEVICE,
+    )
 
 
 if __name__ == "__main__":

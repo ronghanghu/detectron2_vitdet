@@ -1,23 +1,25 @@
 r"""
 Basic training script for PyTorch
 """
+
+# Set up custom environment before nearly anything else is imported
+# NOTE: this should be the first import (no not reorder)
+from torch_detectron.utils.env import setup_environment  # noqa F401 isort:skip
+
 import argparse
-import logging
 import os
 
 import torch
-
 from torch_detectron.config import cfg
-
-from torch_detectron.engine.inference import inference
-from torch_detectron.engine.trainer import do_train
 from torch_detectron.config.data import make_data_loader
-from torch_detectron.config.solver import make_optimizer
 from torch_detectron.config.solver import make_lr_scheduler
-from torch_detectron.config.utils import import_file
+from torch_detectron.config.solver import make_optimizer
+from torch_detectron.engine.inference import inference
+from torch_detectron.engine.logger import setup_logger
+from torch_detectron.engine.trainer import do_train
 from torch_detectron.modeling.model_builder import build_detection_model
 from torch_detectron.utils.checkpoint import Checkpoint
-from torch_detectron.engine.logger import setup_logger
+from torch_detectron.utils.imports import import_file
 from torch_detectron.utils.miscellaneous import mkdir
 
 
@@ -27,12 +29,18 @@ def load_from_pretrained_checkpoint(cfg, model):
         return
     weight_path = cfg.MODEL.WEIGHT
     if weight_path.startswith("catalog://"):
-        paths_catalog = import_file("torch_detectron.config.paths_catalog", cfg.PATHS_CATALOG, True)
+        paths_catalog = import_file(
+            "torch_detectron.config.paths_catalog", cfg.PATHS_CATALOG, True
+        )
         ModelCatalog = paths_catalog.ModelCatalog
-        weight_path = ModelCatalog.get(weight_path[len("catalog://"):])
+        weight_path = ModelCatalog.get(weight_path[len("catalog://") :])
 
     if weight_path.endswith("pkl"):
-        from torch_detectron.utils.c2_model_loading import _load_c2_pickled_weights, _rename_weights_for_R50
+        from torch_detectron.utils.c2_model_loading import (
+            _load_c2_pickled_weights,
+            _rename_weights_for_R50,
+        )
+
         state_dict = _load_c2_pickled_weights(weight_path)
         state_dict = _rename_weights_for_R50(state_dict)
     else:
@@ -116,17 +124,17 @@ def main():
     parser = argparse.ArgumentParser(description="PyTorch Object Detection Training")
     parser.add_argument(
         "--config-file",
-        default="/private/home/fmassa/github/detectron.pytorch/configs/rpn_r50.py",
+        default="",
         metavar="FILE",
         help="path to config file",
+        type=str,
     )
-
     parser.add_argument("--local_rank", type=int, default=0)
     parser.add_argument(
-        '--skip-test',
-        dest='skip_test',
-        help='Do not test the final model',
-        action='store_true'
+        "--skip-test",
+        dest="skip_test",
+        help="Do not test the final model",
+        action="store_true",
     )
     parser.add_argument(
         "opts",
@@ -144,7 +152,6 @@ def main():
     if args.distributed:
         torch.cuda.set_device(args.local_rank)
         torch.distributed.init_process_group(backend="nccl", init_method="env://")
-
 
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
