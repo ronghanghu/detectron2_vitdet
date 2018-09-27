@@ -20,11 +20,13 @@ class BoxList(object):
         bbox = torch.as_tensor(bbox, dtype=torch.float32, device=device)
         if bbox.ndimension() != 2:
             raise ValueError(
-                    "bbox should have 2 dimensions, got {}".format(bbox.ndimension()))
+                "bbox should have 2 dimensions, got {}".format(bbox.ndimension())
+            )
         if bbox.size(-1) != 4:
             raise ValueError(
-                    "last dimenion of bbox should have a "
-                    "size of 4, got {}".format(bbox.size(-1)))
+                "last dimenion of bbox should have a "
+                "size of 4, got {}".format(bbox.size(-1))
+            )
         if mode not in ("xyxy", "xywh"):
             raise ValueError("mode should be 'xyxy' or 'xywh'")
 

@@ -47,9 +47,9 @@ class GeneralizedRCNN(nn.Module):
         # afterwards
         roi_heads = []
         if not cfg.MODEL.RPN_ONLY:
-            roi_heads.append(build_roi_box_head(cfg))
+            roi_heads.append(("box", build_roi_box_head(cfg)))
         if cfg.MODEL.MASK_ON:
-            roi_heads.append(build_roi_mask_head(cfg))
+            roi_heads.append(("mask", build_roi_mask_head(cfg)))
 
         # combine individual heads in a single module
         if roi_heads:
@@ -94,40 +94,42 @@ def build_detection_model(cfg):
 # Those generic classes shows that it's possible to plug both Mask R-CNN C4
 # and Mask R-CNN FPN with generic containers
 ################################################################################
-class CascadedHeads(torch.nn.Module):
+class CascadedHeads(torch.nn.ModuleDict):
     """
     For Mask R-CNN FPN
     """
 
     def __init__(self, heads):
-        super(CascadedHeads, self).__init__()
-        self.heads = torch.nn.ModuleList(heads)
+        super(CascadedHeads, self).__init__(heads)
 
     def forward(self, features, proposals, targets=None):
         losses = {}
-        for head in self.heads:
+        for head in self.values():
             x, proposals, loss = head(features, proposals, targets)
             losses.update(loss)
 
         return x, proposals, losses
 
 
-class SharedROIHeads(torch.nn.Module):
+class SharedROIHeads(torch.nn.ModuleDict):
     """
     For Mask R-CNN C4
     """
 
     def __init__(self, heads):
-        super(SharedROIHeads, self).__init__()
-        self.heads = torch.nn.ModuleList(heads)
+        assert heads[0][0] == "box"
+        super(SharedROIHeads, self).__init__(heads)
+
         # manually share feature extractor
-        shared_feature_extractor = self.heads[0].feature_extractor
-        for head in self.heads[1:]:
-            head.feature_extractor = shared_feature_extractor
+        shared_feature_extractor = self.box.feature_extractor
+        if len(heads) > 1:
+            assert len(heads) == 2
+            assert heads[1][0] == "mask"
+            self.mask.feature_extractor = shared_feature_extractor
 
     def forward(self, features, proposals, targets=None):
         losses = {}
-        for head in self.heads:
+        for head in self.values():
             x, proposals, loss = head(features, proposals, targets)
             # during training, share the features
             if self.training:

@@ -1,8 +1,7 @@
 MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
+  WEIGHT: "/private/home/fmassa/model_final_faster_rcnn.pkl"
   C2_COMPAT:
-    WEIGHTS: "/private/home/fmassa/model_final_faster_rcnn.pkl"
     WEIGHT_LOADER: "faster_rcnn_R_50_C4"
-    ENABLED: True
 DATASETS:
   TEST: ("coco_2014_minival",)

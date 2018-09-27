@@ -35,12 +35,8 @@ _C.MODEL.WEIGHT = ""
 # Load pre-trained models from C2 Detectron
 # -----------------------------------------------------------------------------
 _C.MODEL.C2_COMPAT = CN()
-# Weight file from C2 Detectron. Should be in .pkl format
-_C.MODEL.C2_COMPAT.WEIGHTS = ""
 # Name of the function that loads the C2 weights into our PyTorch model
 _C.MODEL.C2_COMPAT.WEIGHT_LOADER = ""
-# Load from C2 Detectron or not
-_C.MODEL.C2_COMPAT.ENABLED = False
 
 # -----------------------------------------------------------------------------
 # INPUT
@@ -253,7 +249,6 @@ _C.SOLVER.STEPS = (30000,)
 _C.SOLVER.WARMUP_FACTOR = 1.0 / 3
 _C.SOLVER.WARMUP_ITERS = 500
 _C.SOLVER.WARMUP_METHOD = "linear"
-
 
 
 # ---------------------------------------------------------------------------- #

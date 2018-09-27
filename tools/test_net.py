@@ -11,21 +11,7 @@ from torch_detectron.config.data import make_data_loader
 from torch_detectron.engine.inference import inference
 from torch_detectron.engine.logger import setup_logger
 from torch_detectron.modeling.model_builder import build_detection_model
-from torch_detectron.utils.c2_model_loading import load_from_c2
-
-
-def load_from_checkpoint(cfg, model, checkpoint):
-    if cfg.MODEL.C2_COMPAT.ENABLED:
-        load_from_c2(cfg, model, checkpoint)
-        return
-
-    # do standard loading here
-    checkpoint = torch.load(checkpoint)
-    # TODO find a better way of serializing the weights
-    # that avoids this ugly workaround
-    model = torch.nn.DataParallel(model)
-    load_state_dict(model, checkpoint["model"])
-    model = model.module
+from torch_detectron.modeling.model_serialization import load_model_file
 
 
 def main():
@@ -68,7 +54,7 @@ def main():
     model = build_detection_model(cfg)
     model.to(cfg.MODEL.DEVICE)
 
-    load_from_checkpoint(cfg, model, args.checkpoint)
+    load_model_file(cfg, model, args.checkpoint)
 
     data_loader_val = make_data_loader(cfg, is_train=False, is_distributed=distributed)
 

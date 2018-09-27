@@ -6,7 +6,7 @@ from torch_detectron.modeling.poolers import Pooler
 
 
 class ResNet50Conv5ROIFeatureExtractor(nn.Module):
-    def __init__(self, config, pretrained=None):
+    def __init__(self, config):
         super(ResNet50Conv5ROIFeatureExtractor, self).__init__()
 
         resolution = config.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
@@ -28,10 +28,6 @@ class ResNet50Conv5ROIFeatureExtractor(nn.Module):
             stride_in_1x1=config.MODEL.RESNETS.STRIDE_IN_1X1,
             stride_init=None,
         )
-
-        if pretrained:
-            state_dict = torch.load(pretrained)
-            load_state_dict(head, state_dict, strict=False)
 
         self.pooler = pooler
         self.head = head

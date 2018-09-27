@@ -18,50 +18,17 @@ from torch_detectron.engine.inference import inference
 from torch_detectron.engine.logger import setup_logger
 from torch_detectron.engine.trainer import do_train
 from torch_detectron.modeling.model_builder import build_detection_model
+from torch_detectron.modeling.model_serialization import load_model_file
 from torch_detectron.utils.checkpoint import Checkpoint
 from torch_detectron.utils.imports import import_file
 from torch_detectron.utils.miscellaneous import mkdir
-
-
-# TODO handle model retraining
-def load_from_pretrained_checkpoint(cfg, model):
-    if not cfg.MODEL.WEIGHT:
-        return
-    weight_path = cfg.MODEL.WEIGHT
-    if weight_path.startswith("catalog://"):
-        paths_catalog = import_file(
-            "torch_detectron.config.paths_catalog", cfg.PATHS_CATALOG, True
-        )
-        ModelCatalog = paths_catalog.ModelCatalog
-        weight_path = ModelCatalog.get(weight_path[len("catalog://") :])
-
-    if weight_path.endswith("pkl"):
-        from torch_detectron.utils.c2_model_loading import (
-            _load_c2_pickled_weights,
-            _rename_weights_for_R50,
-        )
-
-        state_dict = _load_c2_pickled_weights(weight_path)
-        state_dict = _rename_weights_for_R50(state_dict)
-    else:
-        state_dict = torch.load(weight_path)
-    if cfg.MODEL.RPN.USE_FPN or cfg.MODEL.ROI_HEADS.USE_FPN:
-        model.backbone[0].stem.load_state_dict(state_dict, strict=False)
-        model.backbone[0].load_state_dict(state_dict, strict=False)
-    else:
-        model.backbone.stem.load_state_dict(state_dict, strict=False)
-        model.backbone.load_state_dict(state_dict, strict=False)
-
-        model.roi_heads.heads[0].feature_extractor.head.load_state_dict(
-            state_dict, strict=False
-        )
 
 
 def train(cfg, local_rank, distributed):
     data_loader = make_data_loader(cfg, is_train=True, is_distributed=distributed)
 
     model = build_detection_model(cfg)
-    load_from_pretrained_checkpoint(cfg, model)
+    load_model_file(cfg, model, None)
     device = torch.device(cfg.MODEL.DEVICE)
     model.to(device)
 

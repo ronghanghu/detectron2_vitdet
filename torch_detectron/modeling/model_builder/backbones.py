@@ -1,22 +1,26 @@
+from collections import OrderedDict
+
 from torch import nn
 
-from torch_detectron.modeling import fpn
+from torch_detectron.modeling import fpn as fpn_module
 from torch_detectron.modeling import resnet
 
 
 def build_resnet_backbone(cfg):
-    return resnet.ResNet(cfg)
+    body = resnet.ResNet(cfg)
+    model = nn.Sequential(OrderedDict([("body", body)]))
+    return model
 
 
 def build_resnet_fpn_backbone(cfg):
     body = resnet.ResNet(cfg)
     representation_size = cfg.MODEL.BACKBONE.OUT_CHANNELS
-    fpn_top = fpn.FPN(
+    fpn = fpn_module.FPN(
         layers=[256, 512, 1024, 2048],
         representation_size=representation_size,
-        top_blocks=fpn.LastLevelMaxPool(),
+        top_blocks=fpn_module.LastLevelMaxPool(),
     )
-    model = nn.Sequential(body, fpn_top)
+    model = nn.Sequential(OrderedDict([("body", body), ("fpn", fpn)]))
     return model
 
 
