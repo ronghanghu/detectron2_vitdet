@@ -140,8 +140,8 @@ def keep_only_positive_boxes(boxes):
 def meshgrid(x, y=None):
     if y is None:
         y = x
-    x = torch.tensor(x)
-    y = torch.tensor(y)
+    x = torch.as_tensor(x)
+    y = torch.as_tensor(y)
     m, n = x.size(0), y.size(0)
     grid_x = x[None].expand(n, m).contiguous()
     grid_y = y[:, None].expand(n, m).contiguous()
@@ -153,8 +153,8 @@ def meshgrid_new(x, y):
     Not used. Should eventually replace meshgrid,
     but it requires some testing
     """
-    x = torch.tensor(x)
-    y = torch.tensor(y)
+    x = torch.as_tensor(x)
+    y = torch.as_tensor(y)
     x_exp_shape = tuple(1 for _ in y.shape) + x.shape
     y_exp_shape = y.shape + tuple(1 for _ in x.shape)
 
