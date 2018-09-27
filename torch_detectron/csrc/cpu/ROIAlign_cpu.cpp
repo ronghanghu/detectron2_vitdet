@@ -231,12 +231,12 @@ at::Tensor ROIAlign_forward_cpu(const at::Tensor& input,
   auto height = input.size(2);
   auto width = input.size(3);
 
-  at::Tensor output = input.type().tensor({num_rois, channels, pooled_height, pooled_width});
-
+  auto output = at::empty({num_rois, channels, pooled_height, pooled_width}, input.options());
   auto output_size = num_rois * pooled_height * pooled_width * channels;
 
-  if (output.numel() == 0)
+  if (output.numel() == 0) {
     return output;
+  }
 
   AT_DISPATCH_FLOATING_TYPES(input.type(), "ROIAlign_forward", [&] {
     ROIAlignForward_cpu_kernel<scalar_t>(

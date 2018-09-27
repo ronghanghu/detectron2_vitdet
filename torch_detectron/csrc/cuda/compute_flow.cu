@@ -26,7 +26,7 @@ __global__ void compute_flow_kernel(
     const int n = index % N;
     const int h = (index / N) % H;
     const int w = (index / (N * H)) % W;
-    
+
     // int x0 = ScalarConvert<Dtype, int>::to(boxes[n][0]);
     // int y0 = ScalarConvert<Dtype, int>::to(boxes[n][1]);
     // int x1 = ScalarConvert<Dtype, int>::to(boxes[n][2]);
@@ -41,7 +41,7 @@ __global__ void compute_flow_kernel(
       output[n][h][w][1] = Dtype(-2);
       continue;
     }
-      
+
     int TO_REMOVE = 1;
     int box_width = x1 - x0 + TO_REMOVE;
     int box_height = y1 - y0 + TO_REMOVE;
@@ -70,8 +70,7 @@ at::Tensor compute_flow_cuda(const at::Tensor& boxes,
   AT_ASSERTM(boxes.type().is_cuda(), "boxes must be a CUDA tensor");
 
   auto num_rois = boxes.size(0);
-  at::Tensor output = boxes.type().tensor({num_rois, height, width, 2});
-
+  auto output = at::empty({num_rois, height, width, 2}, boxes.options());
   auto output_size = num_rois * height * width;
   dim3 grid(std::min(THCCeilDiv(output_size, 512L), 4096L));
   dim3 block(512);

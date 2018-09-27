@@ -267,8 +267,7 @@ at::Tensor ROIAlign_forward_cuda(const at::Tensor& input,
   auto height = input.size(2);
   auto width = input.size(3);
 
-  at::Tensor output = input.type().tensor({num_rois, channels, pooled_height, pooled_width});
-
+  auto output = at::empty({num_rois, channels, pooled_height, pooled_width}, input.options());
   auto output_size = num_rois * pooled_height * pooled_width * channels;
   cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
@@ -313,7 +312,7 @@ at::Tensor ROIAlign_backward_cuda(const at::Tensor& grad,
   AT_ASSERTM(rois.type().is_cuda(), "rois must be a CUDA tensor");
 
   auto num_rois = rois.size(0);
-  at::Tensor grad_input = grad.type().tensor({batch_size, channels, height, width}).zero_();
+  auto grad_input = at::zeros({batch_size, channels, height, width}, grad.options());
 
   cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
@@ -344,4 +343,3 @@ at::Tensor ROIAlign_backward_cuda(const at::Tensor& grad,
   THCudaCheck(cudaGetLastError());
   return grad_input;
 }
-
