@@ -25,14 +25,16 @@ def align_and_update_state_dicts(model_state_dict, loaded_state_dict):
     loaded_keys = sorted(list(loaded_state_dict.keys()))
     # get a matrix of string matches, where each (i, j) entry correspond to the size of the
     # loaded_key string, if it matches
-    match_matrix = [len(j) if i.endswith(j) else 0 for i in current_keys for j in loaded_keys]
+    match_matrix = [
+        len(j) if i.endswith(j) else 0 for i in current_keys for j in loaded_keys
+    ]
     match_matrix = torch.as_tensor(match_matrix).view(
         len(current_keys), len(loaded_keys)
     )
     max_match_size, idxs = match_matrix.max(1)
     # remove indices that correspond to no-match
     idxs[max_match_size == 0] = -1
-    
+
     # used for logging
     max_size = max([len(key) for key in current_keys]) if current_keys else 1
     max_size_loaded = max([len(key) for key in loaded_keys]) if loaded_keys else 1
@@ -70,37 +72,8 @@ def load_state_dict(model, loaded_state_dict):
     # if the state_dict comes from a model that was wrapped in a
     # DataParallel or DistributedDataParallel during serialization,
     # remove the "module" prefix before performing the matching
-    strip_prefix_if_present(loaded_state_dict, prefix="module")
+    loaded_state_dict = strip_prefix_if_present(loaded_state_dict, prefix="module.")
     align_and_update_state_dicts(model_state_dict, loaded_state_dict)
 
     # use strict loading
     model.load_state_dict(model_state_dict)
-
-
-def get_weight_path(cfg, checkpoint):
-    weight_path = cfg.MODEL.WEIGHT if not checkpoint else checkpoint
-    if weight_path.startswith("catalog://"):
-        paths_catalog = import_file(
-            "torch_detectron.config.paths_catalog", cfg.PATHS_CATALOG, True
-        )
-        ModelCatalog = paths_catalog.ModelCatalog
-        weight_path = ModelCatalog.get(weight_path[len("catalog://") :])
-    return weight_path
-
-
-def load_model_file(cfg, model, checkpoint):
-    if not cfg.MODEL.WEIGHT and not checkpoint:
-        return
-
-    weight_path = get_weight_path(cfg, checkpoint)
-    if weight_path.endswith(".pkl"):
-        from torch_detectron.utils.c2_model_loading import load_from_c2
-        load_from_c2(cfg, model, weight_path)
-        return
-
-    state_dict = torch.load(weight_path)
-    if checkpoint:
-        # checkpoints serializes the model as well as other training stats,
-        # so get only the model weights
-        state_dict = state_dict["model"]
-    load_state_dict(model, state_dict)

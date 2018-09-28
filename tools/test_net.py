@@ -11,7 +11,7 @@ from torch_detectron.config.data import make_data_loader
 from torch_detectron.engine.inference import inference
 from torch_detectron.engine.logger import setup_logger
 from torch_detectron.modeling.model_builder import build_detection_model
-from torch_detectron.modeling.model_serialization import load_model_file
+from torch_detectron.utils.checkpoint import DetectronCheckpointer
 from torch_detectron.utils.collect_env import collect_env_info
 
 
@@ -22,9 +22,6 @@ def main():
         default="/private/home/fmassa/github/detectron.pytorch_v2/configs/e2e_faster_rcnn_R_50_C4_1x_caffe2.yaml",
         metavar="FILE",
         help="path to config file",
-    )
-    parser.add_argument(
-        "--checkpoint", default="", metavar="FILE", help="path to checkpoint file"
     )
     parser.add_argument("--local_rank", type=int, default=0)
     parser.add_argument(
@@ -58,7 +55,8 @@ def main():
     model = build_detection_model(cfg)
     model.to(cfg.MODEL.DEVICE)
 
-    load_model_file(cfg, model, args.checkpoint)
+    checkpointer = DetectronCheckpointer(cfg, model)
+    _ = checkpointer.load(cfg.MODEL.WEIGHT)
 
     data_loader_val = make_data_loader(cfg, is_train=False, is_distributed=distributed)
 

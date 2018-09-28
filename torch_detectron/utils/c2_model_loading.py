@@ -96,17 +96,13 @@ def load_c2_weights_resnet50(model, file_path):
 
 
 _C2_WEIGHT_LOADER = {
-    # "faster_rcnn_R_50_C4": load_c2_weights_resnet50,
-    # "faster_rcnn_R_50_FPN": load_c2_weights_resnet50,
-    # "mask_rcnn_R_50_C4": load_c2_weights_resnet50,
-    # "mask_rcnn_R_50_FPN": load_c2_weights_resnet50,
     "R-50-C4": load_c2_weights_resnet50,
     "R-50-FPN": load_c2_weights_resnet50,
 }
 
 
-def load_from_c2(cfg, model, weights_file):
-    # loader_name = cfg.MODEL.C2_COMPAT.WEIGHT_LOADER
-    backbone_body = cfg.MODEL.BACKBONE.CONV_BODY
-    loader = _C2_WEIGHT_LOADER[backbone_body]
-    loader(model, weights_file)
+def load_c2_format(cfg, f):
+    # TODO make it support other architectures
+    state_dict = _load_c2_pickled_weights(f)
+    state_dict = _rename_weights_for_R50(state_dict)
+    return dict(model=state_dict)

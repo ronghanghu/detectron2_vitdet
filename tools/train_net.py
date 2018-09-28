@@ -18,9 +18,8 @@ from torch_detectron.engine.inference import inference
 from torch_detectron.engine.logger import setup_logger
 from torch_detectron.engine.trainer import do_train
 from torch_detectron.modeling.model_builder import build_detection_model
-from torch_detectron.modeling.model_serialization import load_model_file
+from torch_detectron.utils.checkpoint import DetectronCheckpointer
 from torch_detectron.utils.collect_env import collect_env_info
-from torch_detectron.utils.checkpoint import Checkpoint
 from torch_detectron.utils.imports import import_file
 from torch_detectron.utils.miscellaneous import mkdir
 
@@ -29,7 +28,6 @@ def train(cfg, local_rank, distributed):
     data_loader = make_data_loader(cfg, is_train=True, is_distributed=distributed)
 
     model = build_detection_model(cfg)
-    load_model_file(cfg, model, None)
     device = torch.device(cfg.MODEL.DEVICE)
     model.to(device)
 
@@ -46,13 +44,13 @@ def train(cfg, local_rank, distributed):
     arguments["iteration"] = 0
 
     output_dir = cfg.OUTPUT_DIR
-    checkpoint_file = cfg.CHECKPOINT
 
-    checkpointer = Checkpoint(model, optimizer, scheduler, output_dir, local_rank)
-
-    if checkpoint_file:
-        extra_checkpoint_data = checkpointer.load(checkpoint_file)
-        arguments.update(extra_checkpoint_data)
+    save_to_disk = local_rank == 0
+    checkpointer = DetectronCheckpointer(
+        cfg, model, optimizer, scheduler, output_dir, save_to_disk
+    )
+    extra_checkpoint_data = checkpointer.load(cfg.MODEL.WEIGHT)
+    arguments.update(extra_checkpoint_data)
 
     do_train(
         model,

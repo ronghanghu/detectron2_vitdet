@@ -96,7 +96,7 @@ def do_train(
         )
         arguments["iteration"] = iteration_end
 
-        checkpointer("model_{}".format(arguments["iteration"]), **arguments)
+        checkpointer.save("model_{:07d}".format(arguments["iteration"]), **arguments)
     total_training_time = time.time() - start_training_time
     total_time_str = str(datetime.timedelta(seconds=total_training_time))
     logger.info(
