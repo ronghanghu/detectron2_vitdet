@@ -12,6 +12,7 @@ from torch_detectron.engine.inference import inference
 from torch_detectron.engine.logger import setup_logger
 from torch_detectron.modeling.model_builder import build_detection_model
 from torch_detectron.modeling.model_serialization import load_model_file
+from torch_detectron.utils.collect_env import collect_env_info
 
 
 def main():
@@ -50,6 +51,9 @@ def main():
     save_dir = ""
     logger = setup_logger("torch_detectron", save_dir, args.local_rank)
     logger.info(cfg)
+
+    logger.info("Collecting env info (might take some time)")
+    logger.info("\n" + collect_env_info())
 
     model = build_detection_model(cfg)
     model.to(cfg.MODEL.DEVICE)

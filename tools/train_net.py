@@ -19,6 +19,7 @@ from torch_detectron.engine.logger import setup_logger
 from torch_detectron.engine.trainer import do_train
 from torch_detectron.modeling.model_builder import build_detection_model
 from torch_detectron.modeling.model_serialization import load_model_file
+from torch_detectron.utils.collect_env import collect_env_info
 from torch_detectron.utils.checkpoint import Checkpoint
 from torch_detectron.utils.imports import import_file
 from torch_detectron.utils.miscellaneous import mkdir
@@ -130,6 +131,9 @@ def main():
 
     logger = setup_logger("torch_detectron", output_dir, args.local_rank)
     logger.info(args)
+
+    logger.info("Collecting env info (might take some time)")
+    logger.info("\n" + collect_env_info())
 
     logger.info("Loaded configuration file {}".format(args.config_file))
     with open(args.config_file, "r") as cf:
