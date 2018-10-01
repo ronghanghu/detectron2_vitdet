@@ -78,89 +78,6 @@ ln -s /private/home/fmassa/imagenet_detectron_models configs/models
 # TODO: coco test 2015 and coco test 2017
 ```
 
-### Step-by-step installation on a devgpu
-
-```bash
-# Initial steps from https://our.internmc.facebook.com/intern/wiki/Caffe2Guide/open-source/
-alias with-proxy="HTTPS_PROXY=http://fwdproxy.any:8080 HTTP_PROXY=http://fwdproxy.any:8080 FTP_PROXY=http://fwdproxy.any:8080 https_proxy=http://fwdproxy.any:8080 http_proxy=http://fwdproxy.any:8080 ftp_proxy=http://fwdproxy.any:8080 http_no_proxy='\''*.facebook.com|*.tfbnw.net|*.fb.com'\'"
-
-export PATH=/usr/local/cuda/bin:$PATH
-export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
-
-sudo cp -R /home/engshare/third-party2/cudnn/7.1.2/src/cuda/include/* /usr/local/cuda/include/
-sudo cp -R /home/engshare/third-party2/cudnn/7.1.2/src/cuda/lib64/* /usr/local/cuda/lib64/
-
-mkdir ~/local/github
-
-# Obtain NCCL2 from https://developer.nvidia.com/nccl
-# E.g., download nccl_2.2.13-1+cuda9.2_x86_64.txz
-mkdir ~/local/github/nccl2
-cd ~/local/github/nccl2
-mv nccl_2.2.13-1+cuda9.2_x86_64.txz .
-tar --no-same-owner -xvf nccl_2.2.13-1+cuda9.2_x86_64.txz
-sudo mv nccl_2.2.13-1+cuda9.2_x86_64/include/* /usr/local/cuda/include/
-sudo cp -P nccl_2.2.13-1+cuda9.2_x86_64/lib/libnccl* /usr/local/cuda/lib64/
-ldconfig
-
-# Install anaconda
-cd ~/local
-
-with-proxy wget https://repo.anaconda.com/archive/Anaconda3-5.2.0-Linux-x86_64.sh -O anaconda3.sh
-chmod +x anaconda3.sh
-with-proxy ./anaconda3.sh -b -p ~/local/anaconda3
-
-# Activate anaconda
-. ~/local/anaconda3/bin/activate
-
-# Create a virtual environment to work in
-with-proxy conda create --prefix ~/local/conda/pytorch_detectron
-conda activate /home/rbg/local/conda/pytorch_detectron
-
-conda install ipython
-
-# pytorch and coco api dependencies
-conda install numpy pyyaml mkl mkl-include setuptools cmake cffi typing cython
-conda install -c mingfeima mkldnn
-conda install -c pytorch magma-cuda90
-
-pip install ninja
-
-# cloning and installing PyTorch from master
-mkdir ~/local/github && cd ~/local/github
-git clone --recursive git@github.com:pytorch/pytorch.git
-cd pytorch
-
-# compile for several GPU architectures using NCCL2
-NCCL_ROOT_DIR=/usr/local/cuda/ TORCH_CUDA_ARCH_LIST="3.5;5.0+PTX;6.0;6.1;7.0" \
-  python setup.py build develop
-
-# install torchvision
-cd ~/local/github
-git clone git@github.com:pytorch/vision.git
-cd vision
-python setup.py install
-
-# install pycocotools
-cd ~/local/github
-git clone git@github.com:cocodataset/cocoapi.git
-cd cocoapi/PythonAPI
-python setup.py build_ext install
-
-# install PyTorch Detection
-cd ~/local/github
-git clone git@github.com:fairinternal/detectron.pytorch.git
-cd detectron.pytorch
-TORCH_CUDA_ARCH_LIST="3.5;5.0+PTX;6.0;6.1;7.0" python setup.py build develop
-
-# links to datasets and models
-cd ~/local/github/detection.pytorch
-ln -s /data/local/packages/ai-group.coco_train2014/latest/coco_train2014 configs/datasets/coco/train2014
-ln -s /data/local/packages/ai-group.coco_val2014/latest/coco_val2014 configs/datasets/coco/val2014
-ln -s /mnt/vol/gfsai-east/ai-group/datasets/json_dataset_annotations/coco configs/datasets/coco/annotations
-mkdir configs/models
-ln -s /mnt/vol/gfsai-east/ai-group/users/vision/torch_detectron_models/r50_new.pth configs/models/R-50.pth
-```
-
 ## Running training code
 
 For the following examples to work, you need to first install `torch_detectron`.
@@ -186,6 +103,64 @@ It is unfortunately not possible (at least I haven't figured out)
 to launch two processes in python with `-m` flag, so that in the
 multi-gpu case we need to specify the full path of the detectron `train.py`
 file.
+
+## FB infra usage
+
+This section includes instructions that are specific to using the code on FB infra (devgpus and cluster).
+
+### Checking out on a devgpu
+
+This repo is not yet integrated into fbcode. In the meantime, we adopt a workaround in
+which one creates an fbcode checkout and then "grafts" the git repo on top of it. Buck
+`TARGETS` files are implemented such that once the git repo is checked out in the correct
+location (`//experimental/deeplearning/vision/detectron_pytorch`) it will build correctly
+using all necessarily dependencies from fbcode, tp2, pyfi, etc.
+
+```bash
+# Create a separate fbcode checkout that we'll use for "grafting" the github repo on top of
+fbclone fbsource fbsource-github-grafts
+
+# Move to the grafting location
+cd /data/users/$USER/fbsource-github-grafts/fbcode/experimental/deeplearning/vision/
+
+# Clone the git repo
+git clone git@github.com:facebookexternal/detectron.pytorch.git
+# The buck targets files require a slightly different name
+mv detectron.pytorch detectron_pytorch
+```
+
+### Running on a devgpu
+
+**NOTE: multi-gpu support is currently broken due to an issue in c10d that is under investigation**
+
+To build:
+
+```bash
+buck build @mode/dev-nosan -c python.native_link_strategy=separate //experimental/deeplearning/vision/detectron_pytorch/...
+```
+
+To run:
+
+```bash
+cd /data/users/$USER/fbsource-github-grafts/fbcode/experimental/deeplearning/vision/detectron_pytorch
+
+TORCH_DETECTRON_ENV_MODULE=infra/fb/env.py \
+  /data/users/$USER/fbsource-github-grafts/fbcode/buck-out/gen/experimental/deeplearning/vision/detectron_pytorch/tools/train_net.par \
+  --config-file configs/e2e_mask_rcnn_R_50_C4_1x.yaml \
+  PATHS_CATALOG infra/fb/paths_catalog.py
+```
+
+Note the two FB infra specific settings:
+ - Setting `TORCH_DETECTRON_ENV_MODULE` such that an FB infra specific environment setup function can execute
+ - Setting `PATHS_CATALOG` so that datasets and models can be found in FB specific locations
+
+### Running on the FB GPU cluster
+
+**NOTE: multi-gpu support is currently broken due to an issue in c10d that is under investigation**
+
+```bash
+GPU=1 MEM=24 CPU=8 ./infra/fb/launch.sh configs/quick_schedules/e2e_faster_rcnn_R_50_FPN_quick.yaml test
+```
 
 ## Model Zoo and Baselines
 
