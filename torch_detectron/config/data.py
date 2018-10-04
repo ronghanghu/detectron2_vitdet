@@ -6,6 +6,7 @@ from torch_detectron.utils import data_transforms as T
 from torch_detectron.utils.concat_dataset import ConcatDataset
 from torch_detectron.utils.data_collate import BatchCollator
 from torch_detectron.utils.data_samplers import GroupedBatchSampler
+from torch_detectron.utils.data_samplers import IterationBasedBatchSampler
 from torch_detectron.utils.data_samplers import compute_aspect_ratios
 from torch_detectron.utils.imports import import_file
 
@@ -84,7 +85,9 @@ def _quantize(x, bins):
     return quantized
 
 
-def make_batch_data_sampler(dataset, sampler, aspect_grouping, images_per_batch):
+def make_batch_data_sampler(
+    dataset, sampler, aspect_grouping, images_per_batch, num_iters=None, start_iter=0
+):
     if aspect_grouping:
         if not isinstance(aspect_grouping, (list, tuple)):
             aspect_grouping = [aspect_grouping]
@@ -97,23 +100,28 @@ def make_batch_data_sampler(dataset, sampler, aspect_grouping, images_per_batch)
         batch_sampler = torch.utils.data.sampler.BatchSampler(
             sampler, images_per_batch, drop_last=False
         )
+    if num_iters is not None:
+        batch_sampler = IterationBasedBatchSampler(batch_sampler, num_iters, start_iter)
     return batch_sampler
 
 
-def make_data_loader(cfg, is_train=True, is_distributed=False):
+def make_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0):
     if is_train:
         images_per_batch = cfg.DATALOADER.IMAGES_PER_BATCH_TRAIN
         shuffle = True
+        num_iters = cfg.SOLVER.MAX_ITER
     else:
         images_per_batch = cfg.DATALOADER.IMAGES_PER_BATCH_TEST
         shuffle = False if not is_distributed else True
+        num_iters = None
+        start_iter = 0
 
     aspect_grouping = [1] if cfg.DATALOADER.ASPECT_RATIO_GROUPING else []
 
     dataset = make_coco_dataset(cfg, is_train)
     sampler = make_data_sampler(dataset, shuffle, is_distributed)
     batch_sampler = make_batch_data_sampler(
-        dataset, sampler, aspect_grouping, images_per_batch
+        dataset, sampler, aspect_grouping, images_per_batch, num_iters, start_iter
     )
     collator = BatchCollator(cfg.DATALOADER.SIZE_DIVISIBILITY)
     num_workers = cfg.DATALOADER.NUM_WORKERS

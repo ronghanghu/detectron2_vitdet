@@ -7,15 +7,26 @@ import torch
 from torch_detectron.utils.metric_logger import MetricLogger
 
 
-def train_one_epoch(
-    model, data_loader, optimizer, scheduler, device, iteration, max_iter
+def do_train(
+    model,
+    data_loader,
+    optimizer,
+    scheduler,
+    checkpointer,
+    device,
+    checkpoint_period,
+    arguments,
 ):
     logger = logging.getLogger("torch_detectron.trainer")
+    logger.info("Start training")
     meters = MetricLogger(delimiter="  ")
+    max_iter = len(data_loader)
     model.train()
+    start_training_time = time.time()
     end = time.time()
-    for _, (images, targets, _) in enumerate(data_loader):
+    for iteration, (images, targets, _) in enumerate(data_loader):
         data_time = time.time() - end
+        arguments["iteration"] = iteration
 
         scheduler.step()
 
@@ -57,46 +68,10 @@ def train_one_epoch(
                     memory=torch.cuda.max_memory_allocated() / 1024.0 / 1024.0,
                 )
             )
+        if iteration % checkpoint_period == 0 and iteration > 0:
+            checkpointer.save("model_{:07d}".format(iteration), **arguments)
 
-        iteration += 1
-        if iteration >= max_iter:
-            break
-    return iteration
-
-
-def do_train(
-    model,
-    data_loader,
-    optimizer,
-    scheduler,
-    checkpointer,
-    max_iter,
-    device,
-    use_distributed,
-    arguments,
-):
-    logger = logging.getLogger("torch_detectron.trainer")
-    logger.info("Start training")
-    start_training_time = time.time()
-    while arguments["iteration"] < max_iter:
-        start_epoch_time = time.time()
-        iteration = arguments["iteration"]
-        if use_distributed:
-            data_loader.batch_sampler.sampler.set_epoch(iteration)
-        iteration_end = train_one_epoch(
-            model, data_loader, optimizer, scheduler, device, iteration, max_iter
-        )
-        total_epoch_time = time.time() - start_epoch_time
-
-        epoch_time_str = str(datetime.timedelta(seconds=total_epoch_time))
-        logger.info(
-            "Total epoch time: {} ({:.4f} s / it)".format(
-                epoch_time_str, total_epoch_time / (iteration_end - iteration)
-            )
-        )
-        arguments["iteration"] = iteration_end
-
-        checkpointer.save("model_{:07d}".format(arguments["iteration"]), **arguments)
+    checkpointer.save("model_{:07d}".format(iteration), **arguments)
     total_training_time = time.time() - start_training_time
     total_time_str = str(datetime.timedelta(seconds=total_training_time))
     logger.info(

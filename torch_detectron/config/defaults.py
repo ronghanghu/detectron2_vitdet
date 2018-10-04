@@ -250,6 +250,7 @@ _C.SOLVER.WARMUP_FACTOR = 1.0 / 3
 _C.SOLVER.WARMUP_ITERS = 500
 _C.SOLVER.WARMUP_METHOD = "linear"
 
+_C.SOLVER.CHECKPOINT_PERIOD = 2500
 
 # ---------------------------------------------------------------------------- #
 # Specific test options
@@ -263,6 +264,5 @@ _C.TEST.EXPECTED_RESULTS_SIGMA_TOL = 4
 # Misc options
 # ---------------------------------------------------------------------------- #
 _C.OUTPUT_DIR = ""
-_C.CHECKPOINT = ""
 
 _C.PATHS_CATALOG = os.path.join(os.path.dirname(__file__), "paths_catalog.py")

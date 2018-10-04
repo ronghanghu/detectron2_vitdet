@@ -42,7 +42,6 @@ class RPNBoxSelector(torch.nn.Module):
 
         self.box_coder = box_coder
 
-
     def add_gt_proposals(self, proposals, targets):
         """
         Arguments:
@@ -58,15 +57,16 @@ class RPNBoxSelector(torch.nn.Module):
         # later cat of bbox requires all fields to be present for all bbox
         # so we need to add a dummy for objectness that's missing
         for gt_box in gt_boxes:
-            gt_box.add_field("objectness",
-                             torch.ones(gt_box.bbox.shape[0],
-                             device=device))
+            gt_box.add_field(
+                "objectness", torch.ones(gt_box.bbox.shape[0], device=device)
+            )
 
-
-        proposals = [[cat_bbox((proposal[0], gt_box))] for proposal, gt_box in zip(proposals, gt_boxes)]
+        proposals = [
+            [cat_bbox((proposal[0], gt_box))]
+            for proposal, gt_box in zip(proposals, gt_boxes)
+        ]
 
         return proposals
-
 
     def forward_for_single_feature_map(self, anchors, objectness, box_regression):
         """
@@ -132,7 +132,7 @@ class RPNBoxSelector(torch.nn.Module):
 
         return sampled_bboxes
 
-    def forward(self, anchors, objectness, box_regression, targets = None):
+    def forward(self, anchors, objectness, box_regression, targets=None):
         """
         Arguments:
             anchors: list[list[BoxList]]
@@ -147,9 +147,7 @@ class RPNBoxSelector(torch.nn.Module):
         # append ground-truth bboxes to proposals
         if self.training and targets is not None:
             sampled_boxes = list(zip(*sampled_boxes))
-            sampled_boxes = self.add_gt_proposals(
-                    sampled_boxes,
-                    targets = targets)
+            sampled_boxes = self.add_gt_proposals(sampled_boxes, targets=targets)
             sampled_boxes = list(zip(*sampled_boxes))
 
         return sampled_boxes
@@ -250,9 +248,7 @@ class FPNRPNBoxSelector(RPNBoxSelector):
 
         # append ground-truth bboxes to proposals
         if self.training and targets is not None:
-            boxlists = self.add_gt_proposals(
-                    boxlists,
-                    targets)
+            boxlists = self.add_gt_proposals(boxlists, targets)
 
         lvl_min = self.roi_to_fpn_level_mapper.k_min
         lvl_max = self.roi_to_fpn_level_mapper.k_max
@@ -260,7 +256,9 @@ class FPNRPNBoxSelector(RPNBoxSelector):
         for img_idx in range(num_images):
             boxlist_per_img = boxlists[img_idx][0]
             levels = self.roi_to_fpn_level_mapper(boxlist_per_img.bbox).to(torch.int64)
-            boxlist_per_level = split_boxlist_in_levels(boxlist_per_img, levels, lvl_min, lvl_max)
+            boxlist_per_level = split_boxlist_in_levels(
+                boxlist_per_img, levels, lvl_min, lvl_max
+            )
             result.append(boxlist_per_level)
 
         # flip order to be feat_lvl -> img

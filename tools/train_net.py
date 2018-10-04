@@ -25,15 +25,12 @@ from torch_detectron.utils.miscellaneous import mkdir
 
 
 def train(cfg, local_rank, distributed):
-    data_loader = make_data_loader(cfg, is_train=True, is_distributed=distributed)
-
     model = build_detection_model(cfg)
     device = torch.device(cfg.MODEL.DEVICE)
     model.to(device)
 
     optimizer = make_optimizer(cfg, model)
     scheduler = make_lr_scheduler(cfg, optimizer)
-    max_iter = cfg.SOLVER.MAX_ITER
 
     if distributed:
         model = torch.nn.parallel.DistributedDataParallel(
@@ -52,15 +49,23 @@ def train(cfg, local_rank, distributed):
     extra_checkpoint_data = checkpointer.load(cfg.MODEL.WEIGHT)
     arguments.update(extra_checkpoint_data)
 
+    data_loader = make_data_loader(
+        cfg,
+        is_train=True,
+        is_distributed=distributed,
+        start_iter=arguments["iteration"],
+    )
+
+    checkpoint_period = cfg.SOLVER.CHECKPOINT_PERIOD
+
     do_train(
         model,
         data_loader,
         optimizer,
         scheduler,
         checkpointer,
-        max_iter,
         device,
-        distributed,
+        checkpoint_period,
         arguments,
     )
 
