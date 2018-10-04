@@ -252,9 +252,9 @@ def evaluate_predictions_on_coco(
 
 
 def _is_main_process():
-    if not torch.distributed.is_initialized():
+    if not torch.distributed.deprecated.is_initialized():
         return True
-    return torch.distributed.get_rank() == 0
+    return torch.distributed.deprecated.get_rank() == 0
 
 
 def _accumulate_predictions_from_multiple_gpus(predictions_per_gpu):
@@ -359,7 +359,7 @@ def inference(
     # convert to a torch.device for efficiency
     device = torch.device(device)
     num_devices = (
-        torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
+        torch.distributed.deprecated.get_world_size() if torch.distributed.deprecated.is_initialized() else 1
     )
     logger = logging.getLogger("torch_detectron.inference")
     dataset = data_loader.dataset

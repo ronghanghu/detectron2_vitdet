@@ -5,6 +5,7 @@ from torch_detectron.datasets.coco import COCODataset
 from torch_detectron.utils import data_transforms as T
 from torch_detectron.utils.concat_dataset import ConcatDataset
 from torch_detectron.utils.data_collate import BatchCollator
+from torch_detectron.utils.data_samplers import DistributedSampler
 from torch_detectron.utils.data_samplers import GroupedBatchSampler
 from torch_detectron.utils.data_samplers import IterationBasedBatchSampler
 from torch_detectron.utils.data_samplers import compute_aspect_ratios
@@ -70,7 +71,7 @@ def make_data_sampler(dataset, shuffle, distributed):
     if shuffle:
         sampler = torch.utils.data.sampler.RandomSampler(dataset)
         if distributed:
-            sampler = torch.utils.data.distributed.DistributedSampler(dataset)
+            sampler = DistributedSampler(dataset)
     else:
         assert (
             distributed == False
