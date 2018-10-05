@@ -53,7 +53,7 @@ class GeneralizedRCNN(nn.Module):
 
         # combine individual heads in a single module
         if roi_heads:
-            self.roi_heads = combine_roi_heads(cfg, roi_heads)
+            self.roi_heads = CombinedROIHeads(cfg, roi_heads)
 
     def forward(self, images, targets=None):
         """
@@ -94,64 +94,29 @@ def build_detection_model(cfg):
 # Those generic classes shows that it's possible to plug both Mask R-CNN C4
 # and Mask R-CNN FPN with generic containers
 ################################################################################
-class CascadedHeads(torch.nn.ModuleDict):
-    """
-    For Mask R-CNN FPN
-    """
-
-    def __init__(self, heads):
-        super(CascadedHeads, self).__init__(heads)
-
-    def forward(self, features, proposals, targets=None):
-        losses = {}
-        for head in self.values():
-            x, proposals, loss = head(features, proposals, targets)
-            losses.update(loss)
-
-        return x, proposals, losses
-
-
-class SharedROIHeads(torch.nn.ModuleDict):
-    """
-    For Mask R-CNN C4
-    """
-
-    def __init__(self, heads):
-        assert heads[0][0] == "box"
-        super(SharedROIHeads, self).__init__(heads)
-
-        # manually share feature extractor
-        shared_feature_extractor = self.box.feature_extractor
-        if len(heads) > 1:
-            assert len(heads) == 2
-            assert heads[1][0] == "mask"
-            self.mask.feature_extractor = shared_feature_extractor
+class CombinedROIHeads(torch.nn.ModuleDict):
+    def __init__(self, cfg, heads):
+        super(CombinedROIHeads, self).__init__(heads)
+        self.cfg = cfg.clone()
+        if cfg.MODEL.MASK_ON and cfg.MODEL.ROI_MASK_HEAD.SHARE_BOX_FEATURE_EXTRACTOR:
+            self.mask.feature_extractor = self.box.feature_extractor
 
     def forward(self, features, proposals, targets=None):
         losses = {}
-        for head in self.values():
-            x, proposals, loss = head(features, proposals, targets)
-            # during training, share the features
-            if self.training:
-                features = x
-            losses.update(loss)
-
-        return x, proposals, losses
-
-
-def combine_roi_heads(cfg, roi_heads):
-    """
-    This function takes a list of modules for the rois computation and
-    combines them into a single head module.
-    It also support feature sharing, for example during
-    Mask R-CNN C4.
-    """
-    constructor = CascadedHeads
-    if cfg.MODEL.SHARE_FEATURES_DURING_TRAINING:
-        constructor = SharedROIHeads
-    # can also use getfunc to query a function by name
-    return constructor(roi_heads)
-
+        # TODO rename x to roi_box_features, if it doesn't increase memory consumption
+        x, detections, loss_box = self.box(features, proposals, targets)
+        losses.update(loss_box)
+        if self.cfg.MODEL.MASK_ON:
+            mask_features = features
+            # optimization: during training, if we share the feature extractor between
+            # the box and the mask heads, then we can reuse the features already computed
+            if self.training and self.cfg.MODEL.ROI_MASK_HEAD.SHARE_BOX_FEATURE_EXTRACTOR:
+                mask_features = x
+            # During training, self.box() will return the unaltered proposals as "detections"
+            # this makes the API consistent during training and testing
+            x, detections, loss_mask = self.mask(mask_features, detections, targets)
+            losses.update(loss_mask)
+        return x, detections, losses
 
 ################################################################################
 # RoiBoxHead
@@ -248,10 +213,10 @@ class ROIMaskHead(torch.nn.Module):
                     r.add_field("mask", features[0].new())
                 return features, proposals, {}
 
-        if self.training and self.cfg.MODEL.SHARE_FEATURES_DURING_TRAINING:
+        if self.training and self.cfg.MODEL.ROI_MASK_HEAD.SHARE_BOX_FEATURE_EXTRACTOR:
             x = features
         else:
-            if self.cfg.MODEL.SHARE_FEATURES_DURING_TRAINING:
+            if self.cfg.MODEL.ROI_MASK_HEAD.SHARE_BOX_FEATURE_EXTRACTOR:
                 # proposals have been flattened by this point, so aren't
                 # in the format of list[list[BoxList]] anymore. Add one more level to it
                 proposals = [proposals]
@@ -260,7 +225,7 @@ class ROIMaskHead(torch.nn.Module):
 
         if not self.training:
             # TODO Fix this horrible hack
-            if self.cfg.MODEL.SHARE_FEATURES_DURING_TRAINING:
+            if self.cfg.MODEL.ROI_MASK_HEAD.SHARE_BOX_FEATURE_EXTRACTOR:
                 proposals = proposals[0]
             result = self.post_processor(mask_logits, proposals)
             return x, result, {}

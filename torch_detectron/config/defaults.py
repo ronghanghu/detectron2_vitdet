@@ -200,8 +200,7 @@ _C.MODEL.ROI_MASK_HEAD.POOLER_SCALES = (1.0 / 16,)
 _C.MODEL.ROI_MASK_HEAD.MLP_HEAD_DIM = 1024
 _C.MODEL.ROI_MASK_HEAD.CONV_LAYERS = (256, 256, 256, 256)
 _C.MODEL.ROI_MASK_HEAD.RESOLUTION = 14
-
-_C.MODEL.SHARE_FEATURES_DURING_TRAINING = True
+_C.MODEL.ROI_MASK_HEAD.SHARE_BOX_FEATURE_EXTRACTOR = True
 
 # ---------------------------------------------------------------------------- #
 # ResNe[X]t options (ResNets = {ResNet, ResNeXt}
