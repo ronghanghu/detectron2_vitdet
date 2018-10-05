@@ -33,13 +33,14 @@ def main():
 
     args = parser.parse_args()
 
-    distributed = (
-        int(os.environ["WORLD_SIZE"]) > 1 if "WORLD_SIZE" in os.environ else False
-    )
+    num_gpus = int(os.environ["WORLD_SIZE"]) if "WORLD_SIZE" in os.environ else 1
+    distributed = num_gpus > 1
 
     if distributed:
         torch.cuda.set_device(args.local_rank)
-        torch.distributed.deprecated.init_process_group(backend="nccl", init_method="env://")
+        torch.distributed.deprecated.init_process_group(
+            backend="nccl", init_method="env://"
+        )
 
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
@@ -47,6 +48,7 @@ def main():
 
     save_dir = ""
     logger = setup_logger("torch_detectron", save_dir, args.local_rank)
+    logger.info("Using {} GPUs".format(num_gpus))
     logger.info(cfg)
 
     logger.info("Collecting env info (might take some time)")

@@ -11,6 +11,12 @@ import time
 import torch
 
 
+def get_world_size():
+    if not torch.distributed.deprecated.is_initialized():
+        return 1
+    return torch.distributed.deprecated.get_world_size()
+
+
 def synchronize():
     """
     Helper function to synchronize between multiple processes when

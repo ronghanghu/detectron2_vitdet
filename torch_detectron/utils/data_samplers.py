@@ -198,12 +198,12 @@ class DistributedSampler(Sampler):
         indices = torch.randperm(len(self.dataset), generator=g).tolist()
 
         # add extra samples to make it evenly divisible
-        indices += indices[:(self.total_size - len(indices))]
+        indices += indices[: (self.total_size - len(indices))]
         assert len(indices) == self.total_size
 
         # subsample
         offset = self.num_samples * self.rank
-        indices = indices[offset:offset + self.num_samples]
+        indices = indices[offset : offset + self.num_samples]
         assert len(indices) == self.num_samples
 
         return iter(indices)

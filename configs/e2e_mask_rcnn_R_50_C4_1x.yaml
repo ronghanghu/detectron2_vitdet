@@ -8,8 +8,6 @@ MODEL:
     PREDICTOR: "MaskRCNNC4Predictor"
     SHARE_BOX_FEATURE_EXTRACTOR: True
   MASK_ON: True
-DATALOADER:
-  IMAGES_PER_BATCH_TRAIN: 1
 DATASETS:
   TRAIN: ("coco_2014_train", "coco_2014_valminusminival")
   TEST: ("coco_2014_minival",)
@@ -18,3 +16,4 @@ SOLVER:
   WEIGHT_DECAY: 0.0001
   STEPS: (120000, 160000)
   MAX_ITER: 180000
+  IMS_PER_BATCH: 8

@@ -56,10 +56,6 @@ class ResNet(nn.Module):
         # of it and store it for later use:
         # self.cfg = cfg.clone()
 
-        # Flag indicating that this module and its children can be
-        # loaded from pretrained model state
-        self.load_pretrained_state = True
-
         # Translate string names to implementations
         stem_module = _STEM_MODULES[cfg.MODEL.RESNETS.STEM_FUNC]
         stage_specs = _STAGE_SPECS[cfg.MODEL.BACKBONE.CONV_BODY]

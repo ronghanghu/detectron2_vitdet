@@ -74,9 +74,6 @@ _C.DATALOADER.NUM_WORKERS = 4
 # If > 0, this enforces that each collated batch should have a size divisible
 # by SIZE_DIVISIBILITY
 _C.DATALOADER.SIZE_DIVISIBILITY = 0
-# Number of images per batch
-_C.DATALOADER.IMAGES_PER_BATCH_TRAIN = 2
-_C.DATALOADER.IMAGES_PER_BATCH_TEST = 1
 # If True, each batch should contain only images for which the aspect ratio
 # is compatible. This groups portrait images together, and landscape images
 # are not batched with portrait images.
@@ -251,12 +248,21 @@ _C.SOLVER.WARMUP_METHOD = "linear"
 
 _C.SOLVER.CHECKPOINT_PERIOD = 2500
 
+# Number of images per batch
+# This is global, so if we have 8 GPUs and IMS_PER_BATCH = 16, each GPU will
+# see 2 images per batch
+_C.SOLVER.IMS_PER_BATCH = 16
+
 # ---------------------------------------------------------------------------- #
 # Specific test options
 # ---------------------------------------------------------------------------- #
 _C.TEST = CN()
 _C.TEST.EXPECTED_RESULTS = []
 _C.TEST.EXPECTED_RESULTS_SIGMA_TOL = 4
+# Number of images per batch
+# This is global, so if we have 8 GPUs and IMS_PER_BATCH = 16, each GPU will
+# see 2 images per batch
+_C.TEST.IMS_PER_BATCH = 8
 
 
 # ---------------------------------------------------------------------------- #

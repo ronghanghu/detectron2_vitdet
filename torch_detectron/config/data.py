@@ -1,8 +1,10 @@
 import bisect
+import logging
 
 import torch.utils.data
 from torch_detectron.datasets.coco import COCODataset
 from torch_detectron.utils import data_transforms as T
+from torch_detectron.utils.comm import get_world_size
 from torch_detectron.utils.concat_dataset import ConcatDataset
 from torch_detectron.utils.data_collate import BatchCollator
 from torch_detectron.utils.data_samplers import DistributedSampler
@@ -107,22 +109,46 @@ def make_batch_data_sampler(
 
 
 def make_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0):
+    num_gpus = get_world_size()
     if is_train:
-        images_per_batch = cfg.DATALOADER.IMAGES_PER_BATCH_TRAIN
+        images_per_batch = cfg.SOLVER.IMS_PER_BATCH
+        assert (
+            images_per_batch % num_gpus == 0
+        ), "SOLVER.IMS_PER_BATCH ({}) must be divisible by the number "
+        "of GPUs ({}) used.".format(images_per_batch, num_gpus)
+        images_per_gpu = images_per_batch // num_gpus
         shuffle = True
         num_iters = cfg.SOLVER.MAX_ITER
     else:
-        images_per_batch = cfg.DATALOADER.IMAGES_PER_BATCH_TEST
+        images_per_batch = cfg.TEST.IMS_PER_BATCH
+        assert (
+            images_per_batch % num_gpus == 0
+        ), "TEST.IMS_PER_BATCH ({}) must be divisible by the number "
+        "of GPUs ({}) used.".format(images_per_batch, num_gpus)
+        images_per_gpu = images_per_batch // num_gpus
         shuffle = False if not is_distributed else True
         num_iters = None
         start_iter = 0
+
+    if images_per_gpu > 1:
+        logger = logging.getLogger(__name__)
+        logger.warning(
+            "When using more than one image per GPU you may encounter "
+            "an out-of-memory (OOM) error if your GPU does not have "
+            "sufficient memory. If this happens, you can reduce "
+            "SOLVER.IMS_PER_BATCH (for training) or "
+            "TEST.IMS_PER_BATCH (for inference). For training, you must "
+            "also adjust the learning rate and schedule length according "
+            "to the linear scaling rule. See for example: "
+            "https://github.com/facebookresearch/Detectron/blob/master/configs/getting_started/tutorial_1gpu_e2e_faster_rcnn_R-50-FPN.yaml#L14"
+        )
 
     aspect_grouping = [1] if cfg.DATALOADER.ASPECT_RATIO_GROUPING else []
 
     dataset = make_coco_dataset(cfg, is_train)
     sampler = make_data_sampler(dataset, shuffle, is_distributed)
     batch_sampler = make_batch_data_sampler(
-        dataset, sampler, aspect_grouping, images_per_batch, num_iters, start_iter
+        dataset, sampler, aspect_grouping, images_per_gpu, num_iters, start_iter
     )
     collator = BatchCollator(cfg.DATALOADER.SIZE_DIVISIBILITY)
     num_workers = cfg.DATALOADER.NUM_WORKERS
