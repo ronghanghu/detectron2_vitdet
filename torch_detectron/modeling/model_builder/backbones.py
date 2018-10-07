@@ -14,10 +14,10 @@ def build_resnet_backbone(cfg):
 
 def build_resnet_fpn_backbone(cfg):
     body = resnet.ResNet(cfg)
-    representation_size = cfg.MODEL.BACKBONE.OUT_CHANNELS
+    out_channels = cfg.MODEL.BACKBONE.OUT_CHANNELS
     fpn = fpn_module.FPN(
-        layers=[256, 512, 1024, 2048],
-        representation_size=representation_size,
+        in_channels_list=[256, 512, 1024, 2048],
+        out_channels=out_channels,
         top_blocks=fpn_module.LastLevelMaxPool(),
     )
     model = nn.Sequential(OrderedDict([("body", body), ("fpn", fpn)]))

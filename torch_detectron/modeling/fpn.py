@@ -12,12 +12,12 @@ class FPN(nn.Module):
     order, and must be consecutive
     """
 
-    def __init__(self, layers, representation_size, top_blocks=None):
+    def __init__(self, in_channels_list, out_channels, top_blocks=None):
         """
         Arguments:
-            layers (list[int]): number of channels for each feature map that
+            in_channels_list (list[int]): number of channels for each feature map that
                 will be fed
-            representation_size (int): number of channels of the FPN representation
+            out_channels (int): number of channels of the FPN representation
             top_blocks (nn.Module or None): if provided, an extra operation will
                 be performed on the output of the last (smallest resolution)
                 FPN output, and the result will extend the result list
@@ -25,14 +25,16 @@ class FPN(nn.Module):
         super(FPN, self).__init__()
         self.inner_blocks = []
         self.layer_blocks = []
-        for idx, layer_size in enumerate(layers, 1):
+        for idx, in_channels in enumerate(in_channels_list, 1):
             inner_block = "fpn_inner{}".format(idx)
             layer_block = "fpn_layer{}".format(idx)
-            inner_block_module = nn.Conv2d(layer_size, representation_size, 1)
+            inner_block_module = nn.Conv2d(in_channels, out_channels, 1)
             layer_block_module = nn.Conv2d(
-                representation_size, representation_size, 3, 1, 1
+                out_channels, out_channels, 3, 1, 1
             )
             for module in [inner_block_module, layer_block_module]:
+                # Caffe2 implementation uses XavierFill, which in fact
+                # corresponds to kaiming_uniform_ in PyTorch
                 nn.init.kaiming_uniform_(module.weight, a=1)
                 nn.init.constant_(module.bias, 0)
             self.add_module(inner_block, inner_block_module)

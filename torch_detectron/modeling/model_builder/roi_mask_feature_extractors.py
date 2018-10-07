@@ -45,6 +45,8 @@ class MaskRCNNFPNFeatureExtractor(nn.Module):
         for layer_idx, layer_features in enumerate(layers, 1):
             layer_name = "mask_fcn{}".format(layer_idx)
             module = Conv2d(next_feature, layer_features, 3, stride=1, padding=1)
+            # Caffe2 implementation uses MSRAFill, which in fact
+            # corresponds to kaiming_normal_ in PyTorch
             nn.init.kaiming_normal_(module.weight, mode="fan_out", nonlinearity="relu")
             nn.init.constant_(module.bias, 0)
             self.add_module(layer_name, module)

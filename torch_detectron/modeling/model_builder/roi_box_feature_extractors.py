@@ -68,6 +68,8 @@ class FPN2MLPFeatureExtractor(nn.Module):
         self.fc7 = nn.Linear(representation_size, representation_size)
 
         for l in [self.fc6, self.fc7]:
+            # Caffe2 implementation uses XavierFill, which in fact
+            # corresponds to kaiming_uniform_ in PyTorch
             nn.init.kaiming_uniform_(l.weight, a=1)
             nn.init.constant_(l.bias, 0)
 
