@@ -167,6 +167,7 @@ def evaluate_box_proposals(
         ann_ids = dataset.coco.getAnnIds(imgIds=original_id)
         anno = dataset.coco.loadAnns(ann_ids)
         gt_boxes = [obj["bbox"] for obj in anno if obj["iscrowd"] == 0]
+        gt_boxes = torch.as_tensor(gt_boxes).reshape(-1, 4)  # guard against no boxes
         gt_boxes = BoxList(gt_boxes, (image_width, image_height), mode="xywh").convert(
             "xyxy"
         )
