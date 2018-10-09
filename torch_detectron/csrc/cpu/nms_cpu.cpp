@@ -10,7 +10,7 @@ at::Tensor nms_cpu_kernel(const at::Tensor& dets,
   AT_ASSERTM(dets.type() == scores.type(), "dets should have the same type as scores");
 
   if (dets.numel() == 0) {
-    return torch::CPU(at::kLong).tensor();
+    return at::empty({0}, at::TensorOptions(at::kCPU).dtype(at::kLong));
   }
 
   auto x1_t = dets.select(1, 0).contiguous();

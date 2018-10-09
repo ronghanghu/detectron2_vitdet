@@ -14,7 +14,7 @@ at::Tensor nms(const at::Tensor& dets,
 #ifdef WITH_CUDA
     // TODO raise error if not compiled with CUDA
     if (dets.numel() == 0)
-      return torch::CPU(at::kLong).tensor();
+      return at::empty({0}, at::TensorOptions(at::kCPU).dtype(at::kLong));
     auto b = at::cat({dets, scores.unsqueeze(1)}, 1);
     return nms_cuda(b, threshold);
 #else
