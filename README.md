@@ -41,7 +41,7 @@ conda install numpy pyyaml mkl mkl-include setuptools cmake cffi typing cython
 conda install -c mingfeima mkldnn
 conda install -c pytorch magma-cuda90
 
-pip install ninja
+pip install ninja yacs
 
 # cloning and installing PyTorch from master
 mkdir ~/github && cd ~/github
