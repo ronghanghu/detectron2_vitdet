@@ -4,7 +4,7 @@ import os
 
 
 class DatasetCatalog(object):
-    DATA_DIR = os.path.join(os.path.dirname(__file__), "/datasets")
+    DATA_DIR = os.path.join(os.path.dirname(__file__), "datasets")
 
     DATASETS = {
         "coco_2014_train": (
