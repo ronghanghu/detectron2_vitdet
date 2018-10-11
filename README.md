@@ -70,12 +70,13 @@ TORCH_CUDA_ARCH_LIST="3.5;5.0+PTX;6.0;6.1;7.0" python setup.py build develop
 
 # symlink the coco dataset
 cd ~/github/detectron.pytorch
-ln -s /datasets01/COCO/060817/annotations configs/datasets/coco/annotations
-ln -s /datasets01/COCO/060817/train2014 configs/datasets/coco/train2014
-ln -s /datasets01/COCO/060817/test2014 configs/datasets/coco/test2014
-ln -s /datasets01/COCO/060817/val2014 configs/datasets/coco/val2014
-ln -s /private/home/fmassa/imagenet_detectron_models configs/models
+mkdir datasets models
+ln -s /datasets01/COCO/060817/annotations datasets/coco/annotations
+ln -s /datasets01/COCO/060817/train2014 datasets/coco/train2014
+ln -s /datasets01/COCO/060817/test2014 datasets/coco/test2014
+ln -s /datasets01/COCO/060817/val2014 datasets/coco/val2014
 # TODO: coco test 2015 and coco test 2017
+for x in /private/home/fmassa/imagenet_detectron_models/* ; do ln -s $x models ; done
 ```
 
 ## Running training code

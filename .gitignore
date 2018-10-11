@@ -19,3 +19,7 @@ torch_detectron/legacy/
 *~
 build/
 dist/
+
+# project dirs
+/datasets
+/models
