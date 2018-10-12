@@ -10,7 +10,7 @@ at::Tensor nms_cpu_kernel(const at::Tensor& dets,
   AT_ASSERTM(dets.type() == scores.type(), "dets should have the same type as scores");
 
   if (dets.numel() == 0) {
-    return at::empty({0}, at::TensorOptions(at::kCPU).dtype(at::kLong));
+    return at::empty({0}, dets.options().dtype(at::kLong).device(at::kCPU));
   }
 
   auto x1_t = dets.select(1, 0).contiguous();
@@ -23,7 +23,7 @@ at::Tensor nms_cpu_kernel(const at::Tensor& dets,
   auto order_t = std::get<1>(scores.sort(0, /* descending=*/true));
 
   auto ndets = dets.size(0);
-  at::Tensor suppressed_t = at::zeros({ndets}, torch::CPU(at::kByte));
+  at::Tensor suppressed_t = at::zeros({ndets}, dets.options().dtype(at::kByte).device(at::kCPU));
 
   auto suppressed = suppressed_t.data<uint8_t>();
   auto order = order_t.data<int64_t>();
