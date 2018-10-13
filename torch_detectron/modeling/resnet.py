@@ -46,6 +46,11 @@ ResNet50FPNStagesTo5 = (
     StageSpec(index=i, block_count=c, return_features=r)
     for (i, c, r) in ((2, 3, True), (3, 4, True), (4, 6, True), (5, 3, True))
 )
+# ResNet-101-FPN (including all stages)
+ResNet101FPNStagesTo5 = (
+    StageSpec(index=i, block_count=c, return_features=r)
+    for (i, c, r) in ((2, 3, True), (3, 4, True), (4, 23, True), (5, 3, True))
+)
 
 
 class ResNet(nn.Module):
@@ -295,6 +300,7 @@ _STAGE_SPECS = {
     "R-50-C4": ResNet50StagesTo4,
     "R-50-C5": ResNet50StagesTo5,
     "R-50-FPN": ResNet50FPNStagesTo5,
+    "R-101-FPN": ResNet101FPNStagesTo5,
 }
 
 

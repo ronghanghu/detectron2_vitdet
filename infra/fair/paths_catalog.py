@@ -34,7 +34,7 @@ class DatasetCatalog(object):
 
 class ModelCatalog(object):
     DATA_DIR = "/private/home/fmassa/imagenet_detectron_models/"
-    MODELS = {"R-50": "R-50.pth"}
+    MODELS = {"R-50": "R-50.pth", "R-101": "R-101.pkl", "X-101-32x8d": "X-101-32x8d.pkl"}
 
     @staticmethod
     def get(name):

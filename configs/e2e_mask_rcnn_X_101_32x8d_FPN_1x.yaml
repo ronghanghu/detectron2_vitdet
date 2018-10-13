@@ -1,8 +1,8 @@
 MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
-  WEIGHT: "/private/home/fmassa/detectron_c2_models/e2e_mask_rcnn_r50_fpn_1x.pkl"
+  WEIGHT: "catalog://X-101-32x8d"
   BACKBONE:
-    CONV_BODY: "R-50-FPN"
+    CONV_BODY: "R-101-FPN"
     OUT_CHANNELS: 256
   RPN:
     USE_FPN: True
@@ -27,8 +27,19 @@ MODEL:
     POOLER_SAMPLING_RATIO: 2
     RESOLUTION: 28
     SHARE_BOX_FEATURE_EXTRACTOR: False
+  RESNETS:
+    STRIDE_IN_1X1: False
+    NUM_GROUPS: 32
+    WIDTH_PER_GROUP: 8
   MASK_ON: True
 DATASETS:
+  TRAIN: ("coco_2014_train", "coco_2014_valminusminival")
   TEST: ("coco_2014_minival",)
 DATALOADER:
   SIZE_DIVISIBILITY: 32
+SOLVER:
+  BASE_LR: 0.01
+  WEIGHT_DECAY: 0.0001
+  STEPS: (120000, 160000)
+  MAX_ITER: 180000
+  IMS_PER_BATCH: 8

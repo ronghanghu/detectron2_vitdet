@@ -32,7 +32,7 @@ class DatasetCatalog(object):
 
 class ModelCatalog(object):
     DATA_DIR = "models"
-    MODELS = {"R-50": "R-50.pth"}
+    MODELS = {"R-50": "R-50.pth", "R-101": "R-101.pth", "X-101-32x8d": "X-101-32x8d.pth"}
 
     @staticmethod
     def get(name):

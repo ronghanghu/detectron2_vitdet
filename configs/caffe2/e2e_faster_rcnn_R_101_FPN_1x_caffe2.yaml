@@ -1,8 +1,8 @@
 MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
-  WEIGHT: "/private/home/fmassa/detectron_c2_models/e2e_mask_rcnn_r50_fpn_1x.pkl"
+  WEIGHT: "/private/home/fmassa/detectron_c2_models/e2e_faster_rcnn_r101_fpn.pkl"
   BACKBONE:
-    CONV_BODY: "R-50-FPN"
+    CONV_BODY: "R-101-FPN"
     OUT_CHANNELS: 256
   RPN:
     USE_FPN: True
@@ -19,15 +19,6 @@ MODEL:
     POOLER_SAMPLING_RATIO: 2
     FEATURE_EXTRACTOR: "FPN2MLPFeatureExtractor"
     PREDICTOR: "FPNPredictor"
-  ROI_MASK_HEAD:
-    POOLER_SCALES: (0.25, 0.125, 0.0625, 0.03125)
-    FEATURE_EXTRACTOR: "MaskRCNNFPNFeatureExtractor"
-    PREDICTOR: "MaskRCNNC4Predictor"
-    POOLER_RESOLUTION: 14
-    POOLER_SAMPLING_RATIO: 2
-    RESOLUTION: 28
-    SHARE_BOX_FEATURE_EXTRACTOR: False
-  MASK_ON: True
 DATASETS:
   TEST: ("coco_2014_minival",)
 DATALOADER:
