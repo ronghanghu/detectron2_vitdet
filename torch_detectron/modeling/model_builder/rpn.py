@@ -8,7 +8,6 @@ from torch_detectron.modeling.box_coder import BoxCoder
 from torch_detectron.modeling.post_processors.rpn import FPNRPNBoxSelector
 from torch_detectron.modeling.post_processors.rpn import ROI2FPNLevelsMapper
 from torch_detectron.modeling.post_processors.rpn import RPNBoxSelector
-from torch_detectron.modeling.utils import cat_bbox
 
 from .loss_evaluators import make_rpn_loss_evaluator
 
@@ -148,9 +147,6 @@ class RPNModule(torch.nn.Module):
         if not self.training:
             boxes = self.box_selector_test(anchors, objectness, rpn_box_regression)
             if self.cfg.MODEL.RPN_ONLY:
-                # concatenate all boxes from different levels if in inference and rpn_only
-                boxes = list(zip(*boxes))
-                boxes = [cat_bbox(box) for box in boxes]
                 # sort scores in decreasing order
                 inds = [
                     box.get_field("objectness").sort(descending=True)[1]

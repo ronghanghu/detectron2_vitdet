@@ -5,8 +5,6 @@ from torch import nn
 
 from torch_detectron.structures.bounding_box import BoxList
 
-from ..utils import split_with_sizes
-
 
 # TODO check if want to return a single BoxList or a composite
 # object
@@ -26,6 +24,16 @@ class MaskPostProcessor(nn.Module):
         self.masker = masker
 
     def forward(self, x, boxes):
+        """
+        Arguments:
+            x (Tensor): the mask logits
+            boxes (list[BoxList]): bounding boxes that are used as
+                reference, one for ech image
+
+        Returns:
+            results (list[BoxList]): one BoxList for each image, containing
+                the extra field mask
+        """
         mask_prob = x.sigmoid()
 
         # select masks coresponding to the predicted classes
@@ -39,7 +47,7 @@ class MaskPostProcessor(nn.Module):
             mask_prob = self.masker(mask_prob, boxes)
 
         boxes_per_image = [box.bbox.size(0) for box in boxes]
-        mask_prob = split_with_sizes(mask_prob, boxes_per_image, dim=0)
+        mask_prob = mask_prob.split(boxes_per_image, dim=0)
 
         results = []
         for prob, box in zip(mask_prob, boxes):

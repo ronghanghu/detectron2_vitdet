@@ -50,7 +50,7 @@ def cat_bbox(bboxes):
     single BoxList
 
     Arguments:
-        bboxes (list of BoxList)
+        bboxes (list[BoxList])
     """
     assert isinstance(bboxes, (list, tuple))
     assert all(isinstance(bbox, BoxList) for bbox in bboxes)
@@ -93,22 +93,34 @@ def split_bbox(bbox, split_size_or_sections):
     return bboxes
 
 
-def split_with_sizes(tensor, split_sizes, dim=0):
+def split_boxlist_in_levels(boxlist, num_levels=None):
     """
-    Similar to split, but with a fix for
-    https://github.com/pytorch/pytorch/issues/8686
+    This function splits a BoxList in a list of BoxList, where each
+    BoxList correspond to a single level.
+
+    It assumes that the levels start from 0 and goes up to num_levels-1.
+
+    Arguments:
+        boxlist (BoxList): boxes to be split. It must have the `level`
+            field set
+        num_levels (bool, optional): the number of levels to use.
+            If not passed, it will be inferred as boxlist.get_field("level").max() + 1
     """
-    assert sum(split_sizes) == tensor.shape[dim]
-    result = []
-    start_idx = 0
-    for length in split_sizes:
-        if length == 0:
-            result.append(tensor.new())
-            continue
-        result.append(tensor.narrow(dim, start_idx, length))
-        start_idx += length
-    assert start_idx == tensor.shape[dim]
-    return result
+    if not boxlist.has_field("level"):
+        raise RuntimeError("boxlist should have a level field set")
+    levels = boxlist.get_field("level")
+    if not num_levels:
+        num_levels = levels.max() + 1
+    # optimization for single level
+    if num_levels == 1:
+        return [boxlist]
+    # the following can be computed simply via levels.bincount()
+    # but we exploit the fact that the levels are in increasing
+    # order to obtain 4x speedup over bincount
+    count_per_level = (levels[:, None] == torch.arange(num_levels, device=levels.device)).sum(0)
+
+    # now split the boxlist over the different levels
+    return split_bbox(boxlist, count_per_level.tolist())
 
 
 def keep_only_positive_boxes(boxes):
@@ -117,74 +129,18 @@ def keep_only_positive_boxes(boxes):
     return a set of BoxList for which `labels > 0`.
 
     Arguments:
-        boxes (list of list of BoxList)
+        boxes (list of BoxList)
     """
     assert isinstance(boxes, (list, tuple))
-    assert isinstance(boxes[0], (list, tuple))
-    assert isinstance(boxes[0][0], BoxList)
-    assert boxes[0][0].has_field("labels")
+    assert isinstance(boxes[0], BoxList)
+    assert boxes[0].has_field("labels")
     positive_boxes = []
     num_boxes = 0
-    for boxes_per_feature_map in boxes:
-        positive_boxes_per_feature_map = []
-        for boxes_per_image in boxes_per_feature_map:
-            labels = boxes_per_image.get_field("labels")
-            inds = nonzero(labels > 0)[0]
-            selected_boxes = boxes_per_image[inds]
-            positive_boxes_per_feature_map.append(selected_boxes)
-            num_boxes += len(inds)
-        positive_boxes.append(positive_boxes_per_feature_map)
+    for boxes_per_image in boxes:
+        labels = boxes_per_image.get_field("labels")
+        inds = nonzero(labels > 0)[0]
+        positive_boxes.append(boxes_per_image[inds])
     return positive_boxes
-
-
-def meshgrid(x, y=None):
-    if y is None:
-        y = x
-    x = torch.as_tensor(x)
-    y = torch.as_tensor(y)
-    m, n = x.size(0), y.size(0)
-    grid_x = x[None].expand(n, m).contiguous()
-    grid_y = y[:, None].expand(n, m).contiguous()
-    return grid_x, grid_y
-
-
-def meshgrid_new(x, y):
-    """
-    Not used. Should eventually replace meshgrid,
-    but it requires some testing
-    """
-    x = torch.as_tensor(x)
-    y = torch.as_tensor(y)
-    x_exp_shape = tuple(1 for _ in y.shape) + x.shape
-    y_exp_shape = y.shape + tuple(1 for _ in x.shape)
-
-    xgrid = x.reshape(x_exp_shape).repeat(y_exp_shape)
-    ygrid = y.reshape(y_exp_shape).repeat(x_exp_shape)
-    new_shape = y.shape + x.shape
-    xgrid = xgrid.reshape(new_shape)
-    ygrid = ygrid.reshape(new_shape)
-
-    return xgrid, ygrid
-
-
-def load_state_dict(model, state_dict, strict=True):
-    """
-    Very similar to model.load_state_dict, but which logs
-    as well which parameters have been loaded
-    """
-    # perform the loading
-    model.load_state_dict(state_dict, strict)
-    logger = logging.getLogger("torch_detectron.core.utils.load_state_dict")
-    # get the names of the parameters that were loaded
-    local_state_dict_keys = model.state_dict().keys()
-    state_dict_keys = state_dict.keys()
-    loaded_keys = [k for k in local_state_dict_keys if k in state_dict_keys]
-    max_size = max([len(key) for key in loaded_keys]) if loaded_keys else 1
-    log_str_template = "{: <{}} loaded from weights file: {}"
-    for key in sorted(loaded_keys):
-        logger.debug(
-            log_str_template.format(key, max_size, tuple(state_dict[key].shape))
-        )
 
 
 class _NewEmptyTensorOp(torch.autograd.Function):
@@ -213,7 +169,7 @@ class Conv2d(torch.nn.Conv2d):
                 x.shape[-2:], self.padding, self.dilation, self.kernel_size, self.stride
             )
         ]
-        output_shape = [x.shape[0], self.bias.shape[0]] + output_shape
+        output_shape = [x.shape[0], self.weight.shape[0]] + output_shape
         return _NewEmptyTensorOp.apply(x, output_shape)
 
 

@@ -8,6 +8,7 @@ from ..box_ops import boxes_area
 from ..utils import cat
 from ..utils import cat_bbox
 from ..utils import nonzero
+from ..utils import split_boxlist_in_levels
 
 
 # TODO add option for different params in train / test
@@ -45,13 +46,12 @@ class RPNBoxSelector(torch.nn.Module):
     def add_gt_proposals(self, proposals, targets):
         """
         Arguments:
-            proposals: list[list[BoxList]], with a single level
-            targets: list of BoxList
+            proposals: list[BoxList]
+            targets: list[BoxList]
         """
         # Get the device we're operating on
-        device = proposals[0][0].bbox.device
+        device = proposals[0].bbox.device
 
-        # gt_boxes = [BoxList(target.bbox, target.size, target.mode) for target in targets]
         gt_boxes = [target.copy_with_fields([]) for target in targets]
 
         # later cat of bbox requires all fields to be present for all bbox
@@ -60,9 +60,12 @@ class RPNBoxSelector(torch.nn.Module):
             gt_box.add_field(
                 "objectness", torch.ones(gt_box.bbox.shape[0], device=device)
             )
+            gt_box.add_field(
+                "level", torch.zeros(gt_box.bbox.shape[0], dtype=torch.int64, device=device)
+            )
 
         proposals = [
-            [cat_bbox((proposal[0], gt_box))]
+            cat_bbox((proposal, gt_box))
             for proposal, gt_box in zip(proposals, gt_boxes)
         ]
 
@@ -71,7 +74,7 @@ class RPNBoxSelector(torch.nn.Module):
     def forward_for_single_feature_map(self, anchors, objectness, box_regression):
         """
         Arguments:
-            anchors: list of BoxList
+            anchors: list[BoxList]
             objectness: tensor of size N, A, H, W
             box_regression: tensor of size N, A * 4, H, W
         """
@@ -89,7 +92,6 @@ class RPNBoxSelector(torch.nn.Module):
         pre_nms_top_n = min(self.pre_nms_top_n, num_anchors)
         objectness, topk_idx = objectness.topk(pre_nms_top_n, dim=1, sorted=True)
 
-        # TODO check if this batch_idx is really needed
         batch_idx = torch.arange(N, device=device)[:, None]
         box_regression = box_regression[batch_idx, topk_idx]
 
@@ -103,17 +105,13 @@ class RPNBoxSelector(torch.nn.Module):
 
         proposals = proposals.view(N, -1, 4)
 
+        # assumption: all the boxes belong to the same level
+        # FIXME need to be improved, as they might already have changed in the decoding
+        lvl = anchors[0].get_field("level")[0]
         # TODO optimize / make batch friendly
         sampled_bboxes = []
         for proposal, score, im_shape in zip(proposals, objectness, image_shapes):
             height, width = im_shape
-
-            if proposal.dim() == 0:
-                # TODO check what to do here
-                # sampled_proposals.append(proposal.new())
-                # sampled_scores.append(score.new())
-                print("skipping")
-                continue
 
             p = _clip_boxes_to_image(proposal, height, width)
             keep = _filter_boxes(p, self.min_size, im_shape)
@@ -127,6 +125,7 @@ class RPNBoxSelector(torch.nn.Module):
                 score = score[keep]
             sampled_bbox = BoxList(p, (width, height), mode="xyxy")
             sampled_bbox.add_field("objectness", score)
+            sampled_bbox.add_field("level", torch.full_like(score, lvl, dtype=torch.int64))
             sampled_bboxes.append(sampled_bbox)
             # TODO maybe also copy the other fields that were originally present?
 
@@ -135,20 +134,24 @@ class RPNBoxSelector(torch.nn.Module):
     def forward(self, anchors, objectness, box_regression, targets=None):
         """
         Arguments:
-            anchors: list[list[BoxList]]
+            anchors: list[BoxList]
             objectness: list[tensor]
             box_regression: list[tensor]
         """
-        assert len(anchors) == 1, "only single feature map supported"
+        num_levels = len(objectness)
+        assert num_levels == 1, "only single feature map supported"
+        anchors = [split_boxlist_in_levels(anchor, num_levels) for anchor in anchors]
+        anchors = list(zip(*anchors))
         sampled_boxes = []
         for a, o, b in zip(anchors, objectness, box_regression):
             sampled_boxes.append(self.forward_for_single_feature_map(a, o, b))
 
+        # there is a single feature map, remove the extra nesting level
+        sampled_boxes = sampled_boxes[0]
+
         # append ground-truth bboxes to proposals
         if self.training and targets is not None:
-            sampled_boxes = list(zip(*sampled_boxes))
             sampled_boxes = self.add_gt_proposals(sampled_boxes, targets=targets)
-            sampled_boxes = list(zip(*sampled_boxes))
 
         return sampled_boxes
 
@@ -165,20 +168,19 @@ class FPNRPNBoxSelector(RPNBoxSelector):
         self.roi_to_fpn_level_mapper = roi_to_fpn_level_mapper
         self.fpn_post_nms_top_n = fpn_post_nms_top_n
 
-    def __call__(self, anchors, objectness, box_regression, targets=None):
+    def forward(self, anchors, objectness, box_regression, targets=None):
         """
         Arguments:
-            anchors: list[list[BoxList]]
+            anchors: list[BoxList]
             objectness: list[tensor]
             box_regression: list[tensor]
         """
         sampled_boxes = []
+        num_levels = len(objectness)
+        anchors = [split_boxlist_in_levels(anchor, num_levels) for anchor in anchors]
+        anchors = list(zip(*anchors))
         for a, o, b in zip(anchors, objectness, box_regression):
             sampled_boxes.append(self.forward_for_single_feature_map(a, o, b))
-
-        # shortcut for single feature maps
-        if len(sampled_boxes) == 1:
-            return sampled_boxes
 
         # TODO almost all this part can be
         # factored out in a RPN-agnostic class
@@ -242,9 +244,9 @@ class FPNRPNBoxSelector(RPNBoxSelector):
             idx_per_img = nonzero(indices == img_idx)[0]
             boxes_per_img = concat_boxes[idx_per_img]
             boxlist_per_img = BoxList(boxes_per_img, image_sizes[img_idx], mode="xyxy")
-            for field_data in extra_fields.items():
+            for field, data in extra_fields.items():
                 boxlist_per_img.add_field(field, data[idx_per_img])
-            boxlists.append([boxlist_per_img])
+            boxlists.append(boxlist_per_img)
 
         # append ground-truth bboxes to proposals
         if self.training and targets is not None:
@@ -254,15 +256,16 @@ class FPNRPNBoxSelector(RPNBoxSelector):
         lvl_max = self.roi_to_fpn_level_mapper.k_max
         result = []
         for img_idx in range(num_images):
-            boxlist_per_img = boxlists[img_idx][0]
-            levels = self.roi_to_fpn_level_mapper(boxlist_per_img.bbox).to(torch.int64)
-            boxlist_per_level = split_boxlist_in_levels(
-                boxlist_per_img, levels, lvl_min, lvl_max
-            )
-            result.append(boxlist_per_level)
+            boxlist_per_img = boxlists[img_idx]
+            levels = self.roi_to_fpn_level_mapper(boxlist_per_img.bbox)
+            boxlist_per_img.add_field("level", levels - lvl_min)
+            # enforce that boxes are in increasing feature map level, so that splitting
+            # over different levels can be done with slicing (instead of advanced indexing)
+            _, permute_idx = levels.sort()
+            boxlist_per_img = boxlist_per_img[permute_idx]
 
-        # flip order to be feat_lvl -> img
-        result = list(zip(*result))
+            result.append(boxlist_per_img)
+
         return result
 
 
@@ -292,13 +295,6 @@ def _filter_boxes(boxes, min_size, im_shape):
         & (y_ctr < im_shape[0])
     )[0]
     return keep
-
-
-def split_boxlist_in_levels(boxlist, levels, lvl_min, lvl_max):
-    result = []
-    for lvl in range(lvl_min, lvl_max + 1):
-        result.append(boxlist[nonzero(levels == lvl)[0]])
-    return result
 
 
 class ROI2FPNLevelsMapper(object):
@@ -332,4 +328,4 @@ class ROI2FPNLevelsMapper(object):
         # Eqn.(1) in FPN paper
         target_lvls = torch.floor(self.lvl0 + torch.log2(s / self.s0 + 1e-6))
         target_lvls = torch.clamp(target_lvls, min=self.k_min, max=self.k_max)
-        return target_lvls
+        return target_lvls.to(torch.int64)

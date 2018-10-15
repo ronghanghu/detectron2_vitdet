@@ -2,11 +2,9 @@ import torch
 from torch.nn import functional as F
 
 from ..utils import cat
-from ..utils import cat_bbox
 from ..utils import keep_only_positive_boxes
 from ..utils import nonzero
 from ..utils import smooth_l1_loss
-from ..utils import split_with_sizes
 from .matcher import Matcher
 from .target_preparator import TargetPreparator
 
@@ -125,10 +123,6 @@ class MaskRCNNLossComputation(object):
         TargetPreparator. It might be worth considering modifying this once
         I implement keypoints
         """
-        # flip anchor representation to be first images, and then feature maps
-        anchors = list(zip(*anchors))
-        anchors = [cat_bbox(anchor) for anchor in anchors]
-
         target_preparator = self.target_preparator
         # TODO assert / resize anchors to have the same .size as targets?
         matched_targets = target_preparator.match_targets_to_anchors(anchors, targets)
@@ -144,44 +138,10 @@ class MaskRCNNLossComputation(object):
             masks.append(masks_per_image)
         return labels, masks
 
-    def get_permutation_inds(self, anchors):
-        """
-        anchors is in features - images order get the permutation to make it in
-        image - features order
-
-        Arguments:
-            anchors (list[list[BoxList]]): first level corresponds to the feature maps,
-                and the second to the images.
-
-        Returns:
-            result (Tensor): indices that allow to convert from the feature map-first
-                representation to the image-first representation
-        """
-        num_images = len(anchors[0])
-        # flatten anchors into a single list
-        flattened = [f for l in anchors for f in l]
-        sizes = [i.bbox.shape[0] for i in flattened]
-        device = torch.device("cpu")
-        # strategy: start from the identity permutation which has the final size
-        # split it according to the sizes for each feature map / image, group the
-        # indices according to a list of features of list of images, invert the
-        # representation to be images -> features, and then concatenate it all
-        inds = torch.arange(sum(sizes), device=device)
-        # can't use torch.split because of a bug with 0 in sizes
-        inds = split_with_sizes(inds, sizes)
-        # grouped correspond to the linear indices split in
-        # features first, and then images
-        grouped = [inds[i : i + num_images] for i in range(0, len(inds), num_images)]
-        # convert to images first, then features by flipping the representation
-        flip = list(zip(*grouped))
-        # flatten the list of lists into a single list of tensors
-        flip = [f for l in flip for f in l]
-        return torch.cat(flip, dim=0)
-
     def __call__(self, anchors, mask_logits, targets):
         """
         Arguments:
-            anchors (list[list[BoxList]))
+            anchors (list[BoxList])
             mask_logits (Tensor)
             targets (list[BoxList])
 
@@ -192,19 +152,14 @@ class MaskRCNNLossComputation(object):
             anchors = keep_only_positive_boxes(anchors)
         labels, mask_targets = self.prepare_targets(anchors, targets)
 
-        # convert from feature map-first representation to
-        # image-first representation
-        permutation_inds = self.get_permutation_inds(anchors)
-        mask_logits = mask_logits[permutation_inds]
-
         labels = cat(labels, dim=0)
         mask_targets = cat(mask_targets, dim=0)
 
         positive_inds = nonzero(labels > 0)[0]
         labels_pos = labels[positive_inds]
 
-        # torch.mean (in binary_cross_entropy_with_logits) does'nt
-        # accept empty tensors, so handle it sepaartely
+        # torch.mean (in binary_cross_entropy_with_logits) doesn't
+        # accept empty tensors, so handle it separately
         if mask_targets.numel() == 0:
             return mask_logits.sum() * 0
 

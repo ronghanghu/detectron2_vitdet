@@ -63,12 +63,11 @@ class RPNLossComputation(object):
     def __call__(self, anchors, objectness, box_regression, targets):
         """
         Arguments:
-            anchors (list of list of BoxList)
-            objectness (list of tensor)
-            box_regression (list of tensor)
-            targets (list of BoxList)
+            anchors (list[BoxList])
+            objectness (list[Tensor])
+            box_regression (list[Tensor])
+            targets (list[BoxList])
         """
-        assert len(anchors) == len(objectness)
         labels, regression_targets = self.target_preparator(anchors, targets)
         sampled_pos_inds, sampled_neg_inds = self.fg_bg_sampler(labels)
         sampled_pos_inds = nonzero(torch.cat(sampled_pos_inds, dim=0))[0]

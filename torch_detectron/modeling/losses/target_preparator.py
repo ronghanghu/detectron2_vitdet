@@ -1,7 +1,6 @@
 import torch
 
 from ..box_ops import boxes_iou
-from ..utils import cat_bbox
 
 
 class TargetPreparator(object):
@@ -27,8 +26,8 @@ class TargetPreparator(object):
     def match_targets_to_anchors(self, anchors, targets):
         """
         Arguments:
-            anchors: list of BoxList, one for each image
-            targets: list of BoxList, one for each image
+            anchors: list[BoxList], one for each image
+            targets: list[BoxList], one for each image
         """
         results = []
         for anchor, target in zip(anchors, targets):
@@ -77,14 +76,9 @@ class TargetPreparator(object):
     def __call__(self, anchors, targets):
         """
         Arguments:
-            anchors: a list of list of BoxList. The first level correspond to the different
-                feature levels, and the second correspond to the images
-            targets: a list of BoxList, one for each image
+            anchors: list[BoxList], one for each image
+            targets: list[BoxList], one for each image
         """
-        # flip anchors so that first level correspond to images, and second to
-        # feature levels
-        anchors = list(zip(*anchors))
-        anchors = [cat_bbox(anchor) for anchor in anchors]
         # TODO assert / resize anchors to have the same .size as targets?
         matched_targets = self.match_targets_to_anchors(anchors, targets)
         labels = []

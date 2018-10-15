@@ -5,9 +5,7 @@ import torch
 from torch import nn
 
 from ..structures.bounding_box import BoxList
-from .utils import meshgrid
-
-# meshgrid = torch.meshgrid
+from .utils import cat_bbox
 
 
 class AnchorGenerator(nn.Module):
@@ -38,7 +36,7 @@ class AnchorGenerator(nn.Module):
     def num_anchors_per_location(self):
         return [len(self.cell_anchors)]
 
-    def forward_single_image(self, image_sizes, feature_map):
+    def forward_single_image(self, image_sizes, feature_map, lvl):
         device = feature_map.device
         grid_height, grid_width = feature_map.shape[-2:]
         stride = self.stride
@@ -48,9 +46,9 @@ class AnchorGenerator(nn.Module):
         shifts_y = torch.arange(
             0, grid_height * stride, step=stride, dtype=torch.float32, device=device
         )
-        shift_x, shift_y = meshgrid(shifts_x, shifts_y)
-        shift_x = shift_x.view(-1)
-        shift_y = shift_y.view(-1)
+        shift_x, shift_y = torch.meshgrid(shifts_x, shifts_y)
+        shift_x = shift_x.reshape(-1)
+        shift_y = shift_y.reshape(-1)
         shifts = torch.stack((shift_x, shift_y, shift_x, shift_y), dim=1)
 
         self.cell_anchors = self.cell_anchors.to(device)
@@ -77,22 +75,25 @@ class AnchorGenerator(nn.Module):
 
         anchors = BoxList(anchors, (image_width, image_height), mode="xyxy")
         anchors.add_field("visibility", inds_inside)
+        anchors.add_field("level", torch.full_like(inds_inside, lvl, dtype=torch.int64))
 
-        # TODO check if want to return list of not
-        # return [anchors]
         return anchors
 
     def forward(self, images_sizes, feature_maps):
         """
         Arguments:
-            image_sizes (list(tuple(int, int)))
-            feature_maps (list(list(tensor)))
+            image_sizes (list[tuple[int, int]]): the sizes of a list of images,
+                in (height, width) format.
+            feature_maps (list[Tensor]): The feature maps on top of which the
+                anchors will be created. Each tensor correspond to a different
+                level in the feature map. The tensors should be of size
+                (N, C, H, W), where N is the number of images.
         """
         assert len(feature_maps) == 1, "only single feature maps allowed"
         anchors = []
         for image_sizes, feature_map in zip(images_sizes, feature_maps[0]):
-            anchors.append(self.forward_single_image(image_sizes, feature_map))
-        return [anchors]
+            anchors.append(self.forward_single_image(image_sizes, feature_map, 0))
+        return anchors
 
 
 # TODO deduplicate with AnchorGenerator
@@ -127,7 +128,7 @@ class FPNAnchorGenerator(nn.Module):
     def num_anchors_per_location(self):
         return [len(cell_anchors) for cell_anchors in self.cell_anchors]
 
-    def forward_single_image(self, image_sizes, feature_map, cell_anchors, stride):
+    def forward_single_image(self, image_sizes, feature_map, cell_anchors, stride, lvl):
         device = feature_map.device
         grid_height, grid_width = feature_map.shape[-2:]
         shifts_x = torch.arange(
@@ -136,9 +137,9 @@ class FPNAnchorGenerator(nn.Module):
         shifts_y = torch.arange(
             0, grid_height * stride, step=stride, dtype=torch.float32, device=device
         )
-        shift_x, shift_y = meshgrid(shifts_x, shifts_y)
-        shift_x = shift_x.view(-1)
-        shift_y = shift_y.view(-1)
+        shift_x, shift_y = torch.meshgrid(shifts_x, shifts_y)
+        shift_x = shift_x.reshape(-1)
+        shift_y = shift_y.reshape(-1)
         shifts = torch.stack((shift_x, shift_y, shift_x, shift_y), dim=1)
 
         A = cell_anchors.size(0)
@@ -163,31 +164,40 @@ class FPNAnchorGenerator(nn.Module):
 
         anchors = BoxList(anchors, (image_width, image_height), mode="xyxy")
         anchors.add_field("visibility", inds_inside)
+        anchors.add_field("level", torch.full_like(inds_inside, lvl, dtype=torch.int64))
 
-        # TODO check if want to return list of not
-        # return [anchors]
         return anchors
 
     def forward(self, images_sizes, feature_maps):
         """
         Arguments:
-            image_sizes (list(tuple(int, int)))
-            feature_maps (list(list(tensor)))
+            image_sizes (list[tuple[int, int]]): the sizes of a list of images,
+                in (height, width) format.
+            feature_maps (list[Tensor]): The feature maps on top of which the
+                anchors will be created. Each tensor correspond to a different
+                level in the feature map. The tensors should be of size
+                (N, C, H, W), where N is the number of images.
         """
-        device = feature_maps[0][0].device
+        device = feature_maps[0].device
         self.cell_anchors = [anchor.to(device) for anchor in self.cell_anchors]
         anchors = []
-        for feature_map_level, stride, cell_anchor in zip(
+        for lvl, (feature_map_level, stride, cell_anchor) in enumerate(zip(
             feature_maps, self.strides, self.cell_anchors
-        ):
+        )):
             per_level_anchors = []
             for image_sizes, feature_map in zip(images_sizes, feature_map_level):
                 per_level_anchors.append(
                     self.forward_single_image(
-                        image_sizes, feature_map, cell_anchor, stride
+                        image_sizes, feature_map, cell_anchor, stride, lvl
                     )
                 )
             anchors.append(per_level_anchors)
+        # convert a list[list[BoxList]], where the first elements correspond to
+        # different feature map levels and the second to different images
+        # into a list[BoxList], where each BoxList contains the corresponding level
+        # attached to it
+        anchors = list(zip(*anchors))
+        anchors = [cat_bbox(anchor) for anchor in anchors]
         return anchors
 
 
@@ -371,7 +381,7 @@ class AnchorGenerator_v0(nn.Module):
         # TODO attention if we want to return a list or not
         # grid_height, grid_width = feature_map[0].shape[-2:]
         grid_height, grid_width = feature_map.shape[-2:]
-        scales_grid, aspect_ratios_grid = meshgrid(self._scales, self._aspect_ratios)
+        scales_grid, aspect_ratios_grid = torch.meshgrid(self._scales, self._aspect_ratios)
         scales_grid = torch.reshape(scales_grid, [-1])
         aspect_ratios_grid = torch.reshape(aspect_ratios_grid, [-1])
 
@@ -446,10 +456,10 @@ def tile_anchors(
     y_centers = y_centers * anchor_stride[0] + anchor_offset[0]
     x_centers = torch.arange(grid_width, dtype=torch.float32, device=device)
     x_centers = x_centers * anchor_stride[1] + anchor_offset[1]
-    x_centers, y_centers = meshgrid(x_centers, y_centers)
+    x_centers, y_centers = torch.meshgrid(x_centers, y_centers)
 
-    widths_grid, x_centers_grid = meshgrid(widths, x_centers)
-    heights_grid, y_centers_grid = meshgrid(heights, y_centers)
+    widths_grid, x_centers_grid = torch.meshgrid(widths, x_centers)
+    heights_grid, y_centers_grid = torch.meshgrid(heights, y_centers)
     bbox_centers = torch.stack([y_centers_grid, x_centers_grid], dim=3)
     bbox_sizes = torch.stack([heights_grid, widths_grid], dim=3)
     bbox_centers = torch.reshape(bbox_centers, [-1, 2])

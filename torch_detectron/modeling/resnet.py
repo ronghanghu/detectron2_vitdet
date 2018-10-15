@@ -15,6 +15,9 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from torch_detectron.modeling.utils import Conv2d
+
+
 STEM_OUT_CHANNELS = 64
 RES2_OUT_CHANNELS = 256
 
@@ -215,7 +218,7 @@ class BottleneckWithFixedBatchNorm(nn.Module):
         super(BottleneckWithFixedBatchNorm, self).__init__()
 
         if in_channels != out_channels:
-            self.branch1 = nn.Conv2d(
+            self.branch1 = Conv2d(
                 in_channels, out_channels, kernel_size=1, stride=stride, bias=False
             )
             self.branch1_bn = FixedBatchNorm2d(out_channels)
@@ -225,7 +228,7 @@ class BottleneckWithFixedBatchNorm(nn.Module):
         # stride in the 3x3 conv
         stride_1x1, stride_3x3 = (stride, 1) if stride_in_1x1 else (1, stride)
 
-        self.branch2a = nn.Conv2d(
+        self.branch2a = Conv2d(
             in_channels,
             bottleneck_channels,
             kernel_size=1,
@@ -235,7 +238,7 @@ class BottleneckWithFixedBatchNorm(nn.Module):
         self.branch2a_bn = FixedBatchNorm2d(bottleneck_channels)
         # TODO: specify init for the above
 
-        self.branch2b = nn.Conv2d(
+        self.branch2b = Conv2d(
             bottleneck_channels,
             bottleneck_channels,
             kernel_size=3,
@@ -246,7 +249,7 @@ class BottleneckWithFixedBatchNorm(nn.Module):
         )
         self.branch2b_bn = FixedBatchNorm2d(bottleneck_channels)
 
-        self.branch2c = nn.Conv2d(
+        self.branch2c = Conv2d(
             bottleneck_channels, out_channels, kernel_size=1, bias=False
         )
         self.branch2c_bn = FixedBatchNorm2d(out_channels)
@@ -279,7 +282,7 @@ class StemWithFixedBatchNorm(nn.Module):
     def __init__(self):
         super(StemWithFixedBatchNorm, self).__init__()
 
-        self.conv1 = nn.Conv2d(
+        self.conv1 = Conv2d(
             3, STEM_OUT_CHANNELS, kernel_size=7, stride=2, padding=3, bias=False
         )
         self.conv1_bn = FixedBatchNorm2d(STEM_OUT_CHANNELS)

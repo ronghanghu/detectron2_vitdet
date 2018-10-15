@@ -90,17 +90,14 @@ class PostProcessor(nn.Module):
         """
         Arguments:
             x (tuple[tensor, tensor]): x contains the class logits
-                and the box_regression from the model
-            boxes (list[list[BoxList]]): bounding boxes that are used as
-                reference. The first level correspond to the feature maps,
-                and the second level to the images.
+                and the box_regression from the model.
+            boxes (list[BoxList]): bounding boxes that are used as
+                reference, one for ech image
 
         Returns:
             results (list[BoxList]): one BoxList for each image, containing
                 the extra fields labels and scores
         """
-        assert len(boxes) == 1, "Only single feature"
-        boxes = boxes[0]
         class_logits, box_regression = x
         class_prob = F.softmax(class_logits, -1)
 
@@ -129,101 +126,7 @@ class PostProcessor(nn.Module):
             bbox = BoxList(cls_boxes, (width, height), mode="xyxy")
             bbox.add_field("scores", cls_scores)
             bbox.add_field("labels", labels)
-            results.append(bbox)
-
-        return results
-
-
-# TODO maybe simplify
-class FPNPostProcessor(nn.Module):
-    """
-    Extension of PostProcessor for FPN case.
-
-    TODO: can probably merge this with PostProcessor
-    """
-
-    def __init__(
-        self,
-        score_thresh=0.05,
-        nms=0.5,
-        detections_per_img=100,
-        box_coder=BoxCoder(weights=(10., 10., 5., 5.)),
-    ):
-        """
-        Arguments:
-            score_thresh (float)
-            nms (float)
-            detections_per_img (int)
-            box_coder (BoxCoder)
-        """
-        super(FPNPostProcessor, self).__init__()
-        self.score_thresh = score_thresh
-        self.nms = nms
-        self.detections_per_img = detections_per_img
-        self.box_coder = box_coder
-
-    def forward(self, x, boxes):
-        """
-        Arguments:
-            x (tuple[tensor, tensor]): x contains the class logits
-                and the box_regression from the model
-            boxes (list[list[BoxList]]): bounding boxes that are used as
-                reference. The first level correspond to the feature maps,
-                and the second level to the images.
-
-        Returns:
-            results (list[BoxList]): one BoxList for each image, containing
-                the extra fields labels and scores
-        """
-        class_logits, box_regression = x
-        class_prob = F.softmax(class_logits, -1)
-
-        num_features = len(boxes)
-        num_images = len(boxes[0])
-
-        merged_lists = [box for per_feature_boxes in boxes for box in per_feature_boxes]
-        indices = [
-            torch.full((box.bbox.shape[0],), img_idx)
-            for per_feature_boxes in boxes
-            for img_idx, box in enumerate(per_feature_boxes)
-        ]
-
-        # TODO make it a helper function
-        concat_boxes = torch.cat([b.bbox for b in merged_lists], dim=0)
-        indices = torch.cat(indices, dim=0)
-        extra_fields = {}
-        field_names = merged_lists[0].fields()
-        for field in field_names:
-            extra_fields[field] = torch.cat(
-                [b.get_field(field) for b in merged_lists], dim=0
-            )
-
-        image_shapes = [box.size[::-1] for box in boxes[0]]
-
-        proposals = self.box_coder.decode(box_regression, concat_boxes)
-
-        all_proposals = []
-        all_class_prob = []
-        for img_idx in range(num_images):
-            img_mask = indices == img_idx
-            all_proposals.append(proposals[img_mask])
-            all_class_prob.append(class_prob[img_mask])
-        proposals = all_proposals
-        class_prob = all_class_prob
-
-        results = []
-        for prob, proposal, (height, width) in zip(class_prob, proposals, image_shapes):
-            clipped_proposal = _clip_boxes_to_image(proposal, height, width)
-            cls_scores, cls_boxes, labels = box_results_with_nms_and_limit(
-                prob,
-                clipped_proposal,
-                self.score_thresh,
-                self.nms,
-                self.detections_per_img,
-            )
-            bbox = BoxList(cls_boxes, (width, height), mode="xyxy")
-            bbox.add_field("scores", cls_scores)
-            bbox.add_field("labels", labels)
+            bbox.add_field("level", torch.zeros_like(labels))
             results.append(bbox)
 
         return results

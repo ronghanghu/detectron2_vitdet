@@ -7,6 +7,7 @@ from torch_detectron.layers import ROIAlign
 from .utils import cat
 from .utils import keep_only_positive_boxes
 from .utils import nonzero
+from .utils import split_boxlist_in_levels
 
 
 class Pooler(nn.Module):
@@ -50,8 +51,23 @@ class Pooler(nn.Module):
         """
         if self.drop_last:
             x = x[:-1]
-        assert len(boxes) == len(self.poolers)
-        assert len(boxes) == len(x)
+        assert len(x) == len(self.poolers)
+        # add an extra idx field to the boxes. This will make it easier to find the
+        # permutation that will move them back to the original order
+        boxes = [box.copy_with_fields("level") for box in boxes]
+
+        num_levels = len(self.poolers)
+        # optimization: skip for single feature map case
+        if num_levels > 1:
+            num_boxes_per_image = [box.bbox.shape[0] for box in boxes]
+            total_boxes = sum(num_boxes_per_image)
+            device = boxes[0].bbox.device
+            indices = torch.arange(total_boxes, device=device).split(num_boxes_per_image)
+            for box, idx in zip(boxes, indices):
+                box.add_field("idx", idx)
+        # put boxes in a format that is per level
+        boxes = [split_boxlist_in_levels(box, num_levels) for box in boxes]
+        boxes = list(zip(*boxes))
         result = []
         for per_level_feature, per_level_boxes, pooler in zip(x, boxes, self.poolers):
             # TODO the scales can be inferred from the bboxes and the feature maps
@@ -63,7 +79,14 @@ class Pooler(nn.Module):
             ids = concat_boxes.new_tensor(ids)
             concat_boxes = torch.cat([ids[:, None], concat_boxes], dim=1)
             result.append(pooler(per_level_feature, concat_boxes))
-        return cat(result, dim=0)
+        result = cat(result, dim=0)
+        # optimization: skip for single feature map case
+        if num_levels > 1:
+            permuted_indices = [box.get_field("idx") for box_in_level in boxes for box in box_in_level]
+            permuted_indices = cat(permuted_indices, dim=0)
+            _, idx_restore = torch.sort(permuted_indices)
+            result = result[idx_restore]
+        return result
 
 
 class MaskFPNPooler(Pooler):
@@ -105,9 +128,9 @@ class MaskFPNPooler(Pooler):
                 image.
         """
 
-        # if it's in training format, fall back to standard
+        # if it's in training, fall back to standard
         # FPNPooler implementation
-        if isinstance(boxes[0], (list, tuple)):
+        if self.training:
             # use the labels that were added by Faster R-CNN
             # subsampling to select only the positive
             # boxes -- this saves computation as usually only
@@ -122,28 +145,20 @@ class MaskFPNPooler(Pooler):
         lvl_max = self.roi_to_fpn_level_mapper.k_max
         fpn_boxes = []
 
-        # get the permutation order to revert the fpn grouping
-        box_data = cat([bbox.bbox for bbox in boxes], dim=0)
-        levels = self.roi_to_fpn_level_mapper(box_data)
-        rois_idx_order = [
-            nonzero(levels == feat_lvl)[0] for feat_lvl in range(lvl_min, lvl_max + 1)
-        ]
-
         # for each image, split in different fpn levels
-        for img_idx, bboxes in enumerate(boxes):
-            box_data = bboxes.bbox
-            per_img_boxes = []
+        count = 0
+        rois_idx_order = []
+        for img_idx, boxlist_per_img in enumerate(boxes):
+            box_data = boxlist_per_img.bbox
             levels = self.roi_to_fpn_level_mapper(box_data)
-            for feat_lvl in range(lvl_min, lvl_max + 1):
-                # TODO this can probably be optimized as has already been computed just before
-                lvl_idx_per_img = nonzero(levels == feat_lvl)[0]
-                bbox = bboxes[lvl_idx_per_img]
-                per_img_boxes.append(bbox)
-            fpn_boxes.append(per_img_boxes)
 
-        # invert box representation to be first number of levels, and then
-        # number of images
-        fpn_boxes = list(zip(*fpn_boxes))
+            boxlist_per_img.add_field("level", levels - lvl_min)
+            # enforce that boxes are in increasing feature map level, so that splitting
+            # over different levels can be done with slicing (instead of advanced indexing)
+            _, permute_idx = levels.sort()
+            fpn_boxes.append(boxlist_per_img[permute_idx])
+            rois_idx_order.append(permute_idx + count)
+            count += permute_idx.numel()
 
         _, rois_idx_restore = torch.sort(torch.cat(rois_idx_order, 0))
 

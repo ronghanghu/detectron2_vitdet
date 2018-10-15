@@ -13,7 +13,6 @@ from torch_detectron.modeling.box_coder import BoxCoder
 
 from torch_detectron.modeling.post_processors.fast_rcnn import (
     PostProcessor,
-    FPNPostProcessor,
 )
 from torch_detectron.modeling.post_processors.mask_rcnn import MaskPostProcessor
 
@@ -137,8 +136,7 @@ def make_roi_box_post_processor(cfg):
     nms_thresh = cfg.MODEL.ROI_HEADS.NMS
     detections_per_img = cfg.MODEL.ROI_HEADS.DETECTIONS_PER_IMG
 
-    postprocessor_maker = PostProcessor if not use_fpn else FPNPostProcessor
-    postprocessor = postprocessor_maker(
+    postprocessor = PostProcessor(
         score_thresh, nms_thresh, detections_per_img, box_coder
     )
     return postprocessor
@@ -208,29 +206,13 @@ class ROIMaskHead(torch.nn.Module):
         self.loss_evaluator = loss_evaluators.make_roi_mask_loss_evaluator(cfg)
 
     def forward(self, features, proposals, targets=None):
-        # the network can't handle the case of no selected proposals,
-        # so need to shortcut before
-        # TODO handle this properly
-        if not self.training:
-            if sum(r.bbox.shape[0] for r in proposals) == 0:
-                for r in proposals:
-                    r.add_field("mask", features[0].new())
-                return features, proposals, {}
-
         if self.training and self.cfg.MODEL.ROI_MASK_HEAD.SHARE_BOX_FEATURE_EXTRACTOR:
             x = features
         else:
-            if self.cfg.MODEL.ROI_MASK_HEAD.SHARE_BOX_FEATURE_EXTRACTOR:
-                # proposals have been flattened by this point, so aren't
-                # in the format of list[list[BoxList]] anymore. Add one more level to it
-                proposals = [proposals]
             x = self.feature_extractor(features, proposals)
         mask_logits = self.predictor(x)
 
         if not self.training:
-            # TODO Fix this horrible hack
-            if self.cfg.MODEL.ROI_MASK_HEAD.SHARE_BOX_FEATURE_EXTRACTOR:
-                proposals = proposals[0]
             result = self.post_processor(mask_logits, proposals)
             return x, result, {}
 
