@@ -9,10 +9,10 @@ import torch
 from torch_detectron.config import cfg
 from torch_detectron.config.data import make_data_loader
 from torch_detectron.engine.inference import inference
-from torch_detectron.engine.logger import setup_logger
 from torch_detectron.modeling.model_builder import build_detection_model
 from torch_detectron.utils.checkpoint import DetectronCheckpointer
 from torch_detectron.utils.collect_env import collect_env_info
+from torch_detectron.utils.logging import setup_logger
 
 
 def main():
