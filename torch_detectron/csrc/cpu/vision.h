@@ -1,5 +1,5 @@
 #pragma once
-#include <torch/torch.h>
+#include <torch/extension.h>
 
 
 at::Tensor ROIAlign_forward_cpu(const at::Tensor& input,
