@@ -21,10 +21,11 @@ def do_train(
     logger.info("Start training")
     meters = MetricLogger(delimiter="  ")
     max_iter = len(data_loader)
+    start_iter = arguments["iteration"]
     model.train()
     start_training_time = time.time()
     end = time.time()
-    for iteration, (images, targets, _) in enumerate(data_loader):
+    for iteration, (images, targets, _) in enumerate(data_loader, start_iter):
         data_time = time.time() - end
         arguments["iteration"] = iteration
 
