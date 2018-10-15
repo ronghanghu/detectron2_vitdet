@@ -123,6 +123,20 @@ def split_boxlist_in_levels(boxlist, num_levels=None):
     return split_bbox(boxlist, count_per_level.tolist())
 
 
+def meshgrid(x, y=None):
+    """
+    Similar to numpy.meshgrid.
+    Note that torch.meshgrid behaves differently than numpy.meshgrid
+    """
+    if y is None:
+        y = x
+    x = torch.as_tensor(x)
+    y = torch.as_tensor(y)
+    m, n = x.size(0), y.size(0)
+    grid_x = x[None].expand(n, m).contiguous()
+    grid_y = y[:, None].expand(n, m).contiguous()
+    return grid_x, grid_y
+
 def keep_only_positive_boxes(boxes):
     """
     Given a set of BoxList containing the `labels` field,

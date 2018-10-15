@@ -6,6 +6,7 @@ from torch import nn
 
 from ..structures.bounding_box import BoxList
 from .utils import cat_bbox
+from .utils import meshgrid
 
 
 class AnchorGenerator(nn.Module):
@@ -46,7 +47,7 @@ class AnchorGenerator(nn.Module):
         shifts_y = torch.arange(
             0, grid_height * stride, step=stride, dtype=torch.float32, device=device
         )
-        shift_x, shift_y = torch.meshgrid(shifts_x, shifts_y)
+        shift_x, shift_y = meshgrid(shifts_x, shifts_y)
         shift_x = shift_x.reshape(-1)
         shift_y = shift_y.reshape(-1)
         shifts = torch.stack((shift_x, shift_y, shift_x, shift_y), dim=1)
@@ -137,7 +138,7 @@ class FPNAnchorGenerator(nn.Module):
         shifts_y = torch.arange(
             0, grid_height * stride, step=stride, dtype=torch.float32, device=device
         )
-        shift_x, shift_y = torch.meshgrid(shifts_x, shifts_y)
+        shift_x, shift_y = meshgrid(shifts_x, shifts_y)
         shift_x = shift_x.reshape(-1)
         shift_y = shift_y.reshape(-1)
         shifts = torch.stack((shift_x, shift_y, shift_x, shift_y), dim=1)
@@ -381,7 +382,7 @@ class AnchorGenerator_v0(nn.Module):
         # TODO attention if we want to return a list or not
         # grid_height, grid_width = feature_map[0].shape[-2:]
         grid_height, grid_width = feature_map.shape[-2:]
-        scales_grid, aspect_ratios_grid = torch.meshgrid(self._scales, self._aspect_ratios)
+        scales_grid, aspect_ratios_grid = meshgrid(self._scales, self._aspect_ratios)
         scales_grid = torch.reshape(scales_grid, [-1])
         aspect_ratios_grid = torch.reshape(aspect_ratios_grid, [-1])
 
@@ -456,10 +457,10 @@ def tile_anchors(
     y_centers = y_centers * anchor_stride[0] + anchor_offset[0]
     x_centers = torch.arange(grid_width, dtype=torch.float32, device=device)
     x_centers = x_centers * anchor_stride[1] + anchor_offset[1]
-    x_centers, y_centers = torch.meshgrid(x_centers, y_centers)
+    x_centers, y_centers = meshgrid(x_centers, y_centers)
 
-    widths_grid, x_centers_grid = torch.meshgrid(widths, x_centers)
-    heights_grid, y_centers_grid = torch.meshgrid(heights, y_centers)
+    widths_grid, x_centers_grid = meshgrid(widths, x_centers)
+    heights_grid, y_centers_grid = meshgrid(heights, y_centers)
     bbox_centers = torch.stack([y_centers_grid, x_centers_grid], dim=3)
     bbox_sizes = torch.stack([heights_grid, widths_grid], dim=3)
     bbox_centers = torch.reshape(bbox_centers, [-1, 2])
