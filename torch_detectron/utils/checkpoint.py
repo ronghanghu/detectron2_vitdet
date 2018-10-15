@@ -43,15 +43,29 @@ class Checkpointer(object):
         data.update(kwargs)
 
         save_file = os.path.join(self.save_dir, "{}.pth".format(name))
-
         self.logger.info("Saving checkpoint to {}".format(save_file))
         torch.save(data, save_file)
-        self.tag_as_last_checkpoint(save_file)
+        self.tag_last_checkpoint(save_file)
 
-    def tag_as_last_checkpoint(self, last_filename):
-        save_file = os.path.join(self.save_dir, "last_checkpoint")
-        with open(save_file, "w") as f:
-            f.write(last_filename)
+    def load(self, f=None):
+        if self.has_checkpoint():
+            # override argument with existing checkpoint
+            f = self.get_checkpoint_file()
+        if not f:
+            # no checkpoint could be found
+            return {}
+        self.logger.info("Loading checkpoint from {}".format(f))
+        checkpoint = self._load_file(f)
+        self._load_model(checkpoint)
+        if "optimizer" in checkpoint and self.optimizer:
+            self.logger.info("Loading optimizer from {}".format(f))
+            self.optimizer.load_state_dict(checkpoint.pop("optimizer"))
+        if "scheduler" in checkpoint and self.scheduler:
+            self.logger.info("Loading scheduler from {}".format(f))
+            self.scheduler.load_state_dict(checkpoint.pop("scheduler"))
+
+        # return any further checkpoint data
+        return checkpoint
 
     def has_checkpoint(self):
         save_file = os.path.join(self.save_dir, "last_checkpoint")
@@ -68,31 +82,16 @@ class Checkpointer(object):
             last_saved = ""
         return last_saved
 
+    def tag_last_checkpoint(self, last_filename):
+        save_file = os.path.join(self.save_dir, "last_checkpoint")
+        with open(save_file, "w") as f:
+            f.write(last_filename)
+
     def _load_file(self, f):
         return torch.load(f)
 
     def _load_model(self, checkpoint):
         load_state_dict(self.model, checkpoint.pop("model"))
-
-    def load(self, f=""):
-        if self.has_checkpoint():
-            # if a checkpoint file is not manually specified
-            f = self.get_checkpoint_file()
-        if not f:
-            # if no checkpoint could be found by default
-            return {}
-        self.logger.info("Loading checkpoint from {}".format(f))
-        checkpoint = self._load_file(f)
-        self._load_model(checkpoint)
-        if "optimizer" in checkpoint and self.optimizer:
-            self.logger.info("Loading optimizer from {}".format(f))
-            self.optimizer.load_state_dict(checkpoint.pop("optimizer"))
-        if "scheduler" in checkpoint and self.scheduler:
-            self.logger.info("Loading scheduler from {}".format(f))
-            self.scheduler.load_state_dict(checkpoint.pop("scheduler"))
-
-        # extra arguments that were stored
-        return checkpoint
 
 
 class DetectronCheckpointer(Checkpointer):
@@ -112,17 +111,19 @@ class DetectronCheckpointer(Checkpointer):
         self.cfg = cfg.clone()
 
     def _load_file(self, f):
+        # catalog lookup
         if f.startswith("catalog://"):
             paths_catalog = import_file(
                 "torch_detectron.config.paths_catalog", self.cfg.PATHS_CATALOG, True
             )
-            ModelCatalog = paths_catalog.ModelCatalog
-            catalog_f = ModelCatalog.get(f[len("catalog://") :])
+            catalog_f = paths_catalog.ModelCatalog.get(f[len("catalog://") :])
             self.logger.info("{} points to {}".format(f, catalog_f))
             f = catalog_f
+        # convert Caffe2 checkpoint from pkl
         if f.endswith(".pkl"):
             return load_c2_format(self.cfg, f)
-        loaded = torch.load(f)
+        # load native detectron.pytorch checkpoint
+        loaded = super(DetectronCheckpointer, self)._load_file(f)
         if "model" not in loaded:
             loaded = dict(model=loaded)
         return loaded
