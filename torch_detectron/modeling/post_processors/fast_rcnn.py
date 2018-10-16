@@ -6,7 +6,7 @@ from torch_detectron.layers import nms as box_nms
 from torch_detectron.structures.bounding_box import BoxList
 
 from ..box_coder import BoxCoder
-from .rpn import _clip_boxes_to_image
+from ..rpn.inference import _clip_boxes_to_image
 
 
 def box_results_with_nms_and_limit(

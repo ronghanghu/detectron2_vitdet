@@ -8,4 +8,7 @@ python_binary(
         "//caffe2:torch",
         "//experimental/deeplearning/vision/detectron_pytorch/torch_detectron:torch_detectron",
     ],
+    external_deps = [
+        "jupyter_notebook",
+    ],
 )

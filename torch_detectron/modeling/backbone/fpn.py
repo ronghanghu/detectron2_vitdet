@@ -1,8 +1,5 @@
-import torch
 import torch.nn.functional as F
 from torch import nn
-
-from torch_detectron.layers import ROIAlign
 
 
 class FPN(nn.Module):
@@ -29,9 +26,7 @@ class FPN(nn.Module):
             inner_block = "fpn_inner{}".format(idx)
             layer_block = "fpn_layer{}".format(idx)
             inner_block_module = nn.Conv2d(in_channels, out_channels, 1)
-            layer_block_module = nn.Conv2d(
-                out_channels, out_channels, 3, 1, 1
-            )
+            layer_block_module = nn.Conv2d(out_channels, out_channels, 3, 1, 1)
             for module in [inner_block_module, layer_block_module]:
                 # Caffe2 implementation uses XavierFill, which in fact
                 # corresponds to kaiming_uniform_ in PyTorch

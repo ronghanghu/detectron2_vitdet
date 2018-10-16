@@ -2,7 +2,6 @@ import torch
 
 from torch_detectron.layers import nms as box_nms
 from torch_detectron.structures.bounding_box import BoxList
-
 from ..box_coder import BoxCoder
 from ..box_ops import boxes_area
 from ..utils import cat
@@ -24,7 +23,7 @@ class RPNBoxSelector(torch.nn.Module):
         post_nms_top_n,
         nms_thresh,
         min_size,
-        box_coder=BoxCoder(weights=(1., 1., 1., 1.)),
+        box_coder=BoxCoder(weights=(1.0, 1.0, 1.0, 1.0)),
     ):
         """
         Arguments:
@@ -61,7 +60,8 @@ class RPNBoxSelector(torch.nn.Module):
                 "objectness", torch.ones(gt_box.bbox.shape[0], device=device)
             )
             gt_box.add_field(
-                "level", torch.zeros(gt_box.bbox.shape[0], dtype=torch.int64, device=device)
+                "level",
+                torch.zeros(gt_box.bbox.shape[0], dtype=torch.int64, device=device),
             )
 
         proposals = [
@@ -125,7 +125,9 @@ class RPNBoxSelector(torch.nn.Module):
                 score = score[keep]
             sampled_bbox = BoxList(p, (width, height), mode="xyxy")
             sampled_bbox.add_field("objectness", score)
-            sampled_bbox.add_field("level", torch.full_like(score, lvl, dtype=torch.int64))
+            sampled_bbox.add_field(
+                "level", torch.full_like(score, lvl, dtype=torch.int64)
+            )
             sampled_bboxes.append(sampled_bbox)
             # TODO maybe also copy the other fields that were originally present?
 
@@ -286,8 +288,8 @@ def _filter_boxes(boxes, min_size, im_shape):
     fact = 1  # TODO remove
     ws = boxes[:, 2] - boxes[:, 0] + fact
     hs = boxes[:, 3] - boxes[:, 1] + fact
-    x_ctr = boxes[:, 0] + ws / 2.
-    y_ctr = boxes[:, 1] + hs / 2.
+    x_ctr = boxes[:, 0] + ws / 2.0
+    y_ctr = boxes[:, 1] + hs / 2.0
     keep = nonzero(
         (ws >= min_size)
         & (hs >= min_size)

@@ -20,9 +20,8 @@ from .roi_box_feature_extractors import make_roi_box_feature_extractor
 from .roi_box_predictors import make_roi_box_predictor
 from .roi_mask_feature_extractors import make_roi_mask_feature_extractor
 from .roi_mask_predictors import make_roi_mask_predictor
-from .backbones import build_backbone
-
-from .rpn import build_rpn
+from ..backbone import build_backbone
+from ..rpn import build_rpn
 from . import loss_evaluators
 
 

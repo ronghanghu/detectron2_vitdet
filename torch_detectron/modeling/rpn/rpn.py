@@ -2,14 +2,13 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from torch_detectron.modeling.anchor_generator import AnchorGenerator
-from torch_detectron.modeling.anchor_generator import FPNAnchorGenerator
 from torch_detectron.modeling.box_coder import BoxCoder
-from torch_detectron.modeling.post_processors.rpn import FPNRPNBoxSelector
-from torch_detectron.modeling.post_processors.rpn import ROI2FPNLevelsMapper
-from torch_detectron.modeling.post_processors.rpn import RPNBoxSelector
-
-from .loss_evaluators import make_rpn_loss_evaluator
+from ..model_builder.loss_evaluators import make_rpn_loss_evaluator
+from .anchor_generator import AnchorGenerator
+from .anchor_generator import FPNAnchorGenerator
+from .inference import FPNRPNBoxSelector
+from .inference import ROI2FPNLevelsMapper
+from .inference import RPNBoxSelector
 
 
 def make_anchor_generator(config):
@@ -119,7 +118,7 @@ class RPNModule(torch.nn.Module):
             num_input_features, anchor_generator.num_anchors_per_location()[0]
         )
 
-        rpn_box_coder = BoxCoder(weights=(1., 1., 1., 1.))
+        rpn_box_coder = BoxCoder(weights=(1.0, 1.0, 1.0, 1.0))
 
         box_selector_train = make_box_selector(cfg, rpn_box_coder, is_train=True)
         box_selector_test = make_box_selector(cfg, rpn_box_coder, is_train=False)

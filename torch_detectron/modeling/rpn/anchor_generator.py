@@ -4,9 +4,9 @@ import numpy as np
 import torch
 from torch import nn
 
-from ..structures.bounding_box import BoxList
-from .utils import cat_bbox
-from .utils import meshgrid
+from torch_detectron.structures.bounding_box import BoxList
+from ..utils import cat_bbox
+from ..utils import meshgrid
 
 
 class AnchorGenerator(nn.Module):
@@ -182,9 +182,9 @@ class FPNAnchorGenerator(nn.Module):
         device = feature_maps[0].device
         self.cell_anchors = [anchor.to(device) for anchor in self.cell_anchors]
         anchors = []
-        for lvl, (feature_map_level, stride, cell_anchor) in enumerate(zip(
-            feature_maps, self.strides, self.cell_anchors
-        )):
+        for lvl, (feature_map_level, stride, cell_anchor) in enumerate(
+            zip(feature_maps, self.strides, self.cell_anchors)
+        ):
             per_level_anchors = []
             for image_sizes, feature_map in zip(images_sizes, feature_map_level):
                 per_level_anchors.append(
@@ -467,7 +467,8 @@ def tile_anchors(
     bbox_sizes = torch.reshape(bbox_sizes, [-1, 2])
     # bbox_corners = torch.cat([bbox_centers - .5 * bbox_sizes, bbox_centers + .5 * bbox_sizes], 1)
     bbox_corners = torch.cat(
-        [bbox_centers - .5 * (bbox_sizes - 1), bbox_centers + .5 * (bbox_sizes - 1)], 1
+        [bbox_centers - 0.5 * (bbox_sizes - 1), bbox_centers + 0.5 * (bbox_sizes - 1)],
+        1,
     )
     return bbox_corners
 
@@ -479,15 +480,15 @@ if __name__ == "__main__":
 
     t = torch.tensor(
         [
-            [-83., -39., 100., 56.],
-            [-175., -87., 192., 104.],
-            [-359., -183., 376., 200.],
-            [-55., -55., 72., 72.],
-            [-119., -119., 136., 136.],
-            [-247., -247., 264., 264.],
-            [-35., -79., 52., 96.],
-            [-79., -167., 96., 184.],
-            [-167., -343., 184., 360.],
+            [-83.0, -39.0, 100.0, 56.0],
+            [-175.0, -87.0, 192.0, 104.0],
+            [-359.0, -183.0, 376.0, 200.0],
+            [-55.0, -55.0, 72.0, 72.0],
+            [-119.0, -119.0, 136.0, 136.0],
+            [-247.0, -247.0, 264.0, 264.0],
+            [-35.0, -79.0, 52.0, 96.0],
+            [-79.0, -167.0, 96.0, 184.0],
+            [-167.0, -343.0, 184.0, 360.0],
         ]
     )
 

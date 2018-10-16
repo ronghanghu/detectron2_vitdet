@@ -1,7 +1,7 @@
 from torch import nn
 from torch.nn import functional as F
 
-from torch_detectron.modeling import resnet
+from torch_detectron.modeling.backbone import resnet
 from torch_detectron.modeling.poolers import Pooler
 
 
