@@ -10,8 +10,8 @@ from torch_detectron.modeling.losses.fast_rcnn import FastRCNNTargetPreparator
 from torch_detectron.modeling.losses.mask_rcnn import MaskRCNNLossComputation
 from torch_detectron.modeling.losses.mask_rcnn import MaskTargetPreparator
 from torch_detectron.modeling.losses.matcher import Matcher
-from torch_detectron.modeling.losses.rpn import RPNLossComputation
-from torch_detectron.modeling.losses.rpn import RPNTargetPreparator
+from torch_detectron.modeling.rpn.loss import RPNLossComputation
+from torch_detectron.modeling.rpn.loss import RPNTargetPreparator
 
 
 def make_standard_loss_evaluator(

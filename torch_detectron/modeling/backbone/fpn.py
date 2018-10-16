@@ -1,5 +1,8 @@
+import torch
 import torch.nn.functional as F
 from torch import nn
+
+from ..box_ops import boxes_area
 
 
 class FPN(nn.Module):
@@ -55,7 +58,8 @@ class FPN(nn.Module):
             inner_top_down = F.interpolate(last_inner, scale_factor=2, mode="nearest")
             inner_lateral = getattr(self, inner_block)(feature)
             # TODO use size instead of scale to make it robust to different sizes
-            # inner_top_down = F.upsample(last_inner, size=inner_lateral.shape[-2:], mode='bilinear', align_corners=False)
+            # inner_top_down = F.upsample(last_inner, size=inner_lateral.shape[-2:],
+            # mode='bilinear', align_corners=False)
             last_inner = inner_lateral + inner_top_down
             results.insert(0, getattr(self, layer_block)(last_inner))
 
@@ -69,3 +73,37 @@ class FPN(nn.Module):
 class LastLevelMaxPool(nn.Module):
     def forward(self, x):
         return [F.max_pool2d(x, 1, 2, 0)]
+
+
+class ROI2FPNLevelMapper(object):
+    """Determine which FPN level each RoI in a set of RoIs should map to based
+    on the heuristic in the FPN paper.
+    """
+
+    def __init__(self, k_min, k_max, canonical_scale=224, canonical_level=4, eps=1e-6):
+        """
+        Arguments:
+            k_min (int)
+            k_max (int)
+            canonical_scale (int)
+            canonical_level (int)
+            eps (float)
+        """
+        self.k_min = k_min
+        self.k_max = k_max
+        self.s0 = canonical_scale
+        self.lvl0 = canonical_level
+        self.eps = eps
+
+    def __call__(self, rois):
+        """
+        Arguments:
+            rois: tensor
+        """
+        # Compute level ids
+        s = torch.sqrt(boxes_area(rois))
+
+        # Eqn.(1) in FPN paper
+        target_lvls = torch.floor(self.lvl0 + torch.log2(s / self.s0 + 1e-6))
+        target_lvls = torch.clamp(target_lvls, min=self.k_min, max=self.k_max)
+        return target_lvls.to(torch.int64)

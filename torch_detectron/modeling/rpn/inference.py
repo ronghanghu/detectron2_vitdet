@@ -3,7 +3,6 @@ import torch
 from torch_detectron.layers import nms as box_nms
 from torch_detectron.structures.bounding_box import BoxList
 from ..box_coder import BoxCoder
-from ..box_ops import boxes_area
 from ..utils import cat
 from ..utils import cat_bbox
 from ..utils import nonzero
@@ -13,17 +12,12 @@ from ..utils import split_boxlist_in_levels
 # TODO add option for different params in train / test
 class RPNBoxSelector(torch.nn.Module):
     """
-    Performs post-processing on the outputs of the RPN boxes, before feeding the proposals
-    to the heads
+    Performs post-processing on the outputs of the RPN boxes, before feeding the
+    proposals to the heads
     """
 
     def __init__(
-        self,
-        pre_nms_top_n,
-        post_nms_top_n,
-        nms_thresh,
-        min_size,
-        box_coder=BoxCoder(weights=(1.0, 1.0, 1.0, 1.0)),
+        self, pre_nms_top_n, post_nms_top_n, nms_thresh, min_size, box_coder=None
     ):
         """
         Arguments:
@@ -34,13 +28,16 @@ class RPNBoxSelector(torch.nn.Module):
             box_coder (BoxCoder)
         """
         super(RPNBoxSelector, self).__init__()
-        # TODO ATTENTION, as those numbers are for single-image in Detectron, and here it's for the batch
+        # TODO ATTENTION, as those numbers are for single-image in Detectron,
+        # and here it's for the batch
         self.pre_nms_top_n = pre_nms_top_n
         self.post_nms_top_n = post_nms_top_n
         self.nms_thresh = nms_thresh
         self.min_size = min_size
 
-        self.box_coder = box_coder
+        self.box_coder = (
+            BoxCoder(weights=(1.0, 1.0, 1.0, 1.0)) if not box_coder else box_coder
+        )
 
     def add_gt_proposals(self, proposals, targets):
         """
@@ -162,7 +159,7 @@ class FPNRPNBoxSelector(RPNBoxSelector):
     def __init__(self, roi_to_fpn_level_mapper, fpn_post_nms_top_n, **kwargs):
         """
         Arguments:
-            roi_to_fpn_level_mapper (ROI2FPNLevelsMapper)
+            roi_to_fpn_level_mapper (ROI2FPNLevelMapper)
             fpn_post_nms_top_n (int)
             + same arguments as RPNBoxSelector
         """
@@ -187,7 +184,6 @@ class FPNRPNBoxSelector(RPNBoxSelector):
         # TODO almost all this part can be
         # factored out in a RPN-agnostic class
         # merge all lists
-        num_features = len(sampled_boxes)
         num_images = len(sampled_boxes[0])
 
         merged_lists = [
@@ -255,14 +251,14 @@ class FPNRPNBoxSelector(RPNBoxSelector):
             boxlists = self.add_gt_proposals(boxlists, targets)
 
         lvl_min = self.roi_to_fpn_level_mapper.k_min
-        lvl_max = self.roi_to_fpn_level_mapper.k_max
         result = []
         for img_idx in range(num_images):
             boxlist_per_img = boxlists[img_idx]
             levels = self.roi_to_fpn_level_mapper(boxlist_per_img.bbox)
             boxlist_per_img.add_field("level", levels - lvl_min)
-            # enforce that boxes are in increasing feature map level, so that splitting
-            # over different levels can be done with slicing (instead of advanced indexing)
+            # enforce that boxes are in increasing feature map level, so that
+            # splitting over different levels can be done with slicing (instead
+            # of advanced indexing)
             _, permute_idx = levels.sort()
             boxlist_per_img = boxlist_per_img[permute_idx]
 
@@ -297,37 +293,3 @@ def _filter_boxes(boxes, min_size, im_shape):
         & (y_ctr < im_shape[0])
     )[0]
     return keep
-
-
-class ROI2FPNLevelsMapper(object):
-    """Determine which FPN level each RoI in a set of RoIs should map to based
-    on the heuristic in the FPN paper.
-    """
-
-    def __init__(self, k_min, k_max, canonical_scale=224, canonical_level=4, eps=1e-6):
-        """
-        Arguments:
-            k_min (int)
-            k_max (int)
-            canonical_scale (int)
-            canonical_level (int)
-            eps (float)
-        """
-        self.k_min = k_min
-        self.k_max = k_max
-        self.s0 = canonical_scale
-        self.lvl0 = canonical_level
-        self.eps = eps
-
-    def __call__(self, rois):
-        """
-        Arguments:
-            rois: tensor
-        """
-        # Compute level ids
-        s = torch.sqrt(boxes_area(rois))
-
-        # Eqn.(1) in FPN paper
-        target_lvls = torch.floor(self.lvl0 + torch.log2(s / self.s0 + 1e-6))
-        target_lvls = torch.clamp(target_lvls, min=self.k_min, max=self.k_max)
-        return target_lvls.to(torch.int64)

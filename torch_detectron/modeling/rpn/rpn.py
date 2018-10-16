@@ -4,10 +4,10 @@ from torch import nn
 
 from torch_detectron.modeling.box_coder import BoxCoder
 from ..model_builder.loss_evaluators import make_rpn_loss_evaluator
+from ..backbone.fpn import ROI2FPNLevelMapper
 from .anchor_generator import AnchorGenerator
 from .anchor_generator import FPNAnchorGenerator
 from .inference import FPNRPNBoxSelector
-from .inference import ROI2FPNLevelsMapper
 from .inference import RPNBoxSelector
 
 
@@ -45,7 +45,7 @@ def make_box_selector(config, rpn_box_coder, is_train):
     box_selector_args = {}
     if use_fpn:
         # TODO expose those options
-        roi_to_fpn_level_mapper = ROI2FPNLevelsMapper(2, 5)
+        roi_to_fpn_level_mapper = ROI2FPNLevelMapper(2, 5)
         box_selector_maker = FPNRPNBoxSelector
         box_selector_args["roi_to_fpn_level_mapper"] = roi_to_fpn_level_mapper
         fpn_post_nms_top_n = config.MODEL.RPN.FPN_POST_NMS_TOP_N_TRAIN
@@ -71,21 +71,25 @@ def make_box_selector(config, rpn_box_coder, is_train):
     return box_selector
 
 
-class RPNPredictor(nn.Module):
+class RPNHead(nn.Module):
     """
     Adds a simple RPN Head with classification and regression heads
     """
 
-    def __init__(self, inplanes, num_anchors):
+    def __init__(self, in_channels, num_anchors):
         """
         Arguments:
-            inplanes (int): number of channels of the input feature
+            in_channels (int): number of channels of the input feature
             num_anchors (int): number of anchors to be predicted
         """
-        super(RPNPredictor, self).__init__()
-        self.conv = nn.Conv2d(inplanes, inplanes, kernel_size=3, stride=1, padding=1)
-        self.cls_logits = nn.Conv2d(inplanes, num_anchors, kernel_size=1, stride=1)
-        self.bbox_pred = nn.Conv2d(inplanes, num_anchors * 4, kernel_size=1, stride=1)
+        super(RPNHead, self).__init__()
+        self.conv = nn.Conv2d(
+            in_channels, in_channels, kernel_size=3, stride=1, padding=1
+        )
+        self.cls_logits = nn.Conv2d(in_channels, num_anchors, kernel_size=1, stride=1)
+        self.bbox_pred = nn.Conv2d(
+            in_channels, num_anchors * 4, kernel_size=1, stride=1
+        )
 
         for l in [self.conv, self.cls_logits, self.bbox_pred]:
             torch.nn.init.normal_(l.weight, std=0.01)
@@ -103,7 +107,8 @@ class RPNPredictor(nn.Module):
 
 class RPNModule(torch.nn.Module):
     """
-    Module for RPN computation. Works for both FPN and non-FPN.
+    Module for RPN computation. Takes feature maps from the backbone and RPN
+    proposals and losses. Works for both FPN and non-FPN.
     """
 
     def __init__(self, cfg):
@@ -113,10 +118,8 @@ class RPNModule(torch.nn.Module):
 
         anchor_generator = make_anchor_generator(cfg)
 
-        num_input_features = cfg.MODEL.BACKBONE.OUT_CHANNELS
-        heads = RPNPredictor(
-            num_input_features, anchor_generator.num_anchors_per_location()[0]
-        )
+        in_channels = cfg.MODEL.BACKBONE.OUT_CHANNELS
+        head = RPNHead(in_channels, anchor_generator.num_anchors_per_location()[0])
 
         rpn_box_coder = BoxCoder(weights=(1.0, 1.0, 1.0, 1.0))
 
@@ -126,7 +129,7 @@ class RPNModule(torch.nn.Module):
         loss_evaluator = make_rpn_loss_evaluator(cfg, rpn_box_coder)
 
         self.anchor_generator = anchor_generator
-        self.heads = heads
+        self.head = head
         self.box_selector_train = box_selector_train
         self.box_selector_test = box_selector_test
         self.loss_evaluator = loss_evaluator
@@ -140,22 +143,24 @@ class RPNModule(torch.nn.Module):
                 correspond to different feature levels
             targets (list[BoxList): ground-truth boxes present in the image (optional)
         """
-        objectness, rpn_box_regression = self.heads(features)
+        objectness, rpn_box_regression = self.head(features)
         anchors = self.anchor_generator(images.image_sizes, features)
 
-        if not self.training:
-            boxes = self.box_selector_test(anchors, objectness, rpn_box_regression)
-            if self.cfg.MODEL.RPN_ONLY:
-                # sort scores in decreasing order
-                inds = [
-                    box.get_field("objectness").sort(descending=True)[1]
-                    for box in boxes
-                ]
-                boxes = [box[ind] for box, ind in zip(boxes, inds)]
-            return boxes, {}
+        if self.training:
+            return self._forward_train(anchors, objectness, rpn_box_regression, targets)
+        else:
+            return self._forward_test(anchors, objectness, rpn_box_regression)
 
-        boxes = anchors
-        if not self.cfg.MODEL.RPN_ONLY:
+    def _forward_train(self, anchors, objectness, rpn_box_regression, targets):
+        if self.cfg.MODEL.RPN_ONLY:
+            # When training an RPN-only model, the loss is determined by the
+            # predicted objectness and rpn_box_regression values and there is
+            # no need to transform the anchors into predicted boxes; this is an
+            # optimization that avoids the unnecessary transformation.
+            boxes = anchors
+        else:
+            # For end-to-end models, anchors must be transformed into boxes and
+            # sampled into a training batch.
             with torch.no_grad():
                 boxes = self.box_selector_train(
                     anchors, objectness, rpn_box_regression, targets
@@ -163,10 +168,24 @@ class RPNModule(torch.nn.Module):
         loss_objectness, loss_rpn_box_reg = self.loss_evaluator(
             anchors, objectness, rpn_box_regression, targets
         )
-        return (
-            boxes,
-            dict(loss_objectness=loss_objectness, loss_rpn_box_reg=loss_rpn_box_reg),
-        )
+        losses = {
+            "loss_objectness": loss_objectness,
+            "loss_rpn_box_reg": loss_rpn_box_reg,
+        }
+        return boxes, losses
+
+    def _forward_test(self, anchors, objectness, rpn_box_regression):
+        boxes = self.box_selector_test(anchors, objectness, rpn_box_regression)
+        if self.cfg.MODEL.RPN_ONLY:
+            # For end-to-end models, the RPN proposals are an intermediate state
+            # and don't bother to sort them in decreasing score order. For RPN-only
+            # models, the proposals are the final output and we return them in
+            # high-to-low confidence order.
+            inds = [
+                box.get_field("objectness").sort(descending=True)[1] for box in boxes
+            ]
+            boxes = [box[ind] for box, ind in zip(boxes, inds)]
+        return boxes, {}
 
 
 def build_rpn(cfg):

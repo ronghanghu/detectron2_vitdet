@@ -9,8 +9,8 @@ from torch.nn import functional as F
 from ..utils import cat
 from ..utils import nonzero
 from ..utils import smooth_l1_loss
-from .matcher import Matcher
-from .target_preparator import TargetPreparator
+from ..losses.matcher import Matcher
+from ..losses.target_preparator import TargetPreparator
 
 
 class RPNTargetPreparator(TargetPreparator):
@@ -27,8 +27,8 @@ class RPNTargetPreparator(TargetPreparator):
     def prepare_labels(self, matched_targets_per_image, anchors_per_image):
         """
         Arguments:
-            matched_targets_per_image (BoxList): a BoxList with the 'matched_idx' field set,
-                containing the ground-truth targets aligned to the anchors,
+            matched_targets_per_image (BoxList): a BoxList with the 'matched_idx'
+                field set, containing the ground-truth targets aligned to the anchors,
                 i.e., it contains the same number of elements as the number of anchors,
                 and contains de best-matching ground-truth target element. This is
                 returned by match_targets_to_anchors

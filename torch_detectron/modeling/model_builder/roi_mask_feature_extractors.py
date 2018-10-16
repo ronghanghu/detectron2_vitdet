@@ -7,7 +7,7 @@ from torch_detectron.modeling.model_builder.roi_box_feature_extractors import (
 from torch_detectron.modeling.poolers import MaskFPNPooler
 from torch_detectron.modeling.utils import Conv2d
 
-from ..rpn.inference import ROI2FPNLevelsMapper
+from ..backbone.fpn import ROI2FPNLevelMapper
 
 
 class MaskRCNNFPNFeatureExtractor(nn.Module):
@@ -27,7 +27,7 @@ class MaskRCNNFPNFeatureExtractor(nn.Module):
         resolution = cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION
         scales = cfg.MODEL.ROI_MASK_HEAD.POOLER_SCALES
         sampling_ratio = cfg.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO
-        roi_to_fpn_level_mapper = ROI2FPNLevelsMapper(2, 5)  # TODO expose these options
+        roi_to_fpn_level_mapper = ROI2FPNLevelMapper(2, 5)  # TODO expose these options
         pooler = MaskFPNPooler(
             output_size=(resolution, resolution),
             scales=scales,
