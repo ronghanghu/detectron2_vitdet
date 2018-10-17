@@ -42,7 +42,7 @@ def make_transform(cfg, is_train=True):
     return transform
 
 
-def make_coco_dataset(cfg, is_train=True, return_list=False):
+def make_coco_dataset(cfg, is_train=True, concatenate_datasets=True):
     paths_catalog = import_file(
         "torch_detectron.config.paths_catalog", cfg.PATHS_CATALOG, True
     )
@@ -62,14 +62,14 @@ def make_coco_dataset(cfg, is_train=True, return_list=False):
         )
         datasets.append(dataset)
 
-    if return_list:
+    if not concatenate_datasets:
         return datasets
 
     dataset = datasets[0]
     if len(datasets) > 1:
         dataset = ConcatDataset(datasets)
 
-    return dataset
+    return [dataset]
 
 
 def make_data_sampler(dataset, shuffle, distributed):
@@ -148,7 +148,7 @@ def make_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0):
 
     aspect_grouping = [1] if cfg.DATALOADER.ASPECT_RATIO_GROUPING else []
 
-    datasets = make_coco_dataset(cfg, is_train, return_list=not is_train)
+    datasets = make_coco_dataset(cfg, is_train, concatenate_datasets=is_train)
     data_loaders = []
     for dataset in datasets:
         sampler = make_data_sampler(dataset, shuffle, is_distributed)

@@ -71,7 +71,7 @@ def _rename_weights_for_resnet(weights, stage_names):
     layer_keys = [k.replace("conv.fcn", "conv_fcn") for k in layer_keys]
 
     # Rename for our RPN structure
-    layer_keys = [k.replace("rpn.", "rpn.heads.") for k in layer_keys]
+    layer_keys = [k.replace("rpn.", "rpn.head.") for k in layer_keys]
 
     key_map = {k: v for k, v in zip(original_keys, layer_keys)}
 
