@@ -42,7 +42,7 @@ def make_transform(cfg, is_train=True):
     return transform
 
 
-def make_coco_dataset(cfg, is_train=True):
+def make_coco_dataset(cfg, is_train=True, return_list=False):
     paths_catalog = import_file(
         "torch_detectron.config.paths_catalog", cfg.PATHS_CATALOG, True
     )
@@ -61,6 +61,9 @@ def make_coco_dataset(cfg, is_train=True):
             transforms=transforms,
         )
         datasets.append(dataset)
+
+    if return_list:
+        return datasets
 
     dataset = datasets[0]
     if len(datasets) > 1:
@@ -145,17 +148,23 @@ def make_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0):
 
     aspect_grouping = [1] if cfg.DATALOADER.ASPECT_RATIO_GROUPING else []
 
-    dataset = make_coco_dataset(cfg, is_train)
-    sampler = make_data_sampler(dataset, shuffle, is_distributed)
-    batch_sampler = make_batch_data_sampler(
-        dataset, sampler, aspect_grouping, images_per_gpu, num_iters, start_iter
-    )
-    collator = BatchCollator(cfg.DATALOADER.SIZE_DIVISIBILITY)
-    num_workers = cfg.DATALOADER.NUM_WORKERS
-    data_loader = torch.utils.data.DataLoader(
-        dataset,
-        num_workers=num_workers,
-        batch_sampler=batch_sampler,
-        collate_fn=collator,
-    )
-    return data_loader
+    datasets = make_coco_dataset(cfg, is_train, return_list=not is_train)
+    data_loaders = []
+    for dataset in datasets:
+        sampler = make_data_sampler(dataset, shuffle, is_distributed)
+        batch_sampler = make_batch_data_sampler(
+            dataset, sampler, aspect_grouping, images_per_gpu, num_iters, start_iter
+        )
+        collator = BatchCollator(cfg.DATALOADER.SIZE_DIVISIBILITY)
+        num_workers = cfg.DATALOADER.NUM_WORKERS
+        data_loader = torch.utils.data.DataLoader(
+            dataset,
+            num_workers=num_workers,
+            batch_sampler=batch_sampler,
+            collate_fn=collator,
+        )
+        data_loaders.append(data_loader)
+    if is_train:
+        assert len(data_loaders) == 1
+        return data_loaders[0]
+    return data_loaders

@@ -12,7 +12,9 @@ from torch_detectron.engine.inference import inference
 from torch_detectron.modeling.model_builder import build_detection_model
 from torch_detectron.utils.checkpoint import DetectronCheckpointer
 from torch_detectron.utils.collect_env import collect_env_info
+from torch_detectron.utils.comm import synchronize
 from torch_detectron.utils.logging import setup_logger
+from torch_detectron.utils.miscellaneous import mkdir
 
 
 def main():
@@ -60,18 +62,29 @@ def main():
     checkpointer = DetectronCheckpointer(cfg, model)
     _ = checkpointer.load(cfg.MODEL.WEIGHT)
 
-    data_loader_val = make_data_loader(cfg, is_train=False, is_distributed=distributed)
-
     iou_types = ("bbox",)
     if cfg.MODEL.MASK_ON:
         iou_types = iou_types + ("segm",)
-    inference(
-        model,
-        data_loader_val,
-        iou_types=iou_types,
-        box_only=cfg.MODEL.RPN_ONLY,
-        device=cfg.MODEL.DEVICE,
-    )
+    output_folders = [None] * len(cfg.DATASETS.TEST)
+    if cfg.OUTPUT_DIR:
+        dataset_names = cfg.DATASETS.TEST
+        for idx, dataset_name in enumerate(dataset_names):
+            output_folder = os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
+            mkdir(output_folder)
+            output_folders[idx] = output_folder
+    data_loaders_val = make_data_loader(cfg, is_train=False, is_distributed=distributed)
+    for output_folder, data_loader_val in zip(output_folders, data_loaders_val):
+        inference(
+            model,
+            data_loader_val,
+            iou_types=iou_types,
+            box_only=cfg.MODEL.RPN_ONLY,
+            device=cfg.MODEL.DEVICE,
+            expected_results=cfg.TEST.EXPECTED_RESULTS,
+            expected_results_sigma_tol=cfg.TEST.EXPECTED_RESULTS_SIGMA_TOL,
+            output_folder=output_folder,
+        )
+        synchronize()
 
 
 if __name__ == "__main__":

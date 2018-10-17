@@ -2,6 +2,7 @@ import datetime
 import logging
 import tempfile
 import time
+import os
 from collections import OrderedDict
 
 import torch
@@ -248,8 +249,8 @@ def evaluate_predictions_on_coco(
     coco_eval = COCOeval(coco_gt, coco_dt, iou_type)
     coco_eval.evaluate()
     coco_eval.accumulate()
-    # torch.save(coco_eval, join(args.save, 'computed_results.pth'))
-    return coco_eval.summarize()
+    coco_eval.summarize()
+    return coco_eval
 
 
 def _is_main_process():
@@ -355,6 +356,7 @@ def inference(
     device="cuda",
     expected_results=(),
     expected_results_sigma_tol=4,
+    output_folder=None,
 ):
 
     # convert to a torch.device for efficiency
@@ -383,6 +385,9 @@ def inference(
     if not _is_main_process():
         return
 
+    if output_folder:
+        torch.save(predictions, os.path.join(output_folder, "predictions.pth"))
+
     if box_only:
         logger.info("Evaluating bbox proposals")
         areas = {"all": "", "small": "s", "medium": "m", "large": "l"}
@@ -394,9 +399,10 @@ def inference(
                 )
                 key = "AR{}@{:d}".format(suffix, limit)
                 res.results["box_proposal"][key] = stats["ar"].item()
-        # logger.info("AR@1000: {}".format(results["ar"].item()))
         logger.info(res)
         check_expected_results(res, expected_results, expected_results_sigma_tol)
+        if output_folder:
+            torch.save(res, os.path.join(output_folder, "box_proposals.pth"))
         return
     logger.info("Preparing results for COCO format")
     coco_results = {}
@@ -411,9 +417,14 @@ def inference(
     logger.info("Evaluating predictions")
     for iou_type in iou_types:
         with tempfile.NamedTemporaryFile() as f:
+            file_path = f.name
+            if output_folder:
+                file_path = os.path.join(output_folder, iou_type + ".json")
             res = evaluate_predictions_on_coco(
-                dataset.coco, coco_results[iou_type], f.name, iou_type
+                dataset.coco, coco_results[iou_type], file_path, iou_type
             )
-            logger.info(res)
             results.update(res)
-    check_expected_results(res, expected_results, expected_results_sigma_tol)
+    logger.info(results)
+    check_expected_results(results, expected_results, expected_results_sigma_tol)
+    if output_folder:
+        torch.save(results, os.path.join(output_folder, "coco_results.pth"))
