@@ -16,7 +16,7 @@ class MaskPostProcessor(nn.Module):
     by the CNN) and return the masks in the mask field of the BoxList.
 
     If a masker object is passed, it will additionally
-    projecte the masks in the image according to the locations in boxes,
+    project the masks in the image according to the locations in boxes,
     """
 
     def __init__(self, masker=None):
@@ -114,17 +114,12 @@ def expand_masks(mask, padding):
     return padded_mask, scale
 
 
-# TODO remove this. This is just for exactly matching the
-# results from Detectron. Ideally, make it use the
-# grid_sample instead, but results are slightly off with it
 def paste_mask_in_image(mask, box, im_h, im_w, M=14):
-
-    if True:
-        scale = (M + 2.0) / M
-        padded_mask = torch.zeros((M + 2, M + 2), dtype=torch.float32)
-        padded_mask[1:-1, 1:-1] = mask
-        mask = padded_mask
-        box = expand_boxes(box[None], scale)[0]
+    scale = (M + 2.0) / M
+    padded_mask = torch.zeros((M + 2, M + 2), dtype=torch.float32)
+    padded_mask[1:-1, 1:-1] = mask
+    mask = padded_mask
+    box = expand_boxes(box[None], scale)[0]
     box = box.numpy().astype(np.int32)
 
     TO_REMOVE = 1
@@ -163,84 +158,7 @@ class Masker(object):
         self.threshold = threshold
         self.padding = padding
 
-    # TODO this gives slightly different results
-    # than the Detectron implementation. Fix it
-    def compute_flow_field_cpu(self, boxes):
-        im_w, im_h = boxes.size
-        boxes_data = boxes.bbox
-        num_boxes = len(boxes_data)
-        device = boxes_data.device
-
-        TO_REMOVE = 1
-        boxes_data = boxes_data.int()
-        box_widths = boxes_data[:, 2] - boxes_data[:, 0] + TO_REMOVE
-        box_heights = boxes_data[:, 3] - boxes_data[:, 1] + TO_REMOVE
-
-        box_widths.clamp_(min=1)
-        box_heights.clamp_(min=1)
-
-        boxes_data = boxes_data.tolist()
-        box_widths = box_widths.tolist()
-        box_heights = box_heights.tolist()
-
-        flow_field = torch.full((num_boxes, im_h, im_w, 2), -2)
-
-        for i in range(num_boxes):
-            w = box_widths[i]
-            h = box_heights[i]
-            if w < 2 or h < 2:
-                continue
-            x = torch.linspace(-1, 1, w)
-            y = torch.linspace(-1, 1, h)
-            # meshogrid
-            x = x[None, :].expand(h, w)
-            y = y[:, None].expand(h, w)
-
-            b = boxes_data[i]
-            x_0 = max(b[0], 0)
-            x_1 = min(b[2] + 0, im_w)
-            y_0 = max(b[1], 0)
-            y_1 = min(b[3] + 0, im_h)
-            flow_field[i, y_0:y_1, x_0:x_1, 0] = x[
-                (y_0 - b[1]) : (y_1 - b[1]), (x_0 - b[0]) : (x_1 - b[0])
-            ]
-            flow_field[i, y_0:y_1, x_0:x_1, 1] = y[
-                (y_0 - b[1]) : (y_1 - b[1]), (x_0 - b[0]) : (x_1 - b[0])
-            ]
-
-        return flow_field.to(device)
-
-    def compute_flow_field_gpu(self, boxes):
-        from torch_detectron import layers
-
-        width, height = boxes.size
-        flow_field = layers.compute_flow(boxes.bbox, height, width)
-        return flow_field
-
-    def compute_flow_field(self, boxes):
-        if boxes.bbox.is_cuda:
-            return self.compute_flow_field_gpu(boxes)
-        return self.compute_flow_field_cpu(boxes)
-
-    # TODO make it work better for batches
     def forward_single_image(self, masks, boxes):
-        boxes = boxes.convert("xyxy")
-        if self.padding:
-            boxes = BoxList(boxes.bbox.clone(), boxes.size, boxes.mode)
-            masks, scale = expand_masks(masks, self.padding)
-            boxes.bbox = expand_boxes(boxes.bbox, scale)
-
-        flow_field = self.compute_flow_field(boxes)
-        result = torch.nn.functional.grid_sample(masks, flow_field)
-        if self.threshold > 0:
-            result = result > self.threshold
-        return result
-
-    # FIXME this is a hack to make inference gives the same resuts
-    # as Detectron C2. Ideally, we should just fix the approach using
-    # the compute_flow, which is batched and runs on the GPU, but this
-    # gives slightly different (and worse) results.
-    def forward_single_image_2(self, masks, boxes):
         boxes = boxes.convert("xyxy")
         im_w, im_h = boxes.size
         M = masks[0].shape[-1]
@@ -256,6 +174,5 @@ class Masker(object):
         if isinstance(boxes, BoxList):
             boxes = [boxes]
         assert len(boxes) == 1, "Only single image batch supported"
-        # result = self.forward_single_image(masks, boxes[0])
-        result = self.forward_single_image_2(masks, boxes[0])
+        result = self.forward_single_image(masks, boxes[0])
         return result
