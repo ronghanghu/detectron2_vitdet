@@ -16,7 +16,7 @@ class RPNBoxSelector(torch.nn.Module):
     """
 
     def __init__(
-        self, pre_nms_top_n, post_nms_top_n, nms_thresh, min_size, box_coder=None
+        self, pre_nms_top_n, post_nms_top_n, nms_thresh, min_size, box_coder=None, fpn_post_nms_top_n=None,
     ):
         """
         Arguments:
@@ -25,6 +25,7 @@ class RPNBoxSelector(torch.nn.Module):
             nms_thresh (float)
             min_size (int)
             box_coder (BoxCoder)
+            fpn_post_nms_top_n (int)
         """
         super(RPNBoxSelector, self).__init__()
         # TODO ATTENTION, as those numbers are for single-image in Detectron,
@@ -37,6 +38,9 @@ class RPNBoxSelector(torch.nn.Module):
         self.box_coder = (
             BoxCoder(weights=(1.0, 1.0, 1.0, 1.0)) if not box_coder else box_coder
         )
+        if fpn_post_nms_top_n is None:
+            fpn_post_nms_top_n = post_nms_top_n
+        self.fpn_post_nms_top_n = fpn_post_nms_top_n
 
     def add_gt_proposals(self, proposals, targets):
         """
@@ -118,40 +122,6 @@ class RPNBoxSelector(torch.nn.Module):
             # TODO maybe also copy the other fields that were originally present?
 
         return sampled_bboxes
-
-    def forward(self, anchors, objectness, box_regression, targets=None):
-        """
-        Arguments:
-            anchors: list[list[BoxList]]
-            objectness: list[tensor]
-            box_regression: list[tensor]
-        """
-        num_levels = len(objectness)
-        assert num_levels == 1, "only single feature map supported"
-        anchors = list(zip(*anchors))
-        sampled_boxes = []
-        for a, o, b in zip(anchors, objectness, box_regression):
-            sampled_boxes.append(self.forward_for_single_feature_map(a, o, b))
-
-        # there is a single feature map, remove the extra nesting level
-        sampled_boxes = sampled_boxes[0]
-
-        # append ground-truth bboxes to proposals
-        if self.training and targets is not None:
-            sampled_boxes = self.add_gt_proposals(sampled_boxes, targets=targets)
-
-        return sampled_boxes
-
-
-class FPNRPNBoxSelector(RPNBoxSelector):
-    def __init__(self, fpn_post_nms_top_n, **kwargs):
-        """
-        Arguments:
-            fpn_post_nms_top_n (int)
-            + same arguments as RPNBoxSelector
-        """
-        super(FPNRPNBoxSelector, self).__init__(**kwargs)
-        self.fpn_post_nms_top_n = fpn_post_nms_top_n
 
     def forward(self, anchors, objectness, box_regression, targets=None):
         """

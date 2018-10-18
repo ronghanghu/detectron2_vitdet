@@ -5,7 +5,6 @@ from torch import nn
 from torch_detectron.modeling.box_coder import BoxCoder
 from ..model_builder.loss_evaluators import make_rpn_loss_evaluator
 from .anchor_generator import AnchorGenerator
-from .inference import FPNRPNBoxSelector
 from .inference import RPNBoxSelector
 
 
@@ -36,15 +35,13 @@ def make_anchor_generator(config):
 
 
 def make_box_selector(config, rpn_box_coder, is_train):
-    use_fpn = config.MODEL.RPN.USE_FPN
     box_selector_maker = RPNBoxSelector
     box_selector_args = {}
-    if use_fpn:
-        box_selector_maker = FPNRPNBoxSelector
-        fpn_post_nms_top_n = config.MODEL.RPN.FPN_POST_NMS_TOP_N_TRAIN
-        if not is_train:
-            fpn_post_nms_top_n = config.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST
-        box_selector_args["fpn_post_nms_top_n"] = fpn_post_nms_top_n
+
+    fpn_post_nms_top_n = config.MODEL.RPN.FPN_POST_NMS_TOP_N_TRAIN
+    if not is_train:
+        fpn_post_nms_top_n = config.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST
+    box_selector_args["fpn_post_nms_top_n"] = fpn_post_nms_top_n
 
     pre_nms_top_n = config.MODEL.RPN.PRE_NMS_TOP_N_TRAIN
     post_nms_top_n = config.MODEL.RPN.POST_NMS_TOP_N_TRAIN
