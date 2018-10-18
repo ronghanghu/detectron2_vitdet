@@ -9,39 +9,25 @@ from .inference import RPNBoxSelector
 
 
 def make_anchor_generator(config):
-    use_fpn = config.MODEL.RPN.USE_FPN
-
-    scales = config.MODEL.RPN.SCALES
+    anchor_sizes = config.MODEL.RPN.ANCHOR_SIZES
     aspect_ratios = config.MODEL.RPN.ASPECT_RATIOS
-    base_anchor_size = config.MODEL.RPN.BASE_ANCHOR_SIZE
     anchor_stride = config.MODEL.RPN.ANCHOR_STRIDE
     straddle_thresh = config.MODEL.RPN.STRADDLE_THRESH
 
-    anchor_args = {}
-    # FIXME unify the args of AnchorGenerator and FPNAnchorGenerator?
-    anchor_args["scales"] = scales
-    anchor_args["aspect_ratios"] = aspect_ratios
-    anchor_args["base_anchor_size"] = base_anchor_size
-    anchor_args["straddle_thresh"] = straddle_thresh
-    anchor_args["anchor_strides"] = anchor_stride
-    if use_fpn:
+    if config.MODEL.RPN.USE_FPN:
         assert len(anchor_stride) == len(
-            scales
-        ), "FPN should have len(ANCHOR_STRIDE) == len(SCALES)"
+            anchor_sizes
+        ), "FPN should have len(ANCHOR_STRIDE) == len(ANCHOR_SIZES)"
     else:
         assert len(anchor_stride) == 1, "Non-FPN should have a single ANCHOR_STRIDE"
-    anchor_generator = AnchorGenerator(**anchor_args)
+    anchor_generator = AnchorGenerator(anchor_sizes, aspect_ratios, anchor_stride, straddle_thresh)
     return anchor_generator
 
 
 def make_box_selector(config, rpn_box_coder, is_train):
-    box_selector_maker = RPNBoxSelector
-    box_selector_args = {}
-
     fpn_post_nms_top_n = config.MODEL.RPN.FPN_POST_NMS_TOP_N_TRAIN
     if not is_train:
         fpn_post_nms_top_n = config.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST
-    box_selector_args["fpn_post_nms_top_n"] = fpn_post_nms_top_n
 
     pre_nms_top_n = config.MODEL.RPN.PRE_NMS_TOP_N_TRAIN
     post_nms_top_n = config.MODEL.RPN.POST_NMS_TOP_N_TRAIN
@@ -50,13 +36,13 @@ def make_box_selector(config, rpn_box_coder, is_train):
         post_nms_top_n = config.MODEL.RPN.POST_NMS_TOP_N_TEST
     nms_thresh = config.MODEL.RPN.NMS_THRESH
     min_size = config.MODEL.RPN.MIN_SIZE
-    box_selector = box_selector_maker(
+    box_selector = RPNBoxSelector(
         pre_nms_top_n=pre_nms_top_n,
         post_nms_top_n=post_nms_top_n,
         nms_thresh=nms_thresh,
         min_size=min_size,
         box_coder=rpn_box_coder,
-        **box_selector_args
+        fpn_post_nms_top_n=fpn_post_nms_top_n,
     )
     return box_selector
 

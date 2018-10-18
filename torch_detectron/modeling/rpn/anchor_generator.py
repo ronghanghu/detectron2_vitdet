@@ -36,16 +36,12 @@ class AnchorGenerator(nn.Module):
 
     def __init__(
         self,
-        scales=(0.5, 1.0, 2.0),
+        sizes=(128, 256, 512),
         aspect_ratios=(0.5, 1.0, 2.0),
-        base_anchor_size=256,
-        # sizes=(128, 256, 512),
-        # aspect_ratios=(0.5, 1.0, 2.0),
         anchor_strides=(8, 16, 32),
         straddle_thresh=0,
     ):
         super(AnchorGenerator, self).__init__()
-        sizes = tuple(i * base_anchor_size for i in scales)
 
         if len(anchor_strides) == 1:
             anchor_stride = anchor_strides[0]

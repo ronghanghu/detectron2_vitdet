@@ -93,10 +93,8 @@ _C.MODEL.BACKBONE.OUT_CHANNELS = 256 * 4
 # ---------------------------------------------------------------------------- #
 _C.MODEL.RPN = CN()
 _C.MODEL.RPN.USE_FPN = False
-# RPN anchor sizes given in relative size w.r.t. BASE_ANCHOR_SIZE
-_C.MODEL.RPN.SCALES = (0.125, 0.25, 0.5, 1., 2.)
-# Base RPN anchor size given in absolute pixels w.r.t. the scaled network input
-_C.MODEL.RPN.BASE_ANCHOR_SIZE = 256
+# Base RPN anchor sizes given in absolute pixels w.r.t. the scaled network input
+_C.MODEL.RPN.ANCHOR_SIZES = (32, 64, 128, 256, 512)
 # Stride of the feature map that RPN is attached.
 # For FPN, number of strides should match number of scales
 _C.MODEL.RPN.ANCHOR_STRIDE = (16,)
