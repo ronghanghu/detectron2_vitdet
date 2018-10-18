@@ -16,7 +16,6 @@ class ResNet50Conv5ROIFeatureExtractor(nn.Module):
             output_size=(resolution, resolution),
             scales=scales,
             sampling_ratio=sampling_ratio,
-            drop_last=False,
         )
 
         stage = resnet.StageSpec(index=5, block_count=3, return_features=False)
@@ -59,7 +58,6 @@ class FPN2MLPFeatureExtractor(nn.Module):
             output_size=(resolution, resolution),
             scales=scales,
             sampling_ratio=sampling_ratio,
-            drop_last=True,
         )
         input_size = cfg.MODEL.BACKBONE.OUT_CHANNELS * resolution ** 2
         representation_size = cfg.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM

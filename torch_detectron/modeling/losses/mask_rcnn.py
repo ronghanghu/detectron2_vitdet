@@ -103,14 +103,8 @@ class MaskTargetPreparator(TargetPreparator):
 
 
 class MaskRCNNLossComputation(object):
-    def __init__(self, target_preparator, subsample_only_positive_boxes=False):
+    def __init__(self, target_preparator):
         """
-        If subsample_only_positive_boxes is False, all the boxes from the RPN
-        that were passed to the detection branch will be used for mask loss
-        computation. This is wasteful, as only the positive boxes are used
-        for mask loss (which corresponds to 25% of a batch).
-        If subsample_only_positive_boxes is True, then only the positive
-        boxes are selected, but this only works with FPN-like architectures.
         """
         self.target_preparator = target_preparator
         self.subsample_only_positive_boxes = subsample_only_positive_boxes
@@ -148,8 +142,6 @@ class MaskRCNNLossComputation(object):
         Return:
             mask_loss (Tensor): scalar tensor containing the loss
         """
-        if self.subsample_only_positive_boxes:
-            anchors = keep_only_positive_boxes(anchors)
         labels, mask_targets = self.prepare_targets(anchors, targets)
 
         labels = cat(labels, dim=0)

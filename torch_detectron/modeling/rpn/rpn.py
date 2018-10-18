@@ -6,7 +6,7 @@ from torch_detectron.modeling.box_coder import BoxCoder
 from ..model_builder.loss_evaluators import make_rpn_loss_evaluator
 from ..backbone.fpn import ROI2FPNLevelMapper
 from .anchor_generator import AnchorGenerator
-from .anchor_generator import FPNAnchorGenerator
+#from .anchor_generator import FPNAnchorGenerator
 from .inference import FPNRPNBoxSelector
 from .inference import RPNBoxSelector
 
@@ -20,7 +20,7 @@ def make_anchor_generator(config):
     anchor_stride = config.MODEL.RPN.ANCHOR_STRIDE
     straddle_thresh = config.MODEL.RPN.STRADDLE_THRESH
 
-    anchor_maker = AnchorGenerator if not use_fpn else FPNAnchorGenerator
+    anchor_maker = AnchorGenerator #if not use_fpn else FPNAnchorGenerator
     anchor_args = {}
     # FIXME unify the args of AnchorGenerator and FPNAnchorGenerator?
     anchor_args["scales"] = scales
@@ -34,7 +34,7 @@ def make_anchor_generator(config):
         ), "FPN should have len(ANCHOR_STRIDE) == len(SCALES)"
     else:
         assert len(anchor_stride) == 1, "Non-FPN should have a single ANCHOR_STRIDE"
-        anchor_args["anchor_stride"] = anchor_stride[0]
+        anchor_args["anchor_strides"] = anchor_stride
     anchor_generator = anchor_maker(**anchor_args)
     return anchor_generator
 

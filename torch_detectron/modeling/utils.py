@@ -149,12 +149,15 @@ def keep_only_positive_boxes(boxes):
     assert isinstance(boxes[0], BoxList)
     assert boxes[0].has_field("labels")
     positive_boxes = []
+    positive_inds = []
     num_boxes = 0
     for boxes_per_image in boxes:
         labels = boxes_per_image.get_field("labels")
-        inds = nonzero(labels > 0)[0]
+        inds_mask = labels > 0
+        inds = nonzero(inds_mask)[0]
         positive_boxes.append(boxes_per_image[inds])
-    return positive_boxes
+        positive_inds.append(inds_mask)
+    return positive_boxes, positive_inds
 
 
 class _NewEmptyTensorOp(torch.autograd.Function):

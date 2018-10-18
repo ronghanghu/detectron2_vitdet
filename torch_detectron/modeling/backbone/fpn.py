@@ -104,6 +104,6 @@ class ROI2FPNLevelMapper(object):
         s = torch.sqrt(boxes_area(rois))
 
         # Eqn.(1) in FPN paper
-        target_lvls = torch.floor(self.lvl0 + torch.log2(s / self.s0 + 1e-6))
+        target_lvls = torch.floor(self.lvl0 + torch.log2(s / self.s0 + self.eps))
         target_lvls = torch.clamp(target_lvls, min=self.k_min, max=self.k_max)
         return target_lvls.to(torch.int64)

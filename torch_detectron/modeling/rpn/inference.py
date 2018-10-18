@@ -104,7 +104,7 @@ class RPNBoxSelector(torch.nn.Module):
 
         # assumption: all the boxes belong to the same level
         # FIXME need to be improved, as they might already have changed in the decoding
-        lvl = anchors[0].get_field("level")[0]
+        #lvl = anchors[0].get_field("level")[0]
         # TODO optimize / make batch friendly
         sampled_bboxes = []
         for proposal, score, im_shape in zip(proposals, objectness, image_shapes):
@@ -122,9 +122,9 @@ class RPNBoxSelector(torch.nn.Module):
                 score = score[keep]
             sampled_bbox = BoxList(p, (width, height), mode="xyxy")
             sampled_bbox.add_field("objectness", score)
-            sampled_bbox.add_field(
-                "level", torch.full_like(score, lvl, dtype=torch.int64)
-            )
+            #sampled_bbox.add_field(
+            #    "level", torch.full_like(score, lvl, dtype=torch.int64)
+            #)
             sampled_bboxes.append(sampled_bbox)
             # TODO maybe also copy the other fields that were originally present?
 
@@ -139,7 +139,7 @@ class RPNBoxSelector(torch.nn.Module):
         """
         num_levels = len(objectness)
         assert num_levels == 1, "only single feature map supported"
-        anchors = [split_boxlist_in_levels(anchor, num_levels) for anchor in anchors]
+        #anchors = [split_boxlist_in_levels(anchor, num_levels) for anchor in anchors]
         anchors = list(zip(*anchors))
         sampled_boxes = []
         for a, o, b in zip(anchors, objectness, box_regression):
@@ -176,7 +176,7 @@ class FPNRPNBoxSelector(RPNBoxSelector):
         """
         sampled_boxes = []
         num_levels = len(objectness)
-        anchors = [split_boxlist_in_levels(anchor, num_levels) for anchor in anchors]
+        # anchors = [split_boxlist_in_levels(anchor, num_levels) for anchor in anchors]
         anchors = list(zip(*anchors))
         for a, o, b in zip(anchors, objectness, box_regression):
             sampled_boxes.append(self.forward_for_single_feature_map(a, o, b))
@@ -255,7 +255,7 @@ class FPNRPNBoxSelector(RPNBoxSelector):
         for img_idx in range(num_images):
             boxlist_per_img = boxlists[img_idx]
             levels = self.roi_to_fpn_level_mapper(boxlist_per_img.bbox)
-            boxlist_per_img.add_field("level", levels - lvl_min)
+            #boxlist_per_img.add_field("level", levels - lvl_min)
             # enforce that boxes are in increasing feature map level, so that
             # splitting over different levels can be done with slicing (instead
             # of advanced indexing)

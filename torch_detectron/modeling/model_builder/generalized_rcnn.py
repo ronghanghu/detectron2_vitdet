@@ -21,7 +21,8 @@ from .roi_box_predictors import make_roi_box_predictor
 from .roi_mask_feature_extractors import make_roi_mask_feature_extractor
 from .roi_mask_predictors import make_roi_mask_predictor
 from ..backbone import build_backbone
-from ..rpn import build_rpn
+from ..rpn.rpn import build_rpn
+from ..utils import keep_only_positive_boxes
 from . import loss_evaluators
 
 
@@ -205,8 +206,12 @@ class ROIMaskHead(torch.nn.Module):
         self.loss_evaluator = loss_evaluators.make_roi_mask_loss_evaluator(cfg)
 
     def forward(self, features, proposals, targets=None):
+        if self.training:
+            all_proposals = proposals
+            proposals, positive_inds = keep_only_positive_boxes(proposals)
         if self.training and self.cfg.MODEL.ROI_MASK_HEAD.SHARE_BOX_FEATURE_EXTRACTOR:
             x = features
+            x = x[torch.cat(positive_inds, dim=0)]
         else:
             x = self.feature_extractor(features, proposals)
         mask_logits = self.predictor(x)
@@ -217,7 +222,7 @@ class ROIMaskHead(torch.nn.Module):
 
         loss_mask = self.loss_evaluator(proposals, mask_logits, targets)
 
-        return x, proposals, dict(loss_mask=loss_mask)
+        return x, all_proposals, dict(loss_mask=loss_mask)
 
 
 def build_roi_mask_head(cfg):

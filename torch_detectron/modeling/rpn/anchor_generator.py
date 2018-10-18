@@ -9,7 +9,112 @@ from ..utils import cat_bbox
 from ..utils import meshgrid
 
 
+class BufferList(nn.Module):
+    def __init__(self, buffers=None):
+        super(BufferList, self).__init__()
+        if buffers is not None:
+            self.extend(buffers)
+
+    def extend(self, buffers):
+        offset = len(self)
+        for i, buffer in enumerate(buffers):
+            self.register_buffer(str(offset + i), buffer)
+        return self
+
+    def __len__(self):
+        return len(self._buffers)
+
+    def __iter__(self):
+        return iter(self._buffers.values())
+
+
 class AnchorGenerator(nn.Module):
+    """
+    For a set of image sizes and feature maps, computes a set
+    of anchors
+    """
+
+    def __init__(
+        self,
+        scales=(0.5, 1.0, 2.0),
+        aspect_ratios=(0.5, 1.0, 2.0),
+        base_anchor_size=256,
+        # sizes=(128, 256, 512),
+        # aspect_ratios=(0.5, 1.0, 2.0),
+        anchor_strides=(8, 16, 32),
+        straddle_thresh=0,
+    ):
+        super(AnchorGenerator, self).__init__()
+        sizes = tuple(i * base_anchor_size for i in scales)
+
+        if len(anchor_strides) == 1:
+            anchor_stride = anchor_strides[0]
+            cell_anchors = [generate_anchors(anchor_stride, sizes, aspect_ratios).float()]
+        else:
+            cell_anchors = [
+                generate_anchors(anchor_stride, (size,), aspect_ratios).float()
+                for anchor_stride, size in zip(anchor_strides, sizes)
+            ]
+        self.strides = anchor_strides
+        self.cell_anchors = BufferList(cell_anchors)
+        self.straddle_thresh = straddle_thresh
+
+    def num_anchors_per_location(self):
+        return [len(cell_anchors) for cell_anchors in self.cell_anchors]
+
+    # def grid_anchors(self, grid_height, grid_width):
+    def grid_anchors(self, grid_sizes):
+        anchors = []
+        for size, stride, base_anchors in zip(grid_sizes, self.strides, self.cell_anchors):
+            grid_height, grid_width = size
+            device = base_anchors.device
+            shifts_x = torch.arange(
+                0, grid_width * stride, step=stride, dtype=torch.float32, device=device
+            )
+            shifts_y = torch.arange(
+                0, grid_height * stride, step=stride, dtype=torch.float32, device=device
+            )
+            shift_x, shift_y = meshgrid(shifts_x, shifts_y)
+            shift_x = shift_x.reshape(-1)
+            shift_y = shift_y.reshape(-1)
+            shifts = torch.stack((shift_x, shift_y, shift_x, shift_y), dim=1)
+
+            anchors.append((shifts.view(-1, 1, 4) + base_anchors.view(1, -1, 4)).reshape(-1, 4))
+
+        return anchors
+
+    def add_visibility_to(self, boxlist):
+        image_width, image_height = boxlist.size
+        anchors = boxlist.bbox
+        if self.straddle_thresh >= 0:
+            inds_inside = (
+                (anchors[..., 0] >= -self.straddle_thresh)
+                & (anchors[..., 1] >= -self.straddle_thresh)
+                & (anchors[..., 2] < image_width + self.straddle_thresh)
+                & (anchors[..., 3] < image_height + self.straddle_thresh)
+            )
+        else:
+            device = anchors.device
+            inds_inside = torch.ones(anchors.shape[0], dtype=torch.uint8, device=device)
+        boxlist.add_field("visibility", inds_inside)
+
+    def forward(self, image_list, feature_maps):
+        grid_height, grid_width = feature_maps[0].shape[-2:]
+        grid_sizes = [feature_map.shape[-2:] for feature_map in feature_maps]
+        anchors_over_all_feature_maps = self.grid_anchors(grid_sizes)
+        anchors = []
+        # for i, (image_height, image_width) in enumerate(image_list.image_sizes):
+        for i, (image_height, image_width) in enumerate(image_list):
+            anchors_in_image = []
+            for anchors_per_feature_map in anchors_over_all_feature_maps:
+                boxlist = BoxList(anchors_per_feature_map, (image_width, image_height), mode="xyxy")
+                self.add_visibility_to(boxlist)
+                anchors_in_image.append(boxlist)
+            anchors.append(anchors_in_image)
+        return anchors
+
+
+class AnchorGenerator00(nn.Module):
     """
     For a set of image sizes and feature maps, computes a set
     of anchors
@@ -98,7 +203,8 @@ class AnchorGenerator(nn.Module):
 
 
 # TODO deduplicate with AnchorGenerator
-class FPNAnchorGenerator(nn.Module):
+class FPNAnchorGenerator00(nn.Module):
+# class AnchorGenerator(nn.Module):
     """
     For a set of image sizes and feature maps, computes a set
     of anchors
@@ -114,7 +220,7 @@ class FPNAnchorGenerator(nn.Module):
         *args,
         **kwargs
     ):
-        super(FPNAnchorGenerator, self).__init__()
+        super(AnchorGenerator, self).__init__()
         # TODO complete and fix
         sizes = tuple(i * base_anchor_size for i in scales)
 
