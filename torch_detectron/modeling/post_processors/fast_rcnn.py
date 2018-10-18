@@ -10,7 +10,7 @@ from ..box_coder import BoxCoder
 from ..utils import cat_bbox
 
 
-def box_results_with_nms_and_limit(
+def box_results_with_nms_and_limit_(
     scores, boxes, score_thresh=0.05, nms=0.5, detections_per_img=100
 ):
     """Returns bounding-box detection results by thresholding on scores and
@@ -58,6 +58,7 @@ def box_results_with_nms_and_limit(
         cls_scores = cls_scores[keep]
         labels = labels[keep]
     return cls_scores, cls_boxes, labels
+
 
 
 class PostProcessor(nn.Module):
@@ -142,20 +143,62 @@ class PostProcessor(nn.Module):
         # boxlist.add_field("labels", labels)
         return boxlist
 
-    def filter_results(self, boxlist, num_classes):
+
+    def filter_results(self, boxlist, num_classes,
+    ):
+        """Returns bounding-box detection results by thresholding on scores and
+        applying non-maximum suppression (NMS).
+        `boxes` has shape (#detections, 4 * #classes), where each row represents
+        a list of predicted bounding boxes for each of the object classes in the
+        dataset (including the background class). The detections in each row
+        originate from the same object proposal.
+        `scores` has shape (#detection, #classes), where each row represents a list
+        of object detection confidence scores for each of the object classes in the
+        dataset (including the background class). `scores[i, j]`` corresponds to the
+        box at `boxes[i, j * 4:(j + 1) * 4]`.
+        """
         boxes = boxlist.bbox.reshape(-1, num_classes * 4)
         scores = boxlist.get_field("scores").reshape(-1, num_classes)
 
-        cls_scores, cls_boxes, labels = box_results_with_nms_and_limit(
+        device = scores.device
+        # Apply threshold on detection probabilities and apply NMS
+        # Skip j = 0, because it's the background class
+        inds_all = scores > self.score_thresh
+        result = []
+        for j in range(1, num_classes):
+            inds = inds_all[:, j].nonzero().squeeze(1)
+            scores_j = scores[inds, j]
+            boxes_j = boxes[inds, j * 4 : (j + 1) * 4]
+            boxlist_for_class = BoxList(boxes_j, boxlist.size, mode="xyxy")
+            boxlist_for_class.add_field("scores", scores_j)
+            boxlist_for_class = boxlist_nms(boxlist_for_class, self.nms,
+                    score_field="scores")
+            boxlist_for_class.add_field("labels", torch.full((len(boxlist_for_class),), j, device=device))
+            result.append(boxlist_for_class)
+
+        result = cat_bbox(result)
+        number_of_detections = len(result)
+
+        # Limit to max_per_image detections **over all classes**
+        if number_of_detections > self.detections_per_img > 0:
+            cls_scores = result.get_field("scores")
+            image_thresh, _ = torch.kthvalue(
+                cls_scores.cpu(), number_of_detections - self.detections_per_img + 1
+            )
+            keep = cls_scores >= image_thresh.item()
+            keep = torch.nonzero(keep).squeeze(1)
+            result = result[keep]
+        return result
+
+    def filter_results__(self, boxlist, num_classes):
+        boxes = boxlist.bbox.reshape(-1, num_classes * 4)
+        scores = boxlist.get_field("scores").reshape(-1, num_classes)
+
+        bbox = self.box_results_with_nms_and_limit(
             scores,
             boxes,
-            self.score_thresh,
-            self.nms,
-            self.detections_per_img,
+            boxlist.size,
         )
-        bbox = BoxList(cls_boxes, boxlist.size, mode="xyxy")
-        bbox.add_field("scores", cls_scores)
-        bbox.add_field("labels", labels)
         return bbox
 
     def filter_results_0(self, boxlist, num_classes):
