@@ -144,15 +144,13 @@ class RPNBoxSelector(torch.nn.Module):
 
 
 class FPNRPNBoxSelector(RPNBoxSelector):
-    def __init__(self, roi_to_fpn_level_mapper, fpn_post_nms_top_n, **kwargs):
+    def __init__(self, fpn_post_nms_top_n, **kwargs):
         """
         Arguments:
-            roi_to_fpn_level_mapper (ROI2FPNLevelMapper)
             fpn_post_nms_top_n (int)
             + same arguments as RPNBoxSelector
         """
         super(FPNRPNBoxSelector, self).__init__(**kwargs)
-        self.roi_to_fpn_level_mapper = roi_to_fpn_level_mapper
         self.fpn_post_nms_top_n = fpn_post_nms_top_n
 
     def forward(self, anchors, objectness, box_regression, targets=None):
@@ -171,6 +169,16 @@ class FPNRPNBoxSelector(RPNBoxSelector):
         boxlists = list(zip(*sampled_boxes))
         boxlists = [cat_bbox(boxlist) for boxlist in boxlists]
 
+        if num_levels > 1:
+            boxlists = self.select_over_all_levels(boxlists)
+
+        # append ground-truth bboxes to proposals
+        if self.training and targets is not None:
+            boxlists = self.add_gt_proposals(boxlists, targets)
+
+        return boxlists
+
+    def select_over_all_levels(self, boxlists):
         num_images = len(boxlists)
         # different behavior during training and during testing:
         # during training, post_nms_top_n is over *all* the proposals combined, while
@@ -187,84 +195,12 @@ class FPNRPNBoxSelector(RPNBoxSelector):
             inds_mask = inds_mask.split(box_sizes)
             for i in range(num_images):
                 boxlists[i] = boxlists[i][inds_mask[i]]
-
         else:
             for i in range(num_images):
                 objectness = boxlists[i].get_field("objectness")
                 post_nms_top_n = min(self.fpn_post_nms_top_n, len(objectness))
                 _, inds_sorted = torch.topk(objectness, post_nms_top_n, dim=0, sorted=True)
                 boxlists[i] = boxlists[i][inds_sorted]
-
-        """
-        # TODO almost all this part can be
-        # factored out in a RPN-agnostic class
-        # merge all lists
-        num_images = len(sampled_boxes[0])
-
-        merged_lists = [
-            box for per_feature_boxes in sampled_boxes for box in per_feature_boxes
-        ]
-        image_sizes = [b.size for b in sampled_boxes[0]]
-
-        device = merged_lists[0].bbox.device
-        indices = [
-            torch.full((box.bbox.shape[0],), img_idx, device=device)
-            for per_feature_boxes in sampled_boxes
-            for img_idx, box in enumerate(per_feature_boxes)
-        ]
-
-        # TODO make these concatenations a helper function?
-        # once we make train and test consistent, this can be greatly
-        # simplified, as it will go per image, and not per batch
-        concat_boxes = torch.cat([b.bbox for b in merged_lists], dim=0)
-        indices = torch.cat(indices, dim=0)
-        extra_fields = {}
-        field_names = merged_lists[0].fields()
-        for field in field_names:
-            extra_fields[field] = torch.cat(
-                [b.get_field(field) for b in merged_lists], dim=0
-            )
-
-        post_nms_top_n = min(self.fpn_post_nms_top_n, concat_boxes.shape[0])
-        # different behavior during training and during testing:
-        # during training, post_nms_top_n is over *all* the proposals combined, while
-        # during testing, it is over the proposals for each image
-        # TODO resolve this difference and make it consistent. It should be per image,
-        # and not per batch
-        if self.training:
-            _, inds_sorted = torch.topk(
-                extra_fields["objectness"], post_nms_top_n, dim=0, sorted=True
-            )
-        else:
-            inds_sorted = []
-            for i in range(num_images):
-                objectness = extra_fields["objectness"].clone()
-                objectness[indices != i] = -1
-                _, inds_sorted_img = torch.topk(
-                    objectness, post_nms_top_n, dim=0, sorted=True
-                )
-                inds_sorted.append(inds_sorted_img)
-            inds_sorted = cat(inds_sorted, dim=0)
-
-        concat_boxes = concat_boxes[inds_sorted]
-        indices = indices[inds_sorted]
-        for field, data in extra_fields.items():
-            extra_fields[field] = data[inds_sorted]
-
-        boxlists = []
-        # convert back to BoxList
-        for img_idx in range(num_images):
-            idx_per_img = nonzero(indices == img_idx)[0]
-            boxes_per_img = concat_boxes[idx_per_img]
-            boxlist_per_img = BoxList(boxes_per_img, image_sizes[img_idx], mode="xyxy")
-            for field, data in extra_fields.items():
-                boxlist_per_img.add_field(field, data[idx_per_img])
-            boxlists.append(boxlist_per_img)
-        """
-        # append ground-truth bboxes to proposals
-        if self.training and targets is not None:
-            boxlists = self.add_gt_proposals(boxlists, targets)
-
         return boxlists
 
 

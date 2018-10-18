@@ -4,7 +4,6 @@ from torch import nn
 
 from torch_detectron.modeling.box_coder import BoxCoder
 from ..model_builder.loss_evaluators import make_rpn_loss_evaluator
-from ..backbone.fpn import ROI2FPNLevelMapper
 from .anchor_generator import AnchorGenerator
 from .inference import FPNRPNBoxSelector
 from .inference import RPNBoxSelector
@@ -41,10 +40,7 @@ def make_box_selector(config, rpn_box_coder, is_train):
     box_selector_maker = RPNBoxSelector
     box_selector_args = {}
     if use_fpn:
-        # TODO expose those options
-        roi_to_fpn_level_mapper = ROI2FPNLevelMapper(2, 5)
         box_selector_maker = FPNRPNBoxSelector
-        box_selector_args["roi_to_fpn_level_mapper"] = roi_to_fpn_level_mapper
         fpn_post_nms_top_n = config.MODEL.RPN.FPN_POST_NMS_TOP_N_TRAIN
         if not is_train:
             fpn_post_nms_top_n = config.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST
@@ -141,7 +137,7 @@ class RPNModule(torch.nn.Module):
             targets (list[BoxList): ground-truth boxes present in the image (optional)
         """
         objectness, rpn_box_regression = self.head(features)
-        anchors = self.anchor_generator(images.image_sizes, features)
+        anchors = self.anchor_generator(images, features)
 
         if self.training:
             return self._forward_train(anchors, objectness, rpn_box_regression, targets)
