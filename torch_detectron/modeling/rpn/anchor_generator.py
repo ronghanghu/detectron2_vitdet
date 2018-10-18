@@ -47,6 +47,8 @@ class AnchorGenerator(nn.Module):
             anchor_stride = anchor_strides[0]
             cell_anchors = [generate_anchors(anchor_stride, sizes, aspect_ratios).float()]
         else:
+            if  len(anchor_strides) != len(sizes):
+                raise RuntimeError("FPN should have #anchor_strides == #sizes")
             cell_anchors = [
                 generate_anchors(anchor_stride, (size,), aspect_ratios).float()
                 for anchor_stride, size in zip(anchor_strides, sizes)
