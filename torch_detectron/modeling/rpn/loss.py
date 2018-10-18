@@ -7,6 +7,7 @@ import torch
 from torch.nn import functional as F
 
 from ..utils import cat
+from ..utils import cat_bbox
 from ..utils import nonzero
 from ..utils import smooth_l1_loss
 from ..losses.matcher import Matcher
@@ -68,6 +69,7 @@ class RPNLossComputation(object):
             box_regression (list[Tensor])
             targets (list[BoxList])
         """
+        anchors = [cat_bbox(anchors_per_image) for anchors_per_image in anchors]
         labels, regression_targets = self.target_preparator(anchors, targets)
         sampled_pos_inds, sampled_neg_inds = self.fg_bg_sampler(labels)
         sampled_pos_inds = nonzero(torch.cat(sampled_pos_inds, dim=0))[0]

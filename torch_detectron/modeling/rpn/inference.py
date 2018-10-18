@@ -6,7 +6,6 @@ from ..box_coder import BoxCoder
 from ..utils import cat
 from ..utils import cat_bbox
 from ..utils import nonzero
-from ..utils import split_boxlist_in_levels
 
 
 # TODO add option for different params in train / test
@@ -56,10 +55,6 @@ class RPNBoxSelector(torch.nn.Module):
             gt_box.add_field(
                 "objectness", torch.ones(gt_box.bbox.shape[0], device=device)
             )
-            gt_box.add_field(
-                "level",
-                torch.zeros(gt_box.bbox.shape[0], dtype=torch.int64, device=device),
-            )
 
         proposals = [
             cat_bbox((proposal, gt_box))
@@ -102,9 +97,6 @@ class RPNBoxSelector(torch.nn.Module):
 
         proposals = proposals.view(N, -1, 4)
 
-        # assumption: all the boxes belong to the same level
-        # FIXME need to be improved, as they might already have changed in the decoding
-        #lvl = anchors[0].get_field("level")[0]
         # TODO optimize / make batch friendly
         sampled_bboxes = []
         for proposal, score, im_shape in zip(proposals, objectness, image_shapes):
@@ -122,9 +114,6 @@ class RPNBoxSelector(torch.nn.Module):
                 score = score[keep]
             sampled_bbox = BoxList(p, (width, height), mode="xyxy")
             sampled_bbox.add_field("objectness", score)
-            #sampled_bbox.add_field(
-            #    "level", torch.full_like(score, lvl, dtype=torch.int64)
-            #)
             sampled_bboxes.append(sampled_bbox)
             # TODO maybe also copy the other fields that were originally present?
 
@@ -133,13 +122,12 @@ class RPNBoxSelector(torch.nn.Module):
     def forward(self, anchors, objectness, box_regression, targets=None):
         """
         Arguments:
-            anchors: list[BoxList]
+            anchors: list[list[BoxList]]
             objectness: list[tensor]
             box_regression: list[tensor]
         """
         num_levels = len(objectness)
         assert num_levels == 1, "only single feature map supported"
-        #anchors = [split_boxlist_in_levels(anchor, num_levels) for anchor in anchors]
         anchors = list(zip(*anchors))
         sampled_boxes = []
         for a, o, b in zip(anchors, objectness, box_regression):
@@ -170,17 +158,44 @@ class FPNRPNBoxSelector(RPNBoxSelector):
     def forward(self, anchors, objectness, box_regression, targets=None):
         """
         Arguments:
-            anchors: list[BoxList]
+            anchors: list[list[BoxList]]
             objectness: list[tensor]
             box_regression: list[tensor]
         """
         sampled_boxes = []
         num_levels = len(objectness)
-        # anchors = [split_boxlist_in_levels(anchor, num_levels) for anchor in anchors]
         anchors = list(zip(*anchors))
         for a, o, b in zip(anchors, objectness, box_regression):
             sampled_boxes.append(self.forward_for_single_feature_map(a, o, b))
 
+        boxlists = list(zip(*sampled_boxes))
+        boxlists = [cat_bbox(boxlist) for boxlist in boxlists]
+
+        num_images = len(boxlists)
+        # different behavior during training and during testing:
+        # during training, post_nms_top_n is over *all* the proposals combined, while
+        # during testing, it is over the proposals for each image
+        # TODO resolve this difference and make it consistent. It should be per image,
+        # and not per batch
+        if self.training:
+            objectness = torch.cat([boxlist.get_field("objectness") for boxlist in boxlists], dim=0)
+            box_sizes = [boxlist.bbox.shape[0] for boxlist in boxlists]
+            post_nms_top_n = min(self.fpn_post_nms_top_n, len(objectness))
+            _, inds_sorted = torch.topk(objectness, post_nms_top_n, dim=0, sorted=True)
+            inds_mask = torch.zeros_like(objectness, dtype=torch.uint8)
+            inds_mask[inds_sorted] = 1
+            inds_mask = inds_mask.split(box_sizes)
+            for i in range(num_images):
+                boxlists[i] = boxlists[i][inds_mask[i]]
+
+        else:
+            for i in range(num_images):
+                objectness = boxlists[i].get_field("objectness")
+                post_nms_top_n = min(self.fpn_post_nms_top_n, len(objectness))
+                _, inds_sorted = torch.topk(objectness, post_nms_top_n, dim=0, sorted=True)
+                boxlists[i] = boxlists[i][inds_sorted]
+
+        """
         # TODO almost all this part can be
         # factored out in a RPN-agnostic class
         # merge all lists
@@ -245,26 +260,12 @@ class FPNRPNBoxSelector(RPNBoxSelector):
             for field, data in extra_fields.items():
                 boxlist_per_img.add_field(field, data[idx_per_img])
             boxlists.append(boxlist_per_img)
-
+        """
         # append ground-truth bboxes to proposals
         if self.training and targets is not None:
             boxlists = self.add_gt_proposals(boxlists, targets)
 
-        lvl_min = self.roi_to_fpn_level_mapper.k_min
-        result = []
-        for img_idx in range(num_images):
-            boxlist_per_img = boxlists[img_idx]
-            levels = self.roi_to_fpn_level_mapper(boxlist_per_img.bbox)
-            #boxlist_per_img.add_field("level", levels - lvl_min)
-            # enforce that boxes are in increasing feature map level, so that
-            # splitting over different levels can be done with slicing (instead
-            # of advanced indexing)
-            _, permute_idx = levels.sort()
-            boxlist_per_img = boxlist_per_img[permute_idx]
-
-            result.append(boxlist_per_img)
-
-        return result
+        return boxlists
 
 
 # TODO move this to bounding box class?
