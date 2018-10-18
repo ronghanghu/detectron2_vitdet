@@ -162,13 +162,3 @@ class RPNBoxSelector(torch.nn.Module):
                 _, inds_sorted = torch.topk(objectness, post_nms_top_n, dim=0, sorted=True)
                 boxlists[i] = boxlists[i][inds_sorted]
         return boxlists
-
-
-# TODO move this to bounding box class?
-def _clip_boxes_to_image(boxes, height, width):
-    fact = 1  # TODO REMOVE
-    num_boxes = boxes.shape[0]
-    b1 = boxes[:, 0::2].clamp(min=0, max=width - fact)
-    b2 = boxes[:, 1::2].clamp(min=0, max=height - fact)
-    boxes = torch.stack((b1, b2), 2).view(num_boxes, -1)
-    return boxes

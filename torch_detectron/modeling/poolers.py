@@ -72,14 +72,10 @@ class Pooler(nn.Module):
         self.map_levels = LevelMapper(2, 5)
 
     def convert_to_roi_format(self, boxes):
-        ids = [
-            i for i, l in enumerate(boxes) for _ in range(len(l))
-        ]
         concat_boxes = cat([b.bbox for b in boxes], dim=0)
-        device = concat_boxes.device
-        dtype = concat_boxes.dtype
-        ids = torch.tensor(ids, dtype=dtype, device=device)
-        rois = torch.cat([ids[:, None], concat_boxes], dim=1)
+        device, dtype = concat_boxes.device, concat_boxes.dtype
+        ids = cat([torch.full((len(b), 1), i, dtype=dtype, device=device) for i, b in enumerate(boxes)], dim=0)
+        rois = torch.cat([ids, concat_boxes], dim=1)
         return rois
 
     def forward(self, x, boxes):
