@@ -222,6 +222,12 @@ class BoxList(object):
             return self[keep]
         return self
 
+    def area(self):
+        TO_REMOVE = 1
+        box = self.bbox
+        area = (box[:, 2] - box[:, 0] + TO_REMOVE) * (box[:, 3] - box[:, 1] + TO_REMOVE)
+        return area
+
     def copy_with_fields(self, fields):
         bbox = BoxList(self.bbox, self.size, self.mode)
         if not isinstance(fields, (list, tuple)):

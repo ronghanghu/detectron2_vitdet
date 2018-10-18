@@ -1,11 +1,13 @@
 import torch
 
-from torch_detectron.layers import nms as box_nms
 from torch_detectron.structures.bounding_box import BoxList
 from ..box_coder import BoxCoder
 from ..utils import cat
 from ..utils import cat_bbox
 from ..utils import nonzero
+
+from torch_detectron.structures.boxlist_ops import boxlist_nms
+from torch_detectron.structures.boxlist_ops import remove_small_boxes
 
 
 class RPNBoxSelector(torch.nn.Module):
@@ -90,7 +92,7 @@ class RPNBoxSelector(torch.nn.Module):
         batch_idx = torch.arange(N, device=device)[:, None]
         box_regression = box_regression[batch_idx, topk_idx]
 
-        image_shapes = [box.size[::-1] for box in anchors]
+        image_shapes = [box.size for box in anchors]
         concat_anchors = torch.cat([a.bbox for a in anchors], dim=0)
         concat_anchors = concat_anchors.reshape(N, -1, 4)[batch_idx, topk_idx]
 
@@ -100,27 +102,16 @@ class RPNBoxSelector(torch.nn.Module):
 
         proposals = proposals.view(N, -1, 4)
 
-        # TODO optimize / make batch friendly
-        sampled_bboxes = []
+        result = []
         for proposal, score, im_shape in zip(proposals, objectness, image_shapes):
-            height, width = im_shape
-
-            p = _clip_boxes_to_image(proposal, height, width)
-            keep = _filter_boxes(p, self.min_size, im_shape)
-            p = p[keep, :]
-            score = score[keep]
-            if self.nms_thresh > 0:
-                keep = box_nms(p, score, self.nms_thresh)
-                if self.post_nms_top_n > 0:
-                    keep = keep[: self.post_nms_top_n]
-                p = p[keep]
-                score = score[keep]
-            sampled_bbox = BoxList(p, (width, height), mode="xyxy")
-            sampled_bbox.add_field("objectness", score)
-            sampled_bboxes.append(sampled_bbox)
-            # TODO maybe also copy the other fields that were originally present?
-
-        return sampled_bboxes
+            boxlist = BoxList(proposal, im_shape, mode="xyxy")
+            boxlist.add_field("objectness", score)
+            boxlist = boxlist.clip_to_image(remove_empty=False)
+            boxlist = remove_small_boxes(boxlist, self.min_size)
+            boxlist = boxlist_nms(boxlist, self.nms_thresh,
+                    max_proposals=self.post_nms_top_n, score_field="objectness")
+            result.append(boxlist)
+        return result
 
     def forward(self, anchors, objectness, box_regression, targets=None):
         """

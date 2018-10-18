@@ -30,8 +30,9 @@ def box_results_with_nms_and_limit(
     device = scores.device
     # Apply threshold on detection probabilities and apply NMS
     # Skip j = 0, because it's the background class
+    inds_all = scores > score_thresh
     for j in range(1, num_classes):
-        inds = scores[:, j] > score_thresh
+        inds = inds_all[:, j].nonzero().squeeze(1)
         scores_j = scores[inds, j]
         boxes_j = boxes[inds, j * 4 : (j + 1) * 4]
         keep = box_nms(boxes_j, scores_j, nms)
@@ -51,8 +52,7 @@ def box_results_with_nms_and_limit(
             cls_scores.cpu(), number_of_detections - detections_per_img + 1
         )
         keep = cls_scores >= image_thresh.item()
-        keep = torch.nonzero(keep)
-        keep = keep.squeeze(1) if keep.numel() else keep
+        keep = torch.nonzero(keep).squeeze(1)
         cls_boxes = cls_boxes[keep]
         cls_scores = cls_scores[keep]
         labels = labels[keep]
