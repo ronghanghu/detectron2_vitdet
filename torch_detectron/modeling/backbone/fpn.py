@@ -2,8 +2,6 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from ..box_ops import boxes_area
-
 
 class FPN(nn.Module):
     """

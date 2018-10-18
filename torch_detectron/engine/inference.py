@@ -150,7 +150,7 @@ def evaluate_box_proposals(
     area_range = area_ranges[areas[area]]
     gt_overlaps = []
     num_pos = 0
-    from torch_detectron.modeling.box_ops import boxes_iou
+    from torch_detectron.structures.boxlist_ops import boxlist_iou
 
     for image_id, prediction in enumerate(predictions):
         original_id = dataset.id_to_img_map[image_id]
@@ -191,7 +191,7 @@ def evaluate_box_proposals(
         if limit is not None and len(prediction) > limit:
             prediction = prediction[:limit]
 
-        overlaps = boxes_iou(prediction, gt_boxes)
+        overlaps = boxlist_iou(prediction, gt_boxes)
 
         _gt_overlaps = torch.zeros(len(gt_boxes))
         for j in range(min(len(prediction), len(gt_boxes))):

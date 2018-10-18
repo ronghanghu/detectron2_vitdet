@@ -172,21 +172,3 @@ def _clip_boxes_to_image(boxes, height, width):
     b2 = boxes[:, 1::2].clamp(min=0, max=height - fact)
     boxes = torch.stack((b1, b2), 2).view(num_boxes, -1)
     return boxes
-
-
-def _filter_boxes(boxes, min_size, im_shape):
-    """Only keep boxes with both sides >= min_size and center within the image.
-    """
-    # Scale min_size to match image scale
-    fact = 1  # TODO remove
-    ws = boxes[:, 2] - boxes[:, 0] + fact
-    hs = boxes[:, 3] - boxes[:, 1] + fact
-    x_ctr = boxes[:, 0] + ws / 2.0
-    y_ctr = boxes[:, 1] + hs / 2.0
-    keep = nonzero(
-        (ws >= min_size)
-        & (hs >= min_size)
-        & (x_ctr < im_shape[1])
-        & (y_ctr < im_shape[0])
-    )[0]
-    return keep

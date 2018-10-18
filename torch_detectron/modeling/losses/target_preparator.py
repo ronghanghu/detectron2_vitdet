@@ -1,6 +1,6 @@
 import torch
 
-from ..box_ops import boxes_iou
+from torch_detectron.structures.boxlist_ops import boxlist_iou
 
 
 class TargetPreparator(object):
@@ -32,7 +32,7 @@ class TargetPreparator(object):
         results = []
         for anchor, target in zip(anchors, targets):
             if len(anchor) > 0:
-                match_quality_matrix = boxes_iou(target, anchor)
+                match_quality_matrix = boxlist_iou(target, anchor)
                 matched_idxs = self.proposal_matcher(match_quality_matrix)
             else:
                 matched_idxs = torch.empty(

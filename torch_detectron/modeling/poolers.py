@@ -6,7 +6,6 @@ from torch_detectron.layers import ROIAlign
 
 from .utils import cat
 from .utils import nonzero
-from .box_ops import boxes_area
 
 
 class LevelMapper(object):
@@ -29,13 +28,13 @@ class LevelMapper(object):
         self.lvl0 = canonical_level
         self.eps = eps
 
-    def __call__(self, rois):
+    def __call__(self, boxlists):
         """
         Arguments:
-            rois: tensor
+            boxlists (list[BoxList])
         """
         # Compute level ids
-        s = torch.sqrt(boxes_area(rois))
+        s = torch.sqrt(cat([boxlist.area() for boxlist in boxlists]))
 
         # Eqn.(1) in FPN paper
         target_lvls = torch.floor(self.lvl0 + torch.log2(s / self.s0 + self.eps))
@@ -96,7 +95,7 @@ class Pooler(nn.Module):
         if num_levels == 1:
             return self.poolers[0](x[0], rois)
 
-        levels = self.map_levels(rois[:, 1:])
+        levels = self.map_levels(boxes)
 
         num_rois = len(rois)
         num_channels = x[0].shape[1]
