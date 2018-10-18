@@ -103,7 +103,7 @@ class PostProcessor(nn.Module):
 
         # TODO think about a representation of batch of boxes
         image_shapes = [box.size[::-1] for box in boxes]
-        boxes_per_image = [box.bbox.size(0) for box in boxes]
+        boxes_per_image = [len(box) for box in boxes]
         concat_boxes = torch.cat([a.bbox for a in boxes], dim=0)
 
         proposals = self.box_coder.decode(

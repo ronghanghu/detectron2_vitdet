@@ -8,7 +8,6 @@ from ..utils import cat_bbox
 from ..utils import nonzero
 
 
-# TODO add option for different params in train / test
 class RPNBoxSelector(torch.nn.Module):
     """
     Performs post-processing on the outputs of the RPN boxes, before feeding the
@@ -57,7 +56,7 @@ class RPNBoxSelector(torch.nn.Module):
         # so we need to add a dummy for objectness that's missing
         for gt_box in gt_boxes:
             gt_box.add_field(
-                "objectness", torch.ones(gt_box.bbox.shape[0], device=device)
+                "objectness", torch.ones(len(gt_box), device=device)
             )
 
         proposals = [
@@ -157,7 +156,7 @@ class RPNBoxSelector(torch.nn.Module):
         # and not per batch
         if self.training:
             objectness = torch.cat([boxlist.get_field("objectness") for boxlist in boxlists], dim=0)
-            box_sizes = [boxlist.bbox.shape[0] for boxlist in boxlists]
+            box_sizes = [len(boxlist) for boxlist in boxlists]
             post_nms_top_n = min(self.fpn_post_nms_top_n, len(objectness))
             _, inds_sorted = torch.topk(objectness, post_nms_top_n, dim=0, sorted=True)
             inds_mask = torch.zeros_like(objectness, dtype=torch.uint8)

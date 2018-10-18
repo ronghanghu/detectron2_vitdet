@@ -74,7 +74,7 @@ class Pooler(nn.Module):
 
     def convert_to_roi_format(self, boxes):
         ids = [
-            i for i, l in enumerate(boxes) for _ in range(l.bbox.shape[0])
+            i for i, l in enumerate(boxes) for _ in range(len(l))
         ]
         concat_boxes = cat([b.bbox for b in boxes], dim=0)
         device = concat_boxes.device

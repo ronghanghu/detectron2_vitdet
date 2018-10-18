@@ -207,6 +207,9 @@ class BoxList(object):
             bbox.add_field(k, v[item])
         return bbox
 
+    def __len__(self):
+        return self.bbox.shape[0]
+
     def clip_to_image(self, remove_empty=True):
         TO_REMOVE = 1
         self.bbox[:, 0].clamp_(min=0, max=self.size[0] - TO_REMOVE)
@@ -229,7 +232,7 @@ class BoxList(object):
 
     def __repr__(self):
         s = self.__class__.__name__ + "("
-        s += "num_boxes={}, ".format(self.bbox.size(0))
+        s += "num_boxes={}, ".format(len(self))
         s += "image_width={}, ".format(self.size[0])
         s += "image_height={}, ".format(self.size[1])
         s += "mode={})".format(self.mode)

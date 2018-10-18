@@ -46,7 +46,7 @@ class MaskPostProcessor(nn.Module):
         if self.masker:
             mask_prob = self.masker(mask_prob, boxes)
 
-        boxes_per_image = [box.bbox.size(0) for box in boxes]
+        boxes_per_image = [len(box) for box in boxes]
         mask_prob = mask_prob.split(boxes_per_image, dim=0)
 
         results = []

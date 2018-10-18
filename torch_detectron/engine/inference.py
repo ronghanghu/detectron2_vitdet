@@ -35,7 +35,7 @@ def prepare_for_coco_detection(predictions, dataset):
     coco_results = []
     for image_id, prediction in enumerate(predictions):
         original_id = dataset.id_to_img_map[image_id]
-        if len(prediction.bbox) == 0:
+        if len(prediction) == 0:
             continue
 
         # TODO replace with get_img_info?
@@ -74,7 +74,7 @@ def prepare_for_coco_segmentation(predictions, dataset):
     coco_results = []
     for image_id, prediction in tqdm(enumerate(predictions)):
         original_id = dataset.id_to_img_map[image_id]
-        if len(prediction.bbox) == 0:
+        if len(prediction) == 0:
             continue
 
         # TODO replace with get_img_info?
@@ -174,27 +174,27 @@ def evaluate_box_proposals(
         )
         gt_areas = torch.as_tensor([obj["area"] for obj in anno if obj["iscrowd"] == 0])
 
-        if gt_boxes.bbox.shape[0] == 0:
+        if len(gt_boxes) == 0:
             continue
 
         valid_gt_inds = (gt_areas >= area_range[0]) & (gt_areas <= area_range[1])
         gt_boxes = gt_boxes[valid_gt_inds]
 
-        num_pos += gt_boxes.bbox.shape[0]
+        num_pos += len(gt_boxes)
 
-        if gt_boxes.bbox.shape[0] == 0:
+        if len(gt_boxes) == 0:
             continue
 
-        if len(prediction.bbox) == 0:
+        if len(prediction) == 0:
             continue
 
-        if limit is not None and prediction.bbox.shape[0] > limit:
+        if limit is not None and len(prediction) > limit:
             prediction = prediction[:limit]
 
         overlaps = boxes_iou(prediction, gt_boxes)
 
-        _gt_overlaps = torch.zeros(gt_boxes.bbox.shape[0])
-        for j in range(min(prediction.bbox.shape[0], gt_boxes.bbox.shape[0])):
+        _gt_overlaps = torch.zeros(len(gt_boxes))
+        for j in range(min(len(prediction), len(gt_boxes))):
             # find which proposal box maximally covers each gt box
             # and get the iou amount of coverage for each gt box
             max_overlaps, argmax_overlaps = overlaps.max(dim=0)

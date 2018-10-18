@@ -31,7 +31,7 @@ class TargetPreparator(object):
         """
         results = []
         for anchor, target in zip(anchors, targets):
-            if anchor.bbox.numel() > 0:
+            if len(anchor) > 0:
                 match_quality_matrix = boxes_iou(target, anchor)
                 matched_idxs = self.proposal_matcher(match_quality_matrix)
             else:
