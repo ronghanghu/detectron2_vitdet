@@ -1,3 +1,4 @@
+import math
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -69,7 +70,11 @@ class Pooler(nn.Module):
             )
         self.poolers = nn.ModuleList(poolers)
         self.output_size = output_size
-        self.map_levels = LevelMapper(2, 5)
+        # get the levels in the feature map by leveraging the fact that the network always
+        # downsamples by a factor of 2 at each level.
+        lvl_min = -math.log2(scales[0])
+        lvl_max = -math.log2(scales[-1])
+        self.map_levels = LevelMapper(lvl_min, lvl_max)
 
     def convert_to_roi_format(self, boxes):
         concat_boxes = cat([b.bbox for b in boxes], dim=0)
