@@ -107,7 +107,6 @@ class MaskRCNNLossComputation(object):
         """
         """
         self.target_preparator = target_preparator
-        self.subsample_only_positive_boxes = subsample_only_positive_boxes
 
     def prepare_targets(self, anchors, targets):
         """

@@ -51,7 +51,6 @@ class MaskRCNNFPNFeatureExtractor(nn.Module):
     def forward(self, x, proposals):
         x = self.pooler(x, proposals)
 
-        # TODO need to handle case of no boxes -> empty x
         for layer_name in self.blocks:
             x = F.relu(getattr(self, layer_name)(x))
 

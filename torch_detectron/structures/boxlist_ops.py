@@ -1,3 +1,5 @@
+import torch
+
 from .bounding_box import BoxList
 
 from torch_detectron.layers import nms as _box_nms

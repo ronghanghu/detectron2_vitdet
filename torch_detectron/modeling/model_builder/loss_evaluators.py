@@ -22,7 +22,6 @@ def make_standard_loss_evaluator(
     positive_fraction=None,
     box_coder=None,
     mask_resolution=None,
-    mask_subsample_only_positive_boxes=None,
 ):
     assert loss_type in ("rpn", "fast_rcnn", "mask_rcnn")
     allow_low_quality_matches = loss_type == "rpn"
@@ -42,12 +41,12 @@ def make_standard_loss_evaluator(
         )
 
     if loss_type == "rpn":
-        for arg in (mask_resolution, mask_subsample_only_positive_boxes):
+        for arg in (mask_resolution,):
             assert arg is None
         target_preparator = RPNTargetPreparator(matcher, box_coder)
         loss_evaluator = RPNLossComputation(target_preparator, fg_bg_sampler)
     elif loss_type == "fast_rcnn":
-        for arg in (mask_resolution, mask_subsample_only_positive_boxes):
+        for arg in (mask_resolution,):
             assert arg is None
         target_preparator = FastRCNNTargetPreparator(matcher, box_coder)
         loss_evaluator = FastRCNNLossComputation(target_preparator, fg_bg_sampler)
@@ -55,11 +54,9 @@ def make_standard_loss_evaluator(
         for arg in (batch_size_per_image, positive_fraction):
             assert arg is None
         assert isinstance(mask_resolution, (int, float))
-        assert isinstance(mask_subsample_only_positive_boxes, bool)
         target_preparator = MaskTargetPreparator(matcher, mask_resolution)
         loss_evaluator = MaskRCNNLossComputation(
             target_preparator,
-            subsample_only_positive_boxes=mask_subsample_only_positive_boxes,
         )
 
     return loss_evaluator
@@ -95,5 +92,4 @@ def make_roi_mask_loss_evaluator(cfg):
         cfg.MODEL.ROI_HEADS.FG_IOU_THRESHOLD,
         cfg.MODEL.ROI_HEADS.BG_IOU_THRESHOLD,
         mask_resolution=cfg.MODEL.ROI_MASK_HEAD.RESOLUTION,
-        mask_subsample_only_positive_boxes=cfg.MODEL.ROI_HEADS.USE_FPN,
     )
