@@ -118,7 +118,9 @@ class PostProcessor(nn.Module):
             boxlist_for_class.add_field("scores", scores_j)
             boxlist_for_class = boxlist_nms(boxlist_for_class, self.nms,
                     score_field="scores")
-            boxlist_for_class.add_field("labels", torch.full((len(boxlist_for_class),), j, device=device))
+            num_labels = len(boxlist_for_class)
+            boxlist_for_class.add_field("labels",
+                    torch.full((num_labels,), j, dtype=torch.int64, device=device))
             result.append(boxlist_for_class)
 
         result = cat_bbox(result)
