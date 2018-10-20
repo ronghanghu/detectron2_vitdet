@@ -3,48 +3,9 @@ import torch.nn.functional as F
 from torch import nn
 
 from torch_detectron.modeling.box_coder import BoxCoder
-from ..model_builder.loss_evaluators import make_rpn_loss_evaluator
-from .anchor_generator import AnchorGenerator
-from .inference import RPNBoxSelector
-
-
-def make_anchor_generator(config):
-    anchor_sizes = config.MODEL.RPN.ANCHOR_SIZES
-    aspect_ratios = config.MODEL.RPN.ASPECT_RATIOS
-    anchor_stride = config.MODEL.RPN.ANCHOR_STRIDE
-    straddle_thresh = config.MODEL.RPN.STRADDLE_THRESH
-
-    if config.MODEL.RPN.USE_FPN:
-        assert len(anchor_stride) == len(
-            anchor_sizes
-        ), "FPN should have len(ANCHOR_STRIDE) == len(ANCHOR_SIZES)"
-    else:
-        assert len(anchor_stride) == 1, "Non-FPN should have a single ANCHOR_STRIDE"
-    anchor_generator = AnchorGenerator(anchor_sizes, aspect_ratios, anchor_stride, straddle_thresh)
-    return anchor_generator
-
-
-def make_box_selector(config, rpn_box_coder, is_train):
-    fpn_post_nms_top_n = config.MODEL.RPN.FPN_POST_NMS_TOP_N_TRAIN
-    if not is_train:
-        fpn_post_nms_top_n = config.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST
-
-    pre_nms_top_n = config.MODEL.RPN.PRE_NMS_TOP_N_TRAIN
-    post_nms_top_n = config.MODEL.RPN.POST_NMS_TOP_N_TRAIN
-    if not is_train:
-        pre_nms_top_n = config.MODEL.RPN.PRE_NMS_TOP_N_TEST
-        post_nms_top_n = config.MODEL.RPN.POST_NMS_TOP_N_TEST
-    nms_thresh = config.MODEL.RPN.NMS_THRESH
-    min_size = config.MODEL.RPN.MIN_SIZE
-    box_selector = RPNBoxSelector(
-        pre_nms_top_n=pre_nms_top_n,
-        post_nms_top_n=post_nms_top_n,
-        nms_thresh=nms_thresh,
-        min_size=min_size,
-        box_coder=rpn_box_coder,
-        fpn_post_nms_top_n=fpn_post_nms_top_n,
-    )
-    return box_selector
+from .loss import make_rpn_loss_evaluator
+from .anchor_generator import make_anchor_generator
+from .inference import make_rpn_postprocessor
 
 
 class RPNHead(nn.Module):
@@ -99,8 +60,8 @@ class RPNModule(torch.nn.Module):
 
         rpn_box_coder = BoxCoder(weights=(1.0, 1.0, 1.0, 1.0))
 
-        box_selector_train = make_box_selector(cfg, rpn_box_coder, is_train=True)
-        box_selector_test = make_box_selector(cfg, rpn_box_coder, is_train=False)
+        box_selector_train = make_rpn_postprocessor(cfg, rpn_box_coder, is_train=True)
+        box_selector_test = make_rpn_postprocessor(cfg, rpn_box_coder, is_train=False)
 
         loss_evaluator = make_rpn_loss_evaluator(cfg, rpn_box_coder)
 

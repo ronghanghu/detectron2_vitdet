@@ -1,1 +1,0 @@
-from .generalized_rcnn import build_detection_model

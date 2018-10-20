@@ -1,23 +1,28 @@
 import torch
 
+from torch_detectron.modeling.box_coder import BoxCoder
 from torch_detectron.structures.bounding_box import BoxList
-from ..box_coder import BoxCoder
-from ..utils import cat
-from ..utils import cat_bbox
-from ..utils import nonzero
-
+from torch_detectron.structures.boxlist_ops import cat_boxlist
 from torch_detectron.structures.boxlist_ops import boxlist_nms
 from torch_detectron.structures.boxlist_ops import remove_small_boxes
 
+from ..utils import cat
 
-class RPNBoxSelector(torch.nn.Module):
+
+class RPNPostProcessor(torch.nn.Module):
     """
     Performs post-processing on the outputs of the RPN boxes, before feeding the
     proposals to the heads
     """
 
     def __init__(
-        self, pre_nms_top_n, post_nms_top_n, nms_thresh, min_size, box_coder=None, fpn_post_nms_top_n=None,
+        self,
+        pre_nms_top_n,
+        post_nms_top_n,
+        nms_thresh,
+        min_size,
+        box_coder=None,
+        fpn_post_nms_top_n=None,
     ):
         """
         Arguments:
@@ -28,17 +33,16 @@ class RPNBoxSelector(torch.nn.Module):
             box_coder (BoxCoder)
             fpn_post_nms_top_n (int)
         """
-        super(RPNBoxSelector, self).__init__()
-        # TODO ATTENTION, as those numbers are for single-image in Detectron,
-        # and here it's for the batch
+        super(RPNPostProcessor, self).__init__()
         self.pre_nms_top_n = pre_nms_top_n
         self.post_nms_top_n = post_nms_top_n
         self.nms_thresh = nms_thresh
         self.min_size = min_size
 
-        self.box_coder = (
-            BoxCoder(weights=(1.0, 1.0, 1.0, 1.0)) if not box_coder else box_coder
-        )
+        if box_coder is None:
+            box_coder = BoxCoder(weights=(1.0, 1.0, 1.0, 1.0))
+        self.box_coder = box_coder
+
         if fpn_post_nms_top_n is None:
             fpn_post_nms_top_n = post_nms_top_n
         self.fpn_post_nms_top_n = fpn_post_nms_top_n
@@ -57,12 +61,10 @@ class RPNBoxSelector(torch.nn.Module):
         # later cat of bbox requires all fields to be present for all bbox
         # so we need to add a dummy for objectness that's missing
         for gt_box in gt_boxes:
-            gt_box.add_field(
-                "objectness", torch.ones(len(gt_box), device=device)
-            )
+            gt_box.add_field("objectness", torch.ones(len(gt_box), device=device))
 
         proposals = [
-            cat_bbox((proposal, gt_box))
+            cat_boxlist((proposal, gt_box))
             for proposal, gt_box in zip(proposals, gt_boxes)
         ]
 
@@ -108,8 +110,12 @@ class RPNBoxSelector(torch.nn.Module):
             boxlist.add_field("objectness", score)
             boxlist = boxlist.clip_to_image(remove_empty=False)
             boxlist = remove_small_boxes(boxlist, self.min_size)
-            boxlist = boxlist_nms(boxlist, self.nms_thresh,
-                    max_proposals=self.post_nms_top_n, score_field="objectness")
+            boxlist = boxlist_nms(
+                boxlist,
+                self.nms_thresh,
+                max_proposals=self.post_nms_top_n,
+                score_field="objectness",
+            )
             result.append(boxlist)
         return result
 
@@ -127,7 +133,7 @@ class RPNBoxSelector(torch.nn.Module):
             sampled_boxes.append(self.forward_for_single_feature_map(a, o, b))
 
         boxlists = list(zip(*sampled_boxes))
-        boxlists = [cat_bbox(boxlist) for boxlist in boxlists]
+        boxlists = [cat_boxlist(boxlist) for boxlist in boxlists]
 
         if num_levels > 1:
             boxlists = self.select_over_all_levels(boxlists)
@@ -146,7 +152,9 @@ class RPNBoxSelector(torch.nn.Module):
         # TODO resolve this difference and make it consistent. It should be per image,
         # and not per batch
         if self.training:
-            objectness = torch.cat([boxlist.get_field("objectness") for boxlist in boxlists], dim=0)
+            objectness = torch.cat(
+                [boxlist.get_field("objectness") for boxlist in boxlists], dim=0
+            )
             box_sizes = [len(boxlist) for boxlist in boxlists]
             post_nms_top_n = min(self.fpn_post_nms_top_n, len(objectness))
             _, inds_sorted = torch.topk(objectness, post_nms_top_n, dim=0, sorted=True)
@@ -159,6 +167,31 @@ class RPNBoxSelector(torch.nn.Module):
             for i in range(num_images):
                 objectness = boxlists[i].get_field("objectness")
                 post_nms_top_n = min(self.fpn_post_nms_top_n, len(objectness))
-                _, inds_sorted = torch.topk(objectness, post_nms_top_n, dim=0, sorted=True)
+                _, inds_sorted = torch.topk(
+                    objectness, post_nms_top_n, dim=0, sorted=True
+                )
                 boxlists[i] = boxlists[i][inds_sorted]
         return boxlists
+
+
+def make_rpn_postprocessor(config, rpn_box_coder, is_train):
+    fpn_post_nms_top_n = config.MODEL.RPN.FPN_POST_NMS_TOP_N_TRAIN
+    if not is_train:
+        fpn_post_nms_top_n = config.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST
+
+    pre_nms_top_n = config.MODEL.RPN.PRE_NMS_TOP_N_TRAIN
+    post_nms_top_n = config.MODEL.RPN.POST_NMS_TOP_N_TRAIN
+    if not is_train:
+        pre_nms_top_n = config.MODEL.RPN.PRE_NMS_TOP_N_TEST
+        post_nms_top_n = config.MODEL.RPN.POST_NMS_TOP_N_TEST
+    nms_thresh = config.MODEL.RPN.NMS_THRESH
+    min_size = config.MODEL.RPN.MIN_SIZE
+    box_selector = RPNPostProcessor(
+        pre_nms_top_n=pre_nms_top_n,
+        post_nms_top_n=post_nms_top_n,
+        nms_thresh=nms_thresh,
+        min_size=min_size,
+        box_coder=rpn_box_coder,
+        fpn_post_nms_top_n=fpn_post_nms_top_n,
+    )
+    return box_selector

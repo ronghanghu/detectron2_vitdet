@@ -1,8 +1,8 @@
 from torch import nn
 from torch.nn import functional as F
 
-from torch_detectron.modeling.utils import Conv2d
-from torch_detectron.modeling.utils import ConvTranspose2d
+from torch_detectron.layers import Conv2d
+from torch_detectron.layers import ConvTranspose2d
 
 
 class MaskRCNNC4Predictor(nn.Module):
@@ -10,9 +10,15 @@ class MaskRCNNC4Predictor(nn.Module):
         super(MaskRCNNC4Predictor, self).__init__()
         num_classes = cfg.MODEL.ROI_BOX_HEAD.NUM_CLASSES
         dim_reduced = cfg.MODEL.ROI_MASK_HEAD.CONV_LAYERS[-1]
-        num_inputs = (
-            dim_reduced if cfg.MODEL.ROI_HEADS.USE_FPN else 512 * 4
-        )  # TODO improve
+
+        if cfg.MODEL.ROI_HEADS.USE_FPN:
+            num_inputs = dim_reduced
+        else:
+            stage_index = 5
+            stage2_relative_factor = 2 ** (stage_index - 2)
+            res2_out_channels = cfg.MODEL.RESNETS.RES2_OUT_CHANNELS
+            num_inputs = res2_out_channels * stage2_relative_factor
+
         self.conv5_mask = ConvTranspose2d(num_inputs, dim_reduced, 2, 2, 0)
         self.mask_fcn_logits = Conv2d(dim_reduced, num_classes, 1, 1, 0)
 

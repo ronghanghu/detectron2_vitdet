@@ -18,26 +18,26 @@ class BoxCoder(object):
         self.weights = weights
         self.bbox_xform_clip = bbox_xform_clip
 
-    def encode(self, boxes, anchors):
+    def encode(self, reference_boxes, proposals):
         """
-        Encode a set of anchors with respect to some
+        Encode a set of proposals with respect to some
         reference boxes
 
         Arguments:
-            boxes (Tensor): reference boxes
-            anchors (Tensor): boxes to be encoded
+            reference_boxes (Tensor): reference boxes
+            proposals (Tensor): boxes to be encoded
         """
 
         TO_REMOVE = 1  # TODO remove
-        ex_widths = anchors[:, 2] - anchors[:, 0] + TO_REMOVE
-        ex_heights = anchors[:, 3] - anchors[:, 1] + TO_REMOVE
-        ex_ctr_x = anchors[:, 0] + 0.5 * ex_widths
-        ex_ctr_y = anchors[:, 1] + 0.5 * ex_heights
+        ex_widths = proposals[:, 2] - proposals[:, 0] + TO_REMOVE
+        ex_heights = proposals[:, 3] - proposals[:, 1] + TO_REMOVE
+        ex_ctr_x = proposals[:, 0] + 0.5 * ex_widths
+        ex_ctr_y = proposals[:, 1] + 0.5 * ex_heights
 
-        gt_widths = boxes[:, 2] - boxes[:, 0] + TO_REMOVE
-        gt_heights = boxes[:, 3] - boxes[:, 1] + TO_REMOVE
-        gt_ctr_x = boxes[:, 0] + 0.5 * gt_widths
-        gt_ctr_y = boxes[:, 1] + 0.5 * gt_heights
+        gt_widths = reference_boxes[:, 2] - reference_boxes[:, 0] + TO_REMOVE
+        gt_heights = reference_boxes[:, 3] - reference_boxes[:, 1] + TO_REMOVE
+        gt_ctr_x = reference_boxes[:, 0] + 0.5 * gt_widths
+        gt_ctr_y = reference_boxes[:, 1] + 0.5 * gt_heights
 
         wx, wy, ww, wh = self.weights
         targets_dx = wx * (gt_ctr_x - ex_ctr_x) / ex_widths
@@ -48,23 +48,23 @@ class BoxCoder(object):
         targets = torch.stack((targets_dx, targets_dy, targets_dw, targets_dh), dim=1)
         return targets
 
-    def decode(self, rel_codes, anchors):
+    def decode(self, rel_codes, boxes):
         """
-        From a set of original anchors and encoded relative box offsets,
+        From a set of original boxes and encoded relative box offsets,
         get the decoded boxes.
 
         Arguments:
             rel_codes (Tensor): encoded boxes
-            anchors (Tensor): reference anchors.
+            boxes (Tensor): reference boxes.
         """
 
-        anchors = anchors.to(rel_codes.dtype)
+        boxes = boxes.to(rel_codes.dtype)
 
         TO_REMOVE = 1  # TODO remove
-        widths = anchors[:, 2] - anchors[:, 0] + TO_REMOVE
-        heights = anchors[:, 3] - anchors[:, 1] + TO_REMOVE
-        ctr_x = anchors[:, 0] + 0.5 * widths
-        ctr_y = anchors[:, 1] + 0.5 * heights
+        widths = boxes[:, 2] - boxes[:, 0] + TO_REMOVE
+        heights = boxes[:, 3] - boxes[:, 1] + TO_REMOVE
+        ctr_x = boxes[:, 0] + 0.5 * widths
+        ctr_y = boxes[:, 1] + 0.5 * heights
 
         wx, wy, ww, wh = self.weights
         dx = rel_codes[:, 0::4] / wx

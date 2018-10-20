@@ -176,3 +176,9 @@ class Masker(object):
         assert len(boxes) == 1, "Only single image batch supported"
         result = self.forward_single_image(masks, boxes[0])
         return result
+
+
+def make_roi_mask_post_processor(cfg):
+    masker = None
+    mask_post_processor = MaskPostProcessor(masker)
+    return mask_post_processor

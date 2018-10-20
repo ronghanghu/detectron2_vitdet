@@ -4,7 +4,7 @@ from collections import OrderedDict
 
 import torch
 
-from torch_detectron.modeling.model_serialization import load_state_dict
+from torch_detectron.utils.model_serialization import load_state_dict
 
 
 def _rename_basic_resnet_weights(layer_keys):

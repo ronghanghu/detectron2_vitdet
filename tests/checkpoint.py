@@ -6,7 +6,7 @@ import unittest
 import torch
 from torch import nn
 
-from torch_detectron.modeling.model_serialization import load_state_dict
+from torch_detectron.utils.model_serialization import load_state_dict
 from torch_detectron.utils.checkpoint import Checkpointer
 
 

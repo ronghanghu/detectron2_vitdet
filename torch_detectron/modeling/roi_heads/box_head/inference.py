@@ -4,9 +4,8 @@ from torch import nn
 
 from torch_detectron.structures.bounding_box import BoxList
 from torch_detectron.structures.boxlist_ops import boxlist_nms
-
-from ..box_coder import BoxCoder
-from ..utils import cat_bbox
+from torch_detectron.structures.boxlist_ops import cat_boxlist
+from torch_detectron.modeling.box_coder import BoxCoder
 
 
 class PostProcessor(nn.Module):
@@ -17,11 +16,7 @@ class PostProcessor(nn.Module):
     """
 
     def __init__(
-        self,
-        score_thresh=0.05,
-        nms=0.5,
-        detections_per_img=100,
-        box_coder=None,
+        self, score_thresh=0.05, nms=0.5, detections_per_img=100, box_coder=None
     ):
         """
         Arguments:
@@ -68,13 +63,14 @@ class PostProcessor(nn.Module):
         class_prob = class_prob.split(boxes_per_image, dim=0)
 
         results = []
-        for prob, boxes_per_img, image_shape in zip(class_prob, proposals, image_shapes):
+        for prob, boxes_per_img, image_shape in zip(
+            class_prob, proposals, image_shapes
+        ):
             boxlist = self.prepare_boxlist(boxes_per_img, prob, image_shape)
             boxlist = boxlist.clip_to_image(remove_empty=False)
             boxlist = self.filter_results(boxlist, num_classes)
             results.append(boxlist)
         return results
-
 
     def prepare_boxlist(self, boxes, scores, image_shape):
         """
@@ -94,7 +90,6 @@ class PostProcessor(nn.Module):
         boxlist = BoxList(boxes, image_shape, mode="xyxy")
         boxlist.add_field("scores", scores)
         return boxlist
-
 
     def filter_results(self, boxlist, num_classes):
         """Returns bounding-box detection results by thresholding on scores and
@@ -116,14 +111,16 @@ class PostProcessor(nn.Module):
             boxes_j = boxes[inds, j * 4 : (j + 1) * 4]
             boxlist_for_class = BoxList(boxes_j, boxlist.size, mode="xyxy")
             boxlist_for_class.add_field("scores", scores_j)
-            boxlist_for_class = boxlist_nms(boxlist_for_class, self.nms,
-                    score_field="scores")
+            boxlist_for_class = boxlist_nms(
+                boxlist_for_class, self.nms, score_field="scores"
+            )
             num_labels = len(boxlist_for_class)
-            boxlist_for_class.add_field("labels",
-                    torch.full((num_labels,), j, dtype=torch.int64, device=device))
+            boxlist_for_class.add_field(
+                "labels", torch.full((num_labels,), j, dtype=torch.int64, device=device)
+            )
             result.append(boxlist_for_class)
 
-        result = cat_bbox(result)
+        result = cat_boxlist(result)
         number_of_detections = len(result)
 
         # Limit to max_per_image detections **over all classes**
@@ -136,3 +133,19 @@ class PostProcessor(nn.Module):
             keep = torch.nonzero(keep).squeeze(1)
             result = result[keep]
         return result
+
+
+def make_roi_box_post_processor(cfg):
+    use_fpn = cfg.MODEL.ROI_HEADS.USE_FPN
+
+    bbox_reg_weights = cfg.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS
+    box_coder = BoxCoder(weights=bbox_reg_weights)
+
+    score_thresh = cfg.MODEL.ROI_HEADS.SCORE_THRESH
+    nms_thresh = cfg.MODEL.ROI_HEADS.NMS
+    detections_per_img = cfg.MODEL.ROI_HEADS.DETECTIONS_PER_IMG
+
+    postprocessor = PostProcessor(
+        score_thresh, nms_thresh, detections_per_img, box_coder
+    )
+    return postprocessor

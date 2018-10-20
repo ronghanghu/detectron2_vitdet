@@ -4,7 +4,12 @@ from torch import nn
 class FastRCNNPredictor(nn.Module):
     def __init__(self, config, pretrained=None):
         super(FastRCNNPredictor, self).__init__()
-        num_inputs = 2048  # config.MODEL.ROI_BOX_HEAD.something
+
+        stage_index = 5
+        stage2_relative_factor = 2 ** (stage_index - 2)
+        res2_out_channels = config.MODEL.RESNETS.RES2_OUT_CHANNELS
+        num_inputs = res2_out_channels * stage2_relative_factor
+
         num_classes = config.MODEL.ROI_BOX_HEAD.NUM_CLASSES
         self.avgpool = nn.AvgPool2d(kernel_size=7, stride=7)
         self.cls_score = nn.Linear(num_inputs, num_classes)

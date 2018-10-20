@@ -15,11 +15,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from torch_detectron.modeling.utils import Conv2d
+from torch_detectron.layers import Conv2d
 
-
-STEM_OUT_CHANNELS = 64
-RES2_OUT_CHANNELS = 256
 
 # ResNet stage specification
 StageSpec = namedtuple(
@@ -70,14 +67,14 @@ class ResNet(nn.Module):
         transformation_module = _TRANSFORMATION_MODULES[cfg.MODEL.RESNETS.TRANS_FUNC]
 
         # Construct the stem module
-        self.stem = stem_module()
+        self.stem = stem_module(cfg)
 
         # Constuct the specified ResNet stages
         num_groups = cfg.MODEL.RESNETS.NUM_GROUPS
         width_per_group = cfg.MODEL.RESNETS.WIDTH_PER_GROUP
-        in_channels = STEM_OUT_CHANNELS
+        in_channels = cfg.MODEL.RESNETS.STEM_OUT_CHANNELS
         stage2_bottleneck_channels = num_groups * width_per_group
-        stage2_out_channels = RES2_OUT_CHANNELS
+        stage2_out_channels = cfg.MODEL.RESNETS.RES2_OUT_CHANNELS
         self.stages = []
         self.return_features = {}
         for stage_spec in stage_specs:
@@ -131,11 +128,15 @@ class ResNetHead(nn.Module):
         width_per_group=64,
         stride_in_1x1=True,
         stride_init=None,
+        res2_out_channels=256,
     ):
-        in_channels = 1024  # TODO make it generic
-        out_channels = 2048  # TODO make it generic
-        bottleneck_channels = 512  # TODO make it generic
         super(ResNetHead, self).__init__()
+
+        stage2_relative_factor = 2 ** (stages[0].index - 2)
+        stage2_bottleneck_channels = num_groups * width_per_group
+        out_channels = res2_out_channels * stage2_relative_factor
+        in_channels = out_channels // 2
+        bottleneck_channels = stage2_bottleneck_channels * stage2_relative_factor
 
         block_module = _TRANSFORMATION_MODULES[block_module]
 
@@ -279,13 +280,15 @@ class BottleneckWithFixedBatchNorm(nn.Module):
 
 
 class StemWithFixedBatchNorm(nn.Module):
-    def __init__(self):
+    def __init__(self, cfg):
         super(StemWithFixedBatchNorm, self).__init__()
 
+        out_channels = cfg.MODEL.RESNETS.STEM_OUT_CHANNELS
+
         self.conv1 = Conv2d(
-            3, STEM_OUT_CHANNELS, kernel_size=7, stride=2, padding=3, bias=False
+            3, out_channels, kernel_size=7, stride=2, padding=3, bias=False
         )
-        self.conv1_bn = FixedBatchNorm2d(STEM_OUT_CHANNELS)
+        self.conv1_bn = FixedBatchNorm2d(out_channels)
 
     def forward(self, x):
         x = self.conv1(x)

@@ -1,11 +1,9 @@
 from torch import nn
 from torch.nn import functional as F
 
-from torch_detectron.modeling.model_builder.roi_box_feature_extractors import (
-    ResNet50Conv5ROIFeatureExtractor
-)
+from ..box_head.roi_box_feature_extractors import ResNet50Conv5ROIFeatureExtractor
 from torch_detectron.modeling.poolers import Pooler
-from torch_detectron.modeling.utils import Conv2d
+from torch_detectron.layers import Conv2d
 
 
 class MaskRCNNFPNFeatureExtractor(nn.Module):

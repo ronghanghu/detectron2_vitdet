@@ -45,10 +45,15 @@ class Matcher(object):
             pairwise quality between M ground-truth elements and N predicted elements.
 
         Returns:
-            matches (Tensor[float]): an N tensor where N[i] is a matched gt in
+            matches (Tensor[int64]): an N tensor where N[i] is a matched gt in
             [0, M - 1] or a negative value indicating that prediction i could not
             be matched.
         """
+        if match_quality_matrix.numel() == 0:
+            # handle empty case
+            device = match_quality_matrix.device
+            return torch.empty((0,), dtype=torch.int64, device=device)
+
         # match_quality_matrix is M (gt) x N (predicted)
         # Max over gt elements (dim 0) to find best gt candidate for each prediction
         matched_vals, matches = match_quality_matrix.max(dim=0)

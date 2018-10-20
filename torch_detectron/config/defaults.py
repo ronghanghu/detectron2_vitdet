@@ -215,6 +215,8 @@ _C.MODEL.RESNETS.STEM_FUNC = "StemWithFixedBatchNorm"
 # Apply dilation in stage "res5"
 _C.MODEL.RESNETS.RES5_DILATION = 1
 
+_C.MODEL.RESNETS.RES2_OUT_CHANNELS = 256
+_C.MODEL.RESNETS.STEM_OUT_CHANNELS = 64
 
 # ---------------------------------------------------------------------------- #
 # Solver

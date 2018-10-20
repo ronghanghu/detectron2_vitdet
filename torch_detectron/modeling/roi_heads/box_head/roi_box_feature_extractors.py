@@ -26,6 +26,7 @@ class ResNet50Conv5ROIFeatureExtractor(nn.Module):
             width_per_group=config.MODEL.RESNETS.WIDTH_PER_GROUP,
             stride_in_1x1=config.MODEL.RESNETS.STRIDE_IN_1X1,
             stride_init=None,
+            res2_out_channels=config.MODEL.RESNETS.RES2_OUT_CHANNELS,
         )
 
         self.pooler = pooler
@@ -43,12 +44,6 @@ class FPN2MLPFeatureExtractor(nn.Module):
     """
 
     def __init__(self, cfg):
-        """
-        Arguments:
-            num_classes (int): number of output classes
-            input_size (int): number of channels of the input once it's flattened
-            representation_size (int): size of the intermediate representation
-        """
         super(FPN2MLPFeatureExtractor, self).__init__()
 
         resolution = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION

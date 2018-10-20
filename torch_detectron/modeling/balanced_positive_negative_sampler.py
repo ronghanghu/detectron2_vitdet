@@ -1,7 +1,5 @@
 import torch
 
-from ..utils import nonzero
-
 
 class BalancedPositiveNegativeSampler(object):
     """
@@ -36,8 +34,8 @@ class BalancedPositiveNegativeSampler(object):
         pos_idx = []
         neg_idx = []
         for matched_idxs_per_image in matched_idxs:
-            positive = nonzero(matched_idxs_per_image >= 1)[0]
-            negative = nonzero(matched_idxs_per_image == 0)[0]
+            positive = torch.nonzero(matched_idxs_per_image >= 1).squeeze(1)
+            negative = torch.nonzero(matched_idxs_per_image == 0).squeeze(1)
 
             num_pos = int(self.batch_size_per_image * self.positive_fraction)
             # protect against not enough positive examples

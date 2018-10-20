@@ -14,6 +14,10 @@ from ..utils.comm import scatter_gather
 from ..utils.comm import synchronize
 
 
+from torch_detectron.modeling.roi_heads.mask_head.inference import Masker
+from torch_detectron.structures.boxlist_ops import boxlist_iou
+
+
 def compute_on_dataset(model, data_loader, device):
     model.eval()
     results_dict = {}
@@ -65,7 +69,6 @@ def prepare_for_coco_detection(predictions, dataset):
 
 
 def prepare_for_coco_segmentation(predictions, dataset):
-    from torch_detectron.modeling.post_processors.mask_rcnn import Masker
     import pycocotools.mask as mask_util
     import numpy as np
 
@@ -150,7 +153,6 @@ def evaluate_box_proposals(
     area_range = area_ranges[areas[area]]
     gt_overlaps = []
     num_pos = 0
-    from torch_detectron.structures.boxlist_ops import boxlist_iou
 
     for image_id, prediction in enumerate(predictions):
         original_id = dataset.id_to_img_map[image_id]

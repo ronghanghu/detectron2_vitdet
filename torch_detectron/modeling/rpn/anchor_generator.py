@@ -5,11 +5,13 @@ import torch
 from torch import nn
 
 from torch_detectron.structures.bounding_box import BoxList
-from ..utils import cat_bbox
-from ..utils import meshgrid
 
 
 class BufferList(nn.Module):
+    """
+    Similar to nn.ParameterList, but for buffers
+    """
+
     def __init__(self, buffers=None):
         super(BufferList, self).__init__()
         if buffers is not None:
@@ -45,9 +47,11 @@ class AnchorGenerator(nn.Module):
 
         if len(anchor_strides) == 1:
             anchor_stride = anchor_strides[0]
-            cell_anchors = [generate_anchors(anchor_stride, sizes, aspect_ratios).float()]
+            cell_anchors = [
+                generate_anchors(anchor_stride, sizes, aspect_ratios).float()
+            ]
         else:
-            if  len(anchor_strides) != len(sizes):
+            if len(anchor_strides) != len(sizes):
                 raise RuntimeError("FPN should have #anchor_strides == #sizes")
             cell_anchors = [
                 generate_anchors(anchor_stride, (size,), aspect_ratios).float()
@@ -62,7 +66,9 @@ class AnchorGenerator(nn.Module):
 
     def grid_anchors(self, grid_sizes):
         anchors = []
-        for size, stride, base_anchors in zip(grid_sizes, self.strides, self.cell_anchors):
+        for size, stride, base_anchors in zip(
+            grid_sizes, self.strides, self.cell_anchors
+        ):
             grid_height, grid_width = size
             device = base_anchors.device
             shifts_x = torch.arange(
@@ -71,12 +77,14 @@ class AnchorGenerator(nn.Module):
             shifts_y = torch.arange(
                 0, grid_height * stride, step=stride, dtype=torch.float32, device=device
             )
-            shift_x, shift_y = meshgrid(shifts_x, shifts_y)
+            shift_y, shift_x = torch.meshgrid(shifts_y, shifts_x)
             shift_x = shift_x.reshape(-1)
             shift_y = shift_y.reshape(-1)
             shifts = torch.stack((shift_x, shift_y, shift_x, shift_y), dim=1)
 
-            anchors.append((shifts.view(-1, 1, 4) + base_anchors.view(1, -1, 4)).reshape(-1, 4))
+            anchors.append(
+                (shifts.view(-1, 1, 4) + base_anchors.view(1, -1, 4)).reshape(-1, 4)
+            )
 
         return anchors
 
@@ -103,11 +111,31 @@ class AnchorGenerator(nn.Module):
         for i, (image_height, image_width) in enumerate(image_list.image_sizes):
             anchors_in_image = []
             for anchors_per_feature_map in anchors_over_all_feature_maps:
-                boxlist = BoxList(anchors_per_feature_map, (image_width, image_height), mode="xyxy")
+                boxlist = BoxList(
+                    anchors_per_feature_map, (image_width, image_height), mode="xyxy"
+                )
                 self.add_visibility_to(boxlist)
                 anchors_in_image.append(boxlist)
             anchors.append(anchors_in_image)
         return anchors
+
+
+def make_anchor_generator(config):
+    anchor_sizes = config.MODEL.RPN.ANCHOR_SIZES
+    aspect_ratios = config.MODEL.RPN.ASPECT_RATIOS
+    anchor_stride = config.MODEL.RPN.ANCHOR_STRIDE
+    straddle_thresh = config.MODEL.RPN.STRADDLE_THRESH
+
+    if config.MODEL.RPN.USE_FPN:
+        assert len(anchor_stride) == len(
+            anchor_sizes
+        ), "FPN should have len(ANCHOR_STRIDE) == len(ANCHOR_SIZES)"
+    else:
+        assert len(anchor_stride) == 1, "Non-FPN should have a single ANCHOR_STRIDE"
+    anchor_generator = AnchorGenerator(
+        anchor_sizes, aspect_ratios, anchor_stride, straddle_thresh
+    )
+    return anchor_generator
 
 
 # Copyright (c) 2017-present, Facebook, Inc.

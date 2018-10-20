@@ -3,7 +3,7 @@ import os
 
 import torch
 
-from torch_detectron.modeling.model_serialization import load_state_dict
+from torch_detectron.utils.model_serialization import load_state_dict
 from torch_detectron.utils.c2_model_loading import load_c2_format
 from torch_detectron.utils.imports import import_file
 
@@ -53,6 +53,7 @@ class Checkpointer(object):
             f = self.get_checkpoint_file()
         if not f:
             # no checkpoint could be found
+            self.logger.info("No checkpoint found. Initializing model from scratch")
             return {}
         self.logger.info("Loading checkpoint from {}".format(f))
         checkpoint = self._load_file(f)

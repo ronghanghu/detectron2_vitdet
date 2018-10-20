@@ -6,7 +6,6 @@ from torch import nn
 from torch_detectron.layers import ROIAlign
 
 from .utils import cat
-from .utils import nonzero
 
 
 class LevelMapper(object):
@@ -79,7 +78,13 @@ class Pooler(nn.Module):
     def convert_to_roi_format(self, boxes):
         concat_boxes = cat([b.bbox for b in boxes], dim=0)
         device, dtype = concat_boxes.device, concat_boxes.dtype
-        ids = cat([torch.full((len(b), 1), i, dtype=dtype, device=device) for i, b in enumerate(boxes)], dim=0)
+        ids = cat(
+            [
+                torch.full((len(b), 1), i, dtype=dtype, device=device)
+                for i, b in enumerate(boxes)
+            ],
+            dim=0,
+        )
         rois = torch.cat([ids, concat_boxes], dim=1)
         return rois
 
@@ -103,8 +108,11 @@ class Pooler(nn.Module):
         output_size = self.output_size[0]
 
         dtype, device = x[0].dtype, x[0].device
-        result = torch.zeros((num_rois, num_channels, output_size, output_size),
-            dtype=dtype, device=device)
+        result = torch.zeros(
+            (num_rois, num_channels, output_size, output_size),
+            dtype=dtype,
+            device=device,
+        )
         for level, (per_level_feature, pooler) in enumerate(zip(x, self.poolers)):
             idx_in_level = torch.nonzero(levels == level).squeeze(1)
             rois_per_level = rois[idx_in_level]
