@@ -14,8 +14,8 @@ class MaskRCNNC4Predictor(nn.Module):
         if cfg.MODEL.ROI_HEADS.USE_FPN:
             num_inputs = dim_reduced
         else:
-            stage_index = 5
-            stage2_relative_factor = 2 ** (stage_index - 2)
+            stage_index = 4
+            stage2_relative_factor = 2 ** (stage_index - 1)
             res2_out_channels = cfg.MODEL.RESNETS.RES2_OUT_CHANNELS
             num_inputs = res2_out_channels * stage2_relative_factor
 

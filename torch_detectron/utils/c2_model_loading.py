@@ -24,6 +24,27 @@ def _rename_basic_resnet_weights(layer_keys):
     layer_keys = [k.replace("rpn.bbox.pred", "rpn.bbox_pred") for k in layer_keys]
     layer_keys = [k.replace("rpn.cls.logits", "rpn.cls_logits") for k in layer_keys]
 
+    # Affine-Channel -> BatchNorm enaming
+    layer_keys = [k.replace("_bn.scale", "_bn.weight") for k in layer_keys]
+
+    # Make torchvision-compatible
+    layer_keys = [k.replace("conv1_bn.", "bn1.") for k in layer_keys]
+
+    layer_keys = [k.replace("res2.", "layer1.") for k in layer_keys]
+    layer_keys = [k.replace("res3.", "layer2.") for k in layer_keys]
+    layer_keys = [k.replace("res4.", "layer3.") for k in layer_keys]
+    layer_keys = [k.replace("res5.", "layer4.") for k in layer_keys]
+
+    layer_keys = [k.replace(".branch2a.", ".conv1.") for k in layer_keys]
+    layer_keys = [k.replace(".branch2a_bn.", ".bn1.") for k in layer_keys]
+    layer_keys = [k.replace(".branch2b.", ".conv2.") for k in layer_keys]
+    layer_keys = [k.replace(".branch2b_bn.", ".bn2.") for k in layer_keys]
+    layer_keys = [k.replace(".branch2c.", ".conv3.") for k in layer_keys]
+    layer_keys = [k.replace(".branch2c_bn.", ".bn3.") for k in layer_keys]
+
+    layer_keys = [k.replace(".branch1.", ".downsample.0.") for k in layer_keys]
+    layer_keys = [k.replace(".branch1_bn.", ".downsample.1.") for k in layer_keys]
+
     return layer_keys
 
 def _rename_fpn_weights(layer_keys, stage_names):
@@ -32,9 +53,9 @@ def _rename_fpn_weights(layer_keys, stage_names):
         if mapped_idx < 4:
             suffix = ".lateral"
         layer_keys = [
-            k.replace("fpn.inner.res{}.sum{}".format(stage_name, suffix), "fpn_inner{}".format(mapped_idx)) for k in layer_keys
+            k.replace("fpn.inner.layer{}.sum{}".format(stage_name, suffix), "fpn_inner{}".format(mapped_idx)) for k in layer_keys
         ]
-        layer_keys = [k.replace("fpn.res{}.sum".format(stage_name), "fpn_layer{}".format(mapped_idx)) for k in layer_keys]
+        layer_keys = [k.replace("fpn.layer{}.sum".format(stage_name), "fpn_layer{}".format(mapped_idx)) for k in layer_keys]
 
 
     layer_keys = [k.replace("rpn.conv.fpn2", "rpn.conv") for k in layer_keys]
@@ -87,8 +108,8 @@ def _rename_weights_for_resnet(weights, stage_names):
         # if 'fc1000' in k:
         #     continue
         w = torch.from_numpy(v)
-        if "bn" in k:
-            w = w.view(1, -1, 1, 1)
+        # if "bn" in k:
+        #     w = w.view(1, -1, 1, 1)
         logger.info("C2 name: {: <{}} mapped name: {}".format(k, max_c2_key_size, key_map[k]))
         new_weights[key_map[k]] = w
 
@@ -106,8 +127,8 @@ def _load_c2_pickled_weights(file_path):
 
 
 _C2_STAGE_NAMES = {
-    "R-50": ["2.2", "3.3", "4.5", "5.2"],
-    "R-101": ["2.2", "3.3", "4.22", "5.2"],
+    "R-50": ["1.2", "2.3", "3.5", "4.2"],
+    "R-101": ["1.2", "2.3", "3.22", "4.2"],
 }
 
 def load_c2_format(cfg, f):

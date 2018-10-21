@@ -5,8 +5,8 @@ class FastRCNNPredictor(nn.Module):
     def __init__(self, config, pretrained=None):
         super(FastRCNNPredictor, self).__init__()
 
-        stage_index = 5
-        stage2_relative_factor = 2 ** (stage_index - 2)
+        stage_index = 4
+        stage2_relative_factor = 2 ** (stage_index - 1)
         res2_out_channels = config.MODEL.RESNETS.RES2_OUT_CHANNELS
         num_inputs = res2_out_channels * stage2_relative_factor
 

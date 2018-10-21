@@ -18,7 +18,7 @@ class ResNet50Conv5ROIFeatureExtractor(nn.Module):
             sampling_ratio=sampling_ratio,
         )
 
-        stage = resnet.StageSpec(index=5, block_count=3, return_features=False)
+        stage = resnet.StageSpec(index=4, block_count=3, return_features=False)
         head = resnet.ResNetHead(
             block_module=config.MODEL.RESNETS.TRANS_FUNC,
             stages=(stage,),

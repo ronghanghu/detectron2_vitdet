@@ -15,6 +15,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from torch_detectron.layers import FrozenBatchNorm2d
 from torch_detectron.layers import Conv2d
 
 
@@ -34,22 +35,22 @@ StageSpec = namedtuple(
 # ResNet-50 (including all stages)
 ResNet50StagesTo5 = (
     StageSpec(index=i, block_count=c, return_features=r)
-    for (i, c, r) in ((2, 3, False), (3, 4, False), (4, 6, False), (5, 3, True))
+    for (i, c, r) in ((1, 3, False), (2, 4, False), (3, 6, False), (4, 3, True))
 )
 # ResNet-50 up to stage 4 (excludes stage 5)
 ResNet50StagesTo4 = (
     StageSpec(index=i, block_count=c, return_features=r)
-    for (i, c, r) in ((2, 3, False), (3, 4, False), (4, 6, True))
+    for (i, c, r) in ((1, 3, False), (2, 4, False), (3, 6, True))
 )
 # ResNet-50-FPN (including all stages)
 ResNet50FPNStagesTo5 = (
     StageSpec(index=i, block_count=c, return_features=r)
-    for (i, c, r) in ((2, 3, True), (3, 4, True), (4, 6, True), (5, 3, True))
+    for (i, c, r) in ((1, 3, True), (2, 4, True), (3, 6, True), (4, 3, True))
 )
 # ResNet-101-FPN (including all stages)
 ResNet101FPNStagesTo5 = (
     StageSpec(index=i, block_count=c, return_features=r)
-    for (i, c, r) in ((2, 3, True), (3, 4, True), (4, 23, True), (5, 3, True))
+    for (i, c, r) in ((1, 3, True), (2, 4, True), (3, 23, True), (4, 3, True))
 )
 
 
@@ -78,8 +79,8 @@ class ResNet(nn.Module):
         self.stages = []
         self.return_features = {}
         for stage_spec in stage_specs:
-            name = "res" + str(stage_spec.index)
-            stage2_relative_factor = 2 ** (stage_spec.index - 2)
+            name = "layer" + str(stage_spec.index)
+            stage2_relative_factor = 2 ** (stage_spec.index - 1)
             bottleneck_channels = stage2_bottleneck_channels * stage2_relative_factor
             out_channels = stage2_out_channels * stage2_relative_factor
             module = _make_stage(
@@ -90,7 +91,7 @@ class ResNet(nn.Module):
                 stage_spec.block_count,
                 num_groups,
                 cfg.MODEL.RESNETS.STRIDE_IN_1X1,
-                first_stride=int(stage_spec.index > 2) + 1,
+                first_stride=int(stage_spec.index > 1) + 1,
             )
             in_channels = out_channels
             self.add_module(name, module)
@@ -101,11 +102,11 @@ class ResNet(nn.Module):
         self._freeze_backbone(cfg.MODEL.BACKBONE.FREEZE_CONV_BODY_AT)
 
     def _freeze_backbone(self, freeze_at):
-        for stage_index in range(1, freeze_at + 1):
-            if stage_index == 1:
-                m = self.stem  # stage 1 is the stem
+        for stage_index in range(freeze_at):
+            if stage_index == 0:
+                m = self.stem  # stage 0 is the stem
             else:
-                m = getattr(self, "res" + str(stage_index))
+                m = getattr(self, "layer" + str(stage_index))
             for p in m.parameters():
                 p.requires_grad = False
 
@@ -132,7 +133,7 @@ class ResNetHead(nn.Module):
     ):
         super(ResNetHead, self).__init__()
 
-        stage2_relative_factor = 2 ** (stages[0].index - 2)
+        stage2_relative_factor = 2 ** (stages[0].index - 1)
         stage2_bottleneck_channels = num_groups * width_per_group
         out_channels = res2_out_channels * stage2_relative_factor
         in_channels = out_channels // 2
@@ -143,9 +144,9 @@ class ResNetHead(nn.Module):
         self.stages = []
         stride = stride_init
         for stage in stages:
-            name = "res" + str(stage.index)
+            name = "layer" + str(stage.index)
             if not stride:
-                stride = int(stage.index > 2) + 1
+                stride = int(stage.index > 1) + 1
             module = _make_stage(
                 block_module,
                 in_channels,
@@ -194,18 +195,6 @@ def _make_stage(
     return nn.Sequential(*blocks)
 
 
-class FixedBatchNorm2d(nn.Module):
-    """Equivalent to AffineChannel in (Caffe2) Detectron."""
-
-    def __init__(self, n):
-        super(FixedBatchNorm2d, self).__init__()
-        self.register_buffer("scale", torch.ones(1, n, 1, 1))
-        self.register_buffer("bias", torch.zeros(1, n, 1, 1))
-
-    def forward(self, x):
-        return x * self.scale + self.bias
-
-
 class BottleneckWithFixedBatchNorm(nn.Module):
     def __init__(
         self,
@@ -218,28 +207,31 @@ class BottleneckWithFixedBatchNorm(nn.Module):
     ):
         super(BottleneckWithFixedBatchNorm, self).__init__()
 
+        self.downsample = None
         if in_channels != out_channels:
-            self.branch1 = Conv2d(
-                in_channels, out_channels, kernel_size=1, stride=stride, bias=False
+            self.downsample = nn.Sequential(
+                Conv2d(
+                    in_channels, out_channels, kernel_size=1, stride=stride, bias=False
+                ),
+                FrozenBatchNorm2d(out_channels),
             )
-            self.branch1_bn = FixedBatchNorm2d(out_channels)
 
         # The original MSRA ResNet models have stride in the first 1x1 conv
         # The subsequent fb.torch.resnet and Caffe2 ResNe[X]t implementations have
         # stride in the 3x3 conv
         stride_1x1, stride_3x3 = (stride, 1) if stride_in_1x1 else (1, stride)
 
-        self.branch2a = Conv2d(
+        self.conv1 = Conv2d(
             in_channels,
             bottleneck_channels,
             kernel_size=1,
             stride=stride_1x1,
             bias=False,
         )
-        self.branch2a_bn = FixedBatchNorm2d(bottleneck_channels)
+        self.bn1 = FrozenBatchNorm2d(bottleneck_channels)
         # TODO: specify init for the above
 
-        self.branch2b = Conv2d(
+        self.conv2 = Conv2d(
             bottleneck_channels,
             bottleneck_channels,
             kernel_size=3,
@@ -248,30 +240,29 @@ class BottleneckWithFixedBatchNorm(nn.Module):
             bias=False,
             groups=num_groups,
         )
-        self.branch2b_bn = FixedBatchNorm2d(bottleneck_channels)
+        self.bn2 = FrozenBatchNorm2d(bottleneck_channels)
 
-        self.branch2c = Conv2d(
+        self.conv3 = Conv2d(
             bottleneck_channels, out_channels, kernel_size=1, bias=False
         )
-        self.branch2c_bn = FixedBatchNorm2d(out_channels)
+        self.bn3 = FrozenBatchNorm2d(out_channels)
 
     def forward(self, x):
         residual = x
 
-        out = self.branch2a(x)
-        out = self.branch2a_bn(out)
+        out = self.conv1(x)
+        out = self.bn1(out)
         out = F.relu_(out)
 
-        out = self.branch2b(out)
-        out = self.branch2b_bn(out)
+        out = self.conv2(out)
+        out = self.bn2(out)
         out = F.relu_(out)
 
-        out0 = self.branch2c(out)
-        out = self.branch2c_bn(out0)
+        out0 = self.conv3(out)
+        out = self.bn3(out0)
 
-        if hasattr(self, "branch1"):
-            residual = self.branch1(x)
-            residual = self.branch1_bn(residual)
+        if self.downsample is not None:
+            residual = self.downsample(x)
 
         out += residual
         out = F.relu_(out)
@@ -288,11 +279,11 @@ class StemWithFixedBatchNorm(nn.Module):
         self.conv1 = Conv2d(
             3, out_channels, kernel_size=7, stride=2, padding=3, bias=False
         )
-        self.conv1_bn = FixedBatchNorm2d(out_channels)
+        self.bn1 = FrozenBatchNorm2d(out_channels)
 
     def forward(self, x):
         x = self.conv1(x)
-        x = self.conv1_bn(x)
+        x = self.bn1(x)
         x = F.relu_(x)
         x = F.max_pool2d(x, kernel_size=3, stride=2, padding=1)
         return x

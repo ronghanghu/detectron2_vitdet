@@ -26,7 +26,7 @@ def make_transform(cfg, is_train=True):
 
     resize_transform = T.Resize(min_size, max_size)
 
-    to_bgr255 = True  # TODO make this an option?
+    to_bgr255 = cfg.INPUT.TO_BGR255
     normalize_transform = T.Normalize(
         mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD, to_bgr255=to_bgr255
     )
