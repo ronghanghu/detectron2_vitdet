@@ -2,85 +2,61 @@ import bisect
 import logging
 
 import torch.utils.data
-from torch_detectron.datasets.coco import COCODataset
-from torch_detectron.utils import data_transforms as T
 from torch_detectron.utils.comm import get_world_size
-from torch_detectron.utils.concat_dataset import ConcatDataset
-from torch_detectron.utils.data_collate import BatchCollator
-from torch_detectron.utils.data_samplers import DistributedSampler
-from torch_detectron.utils.data_samplers import GroupedBatchSampler
-from torch_detectron.utils.data_samplers import IterationBasedBatchSampler
-from torch_detectron.utils.data_samplers import compute_aspect_ratios
 from torch_detectron.utils.imports import import_file
 
+from . import datasets as D
+from . import samplers
 
-def make_transform(cfg, is_train=True):
-    if is_train:
-        min_size = cfg.INPUT.MIN_SIZE_TRAIN
-        max_size = cfg.INPUT.MAX_SIZE_TRAIN
-        flip_prob = 0.5  # cfg.INPUT.FLIP_PROB_TRAIN
-    else:
-        min_size = cfg.INPUT.MIN_SIZE_TEST
-        max_size = cfg.INPUT.MAX_SIZE_TEST
-        flip_prob = 0
-
-    resize_transform = T.Resize(min_size, max_size)
-
-    to_bgr255 = cfg.INPUT.TO_BGR255
-    normalize_transform = T.Normalize(
-        mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD, to_bgr255=to_bgr255
-    )
-
-    transform = T.Compose(
-        [
-            resize_transform,
-            T.RandomHorizontalFlip(flip_prob),
-            T.ToTensor(),
-            normalize_transform,
-        ]
-    )
-    return transform
+from .collate_batch import BatchCollator
+from .transforms import build_transforms
 
 
-def make_coco_dataset(cfg, is_train=True, concatenate_datasets=True):
-    paths_catalog = import_file(
-        "torch_detectron.config.paths_catalog", cfg.PATHS_CATALOG, True
-    )
-    DatasetCatalog = paths_catalog.DatasetCatalog
-    dataset_list = cfg.DATASETS.TRAIN if is_train else cfg.DATASETS.TEST
-
-    transforms = make_transform(cfg, is_train)
-
+def build_dataset(dataset_list, transforms, dataset_catalog, is_train=True):
+    """
+    Arguments:
+        dataset_list (list[str]): Contains the names of the datasets, i.e.,
+            coco_2014_trian, coco_2014_val, etc
+        transforms (callable): transforms to apply to each (image, target) sample
+        dataset_catalog (DatasetCatalog): contains the information on how to
+            construct a dataset.
+        is_train (bool): whether to setup the dataset for training or testing
+    """
+    if not isinstance(dataset_list, (list, tuple)):
+        raise RuntimeError(
+                "dataset_list should be a list of strings, got {}".format(dataset_list))
     datasets = []
     for dataset_name in dataset_list:
-        annotation_path, folder = DatasetCatalog.get(dataset_name)
-        dataset = COCODataset(
-            annotation_path,
-            folder,
-            remove_images_without_annotations=is_train,
-            transforms=transforms,
-        )
+        data = dataset_catalog.get(dataset_name)
+        factory = getattr(D, data["factory"])
+        args = data["args"]
+        # for COCODataset, we want to remove images without annotations
+        # during training
+        if data["factory"] == "COCODataset":
+            args["remove_images_without_annotations"] = is_train
+        args["transforms"] = transforms
+        # make dataset from factory
+        dataset = factory(**args)
         datasets.append(dataset)
 
-    if not concatenate_datasets:
+    # for testing, return a list of datasets
+    if not is_train:
         return datasets
 
+    # for training, concatenate all datasets into a single one
     dataset = datasets[0]
     if len(datasets) > 1:
-        dataset = ConcatDataset(datasets)
+        dataset = D.ConcatDataset(datasets)
 
     return [dataset]
 
 
 def make_data_sampler(dataset, shuffle, distributed):
+    if distributed:
+        return samplers.DistributedSampler(dataset, shuffle=shuffle)
     if shuffle:
         sampler = torch.utils.data.sampler.RandomSampler(dataset)
-        if distributed:
-            sampler = DistributedSampler(dataset)
     else:
-        assert (
-            distributed == False
-        ), "Distributed with no shuffling on the dataset not supported"
         sampler = torch.utils.data.sampler.SequentialSampler(dataset)
     return sampler
 
@@ -91,15 +67,24 @@ def _quantize(x, bins):
     return quantized
 
 
+def _compute_aspect_ratios(dataset):
+    aspect_ratios = []
+    for i in range(len(dataset)):
+        img_info = dataset.get_img_info(i)
+        aspect_ratio = float(img_info["height"]) / float(img_info["width"])
+        aspect_ratios.append(aspect_ratio)
+    return aspect_ratios
+
+
 def make_batch_data_sampler(
     dataset, sampler, aspect_grouping, images_per_batch, num_iters=None, start_iter=0
 ):
     if aspect_grouping:
         if not isinstance(aspect_grouping, (list, tuple)):
             aspect_grouping = [aspect_grouping]
-        aspect_ratios = compute_aspect_ratios(dataset)
+        aspect_ratios = _compute_aspect_ratios(dataset)
         group_ids = _quantize(aspect_ratios, aspect_grouping)
-        batch_sampler = GroupedBatchSampler(
+        batch_sampler = samplers.GroupedBatchSampler(
             sampler, group_ids, images_per_batch, drop_uneven=False
         )
     else:
@@ -107,7 +92,7 @@ def make_batch_data_sampler(
             sampler, images_per_batch, drop_last=False
         )
     if num_iters is not None:
-        batch_sampler = IterationBasedBatchSampler(batch_sampler, num_iters, start_iter)
+        batch_sampler = samplers.IterationBasedBatchSampler(batch_sampler, num_iters, start_iter)
     return batch_sampler
 
 
@@ -146,9 +131,20 @@ def make_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0):
             "https://github.com/facebookresearch/Detectron/blob/master/configs/getting_started/tutorial_1gpu_e2e_faster_rcnn_R-50-FPN.yaml#L14"
         )
 
+    # group images which have similar aspect ratio. In this case, we only
+    # group in two cases: those with width / height > 1, and the other way around,
+    # but the code supports more general grouping strategy
     aspect_grouping = [1] if cfg.DATALOADER.ASPECT_RATIO_GROUPING else []
 
-    datasets = make_coco_dataset(cfg, is_train, concatenate_datasets=is_train)
+    paths_catalog = import_file(
+        "torch_detectron.config.paths_catalog", cfg.PATHS_CATALOG, True
+    )
+    DatasetCatalog = paths_catalog.DatasetCatalog
+    dataset_list = cfg.DATASETS.TRAIN if is_train else cfg.DATASETS.TEST
+
+    transforms = build_transforms(cfg, is_train)
+    datasets = build_dataset(dataset_list, transforms, DatasetCatalog, is_train)
+
     data_loaders = []
     for dataset in datasets:
         sampler = make_data_sampler(dataset, shuffle, is_distributed)
@@ -165,6 +161,7 @@ def make_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0):
         )
         data_loaders.append(data_loader)
     if is_train:
+        # during training, a single (possibly concatenated) data_loader is returned
         assert len(data_loaders) == 1
         return data_loaders[0]
     return data_loaders

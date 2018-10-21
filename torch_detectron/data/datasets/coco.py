@@ -1,8 +1,8 @@
 import torch
 import torchvision
 
-from ..structures.bounding_box import BoxList
-from ..structures.segmentation_mask import SegmentationMask
+from torch_detectron.structures.bounding_box import BoxList
+from torch_detectron.structures.segmentation_mask import SegmentationMask
 
 
 class COCODataset(torchvision.datasets.coco.CocoDetection):

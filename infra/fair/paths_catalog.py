@@ -26,10 +26,18 @@ class DatasetCatalog(object):
 
     @staticmethod
     def get(name):
-        return (
-            os.path.join(DatasetCatalog.DATA_DIR, DatasetCatalog.DATASETS[name][1]),
-            os.path.join(DatasetCatalog.DATA_DIR, DatasetCatalog.DATASETS[name][0]),
-        )
+        if "coco" in name:
+            data_dir = DatasetCatalog.DATA_DIR
+            attrs = DatasetCatalog.DATASETS[name]
+            args = dict(
+                root=os.path.join(data_dir, attrs[0]),
+                ann_file=os.path.join(data_dir, attrs[1]),
+            )
+            return dict(
+                factory="COCODataset",
+                args=args,
+            )
+        raise RuntimeError("Dataset not available: {}".format(name))
 
 
 class ModelCatalog(object):

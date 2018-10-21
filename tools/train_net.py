@@ -11,9 +11,9 @@ import os
 
 import torch
 from torch_detectron.config import cfg
-from torch_detectron.config.data import make_data_loader
-from torch_detectron.config.solver import make_lr_scheduler
-from torch_detectron.config.solver import make_optimizer
+from torch_detectron.data import make_data_loader
+from torch_detectron.solver import make_lr_scheduler
+from torch_detectron.solver import make_optimizer
 from torch_detectron.engine.inference import inference
 from torch_detectron.engine.trainer import do_train
 from torch_detectron.modeling.detector import build_detection_model
@@ -35,7 +35,7 @@ def train(cfg, local_rank, distributed):
 
     if distributed:
         model = torch.nn.parallel.deprecated.DistributedDataParallel(
-            model, device_ids=[local_rank], output_device=local_rank
+            model, device_ids=[local_rank], output_device=local_rank,
         )
 
     arguments = {}

@@ -28,7 +28,7 @@ class Resize(object):
         self.min_size = min_size
         self.max_size = max_size
 
-    # modified from torchvision
+    # modified from torchvision to add support for max size
     def get_size(self, image_size):
         w, h = image_size
         size = self.min_size
@@ -75,12 +75,7 @@ class ToTensor(object):
 
 
 class Normalize(object):
-    def __init__(self, mean=None, std=None, to_bgr255=True):
-        # TODO remove those values?
-        if mean is None:
-            mean = [102.9801, 115.9465, 122.7717]
-        if std is None:
-            std = [1, 1, 1]
+    def __init__(self, mean, std, to_bgr255=True):
         self.mean = mean
         self.std = std
         self.to_bgr255 = to_bgr255

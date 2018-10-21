@@ -7,7 +7,7 @@ import os
 
 import torch
 from torch_detectron.config import cfg
-from torch_detectron.config.data import make_data_loader
+from torch_detectron.data import make_data_loader
 from torch_detectron.engine.inference import inference
 from torch_detectron.modeling.detector import build_detection_model
 from torch_detectron.utils.checkpoint import DetectronCheckpointer

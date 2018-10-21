@@ -4,7 +4,7 @@ Simple dataset class that wraps a list of path names
 
 from PIL import Image
 
-from ..structures.bounding_box import BoxList
+from torch_detectron.structures.bounding_box import BoxList
 
 
 class ListDataset(object):

@@ -1,6 +1,6 @@
 import torch
 
-from torch_detectron.utils.lr_scheduler import WarmupMultiStepLR
+from .lr_scheduler import WarmupMultiStepLR
 
 
 def make_optimizer(cfg, model):
