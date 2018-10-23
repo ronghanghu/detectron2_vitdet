@@ -10,6 +10,7 @@ import torch
 from tqdm import tqdm
 
 from ..structures.bounding_box import BoxList
+from ..utils.comm import is_main_process
 from ..utils.comm import scatter_gather
 from ..utils.comm import synchronize
 
@@ -255,15 +256,9 @@ def evaluate_predictions_on_coco(
     return coco_eval
 
 
-def _is_main_process():
-    if not torch.distributed.deprecated.is_initialized():
-        return True
-    return torch.distributed.deprecated.get_rank() == 0
-
-
 def _accumulate_predictions_from_multiple_gpus(predictions_per_gpu):
     all_predictions = scatter_gather(predictions_per_gpu)
-    if not _is_main_process():
+    if not is_main_process():
         return
     # merge the list of dicts
     predictions = {}
@@ -384,7 +379,7 @@ def inference(
     )
 
     predictions = _accumulate_predictions_from_multiple_gpus(predictions)
-    if not _is_main_process():
+    if not is_main_process():
         return
 
     if output_folder:

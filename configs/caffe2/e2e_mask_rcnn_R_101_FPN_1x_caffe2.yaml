@@ -1,6 +1,6 @@
 MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
-  WEIGHT: "/private/home/fmassa/detectron_c2_models/e2e_mask_rcnn_r101_fpn_1x.pkl"
+  WEIGHT: "catalog://Caffe2Detectron/COCO/35861795/e2e_mask_rcnn_R-101-FPN_1x"
   BACKBONE:
     CONV_BODY: "R-101-FPN"
     OUT_CHANNELS: 256

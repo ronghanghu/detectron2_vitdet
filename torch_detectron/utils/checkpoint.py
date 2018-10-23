@@ -6,6 +6,7 @@ import torch
 from torch_detectron.utils.model_serialization import load_state_dict
 from torch_detectron.utils.c2_model_loading import load_c2_format
 from torch_detectron.utils.imports import import_file
+from torch_detectron.utils.model_zoo import cache_url
 
 
 class Checkpointer(object):
@@ -120,6 +121,12 @@ class DetectronCheckpointer(Checkpointer):
             catalog_f = paths_catalog.ModelCatalog.get(f[len("catalog://") :])
             self.logger.info("{} points to {}".format(f, catalog_f))
             f = catalog_f
+        # download url files
+        if f.startswith("http"):
+            # if the file is a url path, download it and cache it
+            cached_f = cache_url(f)
+            self.logger.info("url {} cached in {}".format(f, cached_f))
+            f = cached_f
         # convert Caffe2 checkpoint from pkl
         if f.endswith(".pkl"):
             return load_c2_format(self.cfg, f)

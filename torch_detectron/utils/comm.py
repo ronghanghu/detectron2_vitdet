@@ -17,6 +17,12 @@ def get_world_size():
     return torch.distributed.deprecated.get_world_size()
 
 
+def is_main_process():
+    if not torch.distributed.deprecated.is_initialized():
+        return True
+    return torch.distributed.deprecated.get_rank() == 0
+
+
 def synchronize():
     """
     Helper function to synchronize between multiple processes when
