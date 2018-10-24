@@ -41,7 +41,7 @@ Check [INSTALL.md](INSTALL.md) for installation instructions.
 Pre-trained models, baselines and comparison with Detectron and mmdetection
 can be found in [MODEL_ZOO.md](MODEL_ZOO.md)
 
-## Inference in s few lines
+## Inference in a few lines
 We provide a helper class to simplify writing inference pipelines using pre-trained models.
 Here is how we would do it. Run this from the `demo` folder:
 ```python
