@@ -12,6 +12,7 @@ creating detection and segmentation models using PyTorch 1.0.
 - **Multi-GPU training and inference**
 - **Batched inference:** can perform inference using multiple images per batch per GPU
 - **CPU support for inference:** runs on CPU in inference time. See our [webcam demo](blob/master/demo) for an example
+- Provides pre-trained models for almost all reference Mask R-CNN and Faster R-CNN configurations with 1x schedule.
 
 ## Webcam and Jupyter notebook demo
 
