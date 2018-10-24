@@ -138,6 +138,9 @@ class MyDataset(object):
         # add the labels to the boxlist
         boxlist.add_field("labels", labels)
 
+        if self.transforms:
+            image, boxlist = self.transforms(image, boxlist)
+
         # return the image, the boxlist and the idx in your dataset
         return image, boxlist, idx
 
