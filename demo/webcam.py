@@ -1,7 +1,7 @@
 import argparse
 import cv2
 
-from torch_detectron.config import cfg
+from maskrcnn_benchmark.config import cfg
 from predictor import COCODemo
 
 import time

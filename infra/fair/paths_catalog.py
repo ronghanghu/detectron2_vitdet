@@ -39,4 +39,4 @@ class DatasetCatalog(object):
             )
         raise RuntimeError("Dataset not available: {}".format(name))
 
-from torch_detectron.config.paths_catalog import ModelCatalog
+from maskrcnn_benchmark.config.paths_catalog import ModelCatalog

@@ -7,8 +7,8 @@ from torch.utils.data.sampler import Sampler
 from torch.utils.data.sampler import SequentialSampler
 from torch.utils.data.sampler import RandomSampler
 
-from torch_detectron.data.samplers import GroupedBatchSampler
-from torch_detectron.data.samplers import IterationBasedBatchSampler
+from maskrcnn_benchmark.data.samplers import GroupedBatchSampler
+from maskrcnn_benchmark.data.samplers import IterationBasedBatchSampler
 
 
 class SubsetSampler(Sampler):

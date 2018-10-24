@@ -2,10 +2,10 @@ import cv2
 import torch
 from torchvision import transforms as T
 
-from torch_detectron.modeling.detector import build_detection_model
-from torch_detectron.utils.checkpoint import DetectronCheckpointer
-from torch_detectron.structures.image_list import to_image_list
-from torch_detectron.modeling.roi_heads.mask_head.inference import Masker
+from maskrcnn_benchmark.modeling.detector import build_detection_model
+from maskrcnn_benchmark.utils.checkpoint import DetectronCheckpointer
+from maskrcnn_benchmark.structures.image_list import to_image_list
+from maskrcnn_benchmark.modeling.roi_heads.mask_head.inference import Masker
 
 
 class COCODemo(object):

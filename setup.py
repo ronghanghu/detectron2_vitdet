@@ -15,7 +15,7 @@ requirements = ["torch", "torchvision"]
 
 def get_extensions():
     this_dir = os.path.dirname(os.path.abspath(__file__))
-    extensions_dir = os.path.join(this_dir, "torch_detectron", "csrc")
+    extensions_dir = os.path.join(this_dir, "maskrcnn_benchmark", "csrc")
 
     main_file = glob.glob(os.path.join(extensions_dir, "*.cpp"))
     source_cpu = glob.glob(os.path.join(extensions_dir, "cpu", "*.cpp"))
@@ -44,7 +44,7 @@ def get_extensions():
 
     ext_modules = [
         extension(
-            "torch_detectron._C",
+            "maskrcnn_benchmark._C",
             sources,
             include_dirs=include_dirs,
             define_macros=define_macros,
@@ -56,7 +56,7 @@ def get_extensions():
 
 
 setup(
-    name="torch_detectron",
+    name="maskrcnn_benchmark",
     version="0.1",
     author="fmassa",
     url="https://github.com/fairinternal/detectron.pytorch",
