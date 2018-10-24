@@ -3,7 +3,7 @@
 This project aims at providing the necessary building blocks for easily
 creating detection and segmentation models using PyTorch 1.0.
 
-![alt text](demo/demo_e2e_mask_rcnn_R_50_FPN_1x.png "from http://cocodataset.org/#explore?id=345434")
+![alt text](demo/demo_e2e_mask_rcnn_X_101_32x8d_FPN_1x.png "from http://cocodataset.org/#explore?id=345434")
 
 ## Highlights
 - **PyTorch 1.0:** RPN, Faster R-CNN and Mask R-CNN implementations that matches or exceeds Detectron accuracies
