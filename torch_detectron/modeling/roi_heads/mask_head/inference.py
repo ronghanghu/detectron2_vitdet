@@ -114,11 +114,9 @@ def expand_masks(mask, padding):
     return padded_mask, scale
 
 
-def paste_mask_in_image(mask, box, im_h, im_w, M=14):
-    scale = (M + 2.0) / M
-    padded_mask = torch.zeros((M + 2, M + 2), dtype=torch.float32)
-    padded_mask[1:-1, 1:-1] = mask
-    mask = padded_mask
+def paste_mask_in_image(mask, box, im_h, im_w, thresh=0.5, padding=1):
+    padded_mask, scale = expand_masks(mask[None], padding=padding)
+    mask = padded_mask[0, 0]
     box = expand_boxes(box[None], scale)[0]
     box = box.numpy().astype(np.int32)
 
@@ -128,13 +126,17 @@ def paste_mask_in_image(mask, box, im_h, im_w, M=14):
     w = max(w, 1)
     h = max(h, 1)
 
-    mask = Image.fromarray(mask.numpy())
+    mask = Image.fromarray(mask.cpu().numpy())
     mask = mask.resize((w, h), resample=Image.BILINEAR)
     mask = np.array(mask, copy=False)
 
-    THRESH_BINARIZE = 0.5
-    mask = np.array(mask > THRESH_BINARIZE, dtype=np.uint8)
-    mask = torch.from_numpy(mask)
+    if thresh >= 0:
+        mask = np.array(mask > thresh, dtype=np.uint8)
+        mask = torch.from_numpy(mask)
+    else:
+        # for visualization and debugging, we also
+        # allow it to return an unmodified mask
+        mask = torch.from_numpy(mask * 255).to(torch.uint8)
 
     im_mask = torch.zeros((im_h, im_w), dtype=torch.uint8)
     x_0 = max(box[0], 0)
@@ -154,16 +156,15 @@ class Masker(object):
     specified by the bounding boxes
     """
 
-    def __init__(self, threshold=0.5, padding=0):
+    def __init__(self, threshold=0.5, padding=1):
         self.threshold = threshold
         self.padding = padding
 
     def forward_single_image(self, masks, boxes):
         boxes = boxes.convert("xyxy")
         im_w, im_h = boxes.size
-        M = masks[0].shape[-1]
         res = [
-            paste_mask_in_image(mask[0], box, im_h, im_w, M)
+            paste_mask_in_image(mask[0], box, im_h, im_w, self.threshold, self.padding)
             for mask, box in zip(masks, boxes.bbox)
         ]
         res = torch.stack(res, dim=0)[:, None]
