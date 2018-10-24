@@ -41,8 +41,31 @@ Check [INSTALL.md](INSTALL.md) for installation instructions.
 Pre-trained models, baselines and comparison with Detectron and mmdetection
 can be found in [MODEL_ZOO.md](MODEL_ZOO.md)
 
+## Inference in s few lines
+We provide a helper class to simplify writing inference pipelines using pre-trained models.
+Here is how we would do it. Run this from the `demo` folder:
+```python
+from maskrcnn_benchmark.config import cfg
+from predictor import COCODemo
 
-## Running training code
+config_file = "../configs/caffe2/e2e_mask_rcnn_R_50_FPN_1x_caffe2.yaml"
+
+# update the config options with the config file
+cfg.merge_from_file(config_file)
+# manual override some options
+cfg.merge_from_list(["MODEL.DEVICE", "cpu"])
+
+coco_demo = COCODemo(
+    cfg,
+    min_image_size=800,
+    confidence_threshold=0.7,
+)
+# load image and then run prediction
+image = ...
+predictions = coco_demo.run_on_opencv_image(image)
+```
+
+## Perform training on COCO dataset
 
 For the following examples to work, you need to first install `maskrcnn_benchmark`.
 
