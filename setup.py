@@ -59,7 +59,7 @@ setup(
     name="maskrcnn_benchmark",
     version="0.1",
     author="fmassa",
-    url="https://github.com/fairinternal/detectron.pytorch",
+    url="https://github.com/facebookresearch/maskrnn-benchmark",
     description="object detection in pytorch",
     # packages=find_packages(exclude=("configs", "examples", "test",)),
     # install_requires=requirements,
