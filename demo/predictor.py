@@ -130,16 +130,16 @@ class COCODemo(object):
         Creates a basic transformation that was used to train the models
         """
         cfg = self.cfg
-        # for simplicity, we suppose that the image is passed in BGR format
-        # as is the case for OpenCV loading. This is not a requirement, but
-        # just makes the logic more complicated
-        if not cfg.INPUT.TO_BGR255:
-            raise NotImplementedError(
-                "Only models trained on Caffe2 "
-                "supported in the demo for now. Also, make sure to load "
-                "the images using OpenCV for the demo, so that they are in "
-                "BGR format and in 0-255"
-            )
+
+        # we are loading images with OpenCV, so we don't need to convert them
+        # to BGR, they are already! So all we need to do is to normalize
+        # by 255 if we want to convert to BGR255 format, or flip the channels
+        # if we want it to be in RGB in [0-1] range.
+        if cfg.INPUT.TO_BGR255:
+            to_bgr_transform = T.Lambda(lambda x: x * 255)
+
+        else:
+            to_bgr_transform = T.Lambda(lambda x: x[[2, 1, 0]])
 
         normalize_transform = T.Normalize(
             mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD
@@ -150,7 +150,7 @@ class COCODemo(object):
                 T.ToPILImage(),
                 T.Resize(self.min_image_size),
                 T.ToTensor(),
-                T.Lambda(lambda x: x * 255),
+                to_bgr_transform,
                 normalize_transform,
             ]
         )
@@ -349,7 +349,7 @@ class COCODemo(object):
             x, y = box[:2]
             s = template.format(label, score)
             cv2.putText(
-                image, s, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2
+                image, s, (x, y), cv2.FONT_HERSHEY_SIMPLEX, .5, (255, 255, 255), 1
             )
 
         return image
