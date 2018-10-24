@@ -167,7 +167,10 @@ class Masker(object):
             paste_mask_in_image(mask[0], box, im_h, im_w, self.threshold, self.padding)
             for mask, box in zip(masks, boxes.bbox)
         ]
-        res = torch.stack(res, dim=0)[:, None]
+        if len(res) > 0:
+            res = torch.stack(res, dim=0)[:, None]
+        else:
+            res = masks.new_empty((0, 1, masks.shape[-2], masks.shape[-1]))
         return res
 
     def __call__(self, masks, boxes):

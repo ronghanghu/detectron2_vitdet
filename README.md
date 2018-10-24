@@ -1,92 +1,76 @@
-# Object Detection and Segmentation in PyTorch
+# Faster R-CNN and Mask R-CNN in PyTorch 1.0
 
 This project aims at providing the necessary building blocks for easily
-creating detection and segmentation models.
+creating detection and segmentation models using PyTorch 1.0.
 
-### Note: For the previous implementation of this code, see https://github.com/facebookexternal/detectron.pytorch/tree/my_proposal_branch
+![alt text](demo/demo_e2e_mask_rcnn_R_50_FPN_1x.png "from http://cocodataset.org/#explore?id=345434")
+
+## Highlights
+- **PyTorch 1.0:** RPN, Faster R-CNN and Mask R-CNN implementations that matches or exceeds Detectron accuracies
+- **Very fast**: up to **2x** faster than [Detectron](https://github.com/facebookresearch/Detectron) and **30%** faster than [mmdetection](https://github.com/open-mmlab/mmdetection) during training. See [MODEL_ZOO.md](MODEL_ZOO.md) for more details.
+- **Memory efficient:** uses roughly 500MB less GPU memory than mmdetection during training
+- **Multi-GPU training and inference**
+- **Batched inference:** can perform inference using multiple images per batch per GPU
+- **CPU support for inference:** runs on CPU in inference time. See our [webcam demo](blob/master/demo) for an example
+
+## Webcam and Jupyter notebook demo
+
+We provide a simple webcam demo that illustrates how you can use `maskrcnn_benchmark` for inference:
+```bash
+cd demo
+# by default, it runs on the GPU
+# for best results, use min-image-size 800
+python webcam.py --min-image-size 800
+# can also run it on the CPU
+python webcam.py --min-image-size 300 MODEL.DEVICE cpu
+# or change the model that you want to use
+python webcam.py --config-file ../configs/caffe2/e2e_mask_rcnn_R_101_FPN_1x_caffe2.py --min-image-size 300 MODEL.DEVICE cpu
+# in order to see the probability heatmaps, pass --show-mask-heatmaps
+python webcam.py --min-image-size 300 --show-mask-heatmaps MODEL.DEVICE cpu
+```
+
+A notebook with the demo can be found in [demo/Mask_R-CNN_demo.ipynb](demo/Mask_R-CNN_demo.ipynb).
 
 ## Installation
 
-### Requirements:
-- PyTorch compiled from master. Installation instructions can be found in [here](https://github.com/pytorch/pytorch#installation).
-- torchvision from master
-- cocoapi
+Check [INSTALL.md](INSTALL.md) for installation instructions.
 
-### Installing the lib
 
-```bash
-git clone git@github.com:facebookexternal/detectron.pytorch.git
-cd detectron.pytorch
+## Model Zoo and Baselines
 
-# the following will install the lib with
-# symbolic links, so that you can modify
-# the files if you want and won't need to
-# re-build it
-python setup.py build develop
-```
+Pre-trained models, baselines and comparison with Detectron and mmdetection
+can be found in [MODEL_ZOO.md](MODEL_ZOO.md)
 
-### Step-by-step installation on the FAIR Cluster
-
-```bash
-# setup environments
-module load anaconda3/5.0.1 cuda/9.0 cudnn/v7.0-cuda.9.0 NCCL/2.2.13-cuda.9.0
-
-conda create --name pytorch_detection
-source activate pytorch_detection
-
-conda install ipython
-
-# pytorch and coco api dependencies
-conda install numpy pyyaml mkl mkl-include setuptools cmake cffi typing cython
-conda install -c mingfeima mkldnn
-conda install -c pytorch magma-cuda90
-
-pip install ninja yacs
-
-# cloning and installing PyTorch from master
-mkdir ~/github && cd ~/github
-git clone --recursive git@github.com:pytorch/pytorch.git
-cd pytorch
-# compile for several GPU architectures
-TORCH_CUDA_ARCH_LIST="3.5;5.0+PTX;6.0;6.1;7.0" python setup.py build develop
-
-# install torchvision
-cd ~/github
-git clone git@github.com:pytorch/vision.git
-cd vision
-python setup.py install
-
-# install pycocotools
-cd ~/github
-git clone git@github.com:cocodataset/cocoapi.git
-cd cocoapi/PythonAPI
-python setup.py build_ext install
-
-# install PyTorch Detection
-cd ~/github
-git clone git@github.com:fairinternal/detectron.pytorch.git
-cd detectron.pytorch
-TORCH_CUDA_ARCH_LIST="3.5;5.0+PTX;6.0;6.1;7.0" python setup.py build develop
-
-# symlink the coco dataset
-cd ~/github/detectron.pytorch
-mkdir datasets models
-ln -s /datasets01/COCO/060817/annotations datasets/coco/annotations
-ln -s /datasets01/COCO/060817/train2014 datasets/coco/train2014
-ln -s /datasets01/COCO/060817/test2014 datasets/coco/test2014
-ln -s /datasets01/COCO/060817/val2014 datasets/coco/val2014
-# TODO: coco test 2015 and coco test 2017
-for x in /private/home/fmassa/imagenet_detectron_models/* ; do ln -s $x models ; done
-```
 
 ## Running training code
 
-For the following examples to work, you need to first install `torch_detectron`.
+For the following examples to work, you need to first install `maskrcnn_benchmark`.
+
+You will also need to download the COCO dataset.
+We recommend to symlink the path to the coco dataset to `datasets/` as follows
+
+We use `minival` and `valminusminival` sets from [Detectron](https://github.com/facebookresearch/Detectron/blob/master/detectron/datasets/data/README.md#coco-minival-annotations)
+
+```bash
+# symlink the coco dataset
+cd ~/github/maskrcnn-benchmark
+mkdir -p datasets/coco
+ln -s /path_to_coco_dataset/annotations datasets/coco/annotations
+ln -s /path_to_coco_dataset/train2014 datasets/coco/train2014
+ln -s /path_to_coco_dataset/test2014 datasets/coco/test2014
+ln -s /path_to_coco_dataset/val2014 datasets/coco/val2014
+```
+
+You can also configure your own paths to the datasets.
+For that, all you need to do is to modify `maskrcnn_benchmark/config/paths_catalog.py` to
+point to the location where your dataset is stored.
+You can also create a new `paths_catalog.py` file which implements the same two classes,
+and pass it as a config argument `PATHS_CATALOG` during training.
 
 ### Single GPU training
 
 ```bash
-python /path_to_detectron/tools/train_net.py --config-file "/path/to/config/file.yaml"
+python /path_to_maskrnn_benchmark/tools/train_net.py --config-file "/path/to/config/file.yaml"
 ```
 
 ### Multi-GPU training
@@ -97,139 +81,55 @@ process will only use a single GPU.
 
 ```bash
 export NGPUS=8
-python -m torch.distributed.launch --nproc_per_node=$NGPUS /path_to_detectron/tools/train_net.py --config-file "path/to/config/file.yaml"
+python -m torch.distributed.launch --nproc_per_node=$NGPUS /path_to_maskrcnn_benchmark/tools/train_net.py --config-file "path/to/config/file.yaml"
 ```
-
-It is unfortunately not possible (at least I haven't figured out)
-to launch two processes in python with `-m` flag, so that in the
-multi-gpu case we need to specify the full path of the detectron `train.py`
-file.
-
-## FB infra usage
-
-This section includes instructions that are specific to using the code on FB infra (devgpus and cluster).
-
-### Checking out on a devgpu
-
-This repo is not yet integrated into fbcode. In the meantime, we adopt a workaround in
-which one creates an fbcode checkout and then "grafts" the git repo on top of it. Buck
-`TARGETS` files are implemented such that once the git repo is checked out in the correct
-location (`//experimental/deeplearning/vision/detectron_pytorch`) it will build correctly
-using all necessarily dependencies from fbcode, tp2, pyfi, etc.
-
-```bash
-# Create a separate fbcode checkout that we'll use for "grafting" the github repo on top of
-fbclone fbsource fbsource-github-grafts
-
-# Move to the grafting location
-cd /data/users/$USER/fbsource-github-grafts/fbcode/experimental/deeplearning/vision/
-
-# Clone the git repo
-git clone git@github.com:facebookexternal/detectron.pytorch.git
-# The buck targets files require a slightly different name
-mv detectron.pytorch detectron_pytorch
-```
-
-### Running on a devgpu
-
-**NOTE: multi-gpu support is currently broken due to an issue in c10d that is under investigation**
-
-To build:
-
-```bash
-buck build @mode/dev-nosan -c python.native_link_strategy=separate //experimental/deeplearning/vision/detectron_pytorch/...
-```
-
-To run:
-
-```bash
-cd /data/users/$USER/fbsource-github-grafts/fbcode/experimental/deeplearning/vision/detectron_pytorch
-
-TORCH_DETECTRON_ENV_MODULE=infra/fb/env.py \
-  /data/users/$USER/fbsource-github-grafts/fbcode/buck-out/gen/experimental/deeplearning/vision/detectron_pytorch/tools/train_net.par \
-  --config-file configs/e2e_mask_rcnn_R_50_C4_1x.yaml \
-  PATHS_CATALOG infra/fb/paths_catalog.py
-```
-
-Note the two FB infra specific settings:
- - Setting `TORCH_DETECTRON_ENV_MODULE` such that an FB infra specific environment setup function can execute
- - Setting `PATHS_CATALOG` so that datasets and models can be found in FB specific locations
-
-### Running on the FB GPU cluster
-
-**NOTE: multi-gpu support is currently broken due to an issue in c10d that is under investigation**
-
-```bash
-GPU=1 MEM=24 CPU=8 ./infra/fb/launch.sh configs/quick_schedules/e2e_faster_rcnn_R_50_FPN_quick.yaml test
-```
-
-## Model Zoo and Baselines
-
-Content coming soon. For now, refer to https://github.com/facebookexternal/detectron.pytorch/pull/60
-
 
 ## Abstractions
-The main abstractions introduced by `torch_detectron` that are useful to
-have in mind are the following:
+For more information on some of the main abstractions in our implementation, see [ABSTRACTIONS.md](ABSTRACTIONS.md).
 
-### ImageList
-In PyTorch, the first dimension of the input to the network generally represents
-the batch dimension, and thus all elements of the same batch have the same
-height / width.
-In order to support images with different sizes and aspect ratios in the same
-batch, we created the `ImageList` class, which holds internally a batch of
-images (os possibly different sizes). The images are padded with zeros such that
-they have the same final size and batched over the first dimension. The original
-sizes of the images before padding are stored in the `image_sizes` attribute,
-and the batched tensor in `tensors`.
-We provide a convenience function `to_image_list` that accepts a few different
-input types, including a list of tensors, and returns an `ImageList` object.
+## Adding your own dataset
 
+This implementation adds support for COCO-style datasets.
+But adding support for training on a new dataset can be done as follows:
 ```python
-from torch_detectron.structures.image_list import to_image_list
+from maskrcnn_benchmark.structures.bounding_box import BoxList
 
-images = [torch.rand(3, 100, 200), torch.rand(3, 150, 170)]
-batched_images = to_image_list(images)
+class MyDataset(object):
+    def __init__(self, ...):
+        # as you would do normally
+    
+    def __getitem__(self, idx):
+        # load the image as a PIL Image
+        image = ...
 
-# it is also possible to make the final batched image be a multiple of a number
-batched_images_32 = to_image_list(images, size_divisible=32)
+        # load the bounding boxes as a list of list of boxes
+        # in this case, for illustrative purposes, we use
+        # x1, y1, x2, y2 order.
+        boxes = [[0, 0, 10, 10], [10, 20, 50, 50]]
+        # and labels
+        labels = torch.tensor([10, 20])
+
+        # create a BoxList from the boxes
+        boxlist = Boxlist(boxes, size=image.size, mode="xyxy")
+        # add the labels to the boxlist
+        boxlist.add_field("labels", labels)
+
+        # return the image, the boxlist and the idx in your dataset
+        return image, boxlist, idx
+
+    def get_img_info(self, idx):
+        # get img_height and img_width. This is used if
+        # we want to split the batches according to the aspect ratio
+        # of the image, as it can be more efficient than loading the
+        # image from disk
+        return {"height": img_height, "width": img_width}
 ```
+That's it. You can also add extra fields to the boxlist, such as segmentation masks
+(using `structures.segmentation_mask.SegmentationMask`), or even your own instance type.
 
-### BoxList
-The `BoxList` class holds a set of bounding boxes (represented as a `Nx4` tensor) for
-a specific image, as well as the size of the image as a `(width, height)` tuple.
-It also contains a set of methods that allow to perform geometric
-transformations to the bounding boxes (such as cropping, scaling and flipping).
-The class accepts bounding boxes from two different input formats:
-- `xyxy`, where each box is encoded as a `x1`, `y1`, `x2` and `y2` coordinates)
-- `xywh`, where each box is encoded as `x1`, `y1`, `w` and `h`.
+For a full example of how the `COCODataset` is implemented, check [`maskrcnn_benchmark/data/datasets/coco.py`](maskrcnn_benchmark/data/datasets/coco.py).
 
-Additionally, each `BoxList` instance can also hold arbitrary additional information
-for each bounding box, such as labels, visibility, probability scores etc.
-
-Here is an example on how to create a `BoxList` from a list of coordinates:
-```python
-from torch_detectron.structures.bounding_box import BoxList, FLIP_LEFT_RIGHT
-
-width = 100
-height = 200
-boxes = [
-  [0, 10, 50, 50],
-  [50, 20, 90, 60],
-  [10, 10, 50, 50]
-]
-# create a BoxList with 3 boxes
-bbox = BoxList(boxes, size=(width, height), mode='xyxy')
-
-# perform some box transformations, has similar API as PIL.Image
-bbox_scaled = bbox.resize((width * 2, height * 3))
-bbox_flipped = bbox.transpose(FLIP_LEFT_RIGHT)
-
-# add labels for each bbox
-labels = torch.tensor([0, 10, 1])
-bbox.add_field('labels', labels)
-
-# bbox also support a few operations, like indexing
-# here, selects boxes 0 and 2
-bbox_subset = bbox[[0, 2]]
-```
+### Note:
+While the aforementioned example should work for training, we leverage the
+cocoApi for computing the accuracies during testing. Thus, test datasets
+should currently follow the cocoApi for now.
