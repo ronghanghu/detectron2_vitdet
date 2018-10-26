@@ -1,4 +1,5 @@
 import bisect
+import copy
 import logging
 
 import torch.utils.data
@@ -62,7 +63,8 @@ def make_data_sampler(dataset, shuffle, distributed):
 
 
 def _quantize(x, bins):
-    bins = sorted(bins.copy())
+    bins = copy.copy(bins)
+    bins = sorted(bins)
     quantized = list(map(lambda y: bisect.bisect_right(bins, y), x))
     return quantized
 
