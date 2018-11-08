@@ -5,7 +5,9 @@ from torch import nn
 from maskrcnn_benchmark.modeling.box_coder import BoxCoder
 from .loss import make_rpn_loss_evaluator
 from .anchor_generator import make_anchor_generator
-from .inference import make_rpn_postprocessor
+
+from .proposals import generate_rpn_proposals, generate_fpn_proposals
+from maskrcnn_benchmark.structures.boxlist_ops import cat_boxlist
 
 
 class RPNHead(nn.Module):
@@ -58,17 +60,12 @@ class RPNModule(torch.nn.Module):
         in_channels = cfg.MODEL.BACKBONE.OUT_CHANNELS
         head = RPNHead(in_channels, anchor_generator.num_anchors_per_location()[0])
 
-        rpn_box_coder = BoxCoder(weights=(1.0, 1.0, 1.0, 1.0))
+        self.rpn_box_coder = BoxCoder(weights=(1.0, 1.0, 1.0, 1.0))
 
-        box_selector_train = make_rpn_postprocessor(cfg, rpn_box_coder, is_train=True)
-        box_selector_test = make_rpn_postprocessor(cfg, rpn_box_coder, is_train=False)
-
-        loss_evaluator = make_rpn_loss_evaluator(cfg, rpn_box_coder)
+        loss_evaluator = make_rpn_loss_evaluator(cfg, self.rpn_box_coder)
 
         self.anchor_generator = anchor_generator
         self.head = head
-        self.box_selector_train = box_selector_train
-        self.box_selector_test = box_selector_test
         self.loss_evaluator = loss_evaluator
 
     def forward(self, images, features, targets=None):
@@ -82,47 +79,105 @@ class RPNModule(torch.nn.Module):
         """
         objectness, rpn_box_regression = self.head(features)
         anchors = self.anchor_generator(images, features)
-
+        # Note that anchors returned for each image have identical boxes.
+        # They are only different in image shapes. TODO Opportunities for simplification.
+        """
+        anchors: A list of #img elements. Each element is a list of #lvl BoxList.
+        objectness: A list of #lvl elements. Each element is a tensor of shape (B, #anchor, H, W)
+        rpn_box_regression: A list of #lvl elements. Each element is a tensor of shape (B, #anchor x 4, H, W)
+        """
         if self.training:
-            return self._forward_train(anchors, objectness, rpn_box_regression, targets)
+            loss_objectness, loss_rpn_box_reg = self.loss_evaluator(
+                anchors, objectness, rpn_box_regression, targets
+            )
+            losses = {
+                "loss_objectness": loss_objectness,
+                "loss_rpn_box_reg": loss_rpn_box_reg,
+            }
         else:
-            return self._forward_test(anchors, objectness, rpn_box_regression)
+            losses = {}
 
-    def _forward_train(self, anchors, objectness, rpn_box_regression, targets):
-        if self.cfg.MODEL.RPN_ONLY:
+        if self.cfg.MODEL.RPN_ONLY and self.training:
             # When training an RPN-only model, the loss is determined by the
             # predicted objectness and rpn_box_regression values and there is
             # no need to transform the anchors into predicted boxes; this is an
             # optimization that avoids the unnecessary transformation.
-            boxes = anchors
-        else:
-            # For end-to-end models, anchors must be transformed into boxes and
-            # sampled into a training batch.
-            with torch.no_grad():
-                boxes = self.box_selector_train(
-                    anchors, objectness, rpn_box_regression, targets
-                )
-        loss_objectness, loss_rpn_box_reg = self.loss_evaluator(
-            anchors, objectness, rpn_box_regression, targets
-        )
-        losses = {
-            "loss_objectness": loss_objectness,
-            "loss_rpn_box_reg": loss_rpn_box_reg,
-        }
-        return boxes, losses
+            return None, losses
 
-    def _forward_test(self, anchors, objectness, rpn_box_regression):
-        boxes = self.box_selector_test(anchors, objectness, rpn_box_regression)
-        if self.cfg.MODEL.RPN_ONLY:
-            # For end-to-end models, the RPN proposals are an intermediate state
-            # and don't bother to sort them in decreasing score order. For RPN-only
-            # models, the proposals are the final output and we return them in
-            # high-to-low confidence order.
-            inds = [
-                box.get_field("objectness").sort(descending=True)[1] for box in boxes
-            ]
-            boxes = [box[ind] for box, ind in zip(boxes, inds)]
-        return boxes, {}
+        with torch.no_grad():
+            decoded_boxes = []
+            """
+            decoded_boxes: #lvl elements. Each is a tensor of shape (B, #total anchors in the image, 4)
+            """
+            anchors = list(zip(*anchors))
+            # for each feature level
+            for anchor, bbreg_logit in zip(anchors, rpn_box_regression):
+                B, _, H, W = bbreg_logit.shape
+                bbreg_logit = bbreg_logit.view(B, -1, 4, H, W).permute(0, 3, 4, 1, 2).reshape(-1, 4)
+                # concat all anchors over all images
+                anchors = torch.cat([a.bbox for a in anchor], dim=0).reshape(-1, 4)
+                decoded = self.rpn_box_coder.decode(bbreg_logit, anchors)
+                decoded_boxes.append(decoded.view(B, -1, 4))   # each has shape (B, HxWx#anchor, 4)
+
+            for idx, score in enumerate(objectness):
+                objectness[idx] = score.permute(0, 2, 3, 1).reshape(B, -1)   # reshape to (B, HxWx#anchor)
+
+            rpn_cfg = self.cfg.MODEL.RPN
+            if len(features) == 1:
+                proposals = generate_rpn_proposals(
+                    decoded_boxes[0], objectness[0],
+                    [x[::-1] for x in images.image_sizes],  # TODO The w, h order is not consistent everywhere!
+                    nms_thresh=rpn_cfg.NMS_THRESH,
+                    pre_nms_topk=rpn_cfg.PRE_NMS_TOP_N_TRAIN if self.training else rpn_cfg.PRE_NMS_TOP_N_TEST,
+                    post_nms_topk=rpn_cfg.POST_NMS_TOP_N_TRAIN if self.training else rpn_cfg.POST_NMS_TOP_N_TEST,
+                    min_size=rpn_cfg.MIN_SIZE)
+            else:
+                proposals = generate_fpn_proposals(
+                    decoded_boxes, objectness,
+                    [x[::-1] for x in images.image_sizes],  # TODO same here
+                    nms_thresh=rpn_cfg.NMS_THRESH,
+                    pre_nms_topk=rpn_cfg.PRE_NMS_TOP_N_TRAIN if self.training else rpn_cfg.PRE_NMS_TOP_N_TEST,
+                    post_nms_topk=rpn_cfg.FPN_POST_NMS_TOP_N_TRAIN if self.training else rpn_cfg.FPN_POST_NMS_TOP_N_TEST,
+                    min_size=rpn_cfg.MIN_SIZE, training=self.training)
+
+            # Add GT proposals for end-to-end training.
+            if self.training and targets is not None:
+                proposals = self._add_gt_proposals(proposals, targets)
+
+            if self.cfg.MODEL.RPN_ONLY:
+                # We must be in testing mode.
+                # For end-to-end models, the RPN proposals are an intermediate state
+                # and don't bother to sort them in decreasing score order. For RPN-only
+                # models, the proposals are the final output and we return them in
+                # high-to-low confidence order.
+                inds = [
+                    box.get_field("objectness").sort(descending=True)[1] for box in proposals
+                ]
+                proposals = [box[ind] for box, ind in zip(proposals, inds)]
+            return proposals, losses
+
+    def _add_gt_proposals(self, proposals, targets):
+        """
+        Arguments:
+            proposals: list[BoxList]
+            targets: list[BoxList]
+        """
+        # Get the device we're operating on
+        device = proposals[0].bbox.device
+
+        gt_boxes = [target.copy_with_fields([]) for target in targets]
+
+        # later cat of bbox requires all fields to be present for all bbox
+        # so we need to add a dummy for objectness that's missing
+        for gt_box in gt_boxes:
+            gt_box.add_field("objectness", torch.ones(len(gt_box), device=device))
+
+        proposals = [
+            cat_boxlist((proposal, gt_box))
+            for proposal, gt_box in zip(proposals, gt_boxes)
+        ]
+
+        return proposals
 
 
 def build_rpn(cfg):
