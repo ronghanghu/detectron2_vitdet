@@ -38,17 +38,15 @@ class FastRCNNLossComputation(object):
         # GT in the image, and matched_idxs can be -2, which goes
         # out of bounds
         matched_targets = target[matched_idxs.clamp(min=0)]
-        matched_targets.add_field("matched_idxs", matched_idxs)
-        return matched_targets
+        return matched_targets, matched_idxs
 
     def prepare_targets(self, proposals, targets):
         labels = []
         regression_targets = []
         for proposals_per_image, targets_per_image in zip(proposals, targets):
-            matched_targets = self.match_targets_to_proposals(
+            matched_targets, matched_idxs = self.match_targets_to_proposals(
                 proposals_per_image, targets_per_image
             )
-            matched_idxs = matched_targets.get_field("matched_idxs")
 
             labels_per_image = matched_targets.get_field("labels")
             labels_per_image = labels_per_image.to(dtype=torch.int64)

@@ -43,18 +43,16 @@ class RPNLossComputation(object):
         # GT in the image, and matched_idxs can be -2, which goes
         # out of bounds
         matched_targets = target[matched_idxs.clamp(min=0)]
-        matched_targets.add_field("matched_idxs", matched_idxs)
-        return matched_targets
+        return matched_targets, matched_idxs
 
     def prepare_targets(self, anchors, targets):
         labels = []
         regression_targets = []
         for anchors_per_image, targets_per_image in zip(anchors, targets):
-            matched_targets = self.match_targets_to_anchors(
+            matched_targets, matched_idxs = self.match_targets_to_anchors(
                 anchors_per_image, targets_per_image
             )
 
-            matched_idxs = matched_targets.get_field("matched_idxs")
             labels_per_image = matched_idxs >= 0
             labels_per_image = labels_per_image.to(dtype=torch.float32)
             # discard anchors that go out of the boundaries of the image
