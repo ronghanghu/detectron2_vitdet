@@ -1,5 +1,5 @@
 import torch
-from torch import nn
+from torch.nn import functional as F
 
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 from maskrcnn_benchmark.modeling.matcher import Matcher
@@ -7,11 +7,49 @@ from maskrcnn_benchmark.modeling.box_coder import BoxCoder
 from maskrcnn_benchmark.modeling.balanced_positive_negative_sampler import (
     BalancedPositiveNegativeSampler
 )
+from maskrcnn_benchmark.modeling.utils import cat
+from maskrcnn_benchmark.layers import smooth_l1_loss
 
 from .roi_box_feature_extractors import make_roi_box_feature_extractor
 from .roi_box_predictors import make_roi_box_predictor
 from .inference import make_roi_box_post_processor
-from .loss import make_roi_box_loss_evaluator
+
+
+def fastrcnn_box_loss(proposals, class_logits, box_regression):
+    """
+    Computes the box classification & regression loss for Faster R-CNN.
+
+    Arguments:
+        class_logits (Tensor): #box x #class
+        box_regression (Tensor): #box x (#class x 4)
+
+    Returns:
+        classification_loss, regression_loss
+    """
+    device = class_logits.device
+
+    labels = cat([proposal.get_field("labels") for proposal in proposals], dim=0)
+    regression_targets = cat(
+        [proposal.get_field("regression_targets") for proposal in proposals], dim=0
+    )
+
+    classification_loss = F.cross_entropy(class_logits, labels)
+
+    # get indices that correspond to the regression targets for
+    # the corresponding ground truth labels, to be used with
+    # advanced indexing
+    sampled_pos_inds_subset = torch.nonzero(labels > 0).squeeze(1)
+    labels_pos = labels[sampled_pos_inds_subset]
+    map_inds = 4 * labels_pos[:, None] + torch.tensor([0, 1, 2, 3], device=device)
+
+    box_loss = smooth_l1_loss(
+        box_regression[sampled_pos_inds_subset[:, None], map_inds],
+        regression_targets[sampled_pos_inds_subset],
+        size_average=False,
+        beta=1,
+    )
+    box_loss = box_loss / labels.numel()
+    return classification_loss, box_loss
 
 
 class ROIBoxHead(torch.nn.Module):
@@ -24,7 +62,6 @@ class ROIBoxHead(torch.nn.Module):
         self.feature_extractor = make_roi_box_feature_extractor(cfg)
         self.predictor = make_roi_box_predictor(cfg)
         self.post_processor = make_roi_box_post_processor(cfg)
-        self.loss_evaluator = make_roi_box_loss_evaluator(cfg)
 
         # match proposals to gt boxes
         self.proposal_matcher = Matcher(
@@ -43,26 +80,27 @@ class ROIBoxHead(torch.nn.Module):
         if self.training:
             with torch.no_grad():
                 proposals = self._prepare_regression_targets(proposals, targets)
+                # #img BoxList
 
         x = self.feature_extractor(features, proposals)
         class_logits, box_regression = self.predictor(x)
+        # #box x #class, #box x #class x 4
 
         if not self.training:
             result = self.post_processor((class_logits, box_regression), proposals)
             return x, result, {}
-
-        loss_classifier, loss_box_reg = self.loss_evaluator(
-            proposals, [class_logits], [box_regression]
-        )
-        return (
-            x,
-            proposals,
-            dict(loss_classifier=loss_classifier, loss_box_reg=loss_box_reg),
-        )
+        else:
+            loss_classifier, loss_box_reg = fastrcnn_box_loss(
+                proposals, class_logits, box_regression)
+            return (
+                x,
+                proposals,
+                dict(loss_classifier=loss_classifier, loss_box_reg=loss_box_reg),
+            )
 
     def _prepare_regression_targets(self, proposals, targets):
         """
-        Prepare BB-regression targets for all the proposals.
+        Sample the proposals and prepare their training targets.
 
         Args:
             proposals (list[BoxList]): #img BoxList. Each contains the proposals for the image.
