@@ -77,6 +77,7 @@ class RPNModule(torch.nn.Module):
                 correspond to different feature levels
             targets (list[BoxList): ground-truth boxes present in the image (optional)
         """
+        num_images = len(images.image_sizes)
         objectness, rpn_box_regression = self.head(features)
         anchors = self.anchor_generator(images, features)
         # Note that anchors returned for each image have identical boxes.
@@ -105,22 +106,9 @@ class RPNModule(torch.nn.Module):
             return None, losses
 
         with torch.no_grad():
-            decoded_boxes = []
-            """
-            decoded_boxes: #lvl elements. Each is a tensor of shape (B, #total anchors in the image, 4)
-            """
-            anchors = list(zip(*anchors))
-            # for each feature level
-            for anchor, bbreg_logit in zip(anchors, rpn_box_regression):
-                B, _, H, W = bbreg_logit.shape
-                bbreg_logit = bbreg_logit.view(B, -1, 4, H, W).permute(0, 3, 4, 1, 2).reshape(-1, 4)
-                # concat all anchors over all images
-                anchors = torch.cat([a.bbox for a in anchor], dim=0).reshape(-1, 4)
-                decoded = self.rpn_box_coder.decode(bbreg_logit, anchors)
-                decoded_boxes.append(decoded.view(B, -1, 4))   # each has shape (B, HxWx#anchor, 4)
-
-            for idx, score in enumerate(objectness):
-                objectness[idx] = score.permute(0, 2, 3, 1).reshape(B, -1)   # reshape to (B, HxWx#anchor)
+            decoded_boxes = self._decode_all_proposals(anchors, rpn_box_regression)
+            objectness = [score.permute(0, 2, 3, 1).reshape(num_images, -1)
+                          for score in objectness]  # reshape to (B, HxWx#anchor)
 
             rpn_cfg = self.cfg.MODEL.RPN
             if len(features) == 1:
@@ -178,6 +166,29 @@ class RPNModule(torch.nn.Module):
         ]
 
         return proposals
+
+    def _decode_all_proposals(self, anchors, rpn_box_regression):
+        """
+        Decode the bounding boxes predicted by RPN box regression.
+
+        Args:
+            anchors: A list of #img elements; Each is a list of #lvl BoxList
+            rpn_box_regression (list[Tensor]): #lvl tensors. Each is (B, #anchor_per_locationx4, H, W)
+
+        Returns:
+            list[Tensor]: #lvl tensors. Each is (B, #anchors_per_image, 4)
+        """
+        decoded_boxes = []
+        anchors = list(zip(*anchors))
+        # for each feature level
+        for anchor, bbreg_logit in zip(anchors, rpn_box_regression):
+            B, _, H, W = bbreg_logit.shape
+            bbreg_logit = bbreg_logit.view(B, -1, 4, H, W).permute(0, 3, 4, 1, 2).reshape(-1, 4)
+            # concat all anchors over all images
+            anchor = torch.cat([a.bbox for a in anchor], dim=0).reshape(-1, 4)
+            decoded = self.rpn_box_coder.decode(bbreg_logit, anchor)
+            decoded_boxes.append(decoded.view(B, -1, 4))   # each has shape (B, HxWx#anchor, 4)
+        return decoded_boxes
 
 
 def build_rpn(cfg):

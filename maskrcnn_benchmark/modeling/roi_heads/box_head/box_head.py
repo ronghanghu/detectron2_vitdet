@@ -5,7 +5,7 @@ from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 from maskrcnn_benchmark.modeling.matcher import Matcher
 from maskrcnn_benchmark.modeling.box_coder import BoxCoder
 from maskrcnn_benchmark.modeling.balanced_positive_negative_sampler import (
-    BalancedPositiveNegativeSampler
+    sample_with_positive_fraction
 )
 from maskrcnn_benchmark.modeling.utils import cat
 from maskrcnn_benchmark.layers import smooth_l1_loss
@@ -15,11 +15,12 @@ from .roi_box_predictors import make_roi_box_predictor
 from .inference import make_roi_box_post_processor
 
 
-def fastrcnn_losses(proposals, class_logits, box_regression):
+def fastrcnn_losses(labels, regression_targets, class_logits, regression_outputs):
     """
     Computes the box classification & regression loss for Faster R-CNN.
 
     Arguments:
+        labels (Tensor): #box binary labels.
         class_logits (Tensor): #box x #class
         box_regression (Tensor): #box x (#class x 4)
 
@@ -27,11 +28,6 @@ def fastrcnn_losses(proposals, class_logits, box_regression):
         classification_loss, regression_loss
     """
     device = class_logits.device
-
-    labels = cat([proposal.get_field("labels") for proposal in proposals], dim=0)
-    regression_targets = cat(
-        [proposal.get_field("regression_targets") for proposal in proposals], dim=0
-    )
 
     classification_loss = F.cross_entropy(class_logits, labels)
 
@@ -43,7 +39,7 @@ def fastrcnn_losses(proposals, class_logits, box_regression):
     map_inds = 4 * labels_pos[:, None] + torch.tensor([0, 1, 2, 3], device=device)
 
     box_loss = smooth_l1_loss(
-        box_regression[sampled_pos_inds_subset[:, None], map_inds],
+        regression_outputs[sampled_pos_inds_subset[:, None], map_inds],
         regression_targets[sampled_pos_inds_subset],
         size_average=False,
         beta=1,
@@ -72,26 +68,27 @@ class ROIBoxHead(torch.nn.Module):
         bbox_reg_weights = cfg.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS
         self.box_coder = BoxCoder(weights=bbox_reg_weights)
 
-        self.fg_bg_sampler = BalancedPositiveNegativeSampler(
-            cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE, cfg.MODEL.ROI_HEADS.POSITIVE_FRACTION
-        )
+        self.batch_size_per_image = cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE
+        self.positive_sample_fraction = cfg.MODEL.ROI_HEADS.POSITIVE_FRACTION
 
     def forward(self, features, proposals, targets=None):
         if self.training:
             with torch.no_grad():
-                proposals = self._prepare_regression_targets(proposals, targets)
+                proposals, labels, regression_targets = self._prepare_regression_targets(proposals, targets)
                 # #img BoxList
 
         x = self.feature_extractor(features, proposals)
-        class_logits, box_regression = self.predictor(x)
+        class_logits, regression_outputs = self.predictor(x)
         # #box x #class, #box x #class x 4
 
         if not self.training:
-            result = self.post_processor((class_logits, box_regression), proposals)
+            result = self.post_processor((class_logits, regression_outputs), proposals)
             return x, result, {}
         else:
             loss_classifier, loss_box_reg = fastrcnn_losses(
-                proposals, class_logits, box_regression)
+                cat(labels, dim=0),
+                cat(regression_targets, dim=0),
+                class_logits, regression_outputs)
             return (
                 x,
                 proposals,
@@ -107,13 +104,13 @@ class ROIBoxHead(torch.nn.Module):
             targets (list[BoxList]): #img BoxList. The GT boxes for the image.
 
         Returns:
-            The proposals after sampling, with two additional fields:
-            labels (list[Tensor]): Each is a 1D tensor containing the label (-1, 0, 1) for each proposal.
-            regression_targets: (list[Tensor]):  Each has shape Nx4, the regression targets for the proposals.
+            list[BoxList]: The proposals after sampling.
+            list[Tensor]: #img labels, each is a 1D tensor containing the label (0, positive) for all proposals on the image.
+            list[Tensor]: #img regression_targets. Each has shape Nx4, the regression targets for all proposals on the image.
                 Only those proposals with positive labels contains meaningful target values.
         """
-        labels = []
-        for proposals_per_image, targets_per_image in zip(proposals, targets):
+        labels, regression_targets = [], []
+        for image_idx, (proposals_per_image, targets_per_image) in enumerate(zip(proposals, targets)):
             match_quality_matrix = boxlist_iou(targets_per_image, proposals_per_image)
             matched_idxs = self.proposal_matcher(match_quality_matrix)
             # Fast RCNN only need "labels" field for selecting the targets
@@ -126,28 +123,30 @@ class ROIBoxHead(torch.nn.Module):
 
             labels_per_image = matched_targets.get_field("labels").to(dtype=torch.int64)
 
+            # Label foreground
+            labels_per_image = labels_per_image.clamp(max=1)
             # Label background (below the low threshold)
             labels_per_image[matched_idxs == Matcher.BELOW_LOW_THRESHOLD] = 0
-
             # Label ignore proposals (between low and high thresholds)
             labels_per_image[matched_idxs == Matcher.BETWEEN_THRESHOLDS] = -1  # -1 is ignored by sampler
-            labels.append(labels_per_image)
 
             # compute regression targets
             regression_targets_per_image = self.box_coder.encode(
                 matched_targets.bbox, proposals_per_image.bbox
             )
 
-            proposals_per_image.add_field("labels", labels_per_image)
-            proposals_per_image.add_field("regression_targets", regression_targets_per_image)
+            # apply sampling
+            sampled_pos_inds, sampled_neg_inds = sample_with_positive_fraction(
+                labels_per_image, self.batch_size_per_image, self.positive_sample_fraction)
+            sampled_inds = torch.cat([sampled_pos_inds, sampled_neg_inds], dim=0)
 
-        sampled_pos_inds, sampled_neg_inds = self.fg_bg_sampler(labels)
-        proposals = [
-            p[torch.nonzero(pos_inds | neg_inds).squeeze(1)]
-            for p, pos_inds, neg_inds in zip(proposals, sampled_pos_inds, sampled_neg_inds)
-        ]
+            labels.append(labels_per_image[sampled_inds])
+            regression_targets.append(regression_targets_per_image[sampled_inds])
 
-        return proposals
+            proposals[image_idx] = proposals_per_image[sampled_inds]
+            proposals[image_idx].add_field("labels", labels[-1])
+
+        return proposals, labels, regression_targets
 
 
 def build_roi_box_head(cfg):
