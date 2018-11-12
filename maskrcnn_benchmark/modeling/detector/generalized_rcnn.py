@@ -4,7 +4,6 @@ Everything that constructs something is a function that is
 or can be accessed by a string
 """
 
-import torch
 from torch import nn
 
 from maskrcnn_benchmark.structures.image_list import to_image_list
@@ -43,7 +42,6 @@ class GeneralizedRCNN(nn.Module):
             x, result, detector_losses = self.roi_heads(features, proposals, targets)
         else:
             # RPN-only models don't have roi_heads
-            x = features
             result = proposals
             detector_losses = {}
 

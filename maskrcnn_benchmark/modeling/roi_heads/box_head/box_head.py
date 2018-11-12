@@ -15,7 +15,7 @@ from .roi_box_predictors import make_roi_box_predictor
 from .inference import make_roi_box_post_processor
 
 
-def fastrcnn_box_loss(proposals, class_logits, box_regression):
+def fastrcnn_losses(proposals, class_logits, box_regression):
     """
     Computes the box classification & regression loss for Faster R-CNN.
 
@@ -90,7 +90,7 @@ class ROIBoxHead(torch.nn.Module):
             result = self.post_processor((class_logits, box_regression), proposals)
             return x, result, {}
         else:
-            loss_classifier, loss_box_reg = fastrcnn_box_loss(
+            loss_classifier, loss_box_reg = fastrcnn_losses(
                 proposals, class_logits, box_regression)
             return (
                 x,
