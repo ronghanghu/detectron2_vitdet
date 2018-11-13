@@ -94,7 +94,7 @@ and pass it as a config argument `PATHS_CATALOG` during training.
 ### Single GPU training
 
 ```bash
-python /path_to_maskrnn_benchmark/tools/train_net.py --config-file "/path/to/config/file.yaml"
+python /path_to_maskrcnn_benchmark/tools/train_net.py --config-file "/path/to/config/file.yaml"
 ```
 
 ### Multi-GPU training

@@ -13,7 +13,17 @@
 ### Step-by-step installation
 
 ```bash
-# maskrnn_benchmark and coco api dependencies
+# first, make sure that your conda is setup properly with the right environment
+# for that, check that `which conda`, `which pip` and `which python` points to the
+# right path. From a clean conda env, this is what you need to do
+
+conda create --name maskrcnn_benchmark
+source activate maskrcnn_benchmark
+
+# this installs the right pip and dependencies for the fresh python
+conda install ipython
+
+# maskrcnn_benchmark and coco api dependencies
 pip install ninja yacs cython matplotlib
 
 # Follow PyTorch installation in https://pytorch.org/get-started/locally/
