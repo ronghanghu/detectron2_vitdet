@@ -20,7 +20,7 @@ def fastrcnn_losses(labels, regression_targets, class_logits, regression_outputs
     Computes the box classification & regression loss for Faster R-CNN.
 
     Arguments:
-        labels (Tensor): #box binary labels.
+        labels (Tensor): #box labels. Each of range [0, #class].
         class_logits (Tensor): #box x #class
         box_regression (Tensor): #box x (#class x 4)
 
@@ -123,8 +123,6 @@ class ROIBoxHead(torch.nn.Module):
 
             labels_per_image = matched_targets.get_field("labels").to(dtype=torch.int64)
 
-            # Label foreground
-            labels_per_image = labels_per_image.clamp(max=1)
             # Label background (below the low threshold)
             labels_per_image[matched_idxs == Matcher.BELOW_LOW_THRESHOLD] = 0
             # Label ignore proposals (between low and high thresholds)
@@ -144,6 +142,7 @@ class ROIBoxHead(torch.nn.Module):
             regression_targets.append(regression_targets_per_image[sampled_inds])
 
             proposals[image_idx] = proposals_per_image[sampled_inds]
+            # TODO avoid the use of field here
             proposals[image_idx].add_field("labels", labels[-1])
 
         return proposals, labels, regression_targets

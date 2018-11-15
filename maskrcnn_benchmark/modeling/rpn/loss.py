@@ -6,7 +6,7 @@ file
 import torch
 from torch.nn import functional as F
 
-from ..balanced_positive_negative_sampler import BalancedPositiveNegativeSampler
+from ..balanced_positive_negative_sampler import sample_with_positive_fraction
 from ..utils import cat
 
 from maskrcnn_benchmark.layers import smooth_l1_loss
@@ -20,17 +20,19 @@ class RPNLossComputation(object):
     This class computes the RPN loss.
     """
 
-    def __init__(self, proposal_matcher, fg_bg_sampler, box_coder):
+    def __init__(self, proposal_matcher, box_coder, batch_per_image, positive_fraction):
         """
         Arguments:
             proposal_matcher (Matcher)
-            fg_bg_sampler (BalancedPositiveNegativeSampler)
             box_coder (BoxCoder)
+            batch_per_image (int)
+            positive_fraction (float)
         """
         # self.target_preparator = target_preparator
         self.proposal_matcher = proposal_matcher
-        self.fg_bg_sampler = fg_bg_sampler
         self.box_coder = box_coder
+        self.batch_per_image = batch_per_image
+        self.positive_fraction = positive_fraction
 
     def match_targets_to_anchors(self, anchor, target):
         match_quality_matrix = boxlist_iou(target, anchor)
@@ -75,14 +77,23 @@ class RPNLossComputation(object):
     def __call__(self, anchors, objectness, box_regression, targets):
         """
         Arguments:
-            anchors (list[BoxList])
-            objectness (list[Tensor])
-            box_regression (list[Tensor])
-            targets (list[BoxList])
+            anchors (list[list[BoxList]]): #img x #lvl BoxList
+            objectness (list[Tensor]): #lvl tensors
+            box_regression (list[Tensor]): #lvl tensors
+            targets (list[BoxList]): #img BoxListgi
         """
-        anchors = [cat_boxlist(anchors_per_image) for anchors_per_image in anchors]
+        anchors = [cat_boxlist(anchors_per_image) for anchors_per_image in anchors]  # #img BoxLists
         labels, regression_targets = self.prepare_targets(anchors, targets)
-        sampled_pos_inds, sampled_neg_inds = self.fg_bg_sampler(labels)
+
+        sampled_pos_inds, sampled_neg_inds = [], []
+        for label in labels:
+            pos_idx, neg_idx = sample_with_positive_fraction(label, self.batch_per_image, self.positive_fraction)
+            # wait for https://github.com/pytorch/pytorch/issues/2027
+            zeros = torch.zeros_like(label, dtype=torch.uint8)
+            sampled_pos_inds.append(
+                zeros if pos_idx.numel() == 0 else zeros.scatter(0, pos_idx, 1))
+            sampled_neg_inds.append(
+                zeros if neg_idx.numel() == 0 else zeros.scatter(0, neg_idx, 1))
         sampled_pos_inds = torch.nonzero(torch.cat(sampled_pos_inds, dim=0)).squeeze(1)
         sampled_neg_inds = torch.nonzero(torch.cat(sampled_neg_inds, dim=0)).squeeze(1)
 
@@ -136,9 +147,8 @@ def make_rpn_loss_evaluator(cfg, box_coder):
         allow_low_quality_matches=True,
     )
 
-    fg_bg_sampler = BalancedPositiveNegativeSampler(
-        cfg.MODEL.RPN.BATCH_SIZE_PER_IMAGE, cfg.MODEL.RPN.POSITIVE_FRACTION
-    )
-
-    loss_evaluator = RPNLossComputation(matcher, fg_bg_sampler, box_coder)
+    loss_evaluator = RPNLossComputation(
+        matcher, box_coder,
+        cfg.MODEL.RPN.BATCH_SIZE_PER_IMAGE,
+        cfg.MODEL.RPN.POSITIVE_FRACTION)
     return loss_evaluator
