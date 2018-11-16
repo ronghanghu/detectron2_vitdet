@@ -25,11 +25,11 @@ def sample_proposals_for_training(
         positive_sample_fraction (float)
 
     Returns:
-        list[BoxList]: The proposals after sampling.
+        list[BoxList]: The proposals after sampling. It has a "labels" field, ranging in [0, #class]
         list[BoxList]: The matched targets for each sampled proposal.
-        list[Tensor]: The labels for each sampled proposal, in [0, #class]
+            Only those for foreground proposals are meaningful.
     """
-    labels, sampled_targets = [], []
+    sampled_targets = []
 
     for image_idx, (proposals_per_image, targets_per_image) in enumerate(zip(proposals, targets)):
         match_quality_matrix = boxlist_iou(targets_per_image, proposals_per_image)
@@ -54,10 +54,10 @@ def sample_proposals_for_training(
             labels_per_image, batch_size_per_image, positive_sample_fraction)
         sampled_inds = torch.cat([sampled_pos_inds, sampled_neg_inds], dim=0)
 
-        labels.append(labels_per_image[sampled_inds])
         sampled_targets.append(matched_targets[sampled_inds])
         proposals[image_idx] = proposals_per_image[sampled_inds]
-    return proposals, sampled_targets, labels
+        proposals[image_idx].add_field("labels", labels_per_image[sampled_inds])
+    return proposals, sampled_targets
 
 
 def keep_only_positive_boxes(boxes, matched_targets):
@@ -104,18 +104,15 @@ class CombinedROIHeads(torch.nn.ModuleDict):
     def forward(self, features, proposals, targets=None):
         if self.training:
             with torch.no_grad():
-                proposals, targets, labels = sample_proposals_for_training(
+                proposals, targets = sample_proposals_for_training(
                     proposals, targets, self.proposal_matcher, self.batch_size_per_image, self.positive_sample_fraction)
-                assert len(labels) == len(proposals)
                 assert len(proposals) == len(targets)
                 # #img BoxList
         else:
             targets = None
-            labels = None
 
         # TODO rename x to roi_box_features, if it doesn't increase memory consumption
-        x, detections, losses = self.box(features, proposals, labels, targets)
-        assert detections[0].has_field("labels")
+        x, detections, losses = self.box(features, proposals, targets)
 
         if self.cfg.MODEL.MASK_ON:
             mask_features = features

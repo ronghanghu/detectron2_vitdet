@@ -57,8 +57,7 @@ class ROIBoxHead(torch.nn.Module):
         bbox_reg_weights = cfg.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS
         self.box_coder = BoxCoder(weights=bbox_reg_weights)
 
-
-    def forward(self, features, proposals, labels=None, matched_targets=None):
+    def forward(self, features, proposals, matched_targets=None):
         x = self.feature_extractor(features, proposals)
         class_logits, regression_outputs = self.predictor(x)
         # #box x #class, #box x #class x 4
@@ -70,15 +69,12 @@ class ROIBoxHead(torch.nn.Module):
             regression_targets = [
                 self.box_coder.encode(matched_targets_per_image.bbox, proposals_per_image.bbox)
                 for matched_targets_per_image, proposals_per_image in zip(matched_targets, proposals)]
+            labels = [p.get_field("labels") for p in proposals]
 
             loss_classifier, loss_box_reg = fastrcnn_losses(
                 cat(labels, dim=0),
                 cat(regression_targets, dim=0),
                 class_logits, regression_outputs)
-
-            # TODO temporary! If training, store the proposal labels for mask head to use
-            for proposals_per_image, label_per_image in zip(proposals, labels):
-                proposals_per_image.add_field("labels", label_per_image)
             return (
                 x,
                 proposals,
