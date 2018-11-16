@@ -2,6 +2,7 @@ import torch
 
 from maskrcnn_benchmark.modeling.matcher import Matcher
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
+from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.modeling.balanced_positive_negative_sampler import (
     sample_with_positive_fraction
 )
@@ -55,12 +56,33 @@ def sample_proposals_for_training(
 
         labels.append(labels_per_image[sampled_inds])
         sampled_targets.append(matched_targets[sampled_inds])
-
         proposals[image_idx] = proposals_per_image[sampled_inds]
-        # TODO avoid the use of field here
-        proposals[image_idx].add_field("labels", labels[-1])
-
     return proposals, sampled_targets, labels
+
+
+def keep_only_positive_boxes(boxes, matched_targets):
+    """
+    Given a set of BoxList containing the `labels` field,
+    return a set of BoxList for which `labels > 0`.
+
+    Arguments:
+        boxes (list[BoxList])
+        matched_targets (list[BoxList]):
+    """
+    assert isinstance(boxes, (list, tuple))
+    assert isinstance(boxes[0], BoxList)
+    assert boxes[0].has_field("labels")
+    positive_boxes = []
+    positive_inds = []
+    positive_targets = []
+    for boxes_per_image, targets_per_image in zip(boxes, matched_targets):
+        labels = boxes_per_image.get_field("labels")
+        inds_mask = labels > 0
+        inds = inds_mask.nonzero().squeeze(1)
+        positive_boxes.append(boxes_per_image[inds])
+        positive_targets.append(targets_per_image[inds])
+        positive_inds.append(inds_mask)
+    return positive_boxes, positive_targets, positive_inds
 
 
 class CombinedROIHeads(torch.nn.ModuleDict):
@@ -83,7 +105,7 @@ class CombinedROIHeads(torch.nn.ModuleDict):
         if self.training:
             with torch.no_grad():
                 proposals, matched_targets, labels = sample_proposals_for_training(
-                    proposals, targets, self.proposal_matcher, self.batch_size_per_image, self.positive_fraction)
+                    proposals, targets, self.proposal_matcher, self.batch_size_per_image, self.positive_sample_fraction)
                 assert len(labels) == len(proposals)
                 assert len(proposals) == len(matched_targets)
                 # #img BoxList
@@ -93,15 +115,17 @@ class CombinedROIHeads(torch.nn.ModuleDict):
 
         # TODO rename x to roi_box_features, if it doesn't increase memory consumption
         x, detections, losses = self.box(features, proposals, labels, matched_targets)
+        assert detections[0].has_field("labels")
+
         if self.cfg.MODEL.MASK_ON:
             mask_features = features
-            # optimization: during training, if we share the feature extractor between
-            # the box and the mask heads, then we can reuse the features already computed
-            if (
-                self.training
-                and self.cfg.MODEL.ROI_MASK_HEAD.SHARE_BOX_FEATURE_EXTRACTOR
-            ):
-                mask_features = x
+            if self.training:
+                proposals, matched_targets, pos_inds = keep_only_positive_boxes(proposals, matched_targets)
+                if self.cfg.MODEL.ROI_MASK_HEAD.SHARE_BOX_FEATURE_EXTRACTOR:
+                    # if sharing, don't need to do feature extraction again,
+                    # just use the box features for all the positivie proposals
+                    mask_features = x[torch.cat(pos_inds, dim=0)]
+
             # During training, self.box() will return the unaltered proposals as "detections"
             # this makes the API consistent during training and testing
             x, detections, loss_mask = self.mask(mask_features, detections, matched_targets)

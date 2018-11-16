@@ -75,6 +75,10 @@ class ROIBoxHead(torch.nn.Module):
                 cat(labels, dim=0),
                 cat(regression_targets, dim=0),
                 class_logits, regression_outputs)
+
+            # TODO temporary! If training, store the proposal labels for mask head to use
+            for proposals_per_image, label_per_image in zip(proposals, labels):
+                proposals_per_image.add_field("labels", label_per_image)
             return (
                 x,
                 proposals,
