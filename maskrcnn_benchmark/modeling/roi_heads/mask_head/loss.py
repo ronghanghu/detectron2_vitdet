@@ -43,53 +43,26 @@ def project_masks_on_boxes(segmentation_masks, proposals, discretization_size):
 
 
 class MaskRCNNLossComputation(object):
-    def __init__(self, proposal_matcher, discretization_size):
+    def __init__(self, discretization_size):
         """
         Arguments:
-            proposal_matcher (Matcher)
             discretization_size (int)
         """
-        self.proposal_matcher = proposal_matcher
         self.discretization_size = discretization_size
 
-    def match_targets_to_proposals(self, proposal, target):
-        match_quality_matrix = boxlist_iou(target, proposal)
-        matched_idxs = self.proposal_matcher(match_quality_matrix)
-        # Mask RCNN needs "labels" and "masks "fields for creating the targets
-        target = target.copy_with_fields(["labels", "masks"])
-        # get the targets corresponding GT for each proposal
-        # NB: need to clamp the indices because we can have a single
-        # GT in the image, and matched_idxs can be -2, which goes
-        # out of bounds
-        matched_targets = target[matched_idxs.clamp(min=0)]
-        return matched_targets, matched_idxs
-
-    def prepare_targets(self, proposals, targets):
+    def prepare_targets(self, proposals, matched_targets):
         labels = []
         masks = []
-        for proposals_per_image, targets_per_image in zip(proposals, targets):
-            matched_targets, matched_idxs = self.match_targets_to_proposals(
-                proposals_per_image, targets_per_image
-            )
-
-            labels_per_image = matched_targets.get_field("labels")
+        for proposals_per_image, matched_targets_per_image in zip(proposals, matched_targets):
+            labels_per_image = matched_targets_per_image.get_field("labels")
             labels_per_image = labels_per_image.to(dtype=torch.int64)
 
-            # this can probably be removed, but is left here for clarity
-            # and completeness
-            neg_inds = matched_idxs == Matcher.BELOW_LOW_THRESHOLD
-            labels_per_image[neg_inds] = 0
-
             # mask scores are only computed on positive samples
-            positive_inds = torch.nonzero(labels_per_image > 0).squeeze(1)
+            assert (labels_per_image > 0).all()
 
-            segmentation_masks = matched_targets.get_field("masks")
-            segmentation_masks = segmentation_masks[positive_inds]
-
-            positive_proposals = proposals_per_image[positive_inds]
-
+            segmentation_masks = matched_targets_per_image.get_field("masks")
             masks_per_image = project_masks_on_boxes(
-                segmentation_masks, positive_proposals, self.discretization_size
+                segmentation_masks, proposals_per_image, self.discretization_size
             )
 
             labels.append(labels_per_image)
@@ -100,9 +73,9 @@ class MaskRCNNLossComputation(object):
     def __call__(self, proposals, mask_logits, targets):
         """
         Arguments:
-            proposals (list[BoxList])
+            proposals (list[BoxList]): all the foreground proposals
             mask_logits (Tensor)
-            targets (list[BoxList])
+            targets (list[BoxList]): one-to-one corresponds to the proposals
 
         Return:
             mask_loss (Tensor): scalar tensor containing the loss
@@ -127,14 +100,7 @@ class MaskRCNNLossComputation(object):
 
 
 def make_roi_mask_loss_evaluator(cfg):
-    matcher = Matcher(
-        cfg.MODEL.ROI_HEADS.FG_IOU_THRESHOLD,
-        cfg.MODEL.ROI_HEADS.BG_IOU_THRESHOLD,
-        allow_low_quality_matches=False,
-    )
-
     loss_evaluator = MaskRCNNLossComputation(
-        matcher, cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
+        cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
     )
-
     return loss_evaluator
