@@ -104,23 +104,23 @@ class CombinedROIHeads(torch.nn.ModuleDict):
     def forward(self, features, proposals, targets=None):
         if self.training:
             with torch.no_grad():
-                proposals, matched_targets, labels = sample_proposals_for_training(
+                proposals, targets, labels = sample_proposals_for_training(
                     proposals, targets, self.proposal_matcher, self.batch_size_per_image, self.positive_sample_fraction)
                 assert len(labels) == len(proposals)
-                assert len(proposals) == len(matched_targets)
+                assert len(proposals) == len(targets)
                 # #img BoxList
         else:
-            matched_targets = None
+            targets = None
             labels = None
 
         # TODO rename x to roi_box_features, if it doesn't increase memory consumption
-        x, detections, losses = self.box(features, proposals, labels, matched_targets)
+        x, detections, losses = self.box(features, proposals, labels, targets)
         assert detections[0].has_field("labels")
 
         if self.cfg.MODEL.MASK_ON:
             mask_features = features
             if self.training:
-                proposals, matched_targets, pos_inds = keep_only_positive_boxes(proposals, matched_targets)
+                proposals, targets, pos_inds = keep_only_positive_boxes(proposals, targets)
                 if self.cfg.MODEL.ROI_MASK_HEAD.SHARE_BOX_FEATURE_EXTRACTOR:
                     # if sharing, don't need to do feature extraction again,
                     # just use the box features for all the positivie proposals
@@ -128,7 +128,7 @@ class CombinedROIHeads(torch.nn.ModuleDict):
 
             # During training, self.box() will return the unaltered proposals as "detections"
             # this makes the API consistent during training and testing
-            x, detections, loss_mask = self.mask(mask_features, detections, matched_targets)
+            x, detections, loss_mask = self.mask(mask_features, detections, targets)
             losses.update(loss_mask)
         return x, detections, losses
 

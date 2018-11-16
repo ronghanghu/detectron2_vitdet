@@ -2,6 +2,9 @@ from torch import nn
 
 
 class FastRCNNPredictor(nn.Module):
+    """
+    TODO bad name. It's just a C4-specific predictor.
+    """
     def __init__(self, config, pretrained=None):
         super(FastRCNNPredictor, self).__init__()
 
@@ -29,14 +32,25 @@ class FastRCNNPredictor(nn.Module):
         return cls_logit, bbox_pred
 
 
-class FPNPredictor(nn.Module):
-    def __init__(self, cfg):
-        super(FPNPredictor, self).__init__()
-        num_classes = cfg.MODEL.ROI_BOX_HEAD.NUM_CLASSES
-        representation_size = cfg.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM
+class BoxHeadPredictor(nn.Module):
+    """
+    2 FC layers that does bbox regression and classification, respectively.
+    """
+    def __init__(self, cfg, input_size=None):
+        """
+        Args:
+            input_size (int): Defaults to be ROI_BOX_HEAD.MLP_HEAD_DIM, for compatibility
+        """
+        super(BoxHeadPredictor, self).__init__()
 
-        self.cls_score = nn.Linear(representation_size, num_classes)
-        self.bbox_pred = nn.Linear(representation_size, num_classes * 4)
+        if input_size is None:
+            # TODO remove this in the future and compute it from the outside
+            input_size = cfg.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM
+
+        num_classes = cfg.MODEL.ROI_BOX_HEAD.NUM_CLASSES
+
+        self.cls_score = nn.Linear(input_size, num_classes)
+        self.bbox_pred = nn.Linear(input_size, num_classes * 4)
 
         nn.init.normal_(self.cls_score.weight, std=0.01)
         nn.init.normal_(self.bbox_pred.weight, std=0.001)
@@ -46,13 +60,13 @@ class FPNPredictor(nn.Module):
     def forward(self, x):
         scores = self.cls_score(x)
         bbox_deltas = self.bbox_pred(x)
-
         return scores, bbox_deltas
 
 
 _ROI_BOX_PREDICTOR = {
     "FastRCNNPredictor": FastRCNNPredictor,
-    "FPNPredictor": FPNPredictor,
+    "BoxHeadPredictor": BoxHeadPredictor,
+    "FPNPredictor": BoxHeadPredictor,  # TODO remove it
 }
 
 
