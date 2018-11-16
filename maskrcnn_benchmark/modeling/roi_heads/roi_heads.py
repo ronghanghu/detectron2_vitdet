@@ -36,13 +36,10 @@ class CombinedROIHeads(torch.nn.ModuleDict):
                 # #img BoxList
         else:
             matched_targets = None
-
-        losses = {}
-
+            labels = None
 
         # TODO rename x to roi_box_features, if it doesn't increase memory consumption
-        x, detections, loss_box = self.box(features, proposals, labels, matched_targets)
-        losses.update(loss_box)
+        x, detections, losses = self.box(features, proposals, labels, matched_targets)
         if self.cfg.MODEL.MASK_ON:
             mask_features = features
             # optimization: during training, if we share the feature extractor between
@@ -67,13 +64,9 @@ class CombinedROIHeads(torch.nn.ModuleDict):
             targets (list[BoxList]): #img BoxList. The GT boxes for the image.
 
         Returns:
-        # TODO
             list[BoxList]: The proposals after sampling.
-            list[Tensor]: #img labels, each is a 1D tensor containing the label (0, positive) for all proposals on the image.
-            list[Tensor]: #img regression_targets. Each has shape Nx4, the regression targets for all proposals on the image.
-                Only those proposals with positive labels contains meaningful target values.
-
-# TODO return sampled_proposals and matched_targets instead.
+            list[BoxList]: The matched targets for each sampled proposal.
+            list[Tensor]: The labels for each sampled proposal, in [0, #class]
         """
         labels, sampled_targets = [], []
 
@@ -108,6 +101,7 @@ class CombinedROIHeads(torch.nn.ModuleDict):
             proposals[image_idx].add_field("labels", labels[-1])
 
         return proposals, sampled_targets, labels
+
 
 def build_roi_heads(cfg):
     # individually create the heads, that will be combined together
