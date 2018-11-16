@@ -54,8 +54,8 @@ class BoxCoder(object):
         get the decoded boxes.
 
         Arguments:
-            rel_codes (Tensor): encoded boxes
-            boxes (Tensor): reference boxes.
+            rel_codes (Tensor): encoded boxes, of shape (N, kx4)
+            boxes (Tensor): reference boxes, of shape (N, 4)
         """
 
         boxes = boxes.to(rel_codes.dtype)
