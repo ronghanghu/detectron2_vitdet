@@ -38,6 +38,7 @@ class BoxHeadPredictor(nn.Module):
     """
     def __init__(self, cfg, input_size=None):
         """
+        TODO: takes num_classes instead of cfg
         Args:
             input_size (int): Defaults to be ROI_BOX_HEAD.MLP_HEAD_DIM, for compatibility
         """

@@ -182,7 +182,5 @@ class Masker(object):
         return result
 
 
-def make_roi_mask_post_processor(cfg):
-    masker = None
-    mask_post_processor = MaskPostProcessor(masker)
-    return mask_post_processor
+def make_roi_mask_post_processor(cfg=None):
+    return MaskPostProcessor(None)

@@ -3,6 +3,7 @@ import torch
 from maskrcnn_benchmark.modeling.matcher import Matcher
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 from maskrcnn_benchmark.structures.bounding_box import BoxList
+from maskrcnn_benchmark.modeling.box_coder import BoxCoder
 from maskrcnn_benchmark.modeling.balanced_positive_negative_sampler import (
     sample_with_positive_fraction
 )
@@ -130,7 +131,118 @@ class CombinedROIHeads(torch.nn.ModuleDict):
         return x, detections, losses
 
 
+class ROIHeads(torch.nn.Module):
+    def __init__(self, cfg):
+        super(ROIHeads, self).__init__()
+        self.cfg = cfg.clone()
+
+        # match proposals to gt boxes
+        self.proposal_matcher = Matcher(
+            cfg.MODEL.ROI_HEADS.FG_IOU_THRESHOLD,
+            cfg.MODEL.ROI_HEADS.BG_IOU_THRESHOLD,
+            allow_low_quality_matches=False,
+        )
+        self.batch_size_per_image = cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE
+        self.positive_sample_fraction = cfg.MODEL.ROI_HEADS.POSITIVE_FRACTION
+
+    def forward(self, features, proposals, targets=None):
+        if self.training:
+            with torch.no_grad():
+                proposals, targets = sample_proposals_for_training(
+                    proposals, targets, self.proposal_matcher, self.batch_size_per_image, self.positive_sample_fraction)
+                return self.forward_training(features, proposals, targets)
+        else:
+            return self.forward_inference(features, proposals)
+
+    def forward_training(self, features, proposals, targets, labels):
+        """
+        TODO
+        """
+        raise NotImplementedError()
+
+    def forward_inference(self, features, proposals):
+        """
+        TODO
+        """
+        raise NotImplementedError()
+
+    def forward_box_training():
+        pass
+
+
+from .box_head.roi_box_predictors import BoxHeadPredictor
+from .box_head.box_head import FastRCNNOutputs
+from .mask_head.mask_head import maskrcnn_loss
+from .mask_head.inference import make_roi_mask_post_processor
+
+class C4ROIHeads(ROIHeads):
+    def __init__(self, cfg):
+        super(C4ROIHeads, self).__init__(cfg)
+
+        from .box_head.roi_box_feature_extractors import ResNet50Conv5ROIFeatureExtractor
+        from .mask_head.roi_mask_predictors import MaskRCNNC4Predictor
+
+        self.shared_roi_transform = ResNet50Conv5ROIFeatureExtractor(cfg)
+
+        stage_index = 4
+        stage2_relative_factor = 2 ** (stage_index - 1)
+        res2_out_channels = cfg.MODEL.RESNETS.RES2_OUT_CHANNELS
+        num_inputs = res2_out_channels * stage2_relative_factor
+        self.box_predictor = BoxHeadPredictor(cfg, num_inputs)
+
+        self.box_coder = BoxCoder(weights=cfg.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS)
+
+        self.test_score_thresh = cfg.MODEL.ROI_HEADS.SCORE_THRESH
+        self.test_nms_thresh = cfg.MODEL.ROI_HEADS.NMS
+        self.test_detections_per_img = cfg.MODEL.ROI_HEADS.DETECTIONS_PER_IMG
+
+        if cfg.MODEL.MASK_ON:
+            self.mask_head = MaskRCNNC4Predictor(cfg)  # just 1 deconv
+            self.mask_discretization_size = cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
+            self.mask_post_processor = make_roi_mask_post_processor()  # TODO make it a function
+
+    def forward_training(self, features, proposals, targets):
+        features = self.shared_roi_transform(features, proposals)
+
+        feature_pooled = features.mean(dim=2).mean(dim=2)  # gap
+        class_logits, regression_outputs = self.box_predictor(feature_pooled)
+        del feature_pooled
+
+        losses = FastRCNNOutputs(
+            self.box_coder, class_logits, regression_outputs, proposals, targets).losses()
+
+        if self.cfg.MODEL.MASK_ON:
+            proposals, targets, pos_inds = keep_only_positive_boxes(proposals, targets)
+            # don't need to do feature extraction again,
+            # just use the box features for all the positivie proposals
+            mask_features = features[torch.cat(pos_inds, dim=0)]
+            mask_logits = self.mask_head(mask_features)
+            losses['loss_mask'] = maskrcnn_loss(
+                proposals, mask_logits, targets, self.mask_discretization_size
+            )
+        return None, None, losses  # just to make outer API compatible
+
+    def forward_inference(self, features, proposals):
+        x = self.shared_roi_transform(features, proposals)
+        x = features.mean(dim=2).mean(dim=2)  # gap
+        class_logits, regression_outputs = self.box_predictor(x)
+        fastrcnn_outputs = FastRCNNOutputs(
+            self.box_coder, class_logits, regression_outputs, proposals, None)
+        results = fastrcnn_outputs.inference(
+            self.test_score_thresh,
+            self.test_nms_thresh,
+            self.test_detections_per_img)
+
+        if self.cfg.MODEL.MASK_ON:
+            x = self.shared_roi_trasnform(features, results)
+            mask_logits = self.mask_head(x)
+            results = self.mask_post_processor(mask_logits, results)
+        return None, results, {}  # just to make outer API compatible
+
+
 def build_roi_heads(cfg):
+    if not cfg.MODEL.ROI_HEADS.USE_FPN:   # TODO not a good if
+        return C4ROIHeads(cfg)
     # individually create the heads, that will be combined together
     # afterwards
     roi_heads = []
