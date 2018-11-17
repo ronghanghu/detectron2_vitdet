@@ -74,7 +74,7 @@ def keep_only_positive_boxes(boxes, matched_targets):
     assert isinstance(boxes[0], BoxList)
     assert boxes[0].has_field("labels")
     positive_boxes = []
-    positive_inds = []
+    positive_masks = []
     positive_targets = []
     for boxes_per_image, targets_per_image in zip(boxes, matched_targets):
         labels = boxes_per_image.get_field("labels")
@@ -82,8 +82,8 @@ def keep_only_positive_boxes(boxes, matched_targets):
         inds = inds_mask.nonzero().squeeze(1)
         positive_boxes.append(boxes_per_image[inds])
         positive_targets.append(targets_per_image[inds])
-        positive_inds.append(inds_mask)
-    return positive_boxes, positive_targets, positive_inds
+        positive_masks.append(inds_mask)
+    return positive_boxes, positive_targets, positive_masks
 
 
 class CombinedROIHeads(torch.nn.ModuleDict):
@@ -118,11 +118,11 @@ class CombinedROIHeads(torch.nn.ModuleDict):
         if self.cfg.MODEL.MASK_ON:
             mask_features = features
             if self.training:
-                proposals, targets, pos_inds = keep_only_positive_boxes(proposals, targets)
+                proposals, targets, pos_masks = keep_only_positive_boxes(proposals, targets)
                 if self.cfg.MODEL.ROI_MASK_HEAD.SHARE_BOX_FEATURE_EXTRACTOR:
                     # if sharing, don't need to do feature extraction again,
                     # just use the box features for all the positivie proposals
-                    mask_features = x[torch.cat(pos_inds, dim=0)]
+                    mask_features = x[torch.cat(pos_masks, dim=0)]
 
             # During training, self.box() will return the unaltered proposals as "detections"
             # this makes the API consistent during training and testing
@@ -145,6 +145,10 @@ class ROIHeads(torch.nn.Module):
         self.batch_size_per_image = cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE
         self.positive_sample_fraction = cfg.MODEL.ROI_HEADS.POSITIVE_FRACTION
 
+        self.test_score_thresh = cfg.MODEL.ROI_HEADS.SCORE_THRESH
+        self.test_nms_thresh = cfg.MODEL.ROI_HEADS.NMS
+        self.test_detections_per_img = cfg.MODEL.ROI_HEADS.DETECTIONS_PER_IMG
+
     def forward(self, features, proposals, targets=None):
         if self.training:
             with torch.no_grad():
@@ -153,6 +157,25 @@ class ROIHeads(torch.nn.Module):
                 return self.forward_training(features, proposals, targets)
         else:
             return self.forward_inference(features, proposals)
+
+    def fastrcnn_predictions(self, outputs):
+        """
+        Args:
+            outputs (FastRCNNOutputs):
+
+        Returns:
+            list[BoxList]: the predictions for each image. Contains field "labels" and "scores".
+        """
+        decoded_boxes = outputs.decoded_outputs()
+        probs = outputs.predicted_probs()
+
+        results = []
+        for probs_per_image, boxes_per_image, image_shape in zip(probs, decoded_boxes, outputs.img_shapes):
+            boxlist = fastrcnn_inference(
+                boxes_per_image, probs_per_image, image_shape,
+                self.test_score_thresh, self.test_nms_thresh, self.test_detections_per_img)
+            results.append(boxlist)
+        return results
 
     def forward_training(self, features, proposals, targets, labels):
         """
@@ -171,9 +194,10 @@ class ROIHeads(torch.nn.Module):
 
 
 from .box_head.roi_box_predictors import BoxHeadPredictor
-from .box_head.box_head import FastRCNNOutputs
+from .box_head.box_head import FastRCNNOutputs, fastrcnn_inference
 from .mask_head.mask_head import maskrcnn_loss
 from .mask_head.inference import make_roi_mask_post_processor
+
 
 class C4ROIHeads(ROIHeads):
     def __init__(self, cfg):
@@ -192,10 +216,6 @@ class C4ROIHeads(ROIHeads):
 
         self.box_coder = BoxCoder(weights=cfg.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS)
 
-        self.test_score_thresh = cfg.MODEL.ROI_HEADS.SCORE_THRESH
-        self.test_nms_thresh = cfg.MODEL.ROI_HEADS.NMS
-        self.test_detections_per_img = cfg.MODEL.ROI_HEADS.DETECTIONS_PER_IMG
-
         if cfg.MODEL.MASK_ON:
             self.mask_head = MaskRCNNC4Predictor(cfg)  # just 1 deconv
             self.mask_discretization_size = cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
@@ -212,10 +232,10 @@ class C4ROIHeads(ROIHeads):
             self.box_coder, class_logits, regression_outputs, proposals, targets).losses()
 
         if self.cfg.MODEL.MASK_ON:
-            proposals, targets, pos_inds = keep_only_positive_boxes(proposals, targets)
+            proposals, targets, pos_masks = keep_only_positive_boxes(proposals, targets)
             # don't need to do feature extraction again,
             # just use the box features for all the positivie proposals
-            mask_features = features[torch.cat(pos_inds, dim=0)]
+            mask_features = features[torch.cat(pos_masks, dim=0)]
             mask_logits = self.mask_head(mask_features)
             losses['loss_mask'] = maskrcnn_loss(
                 proposals, mask_logits, targets, self.mask_discretization_size
@@ -228,10 +248,7 @@ class C4ROIHeads(ROIHeads):
         class_logits, regression_outputs = self.box_predictor(x)
         fastrcnn_outputs = FastRCNNOutputs(
             self.box_coder, class_logits, regression_outputs, proposals, None)
-        results = fastrcnn_outputs.inference(
-            self.test_score_thresh,
-            self.test_nms_thresh,
-            self.test_detections_per_img)
+        results = self.fastrcnn_predictions(fastrcnn_outputs)
 
         if self.cfg.MODEL.MASK_ON:
             x = self.shared_roi_trasnform(features, results)
