@@ -76,7 +76,7 @@ def fastrcnn_inference(
         scores_j = scores[inds, j]
         boxes_j = boxes[inds, j, :]
         # image_size is not used, fill -1
-        boxlist_for_class = BoxList(boxes_j, (-1, -1), mode="xyxy")
+        boxlist_for_class = BoxList(boxes_j, image_shape, mode="xyxy")
         boxlist_for_class.add_field("scores", scores_j)
         boxlist_for_class = boxlist_nms(
             boxlist_for_class, nms_thresh, score_field="scores"
@@ -172,6 +172,7 @@ class ROIBoxHead(torch.nn.Module):
 
     def __init__(self, cfg):
         super(ROIBoxHead, self).__init__()
+        self.cfg = cfg.MODEL.ROI_HEADS.clone()
         self.feature_extractor = make_roi_box_feature_extractor(cfg)
         self.predictor = make_roi_box_predictor(cfg)
         bbox_reg_weights = cfg.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS
@@ -185,11 +186,15 @@ class ROIBoxHead(torch.nn.Module):
         head_outputs = FastRCNNOutputs(
             self.box_coder, class_logits, regression_outputs, proposals, matched_targets)
         if not self.training:
-            heads_cfg = self.cfg.MODEL.ROI_HEADS
-            results = head_outputs.inference(
-                heads_cfg.SCORE_THRESH,
-                heads_cfg.NMS,
-                heads_cfg.DETECTIONS_PER_IMG)
+            decoded_boxes = head_outputs.decoded_outputs()
+            probs = head_outputs.predicted_probs()
+
+            results = []
+            for probs_per_image, boxes_per_image, image_shape in zip(probs, decoded_boxes, head_outputs.img_shapes):
+                boxlist = fastrcnn_inference(
+                    boxes_per_image, probs_per_image, image_shape,
+                    self.cfg.SCORE_THRESH, self.cfg.NMS, self.cfg.DETECTIONS_PER_IMG)
+                results.append(boxlist)
             return x, results, {}
         else:
             return x, proposals, head_outputs.losses()
