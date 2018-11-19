@@ -167,8 +167,8 @@ class ROIHeads(torch.nn.Module):
         Returns:
             list[BoxList]: the predictions for each image. Contains field "labels" and "scores".
         """
-        decoded_boxes = outputs.decoded_outputs()
-        probs = outputs.predicted_probs()
+        decoded_boxes = outputs.predict_boxes()
+        probs = outputs.predict_probs()
 
         results = []
         for probs_per_image, boxes_per_image, image_shape in zip(probs, decoded_boxes, outputs.img_shapes):
@@ -178,7 +178,7 @@ class ROIHeads(torch.nn.Module):
             results.append(boxlist)
         return results
 
-    def forward_training(self, features, proposals, targets, labels):
+    def forward_training(self, features, proposals, targets):
         """
         TODO
         """
@@ -209,6 +209,7 @@ class C4ROIHeads(ROIHeads):
 
         self.shared_roi_transform = ResNet50Conv5ROIFeatureExtractor(cfg)
 
+        # maybe obtain this number from self.shared_roi_transform?
         stage_index = 4
         stage2_relative_factor = 2 ** (stage_index - 1)
         res2_out_channels = cfg.MODEL.RESNETS.RES2_OUT_CHANNELS

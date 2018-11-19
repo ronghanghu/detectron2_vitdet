@@ -146,7 +146,7 @@ class FastRCNNOutputs(object):
             self.class_logits, self.regression_outputs)
         return dict(loss_classifier=loss_classifier, loss_box_reg=loss_box_reg)
 
-    def decoded_outputs(self):
+    def predict_boxes(self):
         """
         Returns:
             list[Tensor]: the Tensor for each image has shape (#box, #class, 4)
@@ -156,7 +156,7 @@ class FastRCNNOutputs(object):
             torch.cat(self.proposals, dim=0))
         return decoded.split(self.num_boxes, dim=0)
 
-    def predicted_probs(self):
+    def predict_probs(self):
         """
         Returns:
             list[Tensor]: the Tensor for each image has shape (#box, #class)
@@ -186,8 +186,8 @@ class ROIBoxHead(torch.nn.Module):
         head_outputs = FastRCNNOutputs(
             self.box_coder, class_logits, regression_outputs, proposals, matched_targets)
         if not self.training:
-            decoded_boxes = head_outputs.decoded_outputs()
-            probs = head_outputs.predicted_probs()
+            decoded_boxes = head_outputs.predict_boxes()
+            probs = head_outputs.predict_probs()
 
             results = []
             for probs_per_image, boxes_per_image, image_shape in zip(probs, decoded_boxes, head_outputs.img_shapes):
