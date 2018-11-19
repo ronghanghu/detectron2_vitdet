@@ -82,6 +82,31 @@ class FPN2MLPFeatureExtractor(nn.Module):
         return self._output_size
 
 
+class FastRCNN2MLPHead(nn.Module):
+    def __init__(self, input_size, mlp_dim):
+        super(FastRCNN2MLPHead, self).__init__()
+        self.fc1 = nn.Linear(input_size, mlp_dim)
+        self.fc2 = nn.Linear(mlp_dim, mlp_dim)
+
+        self._output_size = mlp_dim
+
+        for l in [self.fc1, self.fc2]:
+            # Caffe2 implementation uses XavierFill, which in fact
+            # corresponds to kaiming_uniform_ in PyTorch
+            nn.init.kaiming_uniform_(l.weight, a=1)
+            nn.init.constant_(l.bias, 0)
+
+    def forward(self, x):
+        x = x.view(x.size(0), -1)
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        return x
+
+    @property
+    def output_size(self):
+        return self._output_size
+
+
 _ROI_BOX_FEATURE_EXTRACTORS = {
     "ResNet50Conv5ROIFeatureExtractor": ResNet50Conv5ROIFeatureExtractor,
     "FPN2MLPFeatureExtractor": FPN2MLPFeatureExtractor,

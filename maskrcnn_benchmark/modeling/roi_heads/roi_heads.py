@@ -199,6 +199,7 @@ from .box_head.roi_box_predictors import BoxHeadPredictor
 from .box_head.box_head import FastRCNNOutputs, fastrcnn_inference
 from .mask_head.mask_head import maskrcnn_loss
 from .mask_head.inference import make_roi_mask_post_processor
+from .mask_head.roi_mask_predictors import MaskRCNNConvUpsampleHead
 
 
 class C4ROIHeads(ROIHeads):
@@ -222,12 +223,11 @@ class C4ROIHeads(ROIHeads):
             res2_out_channels=cfg.MODEL.RESNETS.RES2_OUT_CHANNELS,
         )
 
-        num_inputs = self.res5_head.output_channels
+        num_inputs = self.res5_head.output_size
         self.box_predictor = BoxHeadPredictor(cfg, num_inputs)
         self.box_coder = BoxCoder(weights=cfg.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS)
 
         if cfg.MODEL.MASK_ON:
-            from .mask_head.roi_mask_predictors import MaskRCNNConvUpsampleHead
             self.mask_head = MaskRCNNConvUpsampleHead(
                 0, cfg.MODEL.ROI_BOX_HEAD.NUM_CLASSES,
                 num_inputs,
@@ -275,9 +275,80 @@ class C4ROIHeads(ROIHeads):
         return None, results, {}  # just to make outer API compatible
 
 
+class StandardROIHeads(ROIHeads):
+    """
+    Standard in a sense that no ROI transform sharing or feature sharing.
+    C4Head is actually just an optimization (i.e. C4Head can be done with StandardHead as well).
+    """
+    def __init__(self, cfg):
+        super(StandardROIHeads, self).__init__(cfg)
+        from .box_head.roi_box_feature_extractors import FastRCNN2MLPHead
+
+        resolution = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
+        self.box_pooler = Pooler(
+            output_size=resolution,
+            scales=cfg.MODEL.ROI_BOX_HEAD.POOLER_SCALES,
+            sampling_ratio=cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
+        )
+        self.box_head = FastRCNN2MLPHead(   # TODO this should become a factory
+            cfg.MODEL.BACKBONE.OUT_CHANNELS * resolution ** 2,
+            cfg.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM)
+        self.box_predictor = BoxHeadPredictor(cfg, self.box_head.output_size)
+        self.box_coder = BoxCoder(weights=cfg.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS)
+
+        if cfg.MODEL.MASK_ON:
+            self.mask_pooler = Pooler(
+                output_size=(cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION, cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION),
+                scales=cfg.MODEL.ROI_MASK_HEAD.POOLER_SCALES,
+                sampling_ratio=cfg.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO
+            )
+            self.mask_head = MaskRCNNConvUpsampleHead(     # TODO this should become a factory
+                len(cfg.MODEL.ROI_MASK_HEAD.CONV_LAYERS),  # TODO use different names
+                cfg.MODEL.ROI_BOX_HEAD.NUM_CLASSES,
+                cfg.MODEL.BACKBONE.OUT_CHANNELS,
+                cfg.MODEL.ROI_MASK_HEAD.CONV_LAYERS[0]     # TODO use different options
+            )
+            self.mask_discretization_size = cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
+            self.mask_post_processor = make_roi_mask_post_processor()  # TODO make it a function
+
+    def forward_training(self, features, proposals, targets):
+        box_features = self.box_pooler(features, proposals)
+        box_features = self.box_head(box_features)
+        class_logits, regression_outputs = self.box_predictor(box_features)
+        del box_features
+
+        losses = FastRCNNOutputs(
+            self.box_coder, class_logits, regression_outputs, proposals, targets).losses()
+
+        if self.cfg.MODEL.MASK_ON:
+            proposals, targets, _ = keep_only_positive_boxes(proposals, targets)
+            mask_features = self.mask_pooler(features, proposals)
+            mask_logits = self.mask_head(mask_features)
+            losses['loss_mask'] = maskrcnn_loss(
+                proposals, mask_logits, targets, self.mask_discretization_size
+            )
+        return None, None, losses  # just to make outer API compatible
+
+    def forward_inference(self, features, proposals):
+        x = self.box_pooler(features, proposals)
+        x = self.box_head(x)
+        class_logits, regression_outputs = self.box_predictor(x)
+        fastrcnn_outputs = FastRCNNOutputs(
+            self.box_coder, class_logits, regression_outputs, proposals, None)
+        results = self.fastrcnn_predictions(fastrcnn_outputs)
+
+        if self.cfg.MODEL.MASK_ON:
+            x = self.mask_pooler(features, results)
+            mask_logits = self.mask_head(x)
+            results = self.mask_post_processor(mask_logits, results)
+        return None, results, {}  # just to make outer API compatible
+
+
 def build_roi_heads(cfg):
     if not cfg.MODEL.ROI_HEADS.USE_FPN:   # TODO not a good if
         return C4ROIHeads(cfg)
+    else:
+        return StandardROIHeads(cfg)
     # individually create the heads, that will be combined together
     # afterwards
     roi_heads = []

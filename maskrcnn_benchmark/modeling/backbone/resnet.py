@@ -163,7 +163,7 @@ class ResNetHead(nn.Module):
             self.stages.append(name)
 
     @property
-    def output_channels(self):
+    def output_size(self):
         return self._output_channels
 
     def forward(self, x):
