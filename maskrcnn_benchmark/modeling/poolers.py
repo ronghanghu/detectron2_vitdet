@@ -54,11 +54,13 @@ class Pooler(nn.Module):
     def __init__(self, output_size, scales, sampling_ratio):
         """
         Arguments:
-            output_size (list[tuple[int]] or list[int]): output size for the pooled region
+            output_size (int, tuple[int] or list[int]): output size for the pooled region
             scales (list[float]): scales for each Pooler
             sampling_ratio (int): sampling ratio for ROIAlign
         """
         super(Pooler, self).__init__()
+        if isinstance(output_size, int):
+            output_size = (output_size, output_size)
         poolers = []
         for scale in scales:
             poolers.append(

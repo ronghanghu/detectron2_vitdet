@@ -8,6 +8,7 @@ from maskrcnn_benchmark.modeling.box_coder import BoxCoder
 from maskrcnn_benchmark.modeling.balanced_positive_negative_sampler import (
     sample_with_positive_fraction
 )
+from maskrcnn_benchmark.modeling.poolers import Pooler
 
 from .box_head.box_head import build_roi_box_head
 from .mask_head.mask_head import build_roi_mask_head
@@ -204,24 +205,39 @@ class C4ROIHeads(ROIHeads):
     def __init__(self, cfg):
         super(C4ROIHeads, self).__init__(cfg)
 
-        from .box_head.roi_box_feature_extractors import ResNet50Conv5ROIFeatureExtractor
-        from .mask_head.roi_mask_predictors import MaskRCNNC4Predictor
+        from maskrcnn_benchmark.modeling.backbone import resnet
 
-        self.shared_roi_transform = ResNet50Conv5ROIFeatureExtractor(cfg)
+        self.pooler = Pooler(
+            output_size=cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION,
+            scales=cfg.MODEL.ROI_BOX_HEAD.POOLER_SCALES,
+            sampling_ratio=cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO)
 
-        # maybe obtain this number from self.shared_roi_transform?
-        stage_index = 4
-        stage2_relative_factor = 2 ** (stage_index - 1)
-        res2_out_channels = cfg.MODEL.RESNETS.RES2_OUT_CHANNELS
-        num_inputs = res2_out_channels * stage2_relative_factor
+        self.res5_head = resnet.ResNetHead(
+            block_module=cfg.MODEL.RESNETS.TRANS_FUNC,
+            stages=(resnet.StageSpec(index=4, block_count=3, return_features=False),),
+            num_groups=cfg.MODEL.RESNETS.NUM_GROUPS,
+            width_per_group=cfg.MODEL.RESNETS.WIDTH_PER_GROUP,
+            stride_in_1x1=cfg.MODEL.RESNETS.STRIDE_IN_1X1,
+            stride_init=None,
+            res2_out_channels=cfg.MODEL.RESNETS.RES2_OUT_CHANNELS,
+        )
+
+        num_inputs = self.res5_head.output_channels
         self.box_predictor = BoxHeadPredictor(cfg, num_inputs)
-
         self.box_coder = BoxCoder(weights=cfg.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS)
 
         if cfg.MODEL.MASK_ON:
-            self.mask_head = MaskRCNNC4Predictor(cfg)  # just 1 deconv
+            from .mask_head.roi_mask_predictors import MaskRCNNConvUpsampleHead
+            self.mask_head = MaskRCNNConvUpsampleHead(
+                0, cfg.MODEL.ROI_BOX_HEAD.NUM_CLASSES,
+                num_inputs,
+                cfg.MODEL.ROI_MASK_HEAD.CONV_LAYERS[-1])  # TODO use different options
             self.mask_discretization_size = cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
             self.mask_post_processor = make_roi_mask_post_processor()  # TODO make it a function
+
+    def shared_roi_transform(self, features, proposals):
+        x = self.pooler(features, proposals)
+        return self.res5_head(x)
 
     def forward_training(self, features, proposals, targets):
         features = self.shared_roi_transform(features, proposals)

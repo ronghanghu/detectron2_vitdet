@@ -60,6 +60,8 @@ class FPN2MLPFeatureExtractor(nn.Module):
         self.fc6 = nn.Linear(input_size, representation_size)
         self.fc7 = nn.Linear(representation_size, representation_size)
 
+        self._output_size = representation_size
+
         for l in [self.fc6, self.fc7]:
             # Caffe2 implementation uses XavierFill, which in fact
             # corresponds to kaiming_uniform_ in PyTorch
@@ -74,6 +76,10 @@ class FPN2MLPFeatureExtractor(nn.Module):
         x = F.relu(self.fc7(x))
 
         return x
+
+    @property
+    def output_size(self):
+        return self._output_size
 
 
 _ROI_BOX_FEATURE_EXTRACTORS = {

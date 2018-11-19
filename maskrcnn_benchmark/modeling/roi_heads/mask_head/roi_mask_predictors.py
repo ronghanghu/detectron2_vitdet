@@ -40,7 +40,7 @@ class MaskRCNNConvUpsampleHead(nn.Module):
         self.predictor = Conv2d(feature_channels, num_classes, 1, 1, 0)
 
         for name, param in self.named_parameters():
-            print("INIT", name)
+            # print("INIT", name)
             if "bias" in name:
                 nn.init.constant_(param, 0)
             elif "weight" in name:

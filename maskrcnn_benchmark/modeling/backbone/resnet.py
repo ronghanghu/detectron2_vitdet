@@ -140,6 +140,8 @@ class ResNetHead(nn.Module):
 
         block_module = _TRANSFORMATION_MODULES[block_module]
 
+        self._output_channels = out_channels
+
         self.stages = []
         stride = stride_init
         for stage in stages:
@@ -159,6 +161,10 @@ class ResNetHead(nn.Module):
             stride = None
             self.add_module(name, module)
             self.stages.append(name)
+
+    @property
+    def output_channels(self):
+        return self._output_channels
 
     def forward(self, x):
         for stage in self.stages:
