@@ -1,14 +1,11 @@
 import torch
+from torch import nn
 from torch.nn import functional as F
 
 from maskrcnn_benchmark.modeling.utils import cat
 from maskrcnn_benchmark.layers import smooth_l1_loss
-from maskrcnn_benchmark.modeling.box_coder import BoxCoder
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_nms, cat_boxlist
-
-from .roi_box_feature_extractors import make_roi_box_feature_extractor
-from .roi_box_predictors import make_roi_box_predictor
 
 
 def fastrcnn_losses(labels, regression_targets, class_logits, regression_outputs):
@@ -165,45 +162,52 @@ class FastRCNNOutputs(object):
         return probs.split(self.num_boxes, dim=0)
 
 
-class ROIBoxHead(torch.nn.Module):
+class FastRCNNOutputHead(nn.Module):
     """
-    Generic Box Head class.
+    2 FC layers that does bbox regression and classification, respectively.
     """
+    def __init__(self, input_size, num_classes):
+        """
+        Args:
+            input_size (int): Defaults to be ROI_BOX_HEAD.MLP_HEAD_DIM, for compatibility
+        """
+        super(FastRCNNOutputHead, self).__init__()
 
-    def __init__(self, cfg):
-        super(ROIBoxHead, self).__init__()
-        self.cfg = cfg.MODEL.ROI_HEADS.clone()
-        self.feature_extractor = make_roi_box_feature_extractor(cfg)
-        self.predictor = make_roi_box_predictor(cfg)
-        bbox_reg_weights = cfg.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS
-        self.box_coder = BoxCoder(weights=bbox_reg_weights)
+        self.cls_score = nn.Linear(input_size, num_classes)
+        self.bbox_pred = nn.Linear(input_size, num_classes * 4)
 
-    def forward(self, features, proposals, matched_targets=None):
-        x = self.feature_extractor(features, proposals)
-        class_logits, regression_outputs = self.predictor(x)
-        # #box x #class, #box x #class x 4
+        nn.init.normal_(self.cls_score.weight, std=0.01)
+        nn.init.normal_(self.bbox_pred.weight, std=0.001)
+        for l in [self.cls_score, self.bbox_pred]:
+            nn.init.constant_(l.bias, 0)
 
-        head_outputs = FastRCNNOutputs(
-            self.box_coder, class_logits, regression_outputs, proposals, matched_targets)
-        if not self.training:
-            decoded_boxes = head_outputs.predict_boxes()
-            probs = head_outputs.predict_probs()
-
-            results = []
-            for probs_per_image, boxes_per_image, image_shape in zip(probs, decoded_boxes, head_outputs.img_shapes):
-                boxlist = fastrcnn_inference(
-                    boxes_per_image, probs_per_image, image_shape,
-                    self.cfg.SCORE_THRESH, self.cfg.NMS, self.cfg.DETECTIONS_PER_IMG)
-                results.append(boxlist)
-            return x, results, {}
-        else:
-            return x, proposals, head_outputs.losses()
+    def forward(self, x):
+        x = x.view(x.size(0), -1)
+        scores = self.cls_score(x)
+        bbox_deltas = self.bbox_pred(x)
+        return scores, bbox_deltas
 
 
-def build_roi_box_head(cfg):
-    """
-    Constructs a new box head.
-    By default, uses ROIBoxHead, but if it turns out not to be enough, just register a new class
-    and make it a parameter in the config
-    """
-    return ROIBoxHead(cfg)
+class FastRCNN2MLPHead(nn.Module):
+    def __init__(self, input_size, mlp_dim):
+        super(FastRCNN2MLPHead, self).__init__()
+        self.fc1 = nn.Linear(input_size, mlp_dim)
+        self.fc2 = nn.Linear(mlp_dim, mlp_dim)
+
+        self._output_size = mlp_dim
+
+        for l in [self.fc1, self.fc2]:
+            # Caffe2 implementation uses XavierFill, which in fact
+            # corresponds to kaiming_uniform_ in PyTorch
+            nn.init.kaiming_uniform_(l.weight, a=1)
+            nn.init.constant_(l.bias, 0)
+
+    def forward(self, x):
+        x = x.view(x.size(0), -1)
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        return x
+
+    @property
+    def output_size(self):
+        return self._output_size

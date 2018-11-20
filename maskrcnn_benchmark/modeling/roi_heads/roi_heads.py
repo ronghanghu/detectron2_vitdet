@@ -10,8 +10,10 @@ from maskrcnn_benchmark.modeling.balanced_positive_negative_sampler import (
 )
 from maskrcnn_benchmark.modeling.poolers import Pooler
 
-from .box_head.box_head import build_roi_box_head
-from .mask_head.mask_head import build_roi_mask_head
+from .box_head import (
+    FastRCNNOutputHead, FastRCNNOutputs, fastrcnn_inference, FastRCNN2MLPHead)
+from .mask_head.mask_head import maskrcnn_loss, MaskRCNNConvUpsampleHead
+from .mask_head.inference import make_roi_mask_post_processor
 
 
 def sample_proposals_for_training(
@@ -88,51 +90,6 @@ def keep_only_positive_boxes(boxes, matched_targets):
     return positive_boxes, positive_targets, positive_masks
 
 
-class CombinedROIHeads(torch.nn.ModuleDict):
-    def __init__(self, cfg, heads):
-        super(CombinedROIHeads, self).__init__(heads)
-        self.cfg = cfg.clone()
-        if cfg.MODEL.MASK_ON and cfg.MODEL.ROI_MASK_HEAD.SHARE_BOX_FEATURE_EXTRACTOR:
-            self.mask.feature_extractor = self.box.feature_extractor
-
-        # match proposals to gt boxes
-        self.proposal_matcher = Matcher(
-            cfg.MODEL.ROI_HEADS.FG_IOU_THRESHOLD,
-            cfg.MODEL.ROI_HEADS.BG_IOU_THRESHOLD,
-            allow_low_quality_matches=False,
-        )
-        self.batch_size_per_image = cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE
-        self.positive_sample_fraction = cfg.MODEL.ROI_HEADS.POSITIVE_FRACTION
-
-    def forward(self, features, proposals, targets=None):
-        if self.training:
-            with torch.no_grad():
-                proposals, targets = sample_proposals_for_training(
-                    proposals, targets, self.proposal_matcher, self.batch_size_per_image, self.positive_sample_fraction)
-                assert len(proposals) == len(targets)
-                # #img BoxList
-        else:
-            targets = None
-
-        # TODO rename x to roi_box_features, if it doesn't increase memory consumption
-        x, proposals, losses = self.box(features, proposals, targets)
-
-        if self.cfg.MODEL.MASK_ON:
-            mask_features = features
-            if self.training:
-                proposals, targets, pos_masks = keep_only_positive_boxes(proposals, targets)
-                if self.cfg.MODEL.ROI_MASK_HEAD.SHARE_BOX_FEATURE_EXTRACTOR:
-                    # if sharing, don't need to do feature extraction again,
-                    # just use the box features for all the positivie proposals
-                    mask_features = x[torch.cat(pos_masks, dim=0)]
-
-            # During training, self.box() will return the unaltered proposals as "proposals"
-            # this makes the API consistent during training and testing
-            x, proposals, loss_mask = self.mask(mask_features, proposals, targets)
-            losses.update(loss_mask)
-        return x, proposals, losses
-
-
 class ROIHeads(torch.nn.Module):
     def __init__(self, cfg):
         super(ROIHeads, self).__init__()
@@ -195,13 +152,6 @@ class ROIHeads(torch.nn.Module):
         pass
 
 
-from .box_head.roi_box_predictors import BoxHeadPredictor
-from .box_head.box_head import FastRCNNOutputs, fastrcnn_inference
-from .mask_head.mask_head import maskrcnn_loss
-from .mask_head.inference import make_roi_mask_post_processor
-from .mask_head.roi_mask_predictors import MaskRCNNConvUpsampleHead
-
-
 class C4ROIHeads(ROIHeads):
     def __init__(self, cfg):
         super(C4ROIHeads, self).__init__(cfg)
@@ -224,7 +174,7 @@ class C4ROIHeads(ROIHeads):
         )
 
         num_inputs = self.res5_head.output_size
-        self.box_predictor = BoxHeadPredictor(cfg, num_inputs)
+        self.box_predictor = FastRCNNOutputHead(num_inputs, cfg.MODEL.ROI_BOX_HEAD.NUM_CLASSES)
         self.box_coder = BoxCoder(weights=cfg.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS)
 
         if cfg.MODEL.MASK_ON:
@@ -282,7 +232,6 @@ class StandardROIHeads(ROIHeads):
     """
     def __init__(self, cfg):
         super(StandardROIHeads, self).__init__(cfg)
-        from .box_head.roi_box_feature_extractors import FastRCNN2MLPHead
 
         resolution = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
         self.box_pooler = Pooler(
@@ -293,7 +242,7 @@ class StandardROIHeads(ROIHeads):
         self.box_head = FastRCNN2MLPHead(   # TODO this should become a factory
             cfg.MODEL.BACKBONE.OUT_CHANNELS * resolution ** 2,
             cfg.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM)
-        self.box_predictor = BoxHeadPredictor(cfg, self.box_head.output_size)
+        self.box_predictor = FastRCNNOutputHead(self.box_head.output_size, cfg.MODEL.ROI_BOX_HEAD.NUM_CLASSES)
         self.box_coder = BoxCoder(weights=cfg.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS)
 
         if cfg.MODEL.MASK_ON:
@@ -349,16 +298,3 @@ def build_roi_heads(cfg):
         return C4ROIHeads(cfg)
     else:
         return StandardROIHeads(cfg)
-    # individually create the heads, that will be combined together
-    # afterwards
-    roi_heads = []
-    if not cfg.MODEL.RPN_ONLY:
-        roi_heads.append(("box", build_roi_box_head(cfg)))
-    if cfg.MODEL.MASK_ON:
-        roi_heads.append(("mask", build_roi_mask_head(cfg)))
-
-    # combine individual heads in a single module
-    if roi_heads:
-        roi_heads = CombinedROIHeads(cfg, roi_heads)
-
-    return roi_heads

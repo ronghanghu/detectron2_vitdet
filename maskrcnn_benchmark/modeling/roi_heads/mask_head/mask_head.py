@@ -1,11 +1,10 @@
 import torch
+from torch import nn
 from torch.nn import functional as F
 
 from maskrcnn_benchmark.modeling.utils import cat
-
-from .roi_mask_feature_extractors import make_roi_mask_feature_extractor
-from .roi_mask_predictors import make_roi_mask_predictor
-from .inference import make_roi_mask_post_processor
+from maskrcnn_benchmark.layers import Conv2d
+from maskrcnn_benchmark.layers import ConvTranspose2d
 
 
 def project_masks_on_boxes(segmentation_masks, proposals, discretization_size):
@@ -83,36 +82,36 @@ def maskrcnn_loss(proposals, mask_logits, matched_targets, discretization_size):
     return mask_loss
 
 
-class ROIMaskHead(torch.nn.Module):
-    def __init__(self, cfg):
-        super(ROIMaskHead, self).__init__()
-        self.cfg = cfg.clone()
-        self.feature_extractor = make_roi_mask_feature_extractor(cfg)
-        self.predictor = make_roi_mask_predictor(cfg)
-        self.post_processor = make_roi_mask_post_processor(cfg)
-        self.discretization_size = cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
+class MaskRCNNConvUpsampleHead(nn.Module):
+    def __init__(self, num_convs, num_classes, input_channels, feature_channels):
+        super(MaskRCNNConvUpsampleHead, self).__init__()
+        self.blocks = []
 
-    def forward(self, features, proposals, matched_targets=None):
-        """
-        Args:
-            features: feature before pooler (if not sharing or if testing), or after pooler (if sharing and training)
-            proposals (list[BoxList]):
-            matched_targets (list[BoxList]):
-                one-to-one corresponds to the proposals. Only those corresponds to foreground proposals are meaningful.
-        """
-        if self.training and self.cfg.MODEL.ROI_MASK_HEAD.SHARE_BOX_FEATURE_EXTRACTOR:
-            x = features
-        else:
-            x = self.feature_extractor(features, proposals)
-        mask_logits = self.predictor(x)
+        for k in range(num_convs):
+            layer = Conv2d(input_channels if k == 0 else feature_channels,
+                           feature_channels, 3, stride=1, padding=1)
+            # Caffe2 implementation uses MSRAFill, which in fact
+            # corresponds to kaiming_normal_ in PyTorch
+            # nn.init.kaiming_normal_(layer.weight, mode="fan_out", nonlinearity="relu")
+            # nn.init.constant_(layer.bias, 0)
+            self.add_module('mask_fcn{}'.format(k), layer)
+            self.blocks.append(layer)
 
-        if self.training:
-            loss_mask = maskrcnn_loss(proposals, mask_logits, matched_targets, self.discretization_size)
-            return x, proposals, dict(loss_mask=loss_mask)
-        else:
-            result = self.post_processor(mask_logits, proposals)
-            return x, result, {}
+        self.deconv = ConvTranspose2d(feature_channels if num_convs > 0 else input_channels,
+                                      feature_channels, 2, 2, 0)
+        self.predictor = Conv2d(feature_channels, num_classes, 1, 1, 0)
 
+        for name, param in self.named_parameters():
+            # print("INIT", name)
+            if "bias" in name:
+                nn.init.constant_(param, 0)
+            elif "weight" in name:
+                # Caffe2 implementation uses MSRAFill, which in fact
+                # corresponds to kaiming_normal_ in PyTorch
+                nn.init.kaiming_normal_(param, mode="fan_out", nonlinearity="relu")
 
-def build_roi_mask_head(cfg):
-    return ROIMaskHead(cfg)
+    def forward(self, x):
+        for layer in self.blocks:
+            x = F.relu(layer(x))
+        x = F.relu(self.deconv(x))
+        return self.predictor(x)
