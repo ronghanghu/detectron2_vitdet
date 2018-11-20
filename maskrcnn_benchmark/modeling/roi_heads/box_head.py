@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -169,9 +170,13 @@ class FastRCNNOutputHead(nn.Module):
     def __init__(self, input_size, num_classes):
         """
         Args:
-            input_size (int): Defaults to be ROI_BOX_HEAD.MLP_HEAD_DIM, for compatibility
+            input_size (int): channels, or (channels, height, width)
+            num_classes (int):
         """
         super(FastRCNNOutputHead, self).__init__()
+
+        if not isinstance(input_size, int):
+            input_size = np.prod(input_size)
 
         self.cls_score = nn.Linear(input_size, num_classes)
         self.bbox_pred = nn.Linear(input_size, num_classes * 4)
@@ -190,7 +195,14 @@ class FastRCNNOutputHead(nn.Module):
 
 class FastRCNN2MLPHead(nn.Module):
     def __init__(self, input_size, mlp_dim):
+        """
+        Args:
+            input_size: channels, or (channels, height, width)
+            mlp_dim: int
+        """
         super(FastRCNN2MLPHead, self).__init__()
+        if not isinstance(input_size, int):
+            input_size = np.prod(input_size)
         self.fc1 = nn.Linear(input_size, mlp_dim)
         self.fc2 = nn.Linear(mlp_dim, mlp_dim)
 
@@ -211,3 +223,14 @@ class FastRCNN2MLPHead(nn.Module):
     @property
     def output_size(self):
         return self._output_size
+
+
+def make_box_head(cfg, input_size):
+    """
+    Args:
+        input_size: channels, or (channels, height, width)
+    """
+    head = cfg.MODEL.ROI_BOX_HEAD.NAME
+    if head == 'FastRCNN2MLPHead':
+        return FastRCNN2MLPHead(input_size, cfg.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM)
+    raise ValueError("Unknown head {}".format(head))

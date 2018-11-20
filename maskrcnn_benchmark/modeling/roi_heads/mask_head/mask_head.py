@@ -90,10 +90,6 @@ class MaskRCNNConvUpsampleHead(nn.Module):
         for k in range(num_convs):
             layer = Conv2d(input_channels if k == 0 else feature_channels,
                            feature_channels, 3, stride=1, padding=1)
-            # Caffe2 implementation uses MSRAFill, which in fact
-            # corresponds to kaiming_normal_ in PyTorch
-            # nn.init.kaiming_normal_(layer.weight, mode="fan_out", nonlinearity="relu")
-            # nn.init.constant_(layer.bias, 0)
             self.add_module('mask_fcn{}'.format(k), layer)
             self.blocks.append(layer)
 
@@ -102,7 +98,6 @@ class MaskRCNNConvUpsampleHead(nn.Module):
         self.predictor = Conv2d(feature_channels, num_classes, 1, 1, 0)
 
         for name, param in self.named_parameters():
-            # print("INIT", name)
             if "bias" in name:
                 nn.init.constant_(param, 0)
             elif "weight" in name:
@@ -115,3 +110,22 @@ class MaskRCNNConvUpsampleHead(nn.Module):
             x = F.relu(layer(x))
         x = F.relu(self.deconv(x))
         return self.predictor(x)
+
+
+def make_mask_head(cfg, input_size):
+    """
+    input_size: int (channels) or tuple (channels, height, width)
+    """
+    head = cfg.MODEL.ROI_MASK_HEAD.NAME
+    num_classes = cfg.MODEL.ROI_HEADS.NUM_CLASSES
+    if not isinstance(input_size, int):
+        input_size = input_size[0]
+    if head == 'MaskRCNN4ConvUpsampleHead':
+        return MaskRCNNConvUpsampleHead(
+            4, num_classes, input_size,
+            cfg.MODEL.ROI_MASK_HEAD.CONV_DIM)
+    if head == 'MaskRCNNUpsampleHead':
+        return MaskRCNNConvUpsampleHead(
+            0, num_classes, input_size,
+            cfg.MODEL.ROI_MASK_HEAD.CONV_DIM)
+    raise ValueError("Unknown head {}".format(head))

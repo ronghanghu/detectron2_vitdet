@@ -11,8 +11,8 @@ from maskrcnn_benchmark.modeling.balanced_positive_negative_sampler import (
 from maskrcnn_benchmark.modeling.poolers import Pooler
 
 from .box_head import (
-    FastRCNNOutputHead, FastRCNNOutputs, fastrcnn_inference, FastRCNN2MLPHead)
-from .mask_head.mask_head import maskrcnn_loss, MaskRCNNConvUpsampleHead
+    FastRCNNOutputHead, FastRCNNOutputs, fastrcnn_inference, make_box_head)
+from .mask_head.mask_head import maskrcnn_loss, make_mask_head
 from .mask_head.inference import make_roi_mask_post_processor
 
 
@@ -127,6 +127,9 @@ class ROIHeads(torch.nn.Module):
             results.append(boxlist)
         return results
 
+    def forward(self, features, proposals, targets=None):
+        raise NotImplementedError()
+
 
 class C4ROIHeads(ROIHeads):
     def __init__(self, cfg):
@@ -134,8 +137,9 @@ class C4ROIHeads(ROIHeads):
 
         from maskrcnn_benchmark.modeling.backbone import resnet
 
+        resolution = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
         self.pooler = Pooler(
-            output_size=cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION,
+            output_size=resolution,
             scales=cfg.MODEL.ROI_BOX_HEAD.POOLER_SCALES,
             sampling_ratio=cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO)
 
@@ -149,15 +153,12 @@ class C4ROIHeads(ROIHeads):
             res2_out_channels=cfg.MODEL.RESNETS.RES2_OUT_CHANNELS,
         )
 
-        num_inputs = self.res5_head.output_size
-        self.box_predictor = FastRCNNOutputHead(num_inputs, cfg.MODEL.ROI_BOX_HEAD.NUM_CLASSES)
-        self.box_coder = BoxCoder(weights=cfg.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS)
+        num_channels = self.res5_head.output_size
+        self.box_predictor = FastRCNNOutputHead(num_channels, cfg.MODEL.ROI_HEADS.NUM_CLASSES)
+        self.box_coder = BoxCoder(weights=cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS)
 
         if cfg.MODEL.MASK_ON:
-            self.mask_head = MaskRCNNConvUpsampleHead(
-                0, cfg.MODEL.ROI_BOX_HEAD.NUM_CLASSES,
-                num_inputs,
-                cfg.MODEL.ROI_MASK_HEAD.CONV_LAYERS[-1])  # TODO use different options
+            self.mask_head = make_mask_head(cfg, (num_channels, resolution, resolution))
             self.mask_discretization_size = cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
             self.mask_post_processor = make_roi_mask_post_processor()  # TODO make it a function
 
@@ -205,7 +206,8 @@ class C4ROIHeads(ROIHeads):
 class StandardROIHeads(ROIHeads):
     """
     Standard in a sense that no ROI transform sharing or feature sharing.
-    C4Head is actually just an optimization (i.e. C4Head can be done with StandardHead as well).
+    The rois go to separate branches (boxes and masks) directly.
+    This is used by FPN, C5 models, etc.
     """
     def __init__(self, cfg):
         super(StandardROIHeads, self).__init__(cfg)
@@ -216,11 +218,10 @@ class StandardROIHeads(ROIHeads):
             scales=cfg.MODEL.ROI_BOX_HEAD.POOLER_SCALES,
             sampling_ratio=cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
         )
-        self.box_head = FastRCNN2MLPHead(   # TODO this should become a factory
-            cfg.MODEL.BACKBONE.OUT_CHANNELS * resolution ** 2,
-            cfg.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM)
-        self.box_predictor = FastRCNNOutputHead(self.box_head.output_size, cfg.MODEL.ROI_BOX_HEAD.NUM_CLASSES)
-        self.box_coder = BoxCoder(weights=cfg.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS)
+        self.box_head = make_box_head(cfg, (cfg.MODEL.BACKBONE.OUT_CHANNELS, resolution, resolution))
+
+        self.box_predictor = FastRCNNOutputHead(self.box_head.output_size, cfg.MODEL.ROI_HEADS.NUM_CLASSES)
+        self.box_coder = BoxCoder(weights=cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS)
 
         if cfg.MODEL.MASK_ON:
             self.mask_pooler = Pooler(
@@ -228,12 +229,7 @@ class StandardROIHeads(ROIHeads):
                 scales=cfg.MODEL.ROI_MASK_HEAD.POOLER_SCALES,
                 sampling_ratio=cfg.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO
             )
-            self.mask_head = MaskRCNNConvUpsampleHead(     # TODO this should become a factory
-                len(cfg.MODEL.ROI_MASK_HEAD.CONV_LAYERS),  # TODO use different names
-                cfg.MODEL.ROI_BOX_HEAD.NUM_CLASSES,
-                cfg.MODEL.BACKBONE.OUT_CHANNELS,
-                cfg.MODEL.ROI_MASK_HEAD.CONV_LAYERS[0]     # TODO use different options
-            )
+            self.mask_head = make_mask_head(cfg, cfg.MODEL.BACKBONE.OUT_CHANNELS)
             self.mask_discretization_size = cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
             self.mask_post_processor = make_roi_mask_post_processor()  # TODO make it a function
 
@@ -272,7 +268,6 @@ class StandardROIHeads(ROIHeads):
 
 
 def build_roi_heads(cfg):
-    if not cfg.MODEL.ROI_HEADS.USE_FPN:   # TODO not a good if
-        return C4ROIHeads(cfg)
-    else:
-        return StandardROIHeads(cfg)
+    name = cfg.MODEL.ROI_HEADS.NAME
+    return {'C4ROIHeads': C4ROIHeads,
+            'StandardROIHeads': StandardROIHeads}[name](cfg)
