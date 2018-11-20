@@ -42,11 +42,11 @@ def fastrcnn_losses(labels, regression_targets, class_logits, regression_outputs
     return classification_loss, box_loss
 
 
-def fastrcnn_inference(
+def fastrcnn_inference_single(
         boxes, scores, image_shape,
         score_thresh, nms_thresh, detections_per_img):
     """
-    Per-image inference post-processing function.
+    Single-image inference post-processing function.
     Returns bounding-box detection results by thresholding on scores
     and applying non-maximum suppression (NMS).
 
@@ -100,6 +100,26 @@ def fastrcnn_inference(
     return result
 
 
+def fastrcnn_inference(
+        boxes, scores, image_shapes,
+        score_thresh, nms_thresh, detections_per_img):
+    """
+    Call `fastrcnn_inference_single` for all images.
+
+    Args:
+        boxes (list[Tensor]):
+        scores (list[Tensor]):
+        image_shapes (list[tuple]):
+
+    Returns:
+        list[BoxList]:
+    """
+    return [fastrcnn_inference_single(
+            boxes_per_image, probs_per_image, image_shape,
+            score_thresh, nms_thresh, detections_per_img)
+            for probs_per_image, boxes_per_image, image_shape in zip(scores, boxes, image_shapes)]
+
+
 class FastRCNNOutputs(object):
     """
     A class that stores information about outputs of a Fast R-CNN head.
@@ -117,7 +137,7 @@ class FastRCNNOutputs(object):
         """
         self.box_coder = box_coder
         self.num_img = len(proposals)
-        self.img_shapes = [box.size for box in proposals]
+        self.image_shapes = [box.size for box in proposals]
         self.num_boxes = [len(box) for box in proposals]
         self.num_classes = class_logits.shape[1]
 
