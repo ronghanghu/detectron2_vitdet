@@ -12,8 +12,7 @@ from maskrcnn_benchmark.modeling.poolers import Pooler
 
 from .box_head import (
     FastRCNNOutputHead, FastRCNNOutputs, fastrcnn_inference, make_box_head)
-from .mask_head.mask_head import maskrcnn_loss, make_mask_head
-from .mask_head.inference import make_roi_mask_post_processor
+from .mask_head import maskrcnn_loss, maskrcnn_inference, make_mask_head
 
 
 def sample_proposals_for_training(
@@ -160,7 +159,6 @@ class C4ROIHeads(ROIHeads):
         if cfg.MODEL.MASK_ON:
             self.mask_head = make_mask_head(cfg, (num_channels, resolution, resolution))
             self.mask_discretization_size = cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
-            self.mask_post_processor = make_roi_mask_post_processor()  # TODO make it a function
 
     def shared_roi_transform(self, features, proposals):
         x = self.pooler(features, proposals)
@@ -199,7 +197,7 @@ class C4ROIHeads(ROIHeads):
             if self.cfg.MODEL.MASK_ON:
                 x = self.shared_roi_transform(features, results)
                 mask_logits = self.mask_head(x)
-                results = self.mask_post_processor(mask_logits, results)
+                maskrcnn_inference(mask_logits, results)
             return None, results, {}
 
 
@@ -231,7 +229,6 @@ class StandardROIHeads(ROIHeads):
             )
             self.mask_head = make_mask_head(cfg, cfg.MODEL.BACKBONE.OUT_CHANNELS)
             self.mask_discretization_size = cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
-            self.mask_post_processor = make_roi_mask_post_processor()  # TODO make it a function
 
     def forward(self, features, proposals, targets=None):
         if self.training:
@@ -262,7 +259,7 @@ class StandardROIHeads(ROIHeads):
                     proposals, mask_logits, targets, self.mask_discretization_size
                 )
             else:
-                proposals = self.mask_post_processor(mask_logits, proposals)
+                maskrcnn_inference(mask_logits, proposals)
 
         return None, proposals, losses
 

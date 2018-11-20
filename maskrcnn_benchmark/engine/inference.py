@@ -15,7 +15,7 @@ from ..utils.comm import scatter_gather
 from ..utils.comm import synchronize
 
 
-from maskrcnn_benchmark.modeling.roi_heads.mask_head.inference import Masker
+from maskrcnn_benchmark.modeling.roi_heads.paste_mask import Masker
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 
 

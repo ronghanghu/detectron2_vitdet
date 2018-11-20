@@ -30,6 +30,7 @@ def project_masks_on_boxes(segmentation_masks, proposals, discretization_size):
     # masks is not efficient GPU-wise (possibly several small tensors for
     # representing a single instance mask)
     proposals = proposals.bbox.to(torch.device("cpu"))
+    # TODO use RoIAlign.
     for segmentation_mask, proposal in zip(segmentation_masks, proposals):
         # crop the masks, resize them to the desired resolution and
         # then convert them to the tensor representation,
@@ -80,6 +81,40 @@ def maskrcnn_loss(proposals, mask_logits, matched_targets, discretization_size):
         mask_logits[positive_inds, labels_pos], mask_targets
     )
     return mask_loss
+
+
+def maskrcnn_inference(mask_logits, boxes):
+    """
+    From the results of the CNN, post process the masks
+    by taking the mask corresponding to the class with max
+    probability (which are of fixed size and directly output
+    by the CNN) and add it to the boxlist as an extra "mask" field.
+
+    Args:
+        mask_logits (Tensor): NCHW tensor.
+        boxes (list[BoxList]): boxes with "labels" field.
+
+    Returns:
+        None. boxes will contain an extra "mask" field.
+        The field contain the mask in the CNN output size.
+
+        It does not make sense to resize to image size here, because that is a quantization step, and
+        should be done by the caller of the entire model who knows the true original size of the image.
+    """
+    mask_prob = mask_logits.sigmoid()
+
+    # select masks coresponding to the predicted classes
+    num_masks = mask_logits.shape[0]
+    labels = [bbox.get_field("labels") for bbox in boxes]
+    labels = torch.cat(labels)
+    index = torch.arange(num_masks, device=labels.device)
+    mask_prob = mask_prob[index, labels][:, None]
+
+    boxes_per_image = [len(box) for box in boxes]
+    mask_prob = mask_prob.split(boxes_per_image, dim=0)
+
+    for prob, box in zip(mask_prob, boxes):
+        box.add_field("mask", prob)
 
 
 class MaskRCNNConvUpsampleHead(nn.Module):
