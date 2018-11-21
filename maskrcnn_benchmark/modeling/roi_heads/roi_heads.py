@@ -1,8 +1,9 @@
 import torch
 from torch.nn import functional as F
 
-from maskrcnn_benchmark.modeling.balanced_positive_negative_sampler import \
-    sample_with_positive_fraction
+from maskrcnn_benchmark.modeling.balanced_positive_negative_sampler import (
+    sample_with_positive_fraction,
+)
 from maskrcnn_benchmark.modeling.box_coder import BoxCoder
 from maskrcnn_benchmark.modeling.matcher import Matcher
 from maskrcnn_benchmark.modeling.poolers import Pooler
@@ -77,7 +78,9 @@ class ROIHeads(torch.nn.Module):
         sampled_targets = []
 
         with torch.no_grad():
-            for image_idx, (proposals_per_image, targets_per_image) in enumerate(zip(proposals, targets)):
+            for image_idx, (proposals_per_image, targets_per_image) in enumerate(
+                zip(proposals, targets)
+            ):
                 match_quality_matrix = boxlist_iou(targets_per_image, proposals_per_image)
                 matched_idxs = self.proposal_matcher(match_quality_matrix)
                 # Fast RCNN only need "labels" field for selecting the targets
@@ -93,11 +96,14 @@ class ROIHeads(torch.nn.Module):
                 # Label background (below the low threshold)
                 labels_per_image[matched_idxs == Matcher.BELOW_LOW_THRESHOLD] = 0
                 # Label ignore proposals (between low and high thresholds)
-                labels_per_image[matched_idxs == Matcher.BETWEEN_THRESHOLDS] = -1  # -1 is ignored by sampler
+                labels_per_image[
+                    matched_idxs == Matcher.BETWEEN_THRESHOLDS
+                ] = -1  # -1 is ignored by sampler
 
                 # apply sampling
                 sampled_pos_inds, sampled_neg_inds = sample_with_positive_fraction(
-                    labels_per_image, self.batch_size_per_image, self.positive_sample_fraction)
+                    labels_per_image, self.batch_size_per_image, self.positive_sample_fraction
+                )
                 sampled_inds = torch.cat([sampled_pos_inds, sampled_neg_inds], dim=0)
 
                 sampled_targets.append(matched_targets[sampled_inds])
@@ -119,7 +125,8 @@ class C4ROIHeads(ROIHeads):
         self.pooler = Pooler(
             output_size=resolution,
             scales=cfg.MODEL.ROI_BOX_HEAD.POOLER_SCALES,
-            sampling_ratio=cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO)
+            sampling_ratio=cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO,
+        )
 
         self.res5_head = resnet.ResNetHead(
             block_module=cfg.MODEL.RESNETS.TRANS_FUNC,
@@ -153,7 +160,8 @@ class C4ROIHeads(ROIHeads):
         del feature_pooled
 
         outputs = FastRCNNOutputs(
-            self.box_coder, class_logits, regression_outputs, proposals, targets)
+            self.box_coder, class_logits, regression_outputs, proposals, targets
+        )
 
         if self.training:
             losses = outputs.losses()
@@ -164,13 +172,19 @@ class C4ROIHeads(ROIHeads):
                 # just use the box features for all the positivie proposals
                 mask_features = features[torch.cat(pos_masks, dim=0)]
                 mask_logits = self.mask_head(mask_features)
-                losses['loss_mask'] = maskrcnn_loss(
-                    proposals, mask_logits, targets, self.mask_discretization_size)
+                losses["loss_mask"] = maskrcnn_loss(
+                    proposals, mask_logits, targets, self.mask_discretization_size
+                )
             return None, None, losses
         else:
             results = fastrcnn_inference(
-                outputs.predict_boxes(), outputs.predict_probs(), outputs.image_shapes,
-                self.test_score_thresh, self.test_nms_thresh, self.test_detections_per_img)
+                outputs.predict_boxes(),
+                outputs.predict_probs(),
+                outputs.image_shapes,
+                self.test_score_thresh,
+                self.test_nms_thresh,
+                self.test_detections_per_img,
+            )
             if self.cfg.MODEL.MASK_ON:
                 x = self._shared_roi_transform(features, results)
                 mask_logits = self.mask_head(x)
@@ -184,6 +198,7 @@ class StandardROIHeads(ROIHeads):
     The rois go to separate branches (boxes and masks) directly.
     This is used by FPN, C5 models, etc.
     """
+
     def __init__(self, cfg):
         super(StandardROIHeads, self).__init__(cfg)
 
@@ -191,18 +206,22 @@ class StandardROIHeads(ROIHeads):
         self.box_pooler = Pooler(
             output_size=resolution,
             scales=cfg.MODEL.ROI_BOX_HEAD.POOLER_SCALES,
-            sampling_ratio=cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
+            sampling_ratio=cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO,
         )
-        self.box_head = make_box_head(cfg, (cfg.MODEL.BACKBONE.OUT_CHANNELS, resolution, resolution))
+        self.box_head = make_box_head(
+            cfg, (cfg.MODEL.BACKBONE.OUT_CHANNELS, resolution, resolution)
+        )
 
-        self.box_predictor = FastRCNNOutputHead(self.box_head.output_size, cfg.MODEL.ROI_HEADS.NUM_CLASSES)
+        self.box_predictor = FastRCNNOutputHead(
+            self.box_head.output_size, cfg.MODEL.ROI_HEADS.NUM_CLASSES
+        )
         self.box_coder = BoxCoder(weights=cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS)
 
         if cfg.MODEL.MASK_ON:
             self.mask_pooler = Pooler(
                 output_size=cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION,
                 scales=cfg.MODEL.ROI_MASK_HEAD.POOLER_SCALES,
-                sampling_ratio=cfg.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO
+                sampling_ratio=cfg.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO,
             )
             self.mask_head = make_mask_head(cfg, cfg.MODEL.BACKBONE.OUT_CHANNELS)
             self.mask_discretization_size = cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
@@ -217,15 +236,21 @@ class StandardROIHeads(ROIHeads):
         del box_features
 
         outputs = FastRCNNOutputs(
-            self.box_coder, class_logits, regression_outputs, proposals, targets)
+            self.box_coder, class_logits, regression_outputs, proposals, targets
+        )
 
         if self.training:
             losses = outputs.losses()
         else:
             losses = {}
             proposals = fastrcnn_inference(
-                outputs.predict_boxes(), outputs.predict_probs(), outputs.image_shapes,
-                self.test_score_thresh, self.test_nms_thresh, self.test_detections_per_img)
+                outputs.predict_boxes(),
+                outputs.predict_probs(),
+                outputs.image_shapes,
+                self.test_score_thresh,
+                self.test_nms_thresh,
+                self.test_detections_per_img,
+            )
 
         if self.cfg.MODEL.MASK_ON:
             if self.training:
@@ -234,8 +259,9 @@ class StandardROIHeads(ROIHeads):
             mask_logits = self.mask_head(mask_features)
 
             if self.training:
-                losses['loss_mask'] = maskrcnn_loss(
-                    proposals, mask_logits, targets, self.mask_discretization_size)
+                losses["loss_mask"] = maskrcnn_loss(
+                    proposals, mask_logits, targets, self.mask_discretization_size
+                )
             else:
                 maskrcnn_inference(mask_logits, proposals)
 
@@ -244,5 +270,4 @@ class StandardROIHeads(ROIHeads):
 
 def build_roi_heads(cfg):
     name = cfg.MODEL.ROI_HEADS.NAME
-    return {'C4ROIHeads': C4ROIHeads,
-            'StandardROIHeads': StandardROIHeads}[name](cfg)
+    return {"C4ROIHeads": C4ROIHeads, "StandardROIHeads": StandardROIHeads}[name](cfg)

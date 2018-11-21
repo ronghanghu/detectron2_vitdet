@@ -47,22 +47,27 @@ def _rename_basic_resnet_weights(layer_keys):
 
     return layer_keys
 
+
 def _rename_fpn_weights(layer_keys, stage_names):
     for mapped_idx, stage_name in enumerate(stage_names, 1):
         suffix = ""
         if mapped_idx < 4:
             suffix = ".lateral"
         layer_keys = [
-            k.replace("fpn.inner.layer{}.sum{}".format(stage_name, suffix), "fpn_inner{}".format(mapped_idx)) for k in layer_keys
+            k.replace(
+                "fpn.inner.layer{}.sum{}".format(stage_name, suffix),
+                "fpn_inner{}".format(mapped_idx),
+            )
+            for k in layer_keys
         ]
-        layer_keys = [k.replace("fpn.layer{}.sum".format(stage_name), "fpn_layer{}".format(mapped_idx)) for k in layer_keys]
-
+        layer_keys = [
+            k.replace("fpn.layer{}.sum".format(stage_name), "fpn_layer{}".format(mapped_idx))
+            for k in layer_keys
+        ]
 
     layer_keys = [k.replace("rpn.conv.fpn2", "rpn.conv") for k in layer_keys]
     layer_keys = [k.replace("rpn.bbox_pred.fpn2", "rpn.bbox_pred") for k in layer_keys]
-    layer_keys = [
-        k.replace("rpn.cls_logits.fpn2", "rpn.cls_logits") for k in layer_keys
-    ]
+    layer_keys = [k.replace("rpn.cls_logits.fpn2", "rpn.cls_logits") for k in layer_keys]
 
     return layer_keys
 
@@ -129,10 +134,8 @@ def _load_c2_pickled_weights(file_path):
     return weights
 
 
-_C2_STAGE_NAMES = {
-    "R-50": ["1.2", "2.3", "3.5", "4.2"],
-    "R-101": ["1.2", "2.3", "3.22", "4.2"],
-}
+_C2_STAGE_NAMES = {"R-50": ["1.2", "2.3", "3.5", "4.2"], "R-101": ["1.2", "2.3", "3.22", "4.2"]}
+
 
 def load_c2_format(cfg, f):
     # TODO make it support other architectures

@@ -44,8 +44,8 @@ def fastrcnn_losses(labels, regression_targets, class_logits, regression_outputs
 
 
 def fastrcnn_inference_single(
-        boxes, scores, image_shape,
-        score_thresh, nms_thresh, detections_per_img):
+    boxes, scores, image_shape, score_thresh, nms_thresh, detections_per_img
+):
     """
     Single-image inference post-processing function.
     Returns bounding-box detection results by thresholding on scores
@@ -60,8 +60,7 @@ def fastrcnn_inference_single(
     """
     num_classes = scores.shape[1]
     # convert to boxlist to use the `clip` function ...
-    boxlist = BoxList(boxes.reshape(-1, 4),
-                      image_shape, mode="xyxy")
+    boxlist = BoxList(boxes.reshape(-1, 4), image_shape, mode="xyxy")
     boxlist = boxlist.clip_to_image(remove_empty=False)
     boxes = boxlist.bbox.view(-1, num_classes, 4)
 
@@ -77,9 +76,7 @@ def fastrcnn_inference_single(
         # image_size is not used, fill -1
         boxlist_for_class = BoxList(boxes_j, image_shape, mode="xyxy")
         boxlist_for_class.add_field("scores", scores_j)
-        boxlist_for_class = boxlist_nms(
-            boxlist_for_class, nms_thresh, score_field="scores"
-        )
+        boxlist_for_class = boxlist_nms(boxlist_for_class, nms_thresh, score_field="scores")
         num_labels = len(boxlist_for_class)
         boxlist_for_class.add_field(
             "labels", torch.full((num_labels,), j, dtype=torch.int64, device=device)
@@ -101,9 +98,7 @@ def fastrcnn_inference_single(
     return result
 
 
-def fastrcnn_inference(
-        boxes, scores, image_shapes,
-        score_thresh, nms_thresh, detections_per_img):
+def fastrcnn_inference(boxes, scores, image_shapes, score_thresh, nms_thresh, detections_per_img):
     """
     Call `fastrcnn_inference_single` for all images.
 
@@ -115,10 +110,17 @@ def fastrcnn_inference(
     Returns:
         list[BoxList]:
     """
-    return [fastrcnn_inference_single(
-            boxes_per_image, probs_per_image, image_shape,
-            score_thresh, nms_thresh, detections_per_img)
-            for probs_per_image, boxes_per_image, image_shape in zip(scores, boxes, image_shapes)]
+    return [
+        fastrcnn_inference_single(
+            boxes_per_image,
+            probs_per_image,
+            image_shape,
+            score_thresh,
+            nms_thresh,
+            detections_per_img,
+        )
+        for probs_per_image, boxes_per_image, image_shape in zip(scores, boxes, image_shapes)
+    ]
 
 
 class FastRCNNOutputs(object):
@@ -128,6 +130,7 @@ class FastRCNNOutputs(object):
     TODO more property/methods can be added,
     e.g. class-agnostic regression, predicted_labels, decoded_boxes_for_gt_labels, fg_proposals
     """
+
     def __init__(self, box_coder, class_logits, regression_outputs, proposals, targets=None):
         """
         Args:
@@ -157,12 +160,15 @@ class FastRCNNOutputs(object):
         """
         regression_targets = [
             self.box_coder.encode(targets_per_image.bbox, proposals_per_image)
-            for targets_per_image, proposals_per_image in zip(self.targets, self.proposals)]
+            for targets_per_image, proposals_per_image in zip(self.targets, self.proposals)
+        ]
 
         loss_classifier, loss_box_reg = fastrcnn_losses(
             cat(self.labels, dim=0),
             cat(regression_targets, dim=0),
-            self.class_logits, self.regression_outputs)
+            self.class_logits,
+            self.regression_outputs,
+        )
         return dict(loss_classifier=loss_classifier, loss_box_reg=loss_box_reg)
 
     def predict_boxes(self):
@@ -171,8 +177,8 @@ class FastRCNNOutputs(object):
             list[Tensor]: the Tensor for each image has shape (#box, #class, 4)
         """
         decoded = self.box_coder.decode(
-            self.regression_outputs.view(sum(self.num_boxes), -1),
-            torch.cat(self.proposals, dim=0))
+            self.regression_outputs.view(sum(self.num_boxes), -1), torch.cat(self.proposals, dim=0)
+        )
         return decoded.split(self.num_boxes, dim=0)
 
     def predict_probs(self):
@@ -188,6 +194,7 @@ class FastRCNNOutputHead(nn.Module):
     """
     2 FC layers that does bbox regression and classification, respectively.
     """
+
     def __init__(self, input_size, num_classes):
         """
         Args:
@@ -252,6 +259,6 @@ def make_box_head(cfg, input_size):
         input_size: channels, or (channels, height, width)
     """
     head = cfg.MODEL.ROI_BOX_HEAD.NAME
-    if head == 'FastRCNN2MLPHead':
+    if head == "FastRCNN2MLPHead":
         return FastRCNN2MLPHead(input_size, cfg.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM)
     raise ValueError("Unknown head {}".format(head))

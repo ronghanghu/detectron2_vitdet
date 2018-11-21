@@ -11,10 +11,10 @@ from maskrcnn_benchmark.structures.bounding_box import BoxList
 # but are kept here for the moment while we need them
 # temporarily gor paste_mask_in_image
 def expand_boxes(boxes, scale):
-    w_half = (boxes[:, 2] - boxes[:, 0]) * .5
-    h_half = (boxes[:, 3] - boxes[:, 1]) * .5
-    x_c = (boxes[:, 2] + boxes[:, 0]) * .5
-    y_c = (boxes[:, 3] + boxes[:, 1]) * .5
+    w_half = (boxes[:, 2] - boxes[:, 0]) * 0.5
+    h_half = (boxes[:, 3] - boxes[:, 1]) * 0.5
+    x_c = (boxes[:, 2] + boxes[:, 0]) * 0.5
+    y_c = (boxes[:, 3] + boxes[:, 1]) * 0.5
 
     w_half *= scale
     h_half *= scale

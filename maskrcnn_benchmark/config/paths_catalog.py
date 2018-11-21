@@ -7,15 +7,9 @@ class DatasetCatalog(object):
     DATA_DIR = "datasets"
 
     DATASETS = {
-        "coco_2014_train": (
-            "coco/train2014",
-            "coco/annotations/instances_train2014.json",
-        ),
+        "coco_2014_train": ("coco/train2014", "coco/annotations/instances_train2014.json"),
         "coco_2014_val": ("coco/val2014", "coco/annotations/instances_val2014.json"),
-        "coco_2014_minival": (
-            "coco/val2014",
-            "coco/annotations/instances_minival2014.json",
-        ),
+        "coco_2014_minival": ("coco/val2014", "coco/annotations/instances_minival2014.json"),
         "coco_2014_valminusminival": (
             "coco/val2014",
             "coco/annotations/instances_valminusminival2014.json",
@@ -28,13 +22,9 @@ class DatasetCatalog(object):
             data_dir = DatasetCatalog.DATA_DIR
             attrs = DatasetCatalog.DATASETS[name]
             args = dict(
-                root=os.path.join(data_dir, attrs[0]),
-                ann_file=os.path.join(data_dir, attrs[1]),
+                root=os.path.join(data_dir, attrs[0]), ann_file=os.path.join(data_dir, attrs[1])
             )
-            return dict(
-                factory="COCODataset",
-                args=args,
-            )
+            return dict(factory="COCODataset", args=args)
         raise RuntimeError("Dataset not available: {}".format(name))
 
 
@@ -46,7 +36,9 @@ class ModelCatalog(object):
         "FAIR/20171220/X-101-32x8d": "ImageNetPretrained/20171220/X-101-32x8d.pkl",
     }
 
-    C2_DETECTRON_SUFFIX = "output/train/coco_2014_train%3Acoco_2014_valminusminival/generalized_rcnn/model_final.pkl"
+    C2_DETECTRON_SUFFIX = (
+        "output/train/coco_2014_train%3Acoco_2014_valminusminival/generalized_rcnn/model_final.pkl"
+    )
     C2_DETECTRON_MODELS = {
         "35857197/e2e_faster_rcnn_R-50-C4_1x": "01_33_49.iAX0mXvW",
         "35857345/e2e_faster_rcnn_R-50-FPN_1x": "01_36_30.cUF7QR7I",
@@ -69,7 +61,7 @@ class ModelCatalog(object):
     @staticmethod
     def get_c2_imagenet_pretrained(name):
         prefix = ModelCatalog.S3_C2_DETECTRON_URL
-        name = name[len("ImageNetPretrained/"):]
+        name = name[len("ImageNetPretrained/") :]
         name = ModelCatalog.C2_IMAGENET_MODELS[name]
         url = "/".join([prefix, name])
         return url
@@ -82,7 +74,7 @@ class ModelCatalog(object):
         prefix = ModelCatalog.S3_C2_DETECTRON_URL
         suffix = ModelCatalog.C2_DETECTRON_SUFFIX
         # remove identification prefix
-        name = name[len("Caffe2Detectron/COCO/"):]
+        name = name[len("Caffe2Detectron/COCO/") :]
         # split in <model_id> and <model_name>
         model_id, model_name = name.split("/")
         # parsing to make it match the url address from the Caffe2 models

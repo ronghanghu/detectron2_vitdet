@@ -45,9 +45,7 @@ class AnchorGenerator(nn.Module):
 
         if len(anchor_strides) == 1:
             anchor_stride = anchor_strides[0]
-            cell_anchors = [
-                generate_anchors(anchor_stride, sizes, aspect_ratios).float()
-            ]
+            cell_anchors = [generate_anchors(anchor_stride, sizes, aspect_ratios).float()]
         else:
             if len(anchor_strides) != len(sizes):
                 raise RuntimeError("FPN should have #anchor_strides == #sizes")
@@ -64,9 +62,7 @@ class AnchorGenerator(nn.Module):
 
     def grid_anchors(self, grid_sizes):
         anchors = []
-        for size, stride, base_anchors in zip(
-            grid_sizes, self.strides, self.cell_anchors
-        ):
+        for size, stride, base_anchors in zip(grid_sizes, self.strides, self.cell_anchors):
             grid_height, grid_width = size
             device = base_anchors.device
             shifts_x = torch.arange(
@@ -80,9 +76,7 @@ class AnchorGenerator(nn.Module):
             shift_y = shift_y.reshape(-1)
             shifts = torch.stack((shift_x, shift_y, shift_x, shift_y), dim=1)
 
-            anchors.append(
-                (shifts.view(-1, 1, 4) + base_anchors.view(1, -1, 4)).reshape(-1, 4)
-            )
+            anchors.append((shifts.view(-1, 1, 4) + base_anchors.view(1, -1, 4)).reshape(-1, 4))
 
         return anchors
 
@@ -109,9 +103,7 @@ class AnchorGenerator(nn.Module):
         for i, (image_height, image_width) in enumerate(image_list.image_sizes):
             anchors_in_image = []
             for anchors_per_feature_map in anchors_over_all_feature_maps:
-                boxlist = BoxList(
-                    anchors_per_feature_map, (image_width, image_height), mode="xyxy"
-                )
+                boxlist = BoxList(anchors_per_feature_map, (image_width, image_height), mode="xyxy")
                 self.add_visibility_to(boxlist)
                 anchors_in_image.append(boxlist)
             anchors.append(anchors_in_image)
@@ -130,9 +122,7 @@ def make_anchor_generator(config):
         ), "FPN should have len(ANCHOR_STRIDE) == len(ANCHOR_SIZES)"
     else:
         assert len(anchor_stride) == 1, "Non-FPN should have a single ANCHOR_STRIDE"
-    anchor_generator = AnchorGenerator(
-        anchor_sizes, aspect_ratios, anchor_stride, straddle_thresh
-    )
+    anchor_generator = AnchorGenerator(anchor_sizes, aspect_ratios, anchor_stride, straddle_thresh)
     return anchor_generator
 
 
@@ -188,17 +178,13 @@ def make_anchor_generator(config):
 #        [-167., -343.,  184.,  360.]])
 
 
-def generate_anchors(
-    stride=16, sizes=(32, 64, 128, 256, 512), aspect_ratios=(0.5, 1, 2)
-):
+def generate_anchors(stride=16, sizes=(32, 64, 128, 256, 512), aspect_ratios=(0.5, 1, 2)):
     """Generates a matrix of anchor boxes in (x1, y1, x2, y2) format. Anchors
     are centered on stride / 2, have (approximate) sqrt areas of the specified
     sizes, and aspect ratios as given.
     """
     return _generate_anchors(
-        stride,
-        np.array(sizes, dtype=np.float) / stride,
-        np.array(aspect_ratios, dtype=np.float),
+        stride, np.array(sizes, dtype=np.float) / stride, np.array(aspect_ratios, dtype=np.float)
     )
 
 
@@ -208,9 +194,7 @@ def _generate_anchors(base_size, scales, aspect_ratios):
     """
     anchor = np.array([1, 1, base_size, base_size], dtype=np.float) - 1
     anchors = _ratio_enum(anchor, aspect_ratios)
-    anchors = np.vstack(
-        [_scale_enum(anchors[i, :], scales) for i in range(anchors.shape[0])]
-    )
+    anchors = np.vstack([_scale_enum(anchors[i, :], scales) for i in range(anchors.shape[0])])
     return torch.from_numpy(anchors)
 
 

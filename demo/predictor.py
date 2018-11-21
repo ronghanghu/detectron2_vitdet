@@ -141,9 +141,7 @@ class COCODemo(object):
         else:
             to_bgr_transform = T.Lambda(lambda x: x[[2, 1, 0]])
 
-        normalize_transform = T.Normalize(
-            mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD
-        )
+        normalize_transform = T.Normalize(mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD)
 
         transform = T.Compose(
             [
@@ -261,9 +259,7 @@ class COCODemo(object):
         for box, color in zip(boxes, colors):
             box = box.to(torch.int64)
             top_left, bottom_right = box[:2].tolist(), box[2:].tolist()
-            image = cv2.rectangle(
-                image, tuple(top_left), tuple(bottom_right), tuple(color), 1
-            )
+            image = cv2.rectangle(image, tuple(top_left), tuple(bottom_right), tuple(color), 1)
 
         return image
 
@@ -317,9 +313,7 @@ class COCODemo(object):
             masks_padded[: len(masks)] = masks
             masks = masks_padded
         masks = masks.reshape(masks_per_dim, masks_per_dim, height, width)
-        result = torch.zeros(
-            (masks_per_dim * height, masks_per_dim * width), dtype=torch.uint8
-        )
+        result = torch.zeros((masks_per_dim * height, masks_per_dim * width), dtype=torch.uint8)
         for y in range(masks_per_dim):
             start_y = y * height
             end_y = (y + 1) * height
@@ -348,8 +342,6 @@ class COCODemo(object):
         for box, score, label in zip(boxes, scores, labels):
             x, y = box[:2]
             s = template.format(label, score)
-            cv2.putText(
-                image, s, (x, y), cv2.FONT_HERSHEY_SIMPLEX, .5, (255, 255, 255), 1
-            )
+            cv2.putText(image, s, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
         return image

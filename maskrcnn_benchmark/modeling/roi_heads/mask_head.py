@@ -23,9 +23,7 @@ def project_masks_on_boxes(segmentation_masks, proposals, discretization_size):
     M = discretization_size
     device = proposals.bbox.device
     proposals = proposals.convert("xyxy")
-    assert segmentation_masks.size == proposals.size, "{}, {}".format(
-        segmentation_masks, proposals
-    )
+    assert segmentation_masks.size == proposals.size, "{}, {}".format(segmentation_masks, proposals)
     # TODO put the proposals on the CPU, as the representation for the
     # masks is not efficient GPU-wise (possibly several small tensors for
     # representing a single instance mask)
@@ -123,13 +121,19 @@ class MaskRCNNConvUpsampleHead(nn.Module):
         self.blocks = []
 
         for k in range(num_convs):
-            layer = Conv2d(input_channels if k == 0 else feature_channels,
-                           feature_channels, 3, stride=1, padding=1)
-            self.add_module('mask_fcn{}'.format(k), layer)
+            layer = Conv2d(
+                input_channels if k == 0 else feature_channels,
+                feature_channels,
+                3,
+                stride=1,
+                padding=1,
+            )
+            self.add_module("mask_fcn{}".format(k), layer)
             self.blocks.append(layer)
 
-        self.deconv = ConvTranspose2d(feature_channels if num_convs > 0 else input_channels,
-                                      feature_channels, 2, 2, 0)
+        self.deconv = ConvTranspose2d(
+            feature_channels if num_convs > 0 else input_channels, feature_channels, 2, 2, 0
+        )
         self.predictor = Conv2d(feature_channels, num_classes, 1, 1, 0)
 
         for name, param in self.named_parameters():
@@ -155,12 +159,12 @@ def make_mask_head(cfg, input_size):
     num_classes = cfg.MODEL.ROI_HEADS.NUM_CLASSES
     if not isinstance(input_size, int):
         input_size = input_size[0]
-    if head == 'MaskRCNN4ConvUpsampleHead':
+    if head == "MaskRCNN4ConvUpsampleHead":
         return MaskRCNNConvUpsampleHead(
-            4, num_classes, input_size,
-            cfg.MODEL.ROI_MASK_HEAD.CONV_DIM)
-    if head == 'MaskRCNNUpsampleHead':
+            4, num_classes, input_size, cfg.MODEL.ROI_MASK_HEAD.CONV_DIM
+        )
+    if head == "MaskRCNNUpsampleHead":
         return MaskRCNNConvUpsampleHead(
-            0, num_classes, input_size,
-            cfg.MODEL.ROI_MASK_HEAD.CONV_DIM)
+            0, num_classes, input_size, cfg.MODEL.ROI_MASK_HEAD.CONV_DIM
+        )
     raise ValueError("Unknown head {}".format(head))
