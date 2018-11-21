@@ -14,9 +14,8 @@ from collections import namedtuple
 import torch.nn.functional as F
 from torch import nn
 
-from maskrcnn_benchmark.layers import FrozenBatchNorm2d
 from maskrcnn_benchmark.layers import Conv2d
-
+from maskrcnn_benchmark.layers import FrozenBatchNorm2d
 
 # ResNet stage specification
 StageSpec = namedtuple(

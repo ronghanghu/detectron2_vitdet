@@ -2,6 +2,8 @@
 
 import os
 
+from maskrcnn_benchmark.config.paths_catalog import ModelCatalog
+
 
 class DatasetCatalog(object):
     DATA_DIR = os.path.join(
@@ -38,5 +40,3 @@ class DatasetCatalog(object):
                 args=args,
             )
         raise RuntimeError("Dataset not available: {}".format(name))
-
-from maskrcnn_benchmark.config.paths_catalog import ModelCatalog

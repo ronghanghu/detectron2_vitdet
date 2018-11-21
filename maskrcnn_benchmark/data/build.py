@@ -3,12 +3,12 @@ import copy
 import logging
 
 import torch.utils.data
+
 from maskrcnn_benchmark.utils.comm import get_world_size
 from maskrcnn_benchmark.utils.imports import import_file
 
 from . import datasets as D
 from . import samplers
-
 from .collate_batch import BatchCollator
 from .transforms import build_transforms
 

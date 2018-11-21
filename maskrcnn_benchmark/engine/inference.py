@@ -1,22 +1,20 @@
 import datetime
 import logging
+import os
 import tempfile
 import time
-import os
 from collections import OrderedDict
 
 import torch
-
 from tqdm import tqdm
+
+from maskrcnn_benchmark.modeling.roi_heads.paste_mask import Masker
+from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 
 from ..structures.bounding_box import BoxList
 from ..utils.comm import is_main_process
 from ..utils.comm import scatter_gather
 from ..utils.comm import synchronize
-
-
-from maskrcnn_benchmark.modeling.roi_heads.paste_mask import Masker
-from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 
 
 def compute_on_dataset(model, data_loader, device):
@@ -427,4 +425,3 @@ def inference(
         torch.save(results, os.path.join(output_folder, "coco_results.pth"))
         
     return results, coco_results, predictions
-

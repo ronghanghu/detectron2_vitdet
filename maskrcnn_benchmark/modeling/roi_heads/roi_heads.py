@@ -1,18 +1,21 @@
 import torch
 from torch.nn import functional as F
 
-from maskrcnn_benchmark.modeling.matcher import Matcher
-from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
-from maskrcnn_benchmark.structures.bounding_box import BoxList
-from maskrcnn_benchmark.modeling.box_coder import BoxCoder
-from maskrcnn_benchmark.modeling.balanced_positive_negative_sampler import (
+from maskrcnn_benchmark.modeling.balanced_positive_negative_sampler import \
     sample_with_positive_fraction
-)
+from maskrcnn_benchmark.modeling.box_coder import BoxCoder
+from maskrcnn_benchmark.modeling.matcher import Matcher
 from maskrcnn_benchmark.modeling.poolers import Pooler
+from maskrcnn_benchmark.structures.bounding_box import BoxList
+from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 
-from .box_head import (
-    FastRCNNOutputHead, FastRCNNOutputs, fastrcnn_inference, make_box_head)
-from .mask_head import maskrcnn_loss, maskrcnn_inference, make_mask_head
+from .box_head import FastRCNNOutputHead
+from .box_head import FastRCNNOutputs
+from .box_head import fastrcnn_inference
+from .box_head import make_box_head
+from .mask_head import make_mask_head
+from .mask_head import maskrcnn_inference
+from .mask_head import maskrcnn_loss
 
 
 def keep_only_positive_boxes(boxes, matched_targets):
@@ -197,7 +200,7 @@ class StandardROIHeads(ROIHeads):
 
         if cfg.MODEL.MASK_ON:
             self.mask_pooler = Pooler(
-                output_size=(cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION, cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION),
+                output_size=cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION,
                 scales=cfg.MODEL.ROI_MASK_HEAD.POOLER_SCALES,
                 sampling_ratio=cfg.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO
             )

@@ -1,6 +1,5 @@
-import torch
-
 import pycocotools.mask as mask_utils
+import torch
 
 # transpose
 FLIP_LEFT_RIGHT = 0
