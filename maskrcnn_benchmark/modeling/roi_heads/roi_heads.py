@@ -154,8 +154,8 @@ class C4ROIHeads(ROIHeads):
         if self.training:
             proposals, targets = self.sample_proposals_for_training(proposals, targets)
 
-        features = self._shared_roi_transform(features, proposals)
-        feature_pooled = F.avg_pool2d(features, 7)  # gap
+        box_features = self._shared_roi_transform(features, proposals)
+        feature_pooled = F.avg_pool2d(box_features, 7)  # gap
         class_logits, regression_outputs = self.box_predictor(feature_pooled)
         del feature_pooled
 
@@ -164,13 +164,15 @@ class C4ROIHeads(ROIHeads):
         )
 
         if self.training:
+            del features
             losses = outputs.losses()
 
             if self.cfg.MODEL.MASK_ON:
                 proposals, targets, pos_masks = keep_only_positive_boxes(proposals, targets)
                 # don't need to do feature extraction again,
                 # just use the box features for all the positivie proposals
-                mask_features = features[torch.cat(pos_masks, dim=0)]
+                mask_features = box_features[torch.cat(pos_masks, dim=0)]
+                del box_features
                 mask_logits = self.mask_head(mask_features)
                 losses["loss_mask"] = maskrcnn_loss(
                     proposals, mask_logits, targets, self.mask_discretization_size
