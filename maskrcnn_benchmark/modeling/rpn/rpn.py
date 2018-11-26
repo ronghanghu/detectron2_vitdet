@@ -3,11 +3,12 @@ import torch.nn.functional as F
 from torch import nn
 
 from maskrcnn_benchmark.modeling.box_coder import BoxCoder
-from .loss import make_rpn_loss_evaluator
-from .anchor_generator import make_anchor_generator
-
-from .proposals import generate_rpn_proposals, generate_fpn_proposals
 from maskrcnn_benchmark.structures.boxlist_ops import cat_boxlist
+
+from .anchor_generator import make_anchor_generator
+from .loss import make_rpn_loss_evaluator
+from .proposals import generate_fpn_proposals
+from .proposals import generate_rpn_proposals
 
 
 class RPNHead(nn.Module):
@@ -22,13 +23,9 @@ class RPNHead(nn.Module):
             num_anchors (int): number of anchors to be predicted
         """
         super(RPNHead, self).__init__()
-        self.conv = nn.Conv2d(
-            in_channels, in_channels, kernel_size=3, stride=1, padding=1
-        )
+        self.conv = nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1)
         self.cls_logits = nn.Conv2d(in_channels, num_anchors, kernel_size=1, stride=1)
-        self.bbox_pred = nn.Conv2d(
-            in_channels, num_anchors * 4, kernel_size=1, stride=1
-        )
+        self.bbox_pred = nn.Conv2d(in_channels, num_anchors * 4, kernel_size=1, stride=1)
 
         for l in [self.conv, self.cls_logits, self.bbox_pred]:
             torch.nn.init.normal_(l.weight, std=0.01)
@@ -91,10 +88,7 @@ class RPNModule(torch.nn.Module):
             loss_objectness, loss_rpn_box_reg = self.loss_evaluator(
                 anchors, objectness, rpn_box_regression, targets
             )
-            losses = {
-                "loss_objectness": loss_objectness,
-                "loss_rpn_box_reg": loss_rpn_box_reg,
-            }
+            losses = {"loss_objectness": loss_objectness, "loss_rpn_box_reg": loss_rpn_box_reg}
         else:
             losses = {}
 
@@ -107,26 +101,42 @@ class RPNModule(torch.nn.Module):
 
         with torch.no_grad():
             decoded_boxes = self._decode_all_proposals(anchors, rpn_box_regression)
-            objectness = [score.permute(0, 2, 3, 1).reshape(num_images, -1)
-                          for score in objectness]  # reshape to (B, HxWx#anchor)
+            objectness = [
+                score.permute(0, 2, 3, 1).reshape(num_images, -1) for score in objectness
+            ]  # reshape to (B, HxWx#anchor)
 
             rpn_cfg = self.cfg.MODEL.RPN
             if len(features) == 1:
                 proposals = generate_rpn_proposals(
-                    decoded_boxes[0], objectness[0],
-                    [x[::-1] for x in images.image_sizes],  # TODO The w, h order is not consistent everywhere!
+                    decoded_boxes[0],
+                    objectness[0],
+                    [
+                        x[::-1] for x in images.image_sizes
+                    ],  # TODO The w, h order is not consistent everywhere!
                     nms_thresh=rpn_cfg.NMS_THRESH,
-                    pre_nms_topk=rpn_cfg.PRE_NMS_TOP_N_TRAIN if self.training else rpn_cfg.PRE_NMS_TOP_N_TEST,
-                    post_nms_topk=rpn_cfg.POST_NMS_TOP_N_TRAIN if self.training else rpn_cfg.POST_NMS_TOP_N_TEST,
-                    min_size=rpn_cfg.MIN_SIZE)
+                    pre_nms_topk=rpn_cfg.PRE_NMS_TOP_N_TRAIN
+                    if self.training
+                    else rpn_cfg.PRE_NMS_TOP_N_TEST,
+                    post_nms_topk=rpn_cfg.POST_NMS_TOP_N_TRAIN
+                    if self.training
+                    else rpn_cfg.POST_NMS_TOP_N_TEST,
+                    min_size=rpn_cfg.MIN_SIZE,
+                )
             else:
                 proposals = generate_fpn_proposals(
-                    decoded_boxes, objectness,
+                    decoded_boxes,
+                    objectness,
                     [x[::-1] for x in images.image_sizes],  # TODO same here
                     nms_thresh=rpn_cfg.NMS_THRESH,
-                    pre_nms_topk=rpn_cfg.PRE_NMS_TOP_N_TRAIN if self.training else rpn_cfg.PRE_NMS_TOP_N_TEST,
-                    post_nms_topk=rpn_cfg.FPN_POST_NMS_TOP_N_TRAIN if self.training else rpn_cfg.FPN_POST_NMS_TOP_N_TEST,
-                    min_size=rpn_cfg.MIN_SIZE, training=self.training)
+                    pre_nms_topk=rpn_cfg.PRE_NMS_TOP_N_TRAIN
+                    if self.training
+                    else rpn_cfg.PRE_NMS_TOP_N_TEST,
+                    post_nms_topk=rpn_cfg.FPN_POST_NMS_TOP_N_TRAIN
+                    if self.training
+                    else rpn_cfg.FPN_POST_NMS_TOP_N_TEST,
+                    min_size=rpn_cfg.MIN_SIZE,
+                    training=self.training,
+                )
 
             # Add GT proposals for end-to-end training.
             if self.training and targets is not None:
@@ -138,9 +148,7 @@ class RPNModule(torch.nn.Module):
                 # and don't bother to sort them in decreasing score order. For RPN-only
                 # models, the proposals are the final output and we return them in
                 # high-to-low confidence order.
-                inds = [
-                    box.get_field("objectness").sort(descending=True)[1] for box in proposals
-                ]
+                inds = [box.get_field("objectness").sort(descending=True)[1] for box in proposals]
                 proposals = [box[ind] for box, ind in zip(proposals, inds)]
             return proposals, losses
 
@@ -161,8 +169,7 @@ class RPNModule(torch.nn.Module):
             gt_box.add_field("objectness", torch.ones(len(gt_box), device=device))
 
         proposals = [
-            cat_boxlist((proposal, gt_box))
-            for proposal, gt_box in zip(proposals, gt_boxes)
+            cat_boxlist((proposal, gt_box)) for proposal, gt_box in zip(proposals, gt_boxes)
         ]
 
         return proposals
@@ -187,7 +194,7 @@ class RPNModule(torch.nn.Module):
             # concat all anchors over all images
             anchor = torch.cat([a.bbox for a in anchor], dim=0).reshape(-1, 4)
             decoded = self.rpn_box_coder.decode(bbreg_logit, anchor)
-            decoded_boxes.append(decoded.view(B, -1, 4))   # each has shape (B, HxWx#anchor, 4)
+            decoded_boxes.append(decoded.view(B, -1, 4))  # each has shape (B, HxWx#anchor, 4)
         return decoded_boxes
 
 

@@ -65,7 +65,7 @@ class ModelCatalog(object):
         prefix = ModelCatalog.DATA_DIR
         if "X-101-32x8d" in name:
             prefix = ModelCatalog.DATA_DIR_X_101_32x8d
-        name = name[len("ImageNetPretrained/"):]
+        name = name[len("ImageNetPretrained/") :]
         name = ModelCatalog.C2_IMAGENET_MODELS[name]
         url = os.path.join(prefix, name)
         return url

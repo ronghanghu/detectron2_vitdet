@@ -2,7 +2,6 @@ import os
 
 from yacs.config import CfgNode as CN
 
-
 # -----------------------------------------------------------------------------
 # Convention about Training / Test specific parameters
 # -----------------------------------------------------------------------------
@@ -46,7 +45,7 @@ _C.INPUT.MAX_SIZE_TEST = 1333
 # Values to be used for image normalization
 _C.INPUT.PIXEL_MEAN = [102.9801, 115.9465, 122.7717]
 # Values to be used for image normalization
-_C.INPUT.PIXEL_STD = [1., 1., 1.]
+_C.INPUT.PIXEL_STD = [1.0, 1.0, 1.0]
 # Convert image to BGR format (for Caffe2 models), in range 0-255
 _C.INPUT.TO_BGR255 = True
 
@@ -139,15 +138,13 @@ _C.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST = 2000
 # ROI HEADS options
 # ---------------------------------------------------------------------------- #
 _C.MODEL.ROI_HEADS = CN()
-_C.MODEL.ROI_HEADS.USE_FPN = False
+_C.MODEL.ROI_HEADS.NAME = "Res5ROIHeads"
+_C.MODEL.ROI_HEADS.NUM_CLASSES = 81
 # Overlap threshold for an RoI to be considered foreground (if >= FG_IOU_THRESHOLD)
 _C.MODEL.ROI_HEADS.FG_IOU_THRESHOLD = 0.5
 # Overlap threshold for an RoI to be considered background
 # (class = 0 if overlap in [0, BG_IOU_THRESHOLD))
 _C.MODEL.ROI_HEADS.BG_IOU_THRESHOLD = 0.5
-# Default weights on (dx, dy, dw, dh) for normalizing bbox regression targets
-# These are empirically chosen to approximately lead to unit variance targets
-_C.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS = (10., 10., 5., 5.)
 # RoI minibatch size *per image* (number of regions of interest [ROIs])
 # Total number of RoIs per training minibatch =
 #   TRAIN.BATCH_SIZE_PER_IM * TRAIN.IMS_PER_BATCH * NUM_GPUS
@@ -171,26 +168,27 @@ _C.MODEL.ROI_HEADS.DETECTIONS_PER_IMG = 100
 
 
 _C.MODEL.ROI_BOX_HEAD = CN()
-_C.MODEL.ROI_BOX_HEAD.FEATURE_EXTRACTOR = "ResNet50Conv5ROIFeatureExtractor"
-_C.MODEL.ROI_BOX_HEAD.PREDICTOR = "FastRCNNPredictor"
+# C4 don't use head name option
+# Options for non-C4 models: FastRCNN2MLPHead,
+_C.MODEL.ROI_BOX_HEAD.NAME = ""
+# Default weights on (dx, dy, dw, dh) for normalizing bbox regression targets
+# These are empirically chosen to approximately lead to unit variance targets
+_C.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS = (10.0, 10.0, 5.0, 5.0)
 _C.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION = 14
 _C.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO = 0
 _C.MODEL.ROI_BOX_HEAD.POOLER_SCALES = (1.0 / 16,)
-_C.MODEL.ROI_BOX_HEAD.NUM_CLASSES = 81
 # Hidden layer dimension when using an MLP for the RoI box head
 _C.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM = 1024
 
 
 _C.MODEL.ROI_MASK_HEAD = CN()
-_C.MODEL.ROI_MASK_HEAD.FEATURE_EXTRACTOR = "ResNet50Conv5ROIFeatureExtractor"
-_C.MODEL.ROI_MASK_HEAD.PREDICTOR = "MaskRCNNC4Predictor"
+# Options : MaskRCNN4ConvUpsampleHead,, MaskRCNNUpsampleHead
+_C.MODEL.ROI_MASK_HEAD.NAME = "MaskRCNNUpsampleHead"
 _C.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION = 14
 _C.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO = 0
 _C.MODEL.ROI_MASK_HEAD.POOLER_SCALES = (1.0 / 16,)
-_C.MODEL.ROI_MASK_HEAD.MLP_HEAD_DIM = 1024
-_C.MODEL.ROI_MASK_HEAD.CONV_LAYERS = (256, 256, 256, 256)
+_C.MODEL.ROI_MASK_HEAD.CONV_DIM = 256
 _C.MODEL.ROI_MASK_HEAD.RESOLUTION = 14
-_C.MODEL.ROI_MASK_HEAD.SHARE_BOX_FEATURE_EXTRACTOR = True
 
 # ---------------------------------------------------------------------------- #
 # ResNe[X]t options (ResNets = {ResNet, ResNeXt}
@@ -263,6 +261,6 @@ _C.TEST.IMS_PER_BATCH = 8
 # ---------------------------------------------------------------------------- #
 # Misc options
 # ---------------------------------------------------------------------------- #
-_C.OUTPUT_DIR = "."
+_C.OUTPUT_DIR = "./output"
 
 _C.PATHS_CATALOG = os.path.join(os.path.dirname(__file__), "paths_catalog.py")

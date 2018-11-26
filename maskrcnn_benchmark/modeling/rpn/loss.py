@@ -6,13 +6,13 @@ file
 import torch
 from torch.nn import functional as F
 
-from ..balanced_positive_negative_sampler import sample_with_positive_fraction
-from ..utils import cat
-
 from maskrcnn_benchmark.layers import smooth_l1_loss
 from maskrcnn_benchmark.modeling.matcher import Matcher
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 from maskrcnn_benchmark.structures.boxlist_ops import cat_boxlist
+
+from ..balanced_positive_negative_sampler import sample_with_positive_fraction
+from ..utils import cat
 
 
 class RPNLossComputation(object):
@@ -87,13 +87,13 @@ class RPNLossComputation(object):
 
         sampled_pos_inds, sampled_neg_inds = [], []
         for label in labels:
-            pos_idx, neg_idx = sample_with_positive_fraction(label, self.batch_per_image, self.positive_fraction)
+            pos_idx, neg_idx = sample_with_positive_fraction(
+                label, self.batch_per_image, self.positive_fraction
+            )
             # wait for https://github.com/pytorch/pytorch/issues/2027
             zeros = torch.zeros_like(label, dtype=torch.uint8)
-            sampled_pos_inds.append(
-                zeros if pos_idx.numel() == 0 else zeros.scatter(0, pos_idx, 1))
-            sampled_neg_inds.append(
-                zeros if neg_idx.numel() == 0 else zeros.scatter(0, neg_idx, 1))
+            sampled_pos_inds.append(zeros if pos_idx.numel() == 0 else zeros.scatter(0, pos_idx, 1))
+            sampled_neg_inds.append(zeros if neg_idx.numel() == 0 else zeros.scatter(0, neg_idx, 1))
         sampled_pos_inds = torch.nonzero(torch.cat(sampled_pos_inds, dim=0)).squeeze(1)
         sampled_neg_inds = torch.nonzero(torch.cat(sampled_neg_inds, dim=0)).squeeze(1)
 
@@ -105,13 +105,9 @@ class RPNLossComputation(object):
         # same format as the labels. Note that the labels are computed for
         # all feature levels concatenated, so we keep the same representation
         # for the objectness and the box_regression
-        for objectness_per_level, box_regression_per_level in zip(
-            objectness, box_regression
-        ):
+        for objectness_per_level, box_regression_per_level in zip(objectness, box_regression):
             N, A, H, W = objectness_per_level.shape
-            objectness_per_level = objectness_per_level.permute(0, 2, 3, 1).reshape(
-                N, -1
-            )
+            objectness_per_level = objectness_per_level.permute(0, 2, 3, 1).reshape(N, -1)
             box_regression_per_level = box_regression_per_level.view(N, -1, 4, H, W)
             box_regression_per_level = box_regression_per_level.permute(0, 3, 4, 1, 2)
             box_regression_per_level = box_regression_per_level.reshape(N, -1, 4)
@@ -148,7 +144,6 @@ def make_rpn_loss_evaluator(cfg, box_coder):
     )
 
     loss_evaluator = RPNLossComputation(
-        matcher, box_coder,
-        cfg.MODEL.RPN.BATCH_SIZE_PER_IMAGE,
-        cfg.MODEL.RPN.POSITIVE_FRACTION)
+        matcher, box_coder, cfg.MODEL.RPN.BATCH_SIZE_PER_IMAGE, cfg.MODEL.RPN.POSITIVE_FRACTION
+    )
     return loss_evaluator

@@ -6,13 +6,15 @@ import argparse
 import os
 
 import torch
+
 from maskrcnn_benchmark.config import cfg
 from maskrcnn_benchmark.data import make_data_loader
 from maskrcnn_benchmark.engine.inference import inference
 from maskrcnn_benchmark.modeling.detector import build_detection_model
 from maskrcnn_benchmark.utils.checkpoint import DetectronCheckpointer
 from maskrcnn_benchmark.utils.collect_env import collect_env_info
-from maskrcnn_benchmark.utils.comm import synchronize, get_rank
+from maskrcnn_benchmark.utils.comm import get_rank
+from maskrcnn_benchmark.utils.comm import synchronize
 from maskrcnn_benchmark.utils.logger import setup_logger
 from maskrcnn_benchmark.utils.miscellaneous import mkdir
 
@@ -40,9 +42,7 @@ def main():
 
     if distributed:
         torch.cuda.set_device(args.local_rank)
-        torch.distributed.deprecated.init_process_group(
-            backend="nccl", init_method="env://"
-        )
+        torch.distributed.deprecated.init_process_group(backend="nccl", init_method="env://")
 
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)

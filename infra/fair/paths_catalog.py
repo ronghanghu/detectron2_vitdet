@@ -2,6 +2,8 @@
 
 import os
 
+from maskrcnn_benchmark.config.paths_catalog import ModelCatalog
+
 
 class DatasetCatalog(object):
     DATA_DIR = os.path.join(
@@ -9,15 +11,9 @@ class DatasetCatalog(object):
     )
 
     DATASETS = {
-        "coco_2014_train": (
-            "coco/train2014",
-            "coco/annotations/instances_train2014.json",
-        ),
+        "coco_2014_train": ("coco/train2014", "coco/annotations/instances_train2014.json"),
         "coco_2014_val": ("coco/val2014", "coco/annotations/instances_val2014.json"),
-        "coco_2014_minival": (
-            "coco/val2014",
-            "coco/annotations/instances_minival2014.json",
-        ),
+        "coco_2014_minival": ("coco/val2014", "coco/annotations/instances_minival2014.json"),
         "coco_2014_valminusminival": (
             "coco/val2014",
             "coco/annotations/instances_valminusminival2014.json",
@@ -30,13 +26,7 @@ class DatasetCatalog(object):
             data_dir = DatasetCatalog.DATA_DIR
             attrs = DatasetCatalog.DATASETS[name]
             args = dict(
-                root=os.path.join(data_dir, attrs[0]),
-                ann_file=os.path.join(data_dir, attrs[1]),
+                root=os.path.join(data_dir, attrs[0]), ann_file=os.path.join(data_dir, attrs[1])
             )
-            return dict(
-                factory="COCODataset",
-                args=args,
-            )
+            return dict(factory="COCODataset", args=args)
         raise RuntimeError("Dataset not available: {}".format(name))
-
-from maskrcnn_benchmark.config.paths_catalog import ModelCatalog

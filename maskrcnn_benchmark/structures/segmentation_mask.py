@@ -1,6 +1,5 @@
-import torch
-
 import pycocotools.mask as mask_utils
+import torch
 
 # transpose
 FLIP_LEFT_RIGHT = 0
@@ -21,9 +20,7 @@ class Mask(object):
 
     def transpose(self, method):
         if method not in (FLIP_LEFT_RIGHT, FLIP_TOP_BOTTOM):
-            raise NotImplementedError(
-                "Only FLIP_LEFT_RIGHT and FLIP_TOP_BOTTOM implemented"
-            )
+            raise NotImplementedError("Only FLIP_LEFT_RIGHT and FLIP_TOP_BOTTOM implemented")
 
         width, height = self.size
         if method == FLIP_LEFT_RIGHT:
@@ -67,9 +64,7 @@ class Polygons(object):
 
     def transpose(self, method):
         if method not in (FLIP_LEFT_RIGHT, FLIP_TOP_BOTTOM):
-            raise NotImplementedError(
-                "Only FLIP_LEFT_RIGHT and FLIP_TOP_BOTTOM implemented"
-            )
+            raise NotImplementedError("Only FLIP_LEFT_RIGHT and FLIP_TOP_BOTTOM implemented")
 
         flipped_polygons = []
         width, height = self.size
@@ -124,9 +119,7 @@ class Polygons(object):
     def convert(self, mode):
         width, height = self.size
         if mode == "mask":
-            rles = mask_utils.frPyObjects(
-                [p.numpy() for p in self.polygons], height, width
-            )
+            rles = mask_utils.frPyObjects([p.numpy() for p in self.polygons], height, width)
             rle = mask_utils.merge(rles)
             mask = mask_utils.decode(rle)
             mask = torch.from_numpy(mask)
@@ -163,9 +156,7 @@ class SegmentationMask(object):
 
     def transpose(self, method):
         if method not in (FLIP_LEFT_RIGHT, FLIP_TOP_BOTTOM):
-            raise NotImplementedError(
-                "Only FLIP_LEFT_RIGHT and FLIP_TOP_BOTTOM implemented"
-            )
+            raise NotImplementedError("Only FLIP_LEFT_RIGHT and FLIP_TOP_BOTTOM implemented")
 
         flipped = []
         for polygon in self.polygons:

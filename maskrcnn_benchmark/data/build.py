@@ -3,12 +3,12 @@ import copy
 import logging
 
 import torch.utils.data
+
 from maskrcnn_benchmark.utils.comm import get_world_size
 from maskrcnn_benchmark.utils.imports import import_file
 
 from . import datasets as D
 from . import samplers
-
 from .collate_batch import BatchCollator
 from .transforms import build_transforms
 
@@ -24,8 +24,7 @@ def build_dataset(dataset_list, transforms, dataset_catalog, is_train=True):
         is_train (bool): whether to setup the dataset for training or testing
     """
     if not isinstance(dataset_list, (list, tuple)):
-        raise RuntimeError(
-                "dataset_list should be a list of strings, got {}".format(dataset_list))
+        raise RuntimeError("dataset_list should be a list of strings, got {}".format(dataset_list))
     datasets = []
     for dataset_name in dataset_list:
         data = dataset_catalog.get(dataset_name)
@@ -138,9 +137,7 @@ def make_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0):
     # but the code supports more general grouping strategy
     aspect_grouping = [1] if cfg.DATALOADER.ASPECT_RATIO_GROUPING else []
 
-    paths_catalog = import_file(
-        "maskrcnn_benchmark.config.paths_catalog", cfg.PATHS_CATALOG, True
-    )
+    paths_catalog = import_file("maskrcnn_benchmark.config.paths_catalog", cfg.PATHS_CATALOG, True)
     DatasetCatalog = paths_catalog.DatasetCatalog
     dataset_list = cfg.DATASETS.TRAIN if is_train else cfg.DATASETS.TEST
 
@@ -156,10 +153,7 @@ def make_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0):
         collator = BatchCollator(cfg.DATALOADER.SIZE_DIVISIBILITY)
         num_workers = cfg.DATALOADER.NUM_WORKERS
         data_loader = torch.utils.data.DataLoader(
-            dataset,
-            num_workers=num_workers,
-            batch_sampler=batch_sampler,
-            collate_fn=collator,
+            dataset, num_workers=num_workers, batch_sampler=batch_sampler, collate_fn=collator
         )
         data_loaders.append(data_loader)
     if is_train:

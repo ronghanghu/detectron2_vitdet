@@ -1,15 +1,14 @@
 import torch
+
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_nms
-from maskrcnn_benchmark.structures.boxlist_ops import remove_small_boxes
 from maskrcnn_benchmark.structures.boxlist_ops import cat_boxlist
+from maskrcnn_benchmark.structures.boxlist_ops import remove_small_boxes
 
 
 def generate_rpn_proposals(
-        boxes, objectness, image_sizes,
-        nms_thresh,
-        pre_nms_topk, post_nms_topk,
-        min_size=0):
+    boxes, objectness, image_sizes, nms_thresh, pre_nms_topk, post_nms_topk, min_size=0
+):
     """
     Generate RPN proposals from RPN boxes at all locations.
     It does so by NMS and keeping the topk.
@@ -32,7 +31,7 @@ def generate_rpn_proposals(
     objectness, topk_idx = objectness.topk(pre_nms_topk, dim=1)
 
     batch_idx = torch.arange(B, device=device)[:, None]
-    boxes = boxes[batch_idx, topk_idx]           # B, topk, 4
+    boxes = boxes[batch_idx, topk_idx]  # B, topk, 4
 
     result = []
     for proposals, scores, im_shape in zip(boxes, objectness, image_sizes):
@@ -47,20 +46,22 @@ def generate_rpn_proposals(
         boxlist = boxlist.clip_to_image(remove_empty=False)
         boxlist = remove_small_boxes(boxlist, min_size)
         boxlist = boxlist_nms(
-            boxlist,
-            nms_thresh,
-            max_proposals=post_nms_topk,
-            score_field="objectness",
+            boxlist, nms_thresh, max_proposals=post_nms_topk, score_field="objectness"
         )
         result.append(boxlist)
     return result
 
 
 def generate_fpn_proposals(
-        multilevel_boxes, multilevel_objectness, image_sizes,
-        nms_thresh,
-        pre_nms_topk, post_nms_topk,
-        min_size=0, training=False):
+    multilevel_boxes,
+    multilevel_objectness,
+    image_sizes,
+    nms_thresh,
+    pre_nms_topk,
+    post_nms_topk,
+    min_size=0,
+    training=False,
+):
     """
     Generate RPN proposals from multilevel features in FPN.
     Currently it does so by merging the outputs of `generate_rpn_proposals`.
@@ -76,13 +77,13 @@ def generate_fpn_proposals(
     # TODO an alternative is to merge them first, then do topk and NMS
     multilevel_proposals = [
         generate_rpn_proposals(
-            boxes, objectness, image_sizes,
-            nms_thresh, pre_nms_topk, post_nms_topk, min_size)
+            boxes, objectness, image_sizes, nms_thresh, pre_nms_topk, post_nms_topk, min_size
+        )
         for boxes, objectness in zip(multilevel_boxes, multilevel_objectness)
     ]  # #lvl x #img BoxList.
     multilevel_proposals = list(zip(*multilevel_proposals))  # #img x #lvl BoxList
     # concat proposals across feature levels
-    proposals_per_img = [cat_boxlist(boxlist) for boxlist in multilevel_proposals]   # #img BoxList
+    proposals_per_img = [cat_boxlist(boxlist) for boxlist in multilevel_proposals]  # #img BoxList
     num_img = len(proposals_per_img)
 
     # different behavior during training and during testing:
@@ -106,8 +107,6 @@ def generate_fpn_proposals(
         for i in range(num_img):
             objectness = proposals_per_img[i].get_field("objectness")
             post_nms_top_n = min(post_nms_topk, len(objectness))
-            _, inds_sorted = torch.topk(
-                objectness, post_nms_top_n, dim=0, sorted=True
-            )
+            _, inds_sorted = torch.topk(objectness, post_nms_top_n, dim=0, sorted=True)
             proposals_per_img[i] = proposals_per_img[i][inds_sorted]
     return proposals_per_img

@@ -1,22 +1,20 @@
 import datetime
 import logging
+import os
 import tempfile
 import time
-import os
 from collections import OrderedDict
 
 import torch
-
 from tqdm import tqdm
+
+from maskrcnn_benchmark.modeling.roi_heads.paste_mask import Masker
+from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 
 from ..structures.bounding_box import BoxList
 from ..utils.comm import is_main_process
 from ..utils.comm import scatter_gather
 from ..utils.comm import synchronize
-
-
-from maskrcnn_benchmark.modeling.roi_heads.mask_head.inference import Masker
-from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 
 
 def compute_on_dataset(model, data_loader, device):
@@ -29,9 +27,7 @@ def compute_on_dataset(model, data_loader, device):
         with torch.no_grad():
             output = model(images)
             output = [o.to(cpu_device) for o in output]
-        results_dict.update(
-            {img_id: result for img_id, result in zip(image_ids, output)}
-        )
+        results_dict.update({img_id: result for img_id, result in zip(image_ids, output)})
     return results_dict
 
 
@@ -98,8 +94,7 @@ def prepare_for_coco_segmentation(predictions, dataset):
         # rles = prediction.get_field('mask')
 
         rles = [
-            mask_util.encode(np.array(mask[0, :, :, np.newaxis], order="F"))[0]
-            for mask in masks
+            mask_util.encode(np.array(mask[0, :, :, np.newaxis], order="F"))[0] for mask in masks
         ]
         for rle in rles:
             rle["counts"] = rle["counts"].decode("utf-8")
@@ -121,9 +116,7 @@ def prepare_for_coco_segmentation(predictions, dataset):
 
 
 # inspired from Detectron
-def evaluate_box_proposals(
-    predictions, dataset, thresholds=None, area="all", limit=None
-):
+def evaluate_box_proposals(predictions, dataset, thresholds=None, area="all", limit=None):
     """Evaluate detection proposal recall metrics. This function is a much
     faster alternative to the official COCO API recall evaluation code. However,
     it produces slightly different results.
@@ -172,9 +165,7 @@ def evaluate_box_proposals(
         anno = dataset.coco.loadAnns(ann_ids)
         gt_boxes = [obj["bbox"] for obj in anno if obj["iscrowd"] == 0]
         gt_boxes = torch.as_tensor(gt_boxes).reshape(-1, 4)  # guard against no boxes
-        gt_boxes = BoxList(gt_boxes, (image_width, image_height), mode="xywh").convert(
-            "xyxy"
-        )
+        gt_boxes = BoxList(gt_boxes, (image_width, image_height), mode="xywh").convert("xyxy")
         gt_areas = torch.as_tensor([obj["area"] for obj in anno if obj["iscrowd"] == 0])
 
         if len(gt_boxes) == 0:
@@ -237,9 +228,7 @@ def evaluate_box_proposals(
     }
 
 
-def evaluate_predictions_on_coco(
-    coco_gt, coco_results, json_result_file, iou_type="bbox"
-):
+def evaluate_predictions_on_coco(coco_gt, coco_results, json_result_file, iou_type="bbox"):
     import json
 
     with open(json_result_file, "w") as f:
@@ -391,9 +380,7 @@ def inference(
         res = COCOResults("box_proposal")
         for limit in [100, 1000]:
             for area, suffix in areas.items():
-                stats = evaluate_box_proposals(
-                    predictions, dataset, area=area, limit=limit
-                )
+                stats = evaluate_box_proposals(predictions, dataset, area=area, limit=limit)
                 key = "AR{}@{:d}".format(suffix, limit)
                 res.results["box_proposal"][key] = stats["ar"].item()
         logger.info(res)
@@ -425,6 +412,5 @@ def inference(
     check_expected_results(results, expected_results, expected_results_sigma_tol)
     if output_folder:
         torch.save(results, os.path.join(output_folder, "coco_results.pth"))
-        
-    return results, coco_results, predictions
 
+    return results, coco_results, predictions

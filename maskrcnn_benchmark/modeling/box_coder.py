@@ -9,7 +9,7 @@ class BoxCoder(object):
     the representation used for training the regressors.
     """
 
-    def __init__(self, weights, bbox_xform_clip=math.log(1000. / 16)):
+    def __init__(self, weights, bbox_xform_clip=math.log(1000.0 / 16)):
         """
         Arguments:
             weights (4-element tuple)
@@ -54,8 +54,8 @@ class BoxCoder(object):
         get the decoded boxes.
 
         Arguments:
-            rel_codes (Tensor): encoded boxes
-            boxes (Tensor): reference boxes.
+            rel_codes (Tensor): encoded boxes, of shape (N, kx4)
+            boxes (Tensor): reference boxes, of shape (N, 4)
         """
 
         boxes = boxes.to(rel_codes.dtype)
