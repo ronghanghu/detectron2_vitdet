@@ -138,7 +138,7 @@ _C.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST = 2000
 # ROI HEADS options
 # ---------------------------------------------------------------------------- #
 _C.MODEL.ROI_HEADS = CN()
-_C.MODEL.ROI_HEADS.NAME = "C4ROIHeads"
+_C.MODEL.ROI_HEADS.NAME = "Res5ROIHeads"
 _C.MODEL.ROI_HEADS.NUM_CLASSES = 81
 # Overlap threshold for an RoI to be considered foreground (if >= FG_IOU_THRESHOLD)
 _C.MODEL.ROI_HEADS.FG_IOU_THRESHOLD = 0.5

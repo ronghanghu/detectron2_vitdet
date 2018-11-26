@@ -115,9 +115,9 @@ class ROIHeads(torch.nn.Module):
         raise NotImplementedError()
 
 
-class C4ROIHeads(ROIHeads):
+class Res5ROIHeads(ROIHeads):
     def __init__(self, cfg):
-        super(C4ROIHeads, self).__init__(cfg)
+        super(Res5ROIHeads, self).__init__(cfg)
 
         from maskrcnn_benchmark.modeling.backbone import resnet
 
@@ -272,4 +272,4 @@ class StandardROIHeads(ROIHeads):
 
 def build_roi_heads(cfg):
     name = cfg.MODEL.ROI_HEADS.NAME
-    return {"C4ROIHeads": C4ROIHeads, "StandardROIHeads": StandardROIHeads}[name](cfg)
+    return {"Res5ROIHeads": Res5ROIHeads, "StandardROIHeads": StandardROIHeads}[name](cfg)
