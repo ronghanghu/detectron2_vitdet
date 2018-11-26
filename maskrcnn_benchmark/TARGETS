@@ -10,7 +10,7 @@ cpp_python_extension(
         ]
     ),
     headers = glob(["csrc/**/*.h"]),
-    base_module = "torch_detectron",
+    base_module = "maskrcnn_benchmark",
     deps = [
         "//caffe2:torch_extension",
     ],
@@ -20,7 +20,7 @@ cpp_python_extension(
         '-D__CUDA_NO_HALF_OPERATORS__',
         '-D__CUDA_NO_HALF_CONVERSIONS__',
         '-D__CUDA_NO_HALF2_OPERATORS__',
-        "-Iexperimental/deeplearning/vision/detectron_pytorch/torch_detectron/csrc",
+        "-Iexperimental/deeplearning/yuxinwu/detectron2/maskrcnn_benchmark/csrc",
     ],
     nvcc_flags = ["-std=c++11"],
     external_deps = [
@@ -37,7 +37,7 @@ python_library(
             "modeling/**/*.py",
         ],
     ),
-    base_module = "torch_detectron",
+    base_module = "maskrcnn_benchmark",
     deps = [
         ":layers",
         "//caffe2:torch",
@@ -52,7 +52,7 @@ python_library(
             "config/**/*.py",
         ],
     ),
-    base_module = "torch_detectron",
+    base_module = "maskrcnn_benchmark",
     deps = [
         "//caffe2:torch",
         "//python/wheel/yacs:yacs",
@@ -67,7 +67,7 @@ python_library(
             "structures/**/*.py",
         ],
     ),
-    base_module = "torch_detectron",
+    base_module = "maskrcnn_benchmark",
     deps = [
         "//caffe2:torch",
     ],
@@ -81,7 +81,7 @@ python_library(
             "utils/**/*.py",
         ],
     ),
-    base_module = "torch_detectron",
+    base_module = "maskrcnn_benchmark",
     deps = [
         "//caffe2:torch",
         "//pytorch/vision:torchvision",
@@ -96,7 +96,7 @@ python_library(
             "layers/**/*.py",
         ],
     ),
-    base_module = "torch_detectron",
+    base_module = "maskrcnn_benchmark",
     deps = [
         ":_C",
         "//caffe2:torch",
@@ -112,7 +112,7 @@ python_library(
             "engine/**/*.py",
         ],
     ),
-    base_module = "torch_detectron",
+    base_module = "maskrcnn_benchmark",
     deps = [
         ":structures",
         ":utils",
@@ -121,13 +121,13 @@ python_library(
 )
 
 python_library(
-    name = "datasets",
+    name = "data",
     srcs = glob(
         [
-            "datasets/**/*.py",
+            "data/**/*.py",
         ],
     ),
-    base_module = "torch_detectron",
+    base_module = "maskrcnn_benchmark",
     deps = [
         "//deeplearning/projects/cocoApi/PythonAPI:pycocotools",
         "//caffe2:torch",
@@ -136,7 +136,20 @@ python_library(
 )
 
 python_library(
-    name = "torch_detectron",
+    name = "solver",
+    srcs = glob(
+        [
+            "solver/*.py",
+        ],
+    ),
+    base_module = "maskrcnn_benchmark",
+    deps = [
+        "//caffe2:torch",
+    ],
+)
+
+python_library(
+    name = "maskrcnn_benchmark",
     srcs = glob(
         [
             "**/*.py",
@@ -145,10 +158,11 @@ python_library(
     deps = [
         ":_C",
         ":config",
-        ":datasets",
+        ":data",
         ":engine",
         ":layers",
         ":modeling",
+        ":solver",
         ":structures",
         ":utils",
         "//deeplearning/projects/cocoApi/PythonAPI:pycocotools",

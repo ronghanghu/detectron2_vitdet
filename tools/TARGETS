@@ -6,7 +6,7 @@ python_binary(
     par_style = "xar",
     deps = [
         "//caffe2:torch",
-        "//experimental/deeplearning/vision/detectron_pytorch/torch_detectron:torch_detectron",
+        "//experimental/deeplearning/yuxinwu/detectron2/maskrcnn_benchmark:maskrcnn_benchmark",
     ],
     external_deps = [
         "jupyter_notebook",

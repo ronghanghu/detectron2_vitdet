@@ -35,11 +35,12 @@ class DatasetCatalog(object):
 
     @staticmethod
     def get(name):
-        return (
-            os.path.join(DatasetCatalog.DATA_DIR, DatasetCatalog.DATASETS[name][1]),
-            DatasetCatalog.DATASETS[name][0]
-            # os.path.join(DatasetCatalog.DATA_DIR, DatasetCatalog.DATASETS[name][0]),
-        )
+        attrs = DatasetCatalog.DATASETS[name]
+        return dict(factory="COCODataset",
+                    args=dict(
+                        root=attrs[0],
+                        ann_file=os.path.join(DatasetCatalog.DATA_DIR, attrs[1]))
+                    )
 
 
 class ModelCatalog(object):
