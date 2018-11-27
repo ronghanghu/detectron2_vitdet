@@ -53,7 +53,7 @@ def build_dataset(dataset_list, transforms, dataset_catalog, is_train=True):
 
 def make_data_sampler(dataset, shuffle, distributed):
     if distributed:
-        return samplers.DistributedSampler(dataset, shuffle=shuffle)
+        return torch.utils.data.distributed.DistributedSampler(dataset)
     if shuffle:
         sampler = torch.utils.data.sampler.RandomSampler(dataset)
     else:

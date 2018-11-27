@@ -16,8 +16,8 @@
 # maskrnn_benchmark and coco api dependencies
 pip install ninja yacs cython matplotlib
 
-# follow PyTorch installation in https://pytorch.org/get-started/locally/
-# we give the instructions for CUDA 9.0
+# Follow PyTorch installation in https://pytorch.org/get-started/locally/
+# For example:
 conda install pytorch-nightly -c pytorch
 
 # install torchvision
@@ -27,10 +27,7 @@ cd vision
 python setup.py install
 
 # install pycocotools
-cd ~/github
-git clone https://github.com/cocodataset/cocoapi.git
-cd cocoapi/PythonAPI
-python setup.py build_ext install
+pip install --user 'git+https://github.com/cocodataset/cocoapi.git#subdirectory=PythonAPI'
 
 # install PyTorch Detection
 cd ~/github

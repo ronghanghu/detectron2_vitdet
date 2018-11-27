@@ -104,8 +104,7 @@ Python processes as the number of GPUs we want to use, and each Python
 process will only use a single GPU.
 
 ```bash
-export NGPUS=8
-python -m torch.distributed.launch --nproc_per_node=$NGPUS /path_to_maskrcnn_benchmark/tools/train_net.py --config-file "path/to/config/file.yaml"
+python /path_to_maskrcnn_benchmark/tools/train_net.py --num-gpus 8 --config-file "path/to/config/file.yaml"
 ```
 
 ## Abstractions
@@ -121,7 +120,7 @@ from maskrcnn_benchmark.structures.bounding_box import BoxList
 class MyDataset(object):
     def __init__(self, ...):
         # as you would do normally
-    
+
     def __getitem__(self, idx):
         # load the image as a PIL Image
         image = ...

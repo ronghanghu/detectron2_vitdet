@@ -10,6 +10,8 @@ import argparse
 import os
 
 import torch
+import torch.multiprocessing as mp
+import torch.distributed as dist
 
 from maskrcnn_benchmark.config import cfg
 from maskrcnn_benchmark.data import make_data_loader
@@ -36,7 +38,7 @@ def train(cfg, local_rank, distributed):
     scheduler = make_lr_scheduler(cfg, optimizer)
 
     if distributed:
-        model = torch.nn.parallel.deprecated.DistributedDataParallel(
+        model = torch.nn.parallel.DistributedDataParallel(
             model,
             device_ids=[local_rank],
             output_device=local_rank,
@@ -101,7 +103,7 @@ def main():
     parser.add_argument(
         "--config-file", default="", metavar="FILE", help="path to config file", type=str
     )
-    parser.add_argument("--local_rank", type=int, default=0)
+    parser.add_argument("--num-gpus", type=int, default=1)
     parser.add_argument(
         "--skip-test", dest="skip_test", help="Do not test the final model", action="store_true"
     )
@@ -114,12 +116,23 @@ def main():
 
     args = parser.parse_args()
 
-    num_gpus = int(os.environ["WORLD_SIZE"]) if "WORLD_SIZE" in os.environ else 1
-    args.distributed = num_gpus > 1
+    num_gpus = args.num_gpus
+    num_gpus_on_node = torch.cuda.device_count()
 
-    if args.distributed:
-        torch.cuda.set_device(args.local_rank)
-        torch.distributed.deprecated.init_process_group(backend="nccl", init_method="env://")
+
+    if num_gpus > 1:
+        # https://github.com/pytorch/pytorch/pull/14391
+        # TODO prctl in spawned processes
+        mp.spawn(main_worker, nprocs=num_gpus, args=(args,), daemon=False)
+    else:
+        main_worker(0, args)
+
+def main_worker(worker_id, args):
+    if args.num_gpus > 1:
+        dist.init_process_group(
+            backend="NCCL", init_method="tcp://127.0.0.1:12456",
+            world_size=args.num_gpus, rank=worker_id)
+        torch.cuda.set_device(worker_id)
 
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
@@ -130,7 +143,7 @@ def main():
         mkdir(output_dir)
 
     logger = setup_logger("maskrcnn_benchmark", output_dir, get_rank())
-    logger.info("Using {} GPUs".format(num_gpus))
+    logger.info("Using {} GPUs".format(args.num_gpus))
     logger.info(args)
 
     logger.info("Collecting env info (might take some time)")
@@ -142,10 +155,10 @@ def main():
         logger.info(config_str)
     logger.info("Running with config:\n{}".format(cfg))
 
-    model = train(cfg, args.local_rank, args.distributed)
+    model = train(cfg, worker_id, args.num_gpus > 1)
 
     if not args.skip_test:
-        test(cfg, model, args.distributed)
+        test(cfg, model, args.num_gpus > 1)
 
 
 if __name__ == "__main__":
