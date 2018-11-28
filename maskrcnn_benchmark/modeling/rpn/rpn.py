@@ -50,11 +50,12 @@ class RPNModule(torch.nn.Module):
     def __init__(self, cfg):
         super(RPNModule, self).__init__()
 
-        self.cfg = cfg.clone()
+        self.rpn_cfg = cfg.MODEL.RPN.clone()
+        self.rpn_only = cfg.MODEL.RPN_ONLY
+        in_channels = cfg.MODEL.BACKBONE.OUT_CHANNELS
 
         anchor_generator = make_anchor_generator(cfg)
 
-        in_channels = cfg.MODEL.BACKBONE.OUT_CHANNELS
         head = RPNHead(in_channels, anchor_generator.num_anchors_per_location()[0])
 
         self.rpn_box_coder = BoxCoder(weights=(1.0, 1.0, 1.0, 1.0))
@@ -92,7 +93,7 @@ class RPNModule(torch.nn.Module):
         else:
             losses = {}
 
-        if self.cfg.MODEL.RPN_ONLY and self.training:
+        if self.rpn_only and self.training:
             # When training an RPN-only model, the loss is determined by the
             # predicted objectness and rpn_box_regression values and there is
             # no need to transform the anchors into predicted boxes; this is an
@@ -105,7 +106,7 @@ class RPNModule(torch.nn.Module):
                 score.permute(0, 2, 3, 1).reshape(num_images, -1) for score in objectness
             ]  # reshape to (B, HxWx#anchor)
 
-            rpn_cfg = self.cfg.MODEL.RPN
+            rpn_cfg = self.rpn_cfg
             if len(features) == 1:
                 proposals = generate_rpn_proposals(
                     decoded_boxes[0],
@@ -142,7 +143,7 @@ class RPNModule(torch.nn.Module):
             if self.training and targets is not None:
                 proposals = self._add_gt_proposals(proposals, targets)
 
-            if self.cfg.MODEL.RPN_ONLY:
+            if self.rpn_only:
                 # We must be in testing mode.
                 # For end-to-end models, the RPN proposals are an intermediate state
                 # and don't bother to sort them in decreasing score order. For RPN-only

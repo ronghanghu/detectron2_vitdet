@@ -6,8 +6,8 @@ import argparse
 import os
 
 import torch
-import torch.multiprocessing as mp
 import torch.distributed as dist
+import torch.multiprocessing as mp
 
 from maskrcnn_benchmark.config import cfg
 from maskrcnn_benchmark.data import make_data_loader
@@ -46,11 +46,12 @@ def main():
     else:
         main_worker(0, args)
 
+
 def main_worker(worker_id, args):
     if args.num_gpus > 1:
         dist.init_process_group(
-            backend="NCCL", init_method=args.dist_url,
-            world_size=args.num_gpus, rank=worker_id)
+            backend="NCCL", init_method=args.dist_url, world_size=args.num_gpus, rank=worker_id
+        )
         torch.cuda.set_device(worker_id)
 
     cfg.merge_from_file(args.config_file)

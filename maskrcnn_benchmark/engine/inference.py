@@ -347,11 +347,7 @@ def inference(
 
     # convert to a torch.device for efficiency
     device = torch.device(device)
-    num_devices = (
-        torch.distributed.get_world_size()
-        if torch.distributed.is_initialized()
-        else 1
-    )
+    num_devices = torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
     logger = logging.getLogger("maskrcnn_benchmark.inference")
     dataset = data_loader.dataset
     logger.info("Start evaluation on {} images".format(len(dataset)))

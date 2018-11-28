@@ -36,11 +36,10 @@ class DatasetCatalog(object):
     @staticmethod
     def get(name):
         attrs = DatasetCatalog.DATASETS[name]
-        return dict(factory="COCODataset",
-                    args=dict(
-                        root=attrs[0],
-                        ann_file=os.path.join(DatasetCatalog.DATA_DIR, attrs[1]))
-                    )
+        return dict(
+            factory="COCODataset",
+            args=dict(root=attrs[0], ann_file=os.path.join(DatasetCatalog.DATA_DIR, attrs[1])),
+        )
 
 
 class ModelCatalog(object):

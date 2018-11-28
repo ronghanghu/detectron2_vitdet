@@ -47,7 +47,6 @@ def keep_only_positive_boxes(boxes, matched_targets):
 class ROIHeads(torch.nn.Module):
     def __init__(self, cfg):
         super(ROIHeads, self).__init__()
-        self.cfg = cfg.clone()
 
         # match proposals to gt boxes
         self.proposal_matcher = Matcher(
@@ -55,12 +54,15 @@ class ROIHeads(torch.nn.Module):
             cfg.MODEL.ROI_HEADS.BG_IOU_THRESHOLD,
             allow_low_quality_matches=False,
         )
-        self.batch_size_per_image = cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE
+
+        # fmt: off
+        self.batch_size_per_image     = cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE
         self.positive_sample_fraction = cfg.MODEL.ROI_HEADS.POSITIVE_FRACTION
 
-        self.test_score_thresh = cfg.MODEL.ROI_HEADS.SCORE_THRESH
-        self.test_nms_thresh = cfg.MODEL.ROI_HEADS.NMS
-        self.test_detections_per_img = cfg.MODEL.ROI_HEADS.DETECTIONS_PER_IMG
+        self.test_score_thresh        = cfg.MODEL.ROI_HEADS.SCORE_THRESH
+        self.test_nms_thresh          = cfg.MODEL.ROI_HEADS.NMS
+        self.test_detections_per_img  = cfg.MODEL.ROI_HEADS.DETECTIONS_PER_IMG
+        # fmt: on
 
     def sample_proposals_for_training(self, proposals, targets):
         """
@@ -121,30 +123,43 @@ class Res5ROIHeads(ROIHeads):
 
         from maskrcnn_benchmark.modeling.backbone import resnet
 
-        resolution = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
+        # fmt: off
+        pooler_resolution             = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
+        pooler_scales                 = cfg.MODEL.ROI_BOX_HEAD.POOLER_SCALES
+        sampling_ratio                = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
+        resnet_trans_func             = cfg.MODEL.RESNETS.TRANS_FUNC
+        num_groups                    = cfg.MODEL.RESNETS.NUM_GROUPS
+        width_per_group               = cfg.MODEL.RESNETS.WIDTH_PER_GROUP
+        stride_in_1x1                 = cfg.MODEL.RESNETS.STRIDE_IN_1X1
+        res2_out_channels             = cfg.MODEL.RESNETS.RES2_OUT_CHANNELS
+        num_classes                   = cfg.MODEL.ROI_HEADS.NUM_CLASSES
+        bbox_reg_weights              = cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS
+        self.mask_discretization_size = cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
+        self.mask_on                  = cfg.MODEL.MASK_ON
+        # fmt: on
+
         self.pooler = Pooler(
-            output_size=resolution,
-            scales=cfg.MODEL.ROI_BOX_HEAD.POOLER_SCALES,
-            sampling_ratio=cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO,
+            output_size=pooler_resolution, scales=pooler_scales, sampling_ratio=sampling_ratio
         )
 
         self.res5_head = resnet.ResNetHead(
-            block_module=cfg.MODEL.RESNETS.TRANS_FUNC,
+            block_module=resnet_trans_func,
             stages=(resnet.StageSpec(index=4, block_count=3, return_features=False),),
-            num_groups=cfg.MODEL.RESNETS.NUM_GROUPS,
-            width_per_group=cfg.MODEL.RESNETS.WIDTH_PER_GROUP,
-            stride_in_1x1=cfg.MODEL.RESNETS.STRIDE_IN_1X1,
+            num_groups=num_groups,
+            width_per_group=width_per_group,
+            stride_in_1x1=stride_in_1x1,
             stride_init=None,
-            res2_out_channels=cfg.MODEL.RESNETS.RES2_OUT_CHANNELS,
+            res2_out_channels=res2_out_channels,
         )
 
         num_channels = self.res5_head.output_size
-        self.box_predictor = FastRCNNOutputHead(num_channels, cfg.MODEL.ROI_HEADS.NUM_CLASSES)
-        self.box_coder = BoxCoder(weights=cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS)
+        self.box_predictor = FastRCNNOutputHead(num_channels, num_classes)
+        self.box_coder = BoxCoder(weights=bbox_reg_weights)
 
-        if cfg.MODEL.MASK_ON:
-            self.mask_head = make_mask_head(cfg, (num_channels, resolution, resolution))
-            self.mask_discretization_size = cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
+        if self.mask_on:
+            self.mask_head = make_mask_head(
+                cfg, (num_channels, pooler_resolution, pooler_resolution)
+            )
 
     def _shared_roi_transform(self, features, proposals):
         x = self.pooler(features, proposals)
@@ -167,7 +182,7 @@ class Res5ROIHeads(ROIHeads):
             del features
             losses = outputs.losses()
 
-            if self.cfg.MODEL.MASK_ON:
+            if self.mask_on:
                 proposals, targets, pos_masks = keep_only_positive_boxes(proposals, targets)
                 # don't need to do feature extraction again,
                 # just use the box features for all the positivie proposals
@@ -187,7 +202,7 @@ class Res5ROIHeads(ROIHeads):
                 self.test_nms_thresh,
                 self.test_detections_per_img,
             )
-            if self.cfg.MODEL.MASK_ON:
+            if self.mask_on:
                 x = self._shared_roi_transform(features, results)
                 mask_logits = self.mask_head(x)
                 maskrcnn_inference(mask_logits, results)
@@ -204,29 +219,38 @@ class StandardROIHeads(ROIHeads):
     def __init__(self, cfg):
         super(StandardROIHeads, self).__init__(cfg)
 
-        resolution = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
+        # fmt: off
+        pooler_resolution = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
+        pooler_scales     = cfg.MODEL.ROI_BOX_HEAD.POOLER_SCALES
+        sampling_ratio    = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
+        backbone_channels = cfg.MODEL.BACKBONE.OUT_CHANNELS
+        num_classes       = cfg.MODEL.ROI_HEADS.NUM_CLASSES
+        bbox_reg_weights  = cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS
+        self.mask_on      = cfg.MODEL.MASK_ON
+        if self.mask_on:
+            self.mask_discretization_size = cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
+            mask_pooler_resolution        = cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION
+            mask_pooler_scales            = cfg.MODEL.ROI_MASK_HEAD.POOLER_SCALES
+            mask_sampling_ratio           = cfg.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO
+        # fmt: on
+
         self.box_pooler = Pooler(
-            output_size=resolution,
-            scales=cfg.MODEL.ROI_BOX_HEAD.POOLER_SCALES,
-            sampling_ratio=cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO,
+            output_size=pooler_resolution, scales=pooler_scales, sampling_ratio=sampling_ratio
         )
         self.box_head = make_box_head(
-            cfg, (cfg.MODEL.BACKBONE.OUT_CHANNELS, resolution, resolution)
+            cfg, (backbone_channels, pooler_resolution, pooler_resolution)
         )
 
-        self.box_predictor = FastRCNNOutputHead(
-            self.box_head.output_size, cfg.MODEL.ROI_HEADS.NUM_CLASSES
-        )
-        self.box_coder = BoxCoder(weights=cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS)
+        self.box_predictor = FastRCNNOutputHead(self.box_head.output_size, num_classes)
+        self.box_coder = BoxCoder(weights=bbox_reg_weights)
 
-        if cfg.MODEL.MASK_ON:
+        if self.mask_on:
             self.mask_pooler = Pooler(
-                output_size=cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION,
-                scales=cfg.MODEL.ROI_MASK_HEAD.POOLER_SCALES,
-                sampling_ratio=cfg.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO,
+                output_size=mask_pooler_resolution,
+                scales=mask_pooler_scales,
+                sampling_ratio=mask_sampling_ratio,
             )
-            self.mask_head = make_mask_head(cfg, cfg.MODEL.BACKBONE.OUT_CHANNELS)
-            self.mask_discretization_size = cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
+            self.mask_head = make_mask_head(cfg, backbone_channels)
 
     def forward(self, features, proposals, targets=None):
         if self.training:
@@ -254,7 +278,7 @@ class StandardROIHeads(ROIHeads):
                 self.test_detections_per_img,
             )
 
-        if self.cfg.MODEL.MASK_ON:
+        if self.mask_on:
             if self.training:
                 proposals, targets, _ = keep_only_positive_boxes(proposals, targets)
             mask_features = self.mask_pooler(features, proposals)
