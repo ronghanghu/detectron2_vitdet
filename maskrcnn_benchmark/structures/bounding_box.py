@@ -217,7 +217,6 @@ class BoxList(object):
             TO_REMOVE = 1
             area = (box[:, 2] - box[:, 0] + TO_REMOVE) * (box[:, 3] - box[:, 1] + TO_REMOVE)
         elif self.mode == "xywh":
-            box = self.bbox
             area = box[:, 2] * box[:, 3]
         else:
             raise RuntimeError("Should not be here")
