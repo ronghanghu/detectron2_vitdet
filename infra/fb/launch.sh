@@ -20,7 +20,7 @@ ENTITLEMENT=${ENTITLEMENT-gpu_fair}
 GPU_TYPE=${GPU_TYPE-P100}
 CAPABILITIES="GPU_${GPU_TYPE}_HOST"
 
-TOOLS=//experimental/deeplearning/vision/detectron_pytorch/tools
+TOOLS=//experimental/deeplearning/yuxinwu/detectron2/tools
 TOOL=${TOOL-train_net}
 
 if [ "${BUILD}" == "build" ]
@@ -54,6 +54,7 @@ fry flow-gpu --name "${NAME}" \
   --retry 9 \
   -- \
   "${BINARY}" \
+	--num-gpus $GPU \
   --config-file "$(basename "${CFG}")" \
   PATHS_CATALOG "$(basename "${PATHS_CATALOG}")" \
   OUTPUT_DIR ./output
