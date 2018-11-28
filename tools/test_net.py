@@ -6,6 +6,8 @@ import argparse
 import os
 
 import torch
+import torch.multiprocessing as mp
+import torch.distributed as dist
 
 from maskrcnn_benchmark.config import cfg
 from maskrcnn_benchmark.data import make_data_loader
@@ -27,22 +29,29 @@ def main():
         metavar="FILE",
         help="path to config file",
     )
-    parser.add_argument("--local_rank", type=int, default=0)
+    parser.add_argument("--num-gpus", type=int, default=1)
+    parser.add_argument("--dist-url", default="tcp://127.0.0.1:12457")
     parser.add_argument(
         "opts",
         help="Modify config options using the command-line",
         default=None,
         nargs=argparse.REMAINDER,
     )
-
     args = parser.parse_args()
 
-    num_gpus = int(os.environ["WORLD_SIZE"]) if "WORLD_SIZE" in os.environ else 1
-    distributed = num_gpus > 1
+    num_gpus = args.num_gpus
 
-    if distributed:
-        torch.cuda.set_device(args.local_rank)
-        torch.distributed.init_process_group(backend="nccl", init_method="env://")
+    if num_gpus > 1:
+        mp.spawn(main_worker, nprocs=num_gpus, args=(args,), daemon=False)
+    else:
+        main_worker(0, args)
+
+def main_worker(worker_id, args):
+    if args.num_gpus > 1:
+        dist.init_process_group(
+            backend="NCCL", init_method=args.dist_url,
+            world_size=args.num_gpus, rank=worker_id)
+        torch.cuda.set_device(worker_id)
 
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
@@ -50,7 +59,7 @@ def main():
 
     save_dir = ""
     logger = setup_logger("maskrcnn_benchmark", save_dir, get_rank())
-    logger.info("Using {} GPUs".format(num_gpus))
+    logger.info("Using {} GPUs".format(args.num_gpus))
     logger.info(cfg)
 
     logger.info("Collecting env info (might take some time)")
@@ -72,7 +81,7 @@ def main():
             output_folder = os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
             mkdir(output_folder)
             output_folders[idx] = output_folder
-    data_loaders_val = make_data_loader(cfg, is_train=False, is_distributed=distributed)
+    data_loaders_val = make_data_loader(cfg, is_train=False, is_distributed=args.num_gpus > 1)
     for output_folder, data_loader_val in zip(output_folders, data_loaders_val):
         inference(
             model,
