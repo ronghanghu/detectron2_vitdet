@@ -1,6 +1,7 @@
 ## Installation
 
 ### Requirements:
+- Python 3
 - PyTorch 1.0 from a nightly release. Installation instructions can be found in https://pytorch.org/get-started/locally/
 - torchvision from master
 - cocoapi
