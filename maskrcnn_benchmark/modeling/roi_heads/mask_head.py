@@ -128,7 +128,7 @@ class MaskRCNNConvUpsampleHead(nn.Module):
                 stride=1,
                 padding=1,
             )
-            self.add_module("mask_fcn{}".format(k), layer)
+            self.add_module("mask_fcn{}".format(k + 1), layer)
             self.blocks.append(layer)
 
         self.deconv = ConvTranspose2d(

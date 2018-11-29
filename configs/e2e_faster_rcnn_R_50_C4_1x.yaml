@@ -4,6 +4,8 @@ MODEL:
   RPN:
     PRE_NMS_TOP_N_TEST: 6000
     POST_NMS_TOP_N_TEST: 1000
+  ROI_HEADS:
+    NAME: "Res5ROIHeads"
 DATASETS:
   TRAIN: ("coco_2014_train", "coco_2014_valminusminival")
   TEST: ("coco_2014_minival",)
