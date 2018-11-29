@@ -20,7 +20,7 @@ cpp_python_extension(
         '-D__CUDA_NO_HALF_OPERATORS__',
         '-D__CUDA_NO_HALF_CONVERSIONS__',
         '-D__CUDA_NO_HALF2_OPERATORS__',
-        "-Iexperimental/deeplearning/yuxinwu/detectron2/maskrcnn_benchmark/csrc",
+        "-Iexperimental/deeplearning/vision/detectron2/maskrcnn_benchmark/csrc",
     ],
     nvcc_flags = ["-std=c++11"],
     external_deps = [
