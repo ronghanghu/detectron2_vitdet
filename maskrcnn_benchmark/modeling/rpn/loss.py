@@ -28,45 +28,30 @@ class RPNLossComputation(object):
             batch_per_image (int)
             positive_fraction (float)
         """
-        # self.target_preparator = target_preparator
         self.proposal_matcher = proposal_matcher
         self.box_coder = box_coder
         self.batch_per_image = batch_per_image
         self.positive_fraction = positive_fraction
 
-    def match_targets_to_anchors(self, anchor, target):
-        match_quality_matrix = boxlist_iou(target, anchor)
-        matched_idxs = self.proposal_matcher(match_quality_matrix)
-        # RPN doesn't need any fields from target
-        # for creating the labels, so clear them all
-        target = target.copy_with_fields([])
-        # get the targets corresponding GT for each anchor
-        # NB: need to clamp the indices because we can have a single
-        # GT in the image, and matched_idxs can be -2, which goes
-        # out of bounds
-        matched_targets = target[matched_idxs.clamp(min=0)]
-        return matched_targets, matched_idxs
-
     def prepare_targets(self, anchors, targets):
         labels = []
         regression_targets = []
         for anchors_per_image, targets_per_image in zip(anchors, targets):
-            matched_targets, matched_idxs = self.match_targets_to_anchors(
-                anchors_per_image, targets_per_image
-            )
+            match_quality_matrix = boxlist_iou(targets_per_image, anchors_per_image)
+            matched_idxs = self.proposal_matcher(match_quality_matrix)
+            # NB: need to clamp the indices because matched_idxs can be <0
+            matched_targets = targets_per_image.bbox[matched_idxs.clamp(min=0)]
 
-            labels_per_image = matched_idxs >= 0
-            labels_per_image = labels_per_image.to(dtype=torch.float32)
+            labels_per_image = (matched_idxs >= 0).to(dtype=torch.float32)
             # discard anchors that go out of the boundaries of the image
             labels_per_image[~anchors_per_image.get_field("visibility")] = -1
-
-            # discard indices that are between thresholds
-            inds_to_discard = matched_idxs == Matcher.BETWEEN_THRESHOLDS
-            labels_per_image[inds_to_discard] = -1
+            # discard indices that are neither foreground or background
+            labels_per_image[matched_idxs == Matcher.BETWEEN_THRESHOLDS] = -1
 
             # compute regression targets
+            # TODO wasted computation for ignored boxes
             regression_targets_per_image = self.box_coder.encode(
-                matched_targets.bbox, anchors_per_image.bbox
+                matched_targets, anchors_per_image.bbox
             )
 
             labels.append(labels_per_image)
@@ -80,20 +65,21 @@ class RPNLossComputation(object):
             anchors (list[list[BoxList]]): #img x #lvl BoxList
             objectness (list[Tensor]): #lvl tensors
             box_regression (list[Tensor]): #lvl tensors
-            targets (list[BoxList]): #img BoxListgi
+            targets (list[BoxList]): #img BoxList
         """
         anchors = [cat_boxlist(anchors_per_image) for anchors_per_image in anchors]  # #img BoxLists
         labels, regression_targets = self.prepare_targets(anchors, targets)
+        # labels: #img Tensors, each is NAx1
+        # regression_targets: #img Tensors, each is NAx4
 
         sampled_pos_inds, sampled_neg_inds = [], []
         for label in labels:
             pos_idx, neg_idx = sample_with_positive_fraction(
                 label, self.batch_per_image, self.positive_fraction
             )
-            # wait for https://github.com/pytorch/pytorch/issues/2027
             zeros = torch.zeros_like(label, dtype=torch.uint8)
-            sampled_pos_inds.append(zeros if pos_idx.numel() == 0 else zeros.scatter(0, pos_idx, 1))
-            sampled_neg_inds.append(zeros if neg_idx.numel() == 0 else zeros.scatter(0, neg_idx, 1))
+            sampled_pos_inds.append(zeros.scatter(0, pos_idx, 1))
+            sampled_neg_inds.append(zeros.scatter(0, neg_idx, 1))
         sampled_pos_inds = torch.nonzero(torch.cat(sampled_pos_inds, dim=0)).squeeze(1)
         sampled_neg_inds = torch.nonzero(torch.cat(sampled_neg_inds, dim=0)).squeeze(1)
 
