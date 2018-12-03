@@ -86,14 +86,13 @@ class ROIHeads(torch.nn.Module):
                 match_quality_matrix = boxlist_iou(targets_per_image, proposals_per_image)
                 matched_idxs = self.proposal_matcher(match_quality_matrix)
                 # Fast RCNN only need "labels" field for selecting the targets
-                target = targets_per_image.copy_with_fields(["labels", "masks"])
-                # get the targets corresponding GT for each proposal
-                # NB: need to clamp the indices because we can have a single
-                # GT in the image, and matched_idxs can be -2, which goes
-                # out of bounds
-                matched_targets = target[matched_idxs.clamp(min=0)]
+                # Get the targets corresponding GT for each proposal
+                # Need to clamp the indices because matched_idxs can be < 0
+                matched_idxs_clamped = matched_idxs.clamp(min=0)
 
-                labels_per_image = matched_targets.get_field("labels").to(dtype=torch.int64)
+                labels_per_image = targets_per_image.get_field("labels")[matched_idxs_clamped].to(
+                    dtype=torch.int64
+                )
 
                 # Label background (below the low threshold)
                 labels_per_image[matched_idxs == Matcher.BELOW_LOW_THRESHOLD] = 0
@@ -108,7 +107,10 @@ class ROIHeads(torch.nn.Module):
                 )
                 sampled_inds = torch.cat([sampled_pos_inds, sampled_neg_inds], dim=0)
 
-                sampled_targets.append(matched_targets[sampled_inds])
+                # It's still unnecessary to index the masks here.
+                # Because for masks we only need the positives.
+                # This will have another tiny (2~3%) perf improvement.
+                sampled_targets.append(targets_per_image[matched_idxs_clamped[sampled_inds]])
                 proposals[image_idx] = proposals_per_image[sampled_inds]
                 proposals[image_idx].add_field("labels", labels_per_image[sampled_inds])
         return proposals, sampled_targets
