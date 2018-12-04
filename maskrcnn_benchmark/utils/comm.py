@@ -9,24 +9,25 @@ import tempfile
 import time
 
 import torch
+import torch.distributed as dist
 
 
 def get_world_size():
-    if not torch.distributed.is_initialized():
+    if not dist.is_initialized():
         return 1
-    return torch.distributed.get_world_size()
+    return dist.get_world_size()
 
 
 def get_rank():
-    if not torch.distributed.is_initialized():
+    if not dist.is_initialized():
         return 0
-    return torch.distributed.get_rank()
+    return dist.get_rank()
 
 
 def is_main_process():
-    if not torch.distributed.is_initialized():
+    if not dist.is_initialized():
         return True
-    return torch.distributed.get_rank() == 0
+    return dist.get_rank() == 0
 
 
 def synchronize():
@@ -34,10 +35,10 @@ def synchronize():
     Helper function to synchronize between multiple processes when
     using distributed training
     """
-    if not torch.distributed.is_initialized():
+    if not dist.is_initialized():
         return
-    world_size = torch.distributed.get_world_size()
-    rank = torch.distributed.get_rank()
+    world_size = dist.get_world_size()
+    rank = dist.get_rank()
     if world_size == 1:
         return
 
@@ -46,7 +47,7 @@ def synchronize():
             tensor = torch.tensor(0, device="cuda")
         else:
             tensor = torch.tensor(1, device="cuda")
-        torch.distributed.broadcast(tensor, r)
+        dist.broadcast(tensor, r)
         while tensor.item() == 1:
             time.sleep(1)
 
@@ -83,7 +84,7 @@ def scatter_gather(data):
     in a list, as they were obtained from each process.
 
     This function is useful for retrieving data from multiple processes,
-    when launching the code with torch.distributed.launch
+    when launching the code with dist.launch
 
     Note: this function is slow and should not be used in tight loops, i.e.,
     do not use it in the training loop.
@@ -102,11 +103,11 @@ def scatter_gather(data):
     # each process will then serialize the data to the folder defined by
     # the main process, and then the main process reads all of the serialized
     # files and returns them in a list
-    if not torch.distributed.is_initialized():
+    if not dist.is_initialized():
         return [data]
     synchronize()
     # get rank of the current process
-    rank = torch.distributed.get_rank()
+    rank = dist.get_rank()
 
     # the data to communicate should be small
     data_to_communicate = torch.empty(256, dtype=torch.uint8, device="cuda")
@@ -118,7 +119,7 @@ def scatter_gather(data):
 
     synchronize()
     # the main process (rank=0) communicates the data to all processes
-    torch.distributed.broadcast(data_to_communicate, 0)
+    dist.broadcast(data_to_communicate, 0)
 
     # get the data that was communicated
     tmp_dir = _decode(data_to_communicate)
@@ -134,7 +135,7 @@ def scatter_gather(data):
     # only the master process returns the data
     if rank == 0:
         data_list = []
-        world_size = torch.distributed.get_world_size()
+        world_size = dist.get_world_size()
         for r in range(world_size):
             file_path = os.path.join(tmp_dir, file_template.format(r))
             d = torch.load(file_path)
@@ -144,3 +145,32 @@ def scatter_gather(data):
         # cleanup
         os.rmdir(tmp_dir)
         return data_list
+
+
+def reduce_dict(input_dict, average=True):
+    """
+    Args:
+        input_dict (dict): all the values will be reduced
+        average (bool): whether to do average or sum
+
+    Reduce the values in the dictionary from all processes so that process with rank
+    0 has the averaged results. Returns a dict with the same fields as
+    input_dict, after reduction.
+    """
+    world_size = get_world_size()
+    if world_size < 2:
+        return input_dict
+    with torch.no_grad():
+        names = []
+        values = []
+        for k, v in input_dict.items():
+            names.append(k)
+            values.append(v)
+        values = torch.stack(values, dim=0)
+        dist.reduce(values, dst=0)
+        if dist.get_rank() == 0 and average:
+            # only main process gets accumulated, so only divide by
+            # world_size in this case
+            values /= world_size
+        reduced_dict = {k: v for k, v in zip(names, values)}
+    return reduced_dict

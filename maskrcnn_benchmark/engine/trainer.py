@@ -3,52 +3,32 @@ import logging
 import time
 
 import torch
-import torch.distributed as dist
 
-from maskrcnn_benchmark.utils.comm import get_world_size
+from maskrcnn_benchmark.utils.comm import reduce_dict
 from maskrcnn_benchmark.utils.metric_logger import MetricLogger
 
 
-def reduce_loss_dict(loss_dict):
-    """
-    Reduce the loss dictionary from all processes so that process with rank
-    0 has the averaged results. Returns a dict with the same fields as
-    loss_dict, after reduction.
-    """
-    world_size = get_world_size()
-    if world_size < 2:
-        return loss_dict
-    with torch.no_grad():
-        loss_names = []
-        all_losses = []
-        for k, v in loss_dict.items():
-            loss_names.append(k)
-            all_losses.append(v)
-        all_losses = torch.stack(all_losses, dim=0)
-        dist.reduce(all_losses, dst=0)
-        if dist.get_rank() == 0:
-            # only main process gets accumulated, so only divide by
-            # world_size in this case
-            all_losses /= world_size
-        reduced_losses = {k: v for k, v in zip(loss_names, all_losses)}
-    return reduced_losses
-
-
 def do_train(
-    model, data_loader, optimizer, scheduler, checkpointer, device, checkpoint_period, arguments
+    model,
+    data_loader,
+    optimizer,
+    scheduler,
+    checkpointer,
+    device,
+    checkpoint_period,
+    extra_checkpoint_data,
 ):
     logger = logging.getLogger("maskrcnn_benchmark.trainer")
     logger.info("Start training")
     meters = MetricLogger(delimiter="  ")
     max_iter = len(data_loader)
-    start_iter = arguments["iteration"]
+    start_iter = extra_checkpoint_data["iteration"]
     model.train()
     start_training_time = time.time()
     end = time.time()
     for iteration, (images, targets, _) in enumerate(data_loader, start_iter):
         data_time = time.time() - end
-        iteration = iteration + 1
-        arguments["iteration"] = iteration
+        extra_checkpoint_data["iteration"] = iteration = iteration + 1
 
         scheduler.step()
 
@@ -60,7 +40,7 @@ def do_train(
         losses = sum(loss for loss in loss_dict.values())
 
         # reduce losses over all GPUs for logging purposes
-        loss_dict_reduced = reduce_loss_dict(loss_dict)
+        loss_dict_reduced = reduce_dict(loss_dict)
         losses_reduced = sum(loss for loss in loss_dict_reduced.values())
         meters.update(loss=losses_reduced, **loss_dict_reduced)
 
@@ -94,9 +74,9 @@ def do_train(
                 )
             )
         if iteration % checkpoint_period == 0:
-            checkpointer.save("model_{:07d}".format(iteration), **arguments)
+            checkpointer.save("model_{:07d}".format(iteration), **extra_checkpoint_data)
         if iteration == max_iter:
-            checkpointer.save("model_final", **arguments)
+            checkpointer.save("model_final", **extra_checkpoint_data)
 
     total_training_time = time.time() - start_training_time
     total_time_str = str(datetime.timedelta(seconds=total_training_time))

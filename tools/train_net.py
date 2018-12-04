@@ -46,24 +46,32 @@ def train(cfg, local_rank, distributed):
             broadcast_buffers=False,
         )
 
-    arguments = {}
-    arguments["iteration"] = 0
+    extra_checkpoint_data = {"iteration": 0}
 
     output_dir = cfg.OUTPUT_DIR
 
     save_to_disk = get_rank() == 0
     checkpointer = DetectronCheckpointer(cfg, model, optimizer, scheduler, output_dir, save_to_disk)
-    extra_checkpoint_data = checkpointer.load(cfg.MODEL.WEIGHT)
-    arguments.update(extra_checkpoint_data)
+    extra_checkpoint_data.update(checkpointer.load(cfg.MODEL.WEIGHT))
 
     data_loader = make_data_loader(
-        cfg, is_train=True, is_distributed=distributed, start_iter=arguments["iteration"]
+        cfg,
+        is_train=True,
+        is_distributed=distributed,
+        start_iter=extra_checkpoint_data["iteration"],
     )
 
     checkpoint_period = cfg.SOLVER.CHECKPOINT_PERIOD
 
     do_train(
-        model, data_loader, optimizer, scheduler, checkpointer, device, checkpoint_period, arguments
+        model,
+        data_loader,
+        optimizer,
+        scheduler,
+        checkpointer,
+        device,
+        checkpoint_period,
+        extra_checkpoint_data,
     )
 
     return model
@@ -118,7 +126,6 @@ def main():
     args = parser.parse_args()
 
     num_gpus = args.num_gpus
-    num_gpus_on_node = torch.cuda.device_count()
 
     if num_gpus > 1:
         # https://github.com/pytorch/pytorch/pull/14391

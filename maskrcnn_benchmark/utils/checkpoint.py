@@ -23,6 +23,9 @@ class Checkpointer(object):
         self.logger = logger
 
     def save(self, name, **kwargs):
+        """
+        kwargs: extra data to save, in addition to model, optimizer and scheduler
+        """
         if not self.save_dir:
             return
 
@@ -43,6 +46,10 @@ class Checkpointer(object):
         self.tag_last_checkpoint(save_file)
 
     def load(self, f=None):
+        """
+        Returns:
+            dict: extra data loaded from the checkpoint, other than model, optimizer and scheduler.
+        """
         if self.has_checkpoint():
             # override argument with existing checkpoint
             f = self.get_checkpoint_file()
