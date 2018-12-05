@@ -65,8 +65,9 @@ _C.DATASETS.TEST = ()
 _C.DATALOADER = CN()
 # Number of data loading threads
 _C.DATALOADER.NUM_WORKERS = 4
-# If > 0, this enforces that each collated batch should have a size divisible
-# by SIZE_DIVISIBILITY
+# If > 0, this enforces that each collated batch should have a size divisible by SIZE_DIVISIBILITY
+# e.g., for many FPN models, the width and height of each image has to be a
+# multiple of 32.
 _C.DATALOADER.SIZE_DIVISIBILITY = 0
 # If True, each batch should contain only images for which the aspect ratio
 # is compatible. This groups portrait images together, and landscape images

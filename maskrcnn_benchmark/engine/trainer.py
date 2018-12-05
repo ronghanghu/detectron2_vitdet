@@ -38,6 +38,8 @@ def do_train(
         loss_dict = model(images, targets)
 
         losses = sum(loss for loss in loss_dict.values())
+        if torch.isnan(losses).any():
+            raise FloatingPointError("Losses become NaN at iteration={}!".format(iteration))
 
         # reduce losses over all GPUs for logging purposes
         loss_dict_reduced = reduce_dict(loss_dict)
