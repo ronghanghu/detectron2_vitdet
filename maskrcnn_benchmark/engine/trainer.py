@@ -52,10 +52,13 @@ def do_train(
 
         batch_time = time.time() - end
         end = time.time()
-        meters.update(time=batch_time, data=data_time)
-
-        eta_seconds = meters.time.global_avg * (max_iter - iteration)
-        eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
+        # Consider the first several iteration as warmup and don't time it.
+        if iteration <= 3:
+            start_training_time = time.time()
+        else:
+            meters.update(time=batch_time, data=data_time)
+            eta_seconds = meters.time.global_avg * (max_iter - iteration)
+            eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
 
         if iteration % 20 == 0 or iteration == max_iter:
             logger.info(
