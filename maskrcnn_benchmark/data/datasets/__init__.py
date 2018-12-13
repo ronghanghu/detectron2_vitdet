@@ -1,4 +1,4 @@
-from .coco import COCODataset
-from .concat_dataset import ConcatDataset
+from .coco import COCODetection, COCOMeta
+from .common import ConcatDataset, MapDataset
 
-__all__ = ["COCODataset", "ConcatDataset"]
+__all__ = ["COCODetection", "COCOMeta", "ConcatDataset", "MapDataset"]

@@ -3,8 +3,8 @@ import os
 import sys
 
 
-def setup_logger(name, save_dir, distributed_rank):
-    logger = logging.getLogger(name)
+def setup_logger(save_dir=None, distributed_rank=0, name="maskrcnn_benchmark"):
+    logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
     # don't log results for the non-master process
     if distributed_rank > 0:

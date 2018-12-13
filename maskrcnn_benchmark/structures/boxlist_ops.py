@@ -66,9 +66,6 @@ def boxlist_iou(boxlist1, boxlist2):
             "boxlists should have same image size, got {}, {}".format(boxlist1, boxlist2)
         )
 
-    N = len(boxlist1)
-    M = len(boxlist2)
-
     area1 = boxlist1.area()
     area2 = boxlist2.area()
 

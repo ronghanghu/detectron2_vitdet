@@ -9,14 +9,7 @@ from maskrcnn_benchmark.utils.metric_logger import MetricLogger
 
 
 def do_train(
-    model,
-    data_loader,
-    optimizer,
-    scheduler,
-    checkpointer,
-    device,
-    checkpoint_period,
-    extra_checkpoint_data,
+    model, data_loader, optimizer, scheduler, checkpointer, checkpoint_period, extra_checkpoint_data
 ):
     logger = logging.getLogger("maskrcnn_benchmark.trainer")
     logger.info("Start training")
@@ -26,16 +19,13 @@ def do_train(
     model.train()
     start_training_time = time.time()
     end = time.time()
-    for iteration, (images, targets, _) in enumerate(data_loader, start_iter):
+    for iteration, data in enumerate(data_loader, start_iter):
         data_time = time.time() - end
         extra_checkpoint_data["iteration"] = iteration = iteration + 1
 
         scheduler.step()
 
-        images = images.to(device)
-        targets = [target.to(device) for target in targets]
-
-        loss_dict = model(images, targets)
+        loss_dict = model(data)
 
         losses = sum(loss for loss in loss_dict.values())
         if torch.isnan(losses).any():

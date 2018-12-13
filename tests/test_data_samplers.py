@@ -67,7 +67,6 @@ class TestGroupedBatchSampler(unittest.TestCase):
     def test_subset_sampler(self):
         batch_size = 3
         drop_uneven = False
-        dataset = [i for i in range(10)]
         group_ids = [0, 0, 1, 0, 1, 1, 0, 1, 1, 0]
         sampler = SubsetSampler([0, 3, 5, 6, 7, 8])
 
@@ -80,7 +79,6 @@ class TestGroupedBatchSampler(unittest.TestCase):
     def test_permute_subset_sampler(self):
         batch_size = 3
         drop_uneven = False
-        dataset = [i for i in range(10)]
         group_ids = [0, 0, 1, 0, 1, 1, 0, 1, 1, 0]
         sampler = SubsetSampler([5, 0, 6, 1, 3, 8])
 
@@ -93,7 +91,6 @@ class TestGroupedBatchSampler(unittest.TestCase):
     def test_permute_subset_sampler_drop_uneven(self):
         batch_size = 3
         drop_uneven = True
-        dataset = [i for i in range(10)]
         group_ids = [0, 0, 1, 0, 1, 1, 0, 1, 1, 0]
         sampler = SubsetSampler([5, 0, 6, 1, 3, 8])
 

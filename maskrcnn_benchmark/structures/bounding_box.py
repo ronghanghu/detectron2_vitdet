@@ -168,8 +168,8 @@ class BoxList(object):
         cropped_ymax = (ymax - box[1]).clamp(min=0, max=h)
 
         # TODO should I filter empty boxes here?
-        if False:
-            is_empty = (cropped_xmin == cropped_xmax) | (cropped_ymin == cropped_ymax)
+        # if False:
+        #     is_empty = (cropped_xmin == cropped_xmax) | (cropped_ymin == cropped_ymax)
 
         cropped_box = torch.cat((cropped_xmin, cropped_ymin, cropped_xmax, cropped_ymax), dim=-1)
         bbox = BoxList(cropped_box, (w, h), mode="xyxy")

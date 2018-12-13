@@ -59,7 +59,7 @@ def main_worker(worker_id, args):
     cfg.freeze()
 
     save_dir = ""
-    logger = setup_logger("maskrcnn_benchmark", save_dir, get_rank())
+    logger = setup_logger(save_dir, get_rank())
     logger.info("Using {} GPUs".format(args.num_gpus))
     logger.info(cfg)
 
@@ -67,11 +67,10 @@ def main_worker(worker_id, args):
     logger.info("\n" + collect_env_info())
 
     model = build_detection_model(cfg)
-    model.to(cfg.MODEL.DEVICE)
 
     output_dir = cfg.OUTPUT_DIR
     checkpointer = DetectronCheckpointer(cfg, model, save_dir=output_dir)
-    _ = checkpointer.load(cfg.MODEL.WEIGHT)
+    checkpointer.load(cfg.MODEL.WEIGHT)
 
     iou_types = ("bbox",)
     if cfg.MODEL.MASK_ON:
@@ -90,7 +89,6 @@ def main_worker(worker_id, args):
             data_loader_val,
             iou_types=iou_types,
             box_only=cfg.MODEL.RPN_ONLY,
-            device=cfg.MODEL.DEVICE,
             expected_results=cfg.TEST.EXPECTED_RESULTS,
             expected_results_sigma_tol=cfg.TEST.EXPECTED_RESULTS_SIGMA_TOL,
             output_folder=output_folder,

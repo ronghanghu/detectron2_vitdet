@@ -9,49 +9,49 @@ from maskrcnn_benchmark.utils.imports import import_file
 
 from . import datasets as D
 from . import samplers
-from .collate_batch import BatchCollator
-from .transforms import build_transforms
+from .transforms import DetectionTransform
 
 
-def build_dataset(dataset_list, transforms, dataset_catalog, is_train=True):
+def _identity(x):
+    # lambda x:x is not pickleable
+    return x
+
+
+def build_dataset(dataset_list, dataset_catalog, is_train=True):
     """
     Arguments:
         dataset_list (list[str]): Contains the names of the datasets, i.e.,
             coco_2014_trian, coco_2014_val, etc
-        transforms (callable): transforms to apply to each (image, target) sample
         dataset_catalog (DatasetCatalog): contains the information on how to
             construct a dataset.
         is_train (bool): whether to setup the dataset for training or testing
     """
     if not isinstance(dataset_list, (list, tuple)):
         raise RuntimeError("dataset_list should be a list of strings, got {}".format(dataset_list))
+    assert len(dataset_list)
     datasets = []
     for dataset_name in dataset_list:
         data = dataset_catalog.get(dataset_name)
         factory = getattr(D, data["factory"])
         args = data["args"]
-        # for COCODataset, we want to remove images without annotations
-        # during training
-        if data["factory"] == "COCODataset":
+
+        if data["factory"] == "COCODetection":
+            # for COCODataset, we want to remove images without annotations during training
             args["remove_images_without_annotations"] = is_train
-        args["transforms"] = transforms
         # make dataset from factory
         dataset = factory(**args)
         datasets.append(dataset)
 
     # for testing, return a list of datasets
-    if not is_train:
+    if not is_train or len(datasets) <= 1:
         return datasets
-
-    # for training, concatenate all datasets into a single one
-    dataset = datasets[0]
-    if len(datasets) > 1:
-        dataset = D.ConcatDataset(datasets)
-
-    return [dataset]
+    else:
+        # for training, concatenate all datasets into a single one
+        return [D.ConcatDataset(datasets)]
 
 
 def make_data_sampler(dataset, shuffle, distributed):
+    # "samplers" have a bad __init__ interface ... because only the length of dataset is used by the samplers
     if distributed:
         return torch.utils.data.distributed.DistributedSampler(dataset)
     if shuffle:
@@ -68,22 +68,12 @@ def _quantize(x, bins):
     return quantized
 
 
-def _compute_aspect_ratios(dataset):
-    aspect_ratios = []
-    for i in range(len(dataset)):
-        img_info = dataset.get_img_info(i)
-        aspect_ratio = float(img_info["height"]) / float(img_info["width"])
-        aspect_ratios.append(aspect_ratio)
-    return aspect_ratios
-
-
 def make_batch_data_sampler(
-    dataset, sampler, aspect_grouping, images_per_batch, num_iters=None, start_iter=0
+    aspect_ratios, sampler, aspect_grouping, images_per_batch, num_iters=None, start_iter=0
 ):
     if aspect_grouping:
         if not isinstance(aspect_grouping, (list, tuple)):
             aspect_grouping = [aspect_grouping]
-        aspect_ratios = _compute_aspect_ratios(dataset)
         group_ids = _quantize(aspect_ratios, aspect_grouping)
         batch_sampler = samplers.GroupedBatchSampler(
             sampler, group_ids, images_per_batch, drop_uneven=False
@@ -141,19 +131,24 @@ def make_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0):
     DatasetCatalog = paths_catalog.DatasetCatalog
     dataset_list = cfg.DATASETS.TRAIN if is_train else cfg.DATASETS.TEST
 
-    transforms = build_transforms(cfg, is_train)
-    datasets = build_dataset(dataset_list, transforms, DatasetCatalog, is_train)
+    datasets = build_dataset(dataset_list, DatasetCatalog, is_train)
 
     data_loaders = []
     for dataset in datasets:
+        ratios = []
+        for i in range(len(dataset)):
+            img = dataset[i]
+            ratios.append(float(img["height"]) / float(img["width"]))
+
+        dataset = D.MapDataset(dataset, DetectionTransform(cfg, is_train))
+
         sampler = make_data_sampler(dataset, shuffle, is_distributed)
         batch_sampler = make_batch_data_sampler(
-            dataset, sampler, aspect_grouping, images_per_gpu, num_iters, start_iter
+            ratios, sampler, aspect_grouping, images_per_gpu, num_iters, start_iter
         )
-        collator = BatchCollator(cfg.DATALOADER.SIZE_DIVISIBILITY)
         num_workers = cfg.DATALOADER.NUM_WORKERS
         data_loader = torch.utils.data.DataLoader(
-            dataset, num_workers=num_workers, batch_sampler=batch_sampler, collate_fn=collator
+            dataset, num_workers=num_workers, batch_sampler=batch_sampler, collate_fn=_identity
         )
         data_loaders.append(data_loader)
     if is_train:

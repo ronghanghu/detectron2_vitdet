@@ -4,8 +4,6 @@ from collections import OrderedDict
 
 import torch
 
-from maskrcnn_benchmark.utils.model_serialization import load_state_dict
-
 
 def _rename_basic_resnet_weights(layer_keys):
     layer_keys = [k.replace("_", ".") for k in layer_keys]

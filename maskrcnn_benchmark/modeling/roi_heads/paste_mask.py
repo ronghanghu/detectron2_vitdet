@@ -10,6 +10,8 @@ from maskrcnn_benchmark.structures.bounding_box import BoxList
 # the next two functions should be merged inside Masker
 # but are kept here for the moment while we need them
 # temporarily gor paste_mask_in_image
+
+
 def expand_boxes(boxes, scale):
     w_half = (boxes[:, 2] - boxes[:, 0]) * 0.5
     h_half = (boxes[:, 3] - boxes[:, 1]) * 0.5

@@ -1,62 +1,107 @@
-import torch
-import torchvision
+import copy
+import logging
+import os
 
-from maskrcnn_benchmark.structures.bounding_box import BoxList
-from maskrcnn_benchmark.structures.segmentation_mask import SegmentationMask
+import torch.utils.data as data
 
 
-class COCODataset(torchvision.datasets.coco.CocoDetection):
-    def __init__(self, ann_file, root, remove_images_without_annotations, transforms=None):
-        super(COCODataset, self).__init__(root, ann_file)
+class COCOMeta:
+    class_names = None
+    contiguous_id_to_json_id = {}  # contiguous id starts from 1
+    json_id_to_contiguous_id = {}
+
+    _instance = None
+
+    def __new__(cls):
+        if not isinstance(cls._instance, cls):
+            cls._instance = object.__new__(cls)
+        return cls._instance
+
+    @property
+    def num_classes(self):
+        return len(self.class_names)
+
+
+class COCODetection(data.Dataset):
+    def __init__(self, ann_file, root, remove_images_without_annotations=False):
+        """
+        Args:
+            ann_file (str): the annotation file. Path to a json
+            root (str): contains 'train2014', etc
+        """
+        from pycocotools.coco import COCO
+
+        self.root = root
+        self.coco = COCO(ann_file)
+
+        self.meta = COCOMeta()
+
+        # initialize the metadata
+        cat_ids = self.coco.getCatIds()
+        self.meta.class_names = [c["name"] for c in self.coco.loadCats(cat_ids)]
+
+        id_map = self.meta.json_id_to_contiguous_id = {v: i + 1 for i, v in enumerate(cat_ids)}
+        self.meta.contiguous_id_to_json_id = {v: k for k, v in id_map.items()}
 
         # sort indices for reproducible results
-        self.ids = sorted(self.ids)
+        img_ids = sorted(list(self.coco.imgs.keys()))
+        # TODO for inference
+        self.imgs = imgs = self.coco.loadImgs(img_ids)
+        annotations = [self.coco.imgToAnns[img_id] for img_id in img_ids]
 
-        # filter images without detection annotations
+        self.roidbs = list(zip(imgs, annotations))
+
+        logger = logging.getLogger(__name__)
         if remove_images_without_annotations:
-            self.ids = [
-                img_id
-                for img_id in self.ids
-                if len(self.coco.getAnnIds(imgIds=img_id, iscrowd=None)) > 0
-            ]
+            num_before = len(self.roidbs)
 
-        self.json_category_id_to_contiguous_id = {
-            v: i + 1 for i, v in enumerate(self.coco.getCatIds())
-        }
-        self.contiguous_category_id_to_json_id = {
-            v: k for k, v in self.json_category_id_to_contiguous_id.items()
-        }
-        self.id_to_img_map = {k: v for k, v in enumerate(self.ids)}
-        self.transforms = transforms
+            def has_annotation(anns):
+                for ann in anns:
+                    if ann["iscrowd"] == 0:
+                        return True
+                return False
+
+            self.roidbs = [x for x in self.roidbs if has_annotation(x[1])]
+
+            num_after = len(self.roidbs)
+            logger.info(
+                "Remove {} images without no-crowd annotations.".format(num_before - num_after)
+            )
+        logger.info("Loaded {} images from {}".format(len(self.roidbs), ann_file))
+
+    def __len__(self):
+        return len(self.roidbs)
 
     def __getitem__(self, idx):
-        img, anno = super(COCODataset, self).__getitem__(idx)
+        """
+        Return a dict for each image. It has the following keys:
 
-        # filter crowd annotations
-        # TODO might be better to add an extra field
-        anno = [obj for obj in anno if obj["iscrowd"] == 0]
+        file_name: full path to the image
+        id: id of the image
+        height, width: int
+        annotations: list
+        Each annotation is a dict representing an object. The dict has the following keys:
+        segmentation: a list of lists, in COCO's original format
+            area: float
+            iscrowd: 0 or 1
+            bbox: x, y, w, h
+            category_id: 0~79
+        """
+        img_json, anno_json = self.roidbs[idx]
 
-        boxes = [obj["bbox"] for obj in anno]
-        boxes = torch.as_tensor(boxes).reshape(-1, 4)  # guard against no boxes
-        target = BoxList(boxes, img.size, mode="xywh").convert("xyxy")
+        ret_dict = {}
+        ret_dict["file_name"] = os.path.join(self.root, img_json["file_name"])
+        for field in ["height", "width", "id"]:
+            ret_dict[field] = img_json[field]
 
-        classes = [obj["category_id"] for obj in anno]
-        classes = [self.json_category_id_to_contiguous_id[c] for c in classes]
-        classes = torch.tensor(classes)
-        target.add_field("labels", classes)
-
-        masks = [obj["segmentation"] for obj in anno]
-        masks = SegmentationMask(masks, img.size)
-        target.add_field("masks", masks)
-
-        target = target.clip_to_image(remove_empty=True)
-
-        if self.transforms is not None:
-            img, target = self.transforms(img, target)
-
-        return img, target, idx
-
-    def get_img_info(self, index):
-        img_id = self.id_to_img_map[index]
-        img_data = self.coco.imgs[img_id]
-        return img_data
+        objs = []
+        for anno in anno_json:
+            assert anno.get("ignore", 0) == 0
+            obj = {
+                field: copy.deepcopy(anno[field])
+                for field in ["segmentation", "area", "iscrowd", "bbox"]
+            }
+            obj["category_id"] = self.meta.json_id_to_contiguous_id[anno["category_id"]]
+            objs.append(obj)
+        ret_dict["annotations"] = objs
+        return ret_dict

@@ -25,10 +25,8 @@ class Mask(object):
         width, height = self.size
         if method == FLIP_LEFT_RIGHT:
             dim = width
-            idx = 2
         elif method == FLIP_TOP_BOTTOM:
             dim = height
-            idx = 1
 
         flip_idx = list(range(dim)[::-1])
         flipped_masks = self.masks.index_select(dim, flip_idx)

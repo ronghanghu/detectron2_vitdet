@@ -2,7 +2,7 @@
 
 import os
 
-from maskrcnn_benchmark.config.paths_catalog import ModelCatalog
+# TODO this file does not work
 
 
 class DatasetCatalog(object):

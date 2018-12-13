@@ -1,4 +1,5 @@
 import datetime
+import itertools
 import logging
 import os
 import tempfile
@@ -8,6 +9,7 @@ from collections import OrderedDict
 import torch
 from tqdm import tqdm
 
+from maskrcnn_benchmark.data.datasets import COCOMeta
 from maskrcnn_benchmark.modeling.roi_heads.paste_mask import Masker
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 
@@ -17,31 +19,36 @@ from ..utils.comm import scatter_gather
 from ..utils.comm import synchronize
 
 
-def compute_on_dataset(model, data_loader, device):
+def compute_on_dataset(model, data_loader):
+    """
+    Returns:
+        list[dict]. Each dict has: "id", "original_height", "original_width", "result".
+            "result" is a `BoxList` containing the outputs of the model.
+    """
     model.eval()
-    results_dict = {}
+    results = []
     cpu_device = torch.device("cpu")
-    for i, batch in tqdm(enumerate(data_loader)):
-        images, targets, image_ids = batch
-        images = images.to(device)
+    for batch in tqdm(data_loader):
         with torch.no_grad():
-            output = model(images)
-            output = [o.to(cpu_device) for o in output]
-        results_dict.update({img_id: result for img_id, result in zip(image_ids, output)})
-    return results_dict
+            outputs = model(batch)
+            for roidb, output in zip(batch, outputs):
+                output = output.to(cpu_device)
+                result = {k: roidb[k] for k in ["original_height", "original_width", "id"]}
+                result["result"] = output
+                results.append(result)
+    return results
 
 
 def prepare_for_coco_detection(predictions, dataset):
     # assert isinstance(dataset, COCODataset)
     coco_results = []
-    for image_id, prediction in enumerate(predictions):
-        original_id = dataset.id_to_img_map[image_id]
+    for roidb in predictions:
+        prediction = roidb["result"]
         if len(prediction) == 0:
             continue
 
-        # TODO replace with get_img_info?
-        image_width = dataset.coco.imgs[original_id]["width"]
-        image_height = dataset.coco.imgs[original_id]["height"]
+        image_width = roidb["original_width"]
+        image_height = roidb["original_height"]
         prediction = prediction.resize((image_width, image_height))
         prediction = prediction.convert("xywh")
 
@@ -49,12 +56,12 @@ def prepare_for_coco_detection(predictions, dataset):
         scores = prediction.get_field("scores").tolist()
         labels = prediction.get_field("labels").tolist()
 
-        mapped_labels = [dataset.contiguous_category_id_to_json_id[i] for i in labels]
+        mapped_labels = [COCOMeta().contiguous_id_to_json_id[i] for i in labels]
 
         coco_results.extend(
             [
                 {
-                    "image_id": original_id,
+                    "image_id": roidb["id"],
                     "category_id": mapped_labels[k],
                     "bbox": box,
                     "score": scores[k],
@@ -72,14 +79,13 @@ def prepare_for_coco_segmentation(predictions, dataset):
     masker = Masker(threshold=0.5, padding=1)
     # assert isinstance(dataset, COCODataset)
     coco_results = []
-    for image_id, prediction in tqdm(enumerate(predictions)):
-        original_id = dataset.id_to_img_map[image_id]
+    for roidb in tqdm(predictions):
+        prediction = roidb["result"]
         if len(prediction) == 0:
             continue
 
-        # TODO replace with get_img_info?
-        image_width = dataset.coco.imgs[original_id]["width"]
-        image_height = dataset.coco.imgs[original_id]["height"]
+        image_width = roidb["original_width"]
+        image_height = roidb["original_height"]
         prediction = prediction.resize((image_width, image_height))
         masks = prediction.get_field("mask")
         # t = time.time()
@@ -99,12 +105,12 @@ def prepare_for_coco_segmentation(predictions, dataset):
         for rle in rles:
             rle["counts"] = rle["counts"].decode("utf-8")
 
-        mapped_labels = [dataset.contiguous_category_id_to_json_id[i] for i in labels]
+        mapped_labels = [COCOMeta().contiguous_id_to_json_id[i] for i in labels]
 
         coco_results.extend(
             [
                 {
-                    "image_id": original_id,
+                    "image_id": roidb["id"],
                     "category_id": mapped_labels[k],
                     "segmentation": rle,
                     "score": scores[k],
@@ -148,12 +154,10 @@ def evaluate_box_proposals(predictions, dataset, thresholds=None, area="all", li
     gt_overlaps = []
     num_pos = 0
 
-    for image_id, prediction in enumerate(predictions):
-        original_id = dataset.id_to_img_map[image_id]
-
-        # TODO replace with get_img_info?
-        image_width = dataset.coco.imgs[original_id]["width"]
-        image_height = dataset.coco.imgs[original_id]["height"]
+    for roidb in predictions:
+        prediction = roidb["result"]
+        image_width = roidb["original_width"]
+        image_height = roidb["original_height"]
         prediction = prediction.resize((image_width, image_height))
 
         # sort predictions in descending order
@@ -161,8 +165,8 @@ def evaluate_box_proposals(predictions, dataset, thresholds=None, area="all", li
         inds = prediction.get_field("objectness").sort(descending=True)[1]
         prediction = prediction[inds]
 
-        ann_ids = dataset.coco.getAnnIds(imgIds=original_id)
-        anno = dataset.coco.loadAnns(ann_ids)
+        ann_ids = dataset.ds.coco.getAnnIds(imgIds=roidb["id"])
+        anno = dataset.ds.coco.loadAnns(ann_ids)
         gt_boxes = [obj["bbox"] for obj in anno if obj["iscrowd"] == 0]
         gt_boxes = torch.as_tensor(gt_boxes).reshape(-1, 4)  # guard against no boxes
         gt_boxes = BoxList(gt_boxes, (image_width, image_height), mode="xywh").convert("xyxy")
@@ -245,28 +249,6 @@ def evaluate_predictions_on_coco(coco_gt, coco_results, json_result_file, iou_ty
     return coco_eval
 
 
-def _accumulate_predictions_from_multiple_gpus(predictions_per_gpu):
-    all_predictions = scatter_gather(predictions_per_gpu)
-    if not is_main_process():
-        return
-    # merge the list of dicts
-    predictions = {}
-    for p in all_predictions:
-        predictions.update(p)
-    # convert a dict where the key is the index in a list
-    image_ids = list(sorted(predictions.keys()))
-    if len(image_ids) != image_ids[-1] + 1:
-        logger = logging.getLogger("maskrcnn_benchmark.inference")
-        logger.warning(
-            "Number of images that were gathered from multiple processes is not "
-            "a contiguous set. Some images might be missing from the evaluation"
-        )
-
-    # convert to a list
-    predictions = [predictions[i] for i in image_ids]
-    return predictions
-
-
 class COCOResults(object):
     METRICS = {
         "bbox": ["AP", "AP50", "AP75", "APs", "APm", "APl"],
@@ -339,20 +321,16 @@ def inference(
     data_loader,
     iou_types=("bbox",),
     box_only=False,
-    device="cuda",
     expected_results=(),
     expected_results_sigma_tol=4,
     output_folder=None,
 ):
-
-    # convert to a torch.device for efficiency
-    device = torch.device(device)
     num_devices = torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
     logger = logging.getLogger("maskrcnn_benchmark.inference")
     dataset = data_loader.dataset
     logger.info("Start evaluation on {} images".format(len(dataset)))
     start_time = time.time()
-    predictions = compute_on_dataset(model, data_loader, device)
+    predictions = compute_on_dataset(model, data_loader)
     # wait for all processes to complete before measuring the time
     synchronize()
     total_time = time.time() - start_time
@@ -363,9 +341,11 @@ def inference(
         )
     )
 
-    predictions = _accumulate_predictions_from_multiple_gpus(predictions)
+    all_predictions = scatter_gather(predictions)
     if not is_main_process():
         return
+    # concat the lists
+    predictions = list(itertools.chain(*all_predictions))
 
     if output_folder:
         torch.save(predictions, os.path.join(output_folder, "predictions.pth"))
@@ -401,7 +381,7 @@ def inference(
             if output_folder:
                 file_path = os.path.join(output_folder, iou_type + ".json")
             res = evaluate_predictions_on_coco(
-                dataset.coco, coco_results[iou_type], file_path, iou_type
+                dataset.ds.coco, coco_results[iou_type], file_path, iou_type
             )
             results.update(res)
     logger.info(results)

@@ -6,6 +6,11 @@ from maskrcnn_benchmark.config import cfg
 from predictor import COCODemo
 
 
+"""
+TODO: this file no longer works
+"""
+
+
 def main():
     parser = argparse.ArgumentParser(description="PyTorch Object Detection Webcam Demo")
     parser.add_argument(

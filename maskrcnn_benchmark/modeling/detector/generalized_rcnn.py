@@ -4,9 +4,12 @@ Everything that constructs something is a function that is
 or can be accessed by a string
 """
 
+import torch
 from torch import nn
 
+from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.image_list import to_image_list
+from maskrcnn_benchmark.structures.segmentation_mask import SegmentationMask
 
 from ..backbone import build_backbone
 from ..roi_heads.roi_heads import build_roi_heads
@@ -23,19 +26,55 @@ class GeneralizedRCNN(nn.Module):
     def __init__(self, cfg):
         super(GeneralizedRCNN, self).__init__()
 
+        self.size_divisible = cfg.DATALOADER.SIZE_DIVISIBILITY
+        self.device = torch.device(cfg.MODEL.DEVICE)
+
         self.backbone = build_backbone(cfg)
         self.rpn = build_rpn(cfg)
         self.roi_heads = build_roi_heads(cfg)
 
-    def forward(self, images, targets=None):
+        self.to(self.device)
+
+    def preprocess(self, roidbs):
+        """
+        Returns:
+            images: ImageList
+            targets: list[BoxList]. None when not training.
+        """
+        images = [torch.as_tensor(x["image"].transpose(2, 0, 1).astype("float32")) for x in roidbs]
+        images = to_image_list(images, self.size_divisible).to(self.device)
+
+        if not self.training:
+            return images, None
+
+        targets = []
+        for roidb in roidbs:
+            image = roidb["image"]
+            image_size = image.shape[1], image.shape[0]
+
+            annos = roidb["annotations"]
+            boxes = [obj["bbox"] for obj in annos]
+            boxes = torch.as_tensor(boxes).reshape(-1, 4)
+            target = BoxList(boxes, image_size, mode="xywh").convert("xyxy")
+
+            classes = [obj["category_id"] for obj in annos]
+            classes = torch.tensor(classes)
+            target.add_field("labels", classes)
+
+            masks = [obj["segmentation"] for obj in annos]
+            masks = SegmentationMask(masks, image_size)
+            target.add_field("masks", masks)
+            target = target.clip_to_image(remove_empty=True)
+            targets.append(target.to(self.device))
+        return images, targets
+
+    def forward(self, roidbs):
         """
         Arguments:
-            images (list[Tensor] or ImageList): images to be processed
-            targets (list[BoxList]): ground-truth boxes present in the image (optional)
+            roidbs (list): a list of training data. Each is a dict.
         """
-        if self.training and targets is None:
-            raise ValueError("In training mode, targets should be passed")
-        images = to_image_list(images)
+        images, targets = self.preprocess(roidbs)
+
         features = self.backbone(images.tensors)
         proposals, proposal_losses = self.rpn(images, features, targets)
         if self.roi_heads:

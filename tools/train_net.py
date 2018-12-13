@@ -24,15 +24,12 @@ from maskrcnn_benchmark.utils.checkpoint import DetectronCheckpointer
 from maskrcnn_benchmark.utils.collect_env import collect_env_info
 from maskrcnn_benchmark.utils.comm import get_rank
 from maskrcnn_benchmark.utils.comm import synchronize
-from maskrcnn_benchmark.utils.imports import import_file
 from maskrcnn_benchmark.utils.logger import setup_logger
 from maskrcnn_benchmark.utils.miscellaneous import mkdir
 
 
 def train(cfg, local_rank, distributed):
     model = build_detection_model(cfg)
-    device = torch.device(cfg.MODEL.DEVICE)
-    model.to(device)
 
     optimizer = make_optimizer(cfg, model)
     scheduler = make_lr_scheduler(cfg, optimizer)
@@ -69,7 +66,6 @@ def train(cfg, local_rank, distributed):
         optimizer,
         scheduler,
         checkpointer,
-        device,
         checkpoint_period,
         extra_checkpoint_data,
     )
@@ -98,7 +94,6 @@ def test(cfg, model, distributed):
             data_loader_val,
             iou_types=iou_types,
             box_only=cfg.MODEL.RPN_ONLY,
-            device=cfg.MODEL.DEVICE,
             expected_results=cfg.TEST.EXPECTED_RESULTS,
             expected_results_sigma_tol=cfg.TEST.EXPECTED_RESULTS_SIGMA_TOL,
             output_folder=output_folder,
@@ -150,7 +145,7 @@ def main_worker(worker_id, args):
     if output_dir:
         mkdir(output_dir)
 
-    logger = setup_logger("maskrcnn_benchmark", output_dir, get_rank())
+    logger = setup_logger(output_dir, get_rank())
     logger.info("Using {} GPUs".format(args.num_gpus))
     logger.info(args)
 
