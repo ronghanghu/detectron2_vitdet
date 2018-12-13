@@ -1,7 +1,7 @@
+import cv2
 import torch
 from torchvision import transforms as T
 
-import cv2
 from maskrcnn_benchmark.modeling.detector import build_detection_model
 from maskrcnn_benchmark.modeling.roi_heads.paste_mask import Masker
 from maskrcnn_benchmark.structures.image_list import to_image_list
