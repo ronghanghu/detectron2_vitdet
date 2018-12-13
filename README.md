@@ -1,4 +1,4 @@
-# Faster R-CNN and Mask R-CNN in PyTorch 1.0
+# Detectron in Pytorch (Work in Progress)
 
 This project aims at providing the necessary building blocks for easily
 creating detection and segmentation models using PyTorch 1.0.
