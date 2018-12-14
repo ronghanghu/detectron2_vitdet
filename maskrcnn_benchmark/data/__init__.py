@@ -1,1 +1,1 @@
-from .build import make_data_loader
+from .detection import make_detection_data_loader

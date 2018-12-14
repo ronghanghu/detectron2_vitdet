@@ -10,8 +10,8 @@ import torch.distributed as dist
 import torch.multiprocessing as mp
 
 from maskrcnn_benchmark.config import cfg
-from maskrcnn_benchmark.data import make_data_loader
-from maskrcnn_benchmark.engine.inference import inference
+from maskrcnn_benchmark.data import make_detection_data_loader
+from maskrcnn_benchmark.engine.coco_evaluation import coco_evaluation
 from maskrcnn_benchmark.modeling.detector import build_detection_model
 from maskrcnn_benchmark.utils.checkpoint import DetectronCheckpointer
 from maskrcnn_benchmark.utils.collect_env import collect_env_info
@@ -82,15 +82,15 @@ def main_worker(worker_id, args):
             output_folder = os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
             mkdir(output_folder)
             output_folders[idx] = output_folder
-    data_loaders_val = make_data_loader(cfg, is_train=False, is_distributed=args.num_gpus > 1)
+    data_loaders_val = make_detection_data_loader(
+        cfg, is_train=False, is_distributed=args.num_gpus > 1
+    )
     for output_folder, data_loader_val in zip(output_folders, data_loaders_val):
-        inference(
+        coco_evaluation(
             model,
             data_loader_val,
             iou_types=iou_types,
             box_only=cfg.MODEL.RPN_ONLY,
-            expected_results=cfg.TEST.EXPECTED_RESULTS,
-            expected_results_sigma_tol=cfg.TEST.EXPECTED_RESULTS_SIGMA_TOL,
             output_folder=output_folder,
         )
         synchronize()

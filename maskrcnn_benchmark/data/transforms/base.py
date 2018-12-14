@@ -38,6 +38,7 @@ class ImageAugmentor(metaclass=ABCMeta):
 
     def reset_state(self):
         """ reset rng and other state """
+        # TODO check if this has duplicate state between processes.
         # self.rng = get_rng(self)
         self.rng = np.random.RandomState()
 
