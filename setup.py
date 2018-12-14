@@ -10,8 +10,6 @@ from torch.utils.cpp_extension import CUDA_HOME
 from torch.utils.cpp_extension import CppExtension
 from torch.utils.cpp_extension import CUDAExtension
 
-requirements = ["torch", "torchvision"]
-
 
 def get_extensions():
     this_dir = os.path.dirname(os.path.abspath(__file__))
@@ -62,7 +60,11 @@ setup(
     url="https://github.com/facebookresearch/maskrcnn-benchmark",
     description="object detection in pytorch",
     packages=find_packages(exclude=("configs", "tests")),
-    # install_requires=requirements,
+    install_requires=[
+        "termcolor>=1.1",
+        # torch
+        # is torchvision still needed?
+    ],
     ext_modules=get_extensions(),
     cmdclass={"build_ext": torch.utils.cpp_extension.BuildExtension},
 )
