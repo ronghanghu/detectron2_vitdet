@@ -1,45 +1,7 @@
 import pycocotools.mask as mask_utils
 import torch
 
-# transpose
-FLIP_LEFT_RIGHT = 0
-FLIP_TOP_BOTTOM = 1
-
-
-class Mask(object):
-    """
-    This class is unfinished and not meant for use yet
-    It is supposed to contain the mask for an object as
-    a 2d tensor
-    """
-
-    def __init__(self, masks, size, mode):
-        self.masks = masks
-        self.size = size
-        self.mode = mode
-
-    def transpose(self, method):
-        if method not in (FLIP_LEFT_RIGHT, FLIP_TOP_BOTTOM):
-            raise NotImplementedError("Only FLIP_LEFT_RIGHT and FLIP_TOP_BOTTOM implemented")
-
-        width, height = self.size
-        if method == FLIP_LEFT_RIGHT:
-            dim = width
-        elif method == FLIP_TOP_BOTTOM:
-            dim = height
-
-        flip_idx = list(range(dim)[::-1])
-        flipped_masks = self.masks.index_select(dim, flip_idx)
-        return Mask(flipped_masks, self.size, self.mode)
-
-    def crop(self, box):
-        w, h = box[2] - box[0], box[3] - box[1]
-
-        cropped_masks = self.masks[:, box[1] : box[3], box[0] : box[2]]
-        return Mask(cropped_masks, size=(w, h), mode=self.mode)
-
-    def resize(self, size, *args, **kwargs):
-        pass
+# TODO TO_REMOVE maybe remove crop&resize when we deal with masks with fewer quantizations
 
 
 class Polygons(object):
@@ -59,27 +21,6 @@ class Polygons(object):
         self.polygons = polygons
         self.size = size
         self.mode = mode
-
-    def transpose(self, method):
-        if method not in (FLIP_LEFT_RIGHT, FLIP_TOP_BOTTOM):
-            raise NotImplementedError("Only FLIP_LEFT_RIGHT and FLIP_TOP_BOTTOM implemented")
-
-        flipped_polygons = []
-        width, height = self.size
-        if method == FLIP_LEFT_RIGHT:
-            dim = width
-            idx = 0
-        elif method == FLIP_TOP_BOTTOM:
-            dim = height
-            idx = 1
-
-        for poly in self.polygons:
-            p = poly.clone()
-            TO_REMOVE = 1
-            p[idx::2] = dim - poly[idx::2] - TO_REMOVE
-            flipped_polygons.append(p)
-
-        return Polygons(flipped_polygons, size=self.size, mode=self.mode)
 
     def crop(self, box):
         w, h = box[2] - box[0], box[3] - box[1]
@@ -151,15 +92,6 @@ class SegmentationMask(object):
         self.polygons = [Polygons(p, size, mode) for p in polygons]
         self.size = size
         self.mode = mode
-
-    def transpose(self, method):
-        if method not in (FLIP_LEFT_RIGHT, FLIP_TOP_BOTTOM):
-            raise NotImplementedError("Only FLIP_LEFT_RIGHT and FLIP_TOP_BOTTOM implemented")
-
-        flipped = []
-        for polygon in self.polygons:
-            flipped.append(polygon.transpose(method))
-        return SegmentationMask(flipped, size=self.size, mode=self.mode)
 
     def crop(self, box):
         w, h = box[2] - box[0], box[3] - box[1]

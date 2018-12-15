@@ -2,6 +2,8 @@ import math
 
 import torch
 
+_DEFAULT_CLIP = math.log(1000.0 / 16)
+
 
 class BoxCoder(object):
     """
@@ -9,7 +11,7 @@ class BoxCoder(object):
     the representation used for training the regressors.
     """
 
-    def __init__(self, weights, bbox_xform_clip=math.log(1000.0 / 16)):
+    def __init__(self, weights, bbox_xform_clip=_DEFAULT_CLIP):
         """
         Arguments:
             weights (4-element tuple)
@@ -87,8 +89,9 @@ class BoxCoder(object):
         # y1
         pred_boxes[:, 1::4] = pred_ctr_y - 0.5 * pred_h
         # x2 (note: "- 1" is correct; don't be fooled by the asymmetry)
-        pred_boxes[:, 2::4] = pred_ctr_x + 0.5 * pred_w - 1
+        TO_REMOVE = 1  # TODO remove
+        pred_boxes[:, 2::4] = pred_ctr_x + 0.5 * pred_w - TO_REMOVE
         # y2 (note: "- 1" is correct; don't be fooled by the asymmetry)
-        pred_boxes[:, 3::4] = pred_ctr_y + 0.5 * pred_h - 1
+        pred_boxes[:, 3::4] = pred_ctr_y + 0.5 * pred_h - TO_REMOVE
 
         return pred_boxes

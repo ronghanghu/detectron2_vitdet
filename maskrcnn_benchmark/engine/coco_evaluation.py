@@ -1,12 +1,15 @@
 import datetime
 import itertools
+import json
 import logging
 import os
 import tempfile
 import time
 from collections import OrderedDict
 
+import numpy as np
 import torch
+from PIL import Image
 from tqdm import tqdm
 
 from maskrcnn_benchmark.data.datasets import COCOMeta
@@ -17,6 +20,46 @@ from ..structures.bounding_box import BoxList
 from ..utils.comm import is_main_process
 from ..utils.comm import scatter_gather
 from ..utils.comm import synchronize
+
+
+def postprocess(result, original_width, original_height):
+    result = result.copy_with_fields(result.fields())
+    MASK_THRESHOLD = 0.5
+    # we assume we did the scaling without changing the aspect ratio
+    scale = np.sqrt(result.size[0] * 1.0 / original_width * result.size[1] / original_height)
+    result.size = (original_width, original_height)
+    bbox = result.bbox = result.bbox / scale
+    result.clip_to_image()
+    # maybe clip bbox again
+
+    if result.has_field("mask"):
+        if True:
+            masks = result.get_field("mask")  # N, 1, M, M
+            masker = Masker(threshold=MASK_THRESHOLD, padding=1)
+            pasted_masks = [x[0] for x in masker.forward_single_image(masks, result)]
+        else:
+            pasted_masks = []
+            for box, mask in zip(bbox, masks):
+                # This quantization logic is copied from tensorpack/examples/FasterRCNN
+
+                # First, translate floating point coord to integer coord
+                # box fpcoor=0.0 -> intcoor=0.0
+                x0, y0 = list(map(int, box[:2] + 0.5))
+                # box fpcoor=h -> intcoor=h-1, inclusive
+                x1, y1 = list(map(int, box[2:] - 0.5))  # inclusive
+                x1 = max(x0, x1)  # require at least 1x1
+                y1 = max(y0, y1)
+                w = x1 + 1 - x0
+                h = y1 + 1 - y0
+
+                # rounding errors could happen here, because masks were not originally computed for this shape.
+                # but it's hard to do better, because the network does not know the "original" scale
+                mask = Image.fromarray(mask.numpy()[0]).resize((w, h))
+                ret = np.zeros((original_height, original_width), dtype="uint8")
+                ret[y0 : y1 + 1, x0 : x1 + 1] = (np.asarray(mask) > MASK_THRESHOLD).astype("uint8")
+                pasted_masks.append(ret)
+        result.add_field("mask", pasted_masks)
+    return result
 
 
 def compute_on_dataset(model, data_loader):
@@ -39,89 +82,50 @@ def compute_on_dataset(model, data_loader):
     return results
 
 
-def prepare_for_coco_detection(predictions, dataset):
+def prepare_for_coco_evaluation(predictions):
+    import pycocotools.mask as mask_util
+    import numpy as np
+
     coco_results = []
-    for roidb in predictions:
+    for roidb in tqdm(predictions):
         prediction = roidb["result"]
-        if len(prediction) == 0:
+        num_instance = len(prediction)
+        if num_instance == 0:
             continue
 
-        image_width = roidb["original_width"]
-        image_height = roidb["original_height"]
-        prediction = prediction.resize((image_width, image_height))
+        prediction = postprocess(prediction, roidb["original_width"], roidb["original_height"])
         prediction = prediction.convert("xywh")
-
         boxes = prediction.bbox.tolist()
         scores = prediction.get_field("scores").tolist()
         labels = prediction.get_field("labels").tolist()
 
-        mapped_labels = [COCOMeta().contiguous_id_to_json_id[i] for i in labels]
+        has_mask = prediction.has_field("mask")
+        if has_mask:
+            masks = prediction.get_field("mask")
 
-        coco_results.extend(
-            [
-                {
-                    "image_id": roidb["id"],
-                    "category_id": mapped_labels[k],
-                    "bbox": box,
-                    "score": scores[k],
-                }
-                for k, box in enumerate(boxes)
+            rles = [
+                mask_util.encode(np.array(mask[:, :, np.newaxis], order="F"))[0] for mask in masks
             ]
-        )
-    return coco_results
-
-
-def prepare_for_coco_segmentation(predictions, dataset):
-    import pycocotools.mask as mask_util
-    import numpy as np
-
-    masker = Masker(threshold=0.5, padding=1)
-    # assert isinstance(dataset, COCODataset)
-    coco_results = []
-    for roidb in tqdm(predictions):
-        prediction = roidb["result"]
-        if len(prediction) == 0:
-            continue
-
-        image_width = roidb["original_width"]
-        image_height = roidb["original_height"]
-        prediction = prediction.resize((image_width, image_height))
-        masks = prediction.get_field("mask")
-        # t = time.time()
-        masks = masker(masks, prediction)
-        # logger.info('Time mask: {}'.format(time.time() - t))
-        # prediction = prediction.convert('xywh')
-
-        # boxes = prediction.bbox.tolist()
-        scores = prediction.get_field("scores").tolist()
-        labels = prediction.get_field("labels").tolist()
-
-        # rles = prediction.get_field('mask')
-
-        rles = [
-            mask_util.encode(np.array(mask[0, :, :, np.newaxis], order="F"))[0] for mask in masks
-        ]
-        for rle in rles:
-            rle["counts"] = rle["counts"].decode("utf-8")
+            for rle in rles:
+                rle["counts"] = rle["counts"].decode("utf-8")
 
         mapped_labels = [COCOMeta().contiguous_id_to_json_id[i] for i in labels]
 
-        coco_results.extend(
-            [
-                {
-                    "image_id": roidb["id"],
-                    "category_id": mapped_labels[k],
-                    "segmentation": rle,
-                    "score": scores[k],
-                }
-                for k, rle in enumerate(rles)
-            ]
-        )
+        for k in range(num_instance):
+            result = {
+                "image_id": roidb["id"],
+                "category_id": mapped_labels[k],
+                "bbox": boxes[k],
+                "score": scores[k],
+            }
+            if has_mask:
+                result["segmentation"] = rles[k]
+            coco_results.append(result)
     return coco_results
 
 
 # inspired from Detectron
-# TODO(yuxin) this has not been tested for a long time
+# TODO(yuxin) this has not been tested for a long time; should not use "dataset"
 def evaluate_box_proposals(predictions, dataset, thresholds=None, area="all", limit=None):
     """Evaluate detection proposal recall metrics. This function is a much
     faster alternative to the official COCO API recall evaluation code. However,
@@ -158,7 +162,7 @@ def evaluate_box_proposals(predictions, dataset, thresholds=None, area="all", li
         prediction = roidb["result"]
         image_width = roidb["original_width"]
         image_height = roidb["original_height"]
-        prediction = prediction.resize((image_width, image_height))
+        prediction = postprocess(prediction, roidb["original_width"], roidb["original_height"])
 
         # sort predictions in descending order
         # TODO maybe remove this and make it explicit in the documentation
@@ -233,11 +237,6 @@ def evaluate_box_proposals(predictions, dataset, thresholds=None, area="all", li
 
 
 def evaluate_predictions_on_coco(coco_gt, coco_results, json_result_file, iou_type="bbox"):
-    import json
-
-    with open(json_result_file, "w") as f:
-        json.dump(coco_results, f)
-
     from pycocotools.cocoeval import COCOeval
 
     coco_dt = coco_gt.loadRes(str(json_result_file))
@@ -333,26 +332,28 @@ def coco_evaluation(model, data_loader, iou_types=("bbox",), box_only=False, out
         if output_folder:
             torch.save(res, os.path.join(output_folder, "box_proposals.pth"))
         return
+
     logger.info("Preparing results for COCO format")
-    coco_results = {}
-    if "bbox" in iou_types:
-        logger.info("Preparing bbox results")
-        coco_results["bbox"] = prepare_for_coco_detection(predictions, dataset)
-    if "segm" in iou_types:
-        logger.info("Preparing segm results")
-        coco_results["segm"] = prepare_for_coco_segmentation(predictions, dataset)
+    coco_results = prepare_for_coco_evaluation(predictions)
+
+    with tempfile.NamedTemporaryFile() as f:
+        file_path = f.name
+        if output_folder:
+            file_path = os.path.join(output_folder, "coco_results.json")
+        with open(file_path, "w") as f:
+            json.dump(coco_results, f)
 
     results = COCOResults(*iou_types)
     logger.info("Evaluating predictions")
     for iou_type in iou_types:
-        with tempfile.NamedTemporaryFile() as f:
-            file_path = f.name
-            if output_folder:
-                file_path = os.path.join(output_folder, iou_type + ".json")
-            res = evaluate_predictions_on_coco(
-                dataset.ds.coco, coco_results[iou_type], file_path, iou_type
-            )
-            results.update(res)
+        res = evaluate_predictions_on_coco(
+            # TODO shouldn't use dataset.ds
+            dataset.ds.coco,
+            coco_results,
+            file_path,
+            iou_type,
+        )
+        results.update(res)
     logger.info(results)
     if output_folder:
         torch.save(results, os.path.join(output_folder, "coco_results.pth"))

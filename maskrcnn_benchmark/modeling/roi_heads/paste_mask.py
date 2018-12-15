@@ -97,11 +97,3 @@ class Masker(object):
         else:
             res = masks.new_empty((0, 1, masks.shape[-2], masks.shape[-1]))
         return res
-
-    def __call__(self, masks, boxes):
-        # TODO do this properly
-        if isinstance(boxes, BoxList):
-            boxes = [boxes]
-        assert len(boxes) == 1, "Only single image batch supported"
-        result = self.forward_single_image(masks, boxes[0])
-        return result
