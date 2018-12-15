@@ -1,12 +1,16 @@
 #pragma once
-#include "cpu/vision.h"
+#include <torch/extension.h>
+
+at::Tensor nms_cpu(const at::Tensor& dets,
+                   const at::Tensor& scores,
+                   const float threshold);
 
 #ifdef WITH_CUDA
-#include "cuda/vision.h"
+at::Tensor nms_cuda(const at::Tensor boxes, float nms_overlap_thresh);
 #endif
 
 
-at::Tensor nms(const at::Tensor& dets,
+inline at::Tensor nms(const at::Tensor& dets,
                const at::Tensor& scores,
                const float threshold) {
 

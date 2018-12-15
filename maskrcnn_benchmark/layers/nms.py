@@ -1,4 +1,3 @@
-# from ._utils import _C
 from maskrcnn_benchmark import _C
 
 nms = _C.nms

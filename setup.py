@@ -13,13 +13,14 @@ from torch.utils.cpp_extension import CUDAExtension
 
 def get_extensions():
     this_dir = os.path.dirname(os.path.abspath(__file__))
-    extensions_dir = os.path.join(this_dir, "maskrcnn_benchmark", "csrc")
+    extensions_dir = os.path.join(this_dir, "maskrcnn_benchmark", "layers", "csrc")
 
-    main_file = glob.glob(os.path.join(extensions_dir, "*.cpp"))
-    source_cpu = glob.glob(os.path.join(extensions_dir, "cpu", "*.cpp"))
-    source_cuda = glob.glob(os.path.join(extensions_dir, "cuda", "*.cu"))
+    main_source = os.path.join(extensions_dir, "vision.cpp")
+    sources = glob.glob(os.path.join(extensions_dir, "**", "*.cpp"))
+    source_cuda = glob.glob(os.path.join(extensions_dir, "**", "*.cu"))
 
-    sources = main_file + source_cpu
+    sources = [main_source] + sources
+
     extension = CppExtension
 
     extra_compile_args = {"cxx": []}
@@ -35,6 +36,11 @@ def get_extensions():
             "-D__CUDA_NO_HALF_CONVERSIONS__",
             "-D__CUDA_NO_HALF2_OPERATORS__",
         ]
+
+        # It's better if pytorch can do this by default ..
+        CC = os.environ.get("CC", None)
+        if CC is not None:
+            extra_compile_args["nvcc"].append("-ccbin={}".format(CC))
 
     sources = [os.path.join(extensions_dir, s) for s in sources]
 

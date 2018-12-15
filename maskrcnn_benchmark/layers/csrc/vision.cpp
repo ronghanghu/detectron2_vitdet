@@ -1,6 +1,6 @@
-#include "nms.h"
-#include "ROIAlign.h"
-#include "ROIPool.h"
+#include "NMS/nms.h"
+#include "ROIAlign/ROIAlign.h"
+#include "ROIPool/ROIPool.h"
 
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
