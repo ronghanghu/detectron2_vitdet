@@ -14,6 +14,18 @@ class DatasetCatalog(object):
             "coco/val2014",
             "coco/annotations/instances_valminusminival2014.json",
         ),
+        "cityscapes_fine_instanceonly_seg_train_cocostyle": (
+            "cityscapes/images",
+            "cityscapes/annotations/instancesonly_filtered_gtFine_train.json",
+        ),
+        "cityscapes_fine_instanceonly_seg_val_cocostyle": (
+            "cityscapes/images",
+            "cityscapes/annotations/instancesonly_filtered_gtFine_val.json",
+        ),
+        "cityscapes_fine_instanceonly_seg_test_cocostyle": (
+            "cityscapes/images",
+            "cityscapes/annotations/instancesonly_filtered_gtFine_test.json",
+        ),
     }
 
     @staticmethod

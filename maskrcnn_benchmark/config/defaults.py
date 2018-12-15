@@ -35,7 +35,11 @@ _C.MODEL.WEIGHT = ""
 # -----------------------------------------------------------------------------
 _C.INPUT = CN()
 # Size of the smallest side of the image during training
-_C.INPUT.MIN_SIZE_TRAIN = 800  # (800,)
+# _C.INPUT.MIN_SIZE_TRAIN = 800  # (800,)
+_C.INPUT.MIN_SIZE_TRAIN = (800,)
+# Sample size of smallest side by choice or random selection from range give by
+# INPUT.MIN_SIZE_TRAIN
+_C.INPUT.MIN_SIZE_TRAIN_SAMPLING = "choice"
 # Maximum size of the side of the image during training
 _C.INPUT.MAX_SIZE_TRAIN = 1333
 # Size of the smallest side of the image during testing

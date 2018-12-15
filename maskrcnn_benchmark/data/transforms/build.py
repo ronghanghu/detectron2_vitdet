@@ -21,9 +21,17 @@ class DetectionTransform:
         else:
             min_size = cfg.INPUT.MIN_SIZE_TEST
             max_size = cfg.INPUT.MAX_SIZE_TEST
+            sample_style = "choice"
+
+        # in testing, no random sample happens for now
+        sample_style = cfg.INPUT.MIN_SIZE_TRAIN_SAMPLING
+        if sample_style == "range":
+            assert (
+                len(min_size) == 2
+            ), "more than 2 ({}) min_size(s) are provided for ranges".format(len(min_size))
 
         self.to_bgr = cfg.INPUT.BGR
-        augs = [ResizeShortestEdge(min_size, max_size)]
+        augs = [ResizeShortestEdge(min_size, max_size, sample_style)]
         if is_train:
             augs.append(Flip(horiz=True))
         augs.append(Normalize(mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD))

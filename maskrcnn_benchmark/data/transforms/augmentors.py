@@ -81,21 +81,29 @@ class ResizeShortestEdge(TransformAugmentorBase):
     while avoiding the longest edge to exceed max_size.
     """
 
-    def __init__(self, short_edge_length, max_size, interp=Image.BILINEAR):
+    def __init__(self, short_edge_length, max_size, sample_style, interp=Image.BILINEAR):
         """
         Args:
             short_edge_length ([int, int]): a [min, max] interval from which to sample the
                 shortest edge length.
             max_size (int): maximum allowed longest edge length.
+            sample_style (str): select short side from a range or choose from given values
         """
         super(ResizeShortestEdge, self).__init__()
+
+        self.is_range = sample_style == "range"
         if isinstance(short_edge_length, int):
             short_edge_length = (short_edge_length, short_edge_length)
         self._init(locals())
 
     def _get_augment_params(self, img):
         h, w = img.shape[:2]
-        size = self.rng.randint(self.short_edge_length[0], self.short_edge_length[1] + 1)
+
+        if self.is_range:
+            size = self.rng.randint(self.short_edge_length[0], self.short_edge_length[1] + 1)
+        else:
+            size = self.rng.choice(self.short_edge_length)
+
         scale = size * 1.0 / min(h, w)
         if h < w:
             newh, neww = size, scale * w
