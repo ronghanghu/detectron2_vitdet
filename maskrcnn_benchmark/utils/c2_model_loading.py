@@ -73,6 +73,8 @@ def _rename_fpn_weights(layer_keys, stage_names):
 def _rename_weights_for_resnet(weights, stage_names):
     original_keys = sorted(weights.keys())
     layer_keys = sorted(weights.keys())
+    logger = logging.getLogger(__name__)
+    logger.info("Remapping C2 weights ......")
 
     # for X-101, rename output to fc1000 to avoid conflicts afterwards
     layer_keys = [k if k != "pred_b" else "fc1000_b" for k in layer_keys]
@@ -103,8 +105,6 @@ def _rename_weights_for_resnet(weights, stage_names):
 
     key_map = {k: v for k, v in zip(original_keys, layer_keys)}
 
-    logger = logging.getLogger(__name__)
-    logger.info("Remapping C2 weights")
     max_c2_key_size = max([len(k) for k in original_keys if "_momentum" not in k])
 
     new_weights = OrderedDict()
