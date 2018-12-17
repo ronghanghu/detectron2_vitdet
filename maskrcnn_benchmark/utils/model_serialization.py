@@ -60,14 +60,16 @@ def align_and_update_state_dicts(model_state_dict, loaded_state_dict):
         )
     # print warnings about unmatched keys on both side
     unmatched_model_keys = [k for k in model_keys if k not in matched_model_keys]
-    logger.warn(
-        "Keys in the model but not loaded from checkpoint: " + ", ".join(unmatched_model_keys)
-    )
+    if len(unmatched_model_keys):
+        logger.warn(
+            "Keys in the model but not loaded from checkpoint: " + ", ".join(unmatched_model_keys)
+        )
 
     unmatched_loaded_keys = [k for k in loaded_keys if k not in matched_loaded_keys]
-    logger.warn(
-        "Keys in the checkpoint but not found in the model: " + ", ".join(unmatched_loaded_keys)
-    )
+    if len(unmatched_loaded_keys):
+        logger.warn(
+            "Keys in the checkpoint but not found in the model: " + ", ".join(unmatched_loaded_keys)
+        )
 
 
 def strip_prefix_if_present(state_dict, prefix):
