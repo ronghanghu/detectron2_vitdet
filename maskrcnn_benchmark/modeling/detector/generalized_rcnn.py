@@ -26,7 +26,6 @@ class GeneralizedRCNN(nn.Module):
     def __init__(self, cfg):
         super(GeneralizedRCNN, self).__init__()
 
-        self.size_divisible = cfg.DATALOADER.SIZE_DIVISIBILITY
         self.device = torch.device(cfg.MODEL.DEVICE)
 
         self.backbone = build_backbone(cfg)
@@ -35,45 +34,19 @@ class GeneralizedRCNN(nn.Module):
 
         self.to(self.device)
 
-    def preprocess(self, roidbs):
-        """
-        Returns:
-            images: ImageList
-            targets: list[BoxList]. None when not training.
-        """
-        images = [torch.as_tensor(x["image"].transpose(2, 0, 1).astype("float32")) for x in roidbs]
-        images = to_image_list(images, self.size_divisible).to(self.device)
-
-        if not self.training:
-            return images, None
-
-        targets = []
-        for roidb in roidbs:
-            image = roidb["image"]
-            image_size = image.shape[1], image.shape[0]
-
-            annos = roidb["annotations"]
-            boxes = [obj["bbox"] for obj in annos]
-            boxes = torch.as_tensor(boxes).reshape(-1, 4)
-            target = BoxList(boxes, image_size, mode="xywh").convert("xyxy")
-
-            classes = [obj["category_id"] for obj in annos]
-            classes = torch.tensor(classes)
-            target.add_field("labels", classes)
-
-            masks = [obj["segmentation"] for obj in annos]
-            masks = SegmentationMask(masks, image_size)
-            target.add_field("masks", masks)
-            target = target.clip_to_image(remove_empty=True)
-            targets.append(target.to(self.device))
-        return images, targets
-
-    def forward(self, roidbs):
+    def forward(self, data):
         """
         Arguments:
-            roidbs (list): a list of training data. Each is a dict.
+            data: a tuple, produced by :class:`DetectionBatchCollator`.
         """
-        images, targets = self.preprocess(roidbs)
+        images, targets, _ = data
+        """
+        images: ImageList
+        targets: list[BoxList]
+        _: other information that's not useful in training
+        """
+        images = images.to(self.device)
+        targets = [t.to(self.device) for t in targets]
 
         features = self.backbone(images.tensors)
         proposals, proposal_losses = self.rpn(images, features, targets)

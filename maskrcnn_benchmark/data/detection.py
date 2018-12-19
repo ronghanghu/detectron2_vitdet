@@ -4,6 +4,9 @@ import logging
 
 import torch.utils.data
 
+from maskrcnn_benchmark.structures.bounding_box import BoxList
+from maskrcnn_benchmark.structures.image_list import to_image_list
+from maskrcnn_benchmark.structures.segmentation_mask import SegmentationMask
 from maskrcnn_benchmark.utils.comm import get_world_size
 from maskrcnn_benchmark.utils.imports import import_file
 
@@ -148,7 +151,10 @@ def make_detection_data_loader(cfg, is_train=True, is_distributed=False, start_i
         )
         num_workers = cfg.DATALOADER.NUM_WORKERS
         data_loader = torch.utils.data.DataLoader(
-            dataset, num_workers=num_workers, batch_sampler=batch_sampler, collate_fn=_identity
+            dataset,
+            num_workers=num_workers,
+            batch_sampler=batch_sampler,
+            collate_fn=DetectionBatchCollator(is_train, cfg.DATALOADER.SIZE_DIVISIBILITY),
         )
         data_loaders.append(data_loader)
     if is_train:
@@ -156,3 +162,55 @@ def make_detection_data_loader(cfg, is_train=True, is_distributed=False, start_i
         assert len(data_loaders) == 1
         return data_loaders[0]
     return data_loaders
+
+
+class DetectionBatchCollator:
+    """
+    Batch collator will run inside the dataloader processes.
+    This batch collator batch the detection images and labels into torch.Tensor.
+
+    Note that it's best to do this step in the dataloader process, instead of in the main process,
+    because Pytorch's dataloader is less efficient when handling large numpy arrays rather than torch.Tensor.
+    """
+
+    def __init__(self, is_train, size_divisible):
+        self.size_divisible = size_divisible
+        self.is_train = is_train
+
+    def __call__(self, roidbs):
+        """
+        Args:
+            roidbs (list[dict]): each contains "image" and "annotations", produced by :class:`DetectionTransform`.
+
+        Returns:
+            images: ImageList
+            targets: list[BoxList]. None when not training.
+            roidbs: the rest of the roidbs
+        """
+        # important to remove the numpy images so that they will not go through the dataloader and hurt performance
+        numpy_images = [x.pop("image") for x in roidbs]
+        images = [torch.as_tensor(x.transpose(2, 0, 1).astype("float32")) for x in numpy_images]
+        images = to_image_list(images, self.size_divisible)
+
+        if not self.is_train:
+            return images, None, roidbs
+
+        targets = []
+        for image, roidb in zip(numpy_images, roidbs):
+            image_size = image.shape[1], image.shape[0]
+
+            annos = roidb.pop("annotations")
+            boxes = [obj["bbox"] for obj in annos]
+            boxes = torch.as_tensor(boxes).reshape(-1, 4)
+            target = BoxList(boxes, image_size, mode="xywh").convert("xyxy")
+
+            classes = [obj["category_id"] for obj in annos]
+            classes = torch.tensor(classes)
+            target.add_field("labels", classes)
+
+            masks = [obj["segmentation"] for obj in annos]
+            masks = SegmentationMask(masks, image_size)
+            target.add_field("masks", masks)
+            target = target.clip_to_image(remove_empty=True)
+            targets.append(target)
+        return images, targets, roidbs

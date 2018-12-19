@@ -36,6 +36,7 @@ class DetectionTransform:
             augs.append(Flip(horiz=True))
         augs.append(Normalize(mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD))
         self.augs = AugmentorList(augs)
+        self.is_train = is_train
 
     def __call__(self, roidb):
         roidb = deepcopy(roidb)
@@ -50,6 +51,10 @@ class DetectionTransform:
         roidb["original_height"] = roidb["height"]
         roidb["width"] = image.shape[1]
         roidb["height"] = image.shape[0]
+
+        if not self.is_train:
+            del roidb["annotations"]
+            return roidb
 
         annos = [
             self.map_instance(obj, aug_params)

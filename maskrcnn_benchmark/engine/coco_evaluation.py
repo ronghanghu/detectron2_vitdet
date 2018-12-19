@@ -72,9 +72,10 @@ def compute_on_dataset(model, data_loader):
     results = []
     cpu_device = torch.device("cpu")
     for batch in tqdm(data_loader):
+        _, __, roidbs = batch
         with torch.no_grad():
             outputs = model(batch)
-            for roidb, output in zip(batch, outputs):
+            for roidb, output in zip(roidbs, outputs):
                 output = output.to(cpu_device)
                 result = {k: roidb[k] for k in ["original_height", "original_width", "id"]}
                 result["result"] = output
