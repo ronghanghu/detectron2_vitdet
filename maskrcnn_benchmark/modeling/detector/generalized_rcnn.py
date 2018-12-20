@@ -42,7 +42,8 @@ class GeneralizedRCNN(nn.Module):
         _: other information that's not useful in training
         """
         images = images.to(self.device)
-        targets = [t.to(self.device) for t in targets]
+        if targets is not None:
+            targets = [t.to(self.device) for t in targets]
 
         features = self.backbone(images.tensors)
         proposals, proposal_losses = self.rpn(images, features, targets)
