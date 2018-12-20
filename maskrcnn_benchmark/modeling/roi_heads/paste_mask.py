@@ -2,8 +2,6 @@ import numpy as np
 import torch
 from PIL import Image
 
-from maskrcnn_benchmark.structures.bounding_box import BoxList
-
 # TODO this file will be simplified, renamed (or merged to other files)
 # and put to a more appropriate place, when we deal with the TO_REMOVE=1 and other quantization issues.
 

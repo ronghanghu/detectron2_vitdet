@@ -1,7 +1,8 @@
-import cv2
 import torch
 from torchvision import transforms as T
 
+import cv2
+from maskrcnn_benchmark import layers as L
 from maskrcnn_benchmark.modeling.detector import build_detection_model
 from maskrcnn_benchmark.modeling.roi_heads.paste_mask import Masker
 from maskrcnn_benchmark.structures.image_list import to_image_list
@@ -301,9 +302,7 @@ class COCODemo(object):
         """
         masks = predictions.get_field("mask")
         masks_per_dim = self.masks_per_dim
-        masks = torch.nn.functional.interpolate(
-            masks.float(), scale_factor=1 / masks_per_dim
-        ).byte()
+        masks = L.interpolate(masks.float(), scale_factor=1 / masks_per_dim).byte()
         height, width = masks.shape[-2:]
         max_masks = masks_per_dim ** 2
         masks = masks[:max_masks]

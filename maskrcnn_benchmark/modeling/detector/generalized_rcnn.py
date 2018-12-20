@@ -7,10 +7,6 @@ or can be accessed by a string
 import torch
 from torch import nn
 
-from maskrcnn_benchmark.structures.bounding_box import BoxList
-from maskrcnn_benchmark.structures.image_list import to_image_list
-from maskrcnn_benchmark.structures.segmentation_mask import SegmentationMask
-
 from ..backbone import build_backbone
 from ..roi_heads.roi_heads import build_roi_heads
 from ..rpn.rpn import build_rpn
