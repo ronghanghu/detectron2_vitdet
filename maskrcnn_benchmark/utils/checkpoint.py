@@ -130,7 +130,7 @@ class DetectronCheckpointer(Checkpointer):
             f = cached_f
         # convert Caffe2 checkpoint from pkl
         if f.endswith(".pkl"):
-            return load_c2_format(self.cfg, f)
+            return load_c2_format(f)
         # load native detectron.pytorch checkpoint
         loaded = super(DetectronCheckpointer, self)._load_file(f)
         if "model" not in loaded:

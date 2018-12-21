@@ -1,134 +1,14 @@
 import logging
 import pickle
-from collections import OrderedDict
+import copy
+import re
 
 import torch
 
 
-def _rename_basic_resnet_weights(layer_keys):
-    layer_keys = [k.replace("_", ".") for k in layer_keys]
-    layer_keys = [k.replace(".w", ".weight") for k in layer_keys]
-    layer_keys = [k.replace(".bn", "_bn") for k in layer_keys]
-    layer_keys = [k.replace(".b", ".bias") for k in layer_keys]
-    layer_keys = [k.replace("_bn.s", "_bn.scale") for k in layer_keys]
-    layer_keys = [k.replace(".biasranch", ".branch") for k in layer_keys]
-    layer_keys = [k.replace("bbox.pred", "bbox_pred") for k in layer_keys]
-    layer_keys = [k.replace("cls.score", "cls_score") for k in layer_keys]
-    layer_keys = [k.replace("res.conv1_", "conv1_") for k in layer_keys]
-
-    # RPN / Faster RCNN
-    layer_keys = [k.replace(".biasbox", ".bbox") for k in layer_keys]
-    layer_keys = [k.replace("conv.rpn", "rpn.conv") for k in layer_keys]
-    layer_keys = [k.replace("rpn.bbox.pred", "rpn.bbox_pred") for k in layer_keys]
-    layer_keys = [k.replace("rpn.cls.logits", "rpn.cls_logits") for k in layer_keys]
-
-    # Affine-Channel -> BatchNorm enaming
-    layer_keys = [k.replace("_bn.scale", "_bn.weight") for k in layer_keys]
-
-    # Make torchvision-compatible
-    layer_keys = [k.replace("conv1_bn.", "bn1.") for k in layer_keys]
-
-    layer_keys = [k.replace("res2.", "layer1.") for k in layer_keys]
-    layer_keys = [k.replace("res3.", "layer2.") for k in layer_keys]
-    layer_keys = [k.replace("res4.", "layer3.") for k in layer_keys]
-    layer_keys = [k.replace("res5.", "layer4.") for k in layer_keys]
-
-    layer_keys = [k.replace(".branch2a.", ".conv1.") for k in layer_keys]
-    layer_keys = [k.replace(".branch2a_bn.", ".bn1.") for k in layer_keys]
-    layer_keys = [k.replace(".branch2b.", ".conv2.") for k in layer_keys]
-    layer_keys = [k.replace(".branch2b_bn.", ".bn2.") for k in layer_keys]
-    layer_keys = [k.replace(".branch2c.", ".conv3.") for k in layer_keys]
-    layer_keys = [k.replace(".branch2c_bn.", ".bn3.") for k in layer_keys]
-
-    layer_keys = [k.replace(".branch1.", ".downsample.0.") for k in layer_keys]
-    layer_keys = [k.replace(".branch1_bn.", ".downsample.1.") for k in layer_keys]
-
-    return layer_keys
-
-
-def _rename_fpn_weights(layer_keys, stage_names):
-    for mapped_idx, stage_name in enumerate(stage_names, 1):
-        suffix = ""
-        if mapped_idx < 4:
-            suffix = ".lateral"
-        layer_keys = [
-            k.replace(
-                "fpn.inner.layer{}.sum{}".format(stage_name, suffix),
-                "fpn_inner{}".format(mapped_idx),
-            )
-            for k in layer_keys
-        ]
-        layer_keys = [
-            k.replace("fpn.layer{}.sum".format(stage_name), "fpn_layer{}".format(mapped_idx))
-            for k in layer_keys
-        ]
-
-    layer_keys = [k.replace("rpn.conv.fpn2", "rpn.conv") for k in layer_keys]
-    layer_keys = [k.replace("rpn.bbox_pred.fpn2", "rpn.bbox_pred") for k in layer_keys]
-    layer_keys = [k.replace("rpn.cls_logits.fpn2", "rpn.cls_logits") for k in layer_keys]
-
-    return layer_keys
-
-
-def _rename_weights_for_resnet(weights, stage_names):
-    original_keys = sorted(weights.keys())
-    layer_keys = sorted(weights.keys())
-    logger = logging.getLogger(__name__)
-    logger.info("Remapping C2 weights ......")
-
-    # for X-101, rename output to fc1000 to avoid conflicts afterwards
-    layer_keys = [k if k != "pred_b" else "fc1000_b" for k in layer_keys]
-    layer_keys = [k if k != "pred_w" else "fc1000_w" for k in layer_keys]
-
-    # performs basic renaming: _ -> . , etc
-    layer_keys = _rename_basic_resnet_weights(layer_keys)
-
-    # FPN
-    layer_keys = _rename_fpn_weights(layer_keys, stage_names)
-
-    # Mask R-CNN
-    layer_keys = [k.replace("mask.fcn.logits", "mask_head.predictor") for k in layer_keys]
-    layer_keys = [k.replace(".[mask].fcn", "mask_head.mask_fcn") for k in layer_keys]
-    layer_keys = [k.replace("conv5.mask", "mask_head.deconv") for k in layer_keys]
-
-    # Keypoint R-CNN
-    layer_keys = [k.replace("kps.score.lowres", "kps_score_lowres") for k in layer_keys]
-    layer_keys = [k.replace("kps.score", "kps_score") for k in layer_keys]
-    layer_keys = [k.replace("conv.fcn", "conv_fcn") for k in layer_keys]
-
-    # Rename for our RPN structure
-    layer_keys = [k.replace("rpn.", "rpn.head.") for k in layer_keys]
-
-    # Rename for our 2mlp head
-    layer_keys = [k.replace("fc6.", "box_head.fc1.") for k in layer_keys]
-    layer_keys = [k.replace("fc7.", "box_head.fc2.") for k in layer_keys]
-
-    key_map = {k: v for k, v in zip(original_keys, layer_keys)}
-
-    max_c2_key_size = max([len(k) for k in original_keys if "_momentum" not in k])
-
-    new_weights = OrderedDict()
-    for k in original_keys:
-        v = weights[k]
-        if "_momentum" in k:
-            continue
-        # if 'fc1000' in k:
-        #     continue
-        w = torch.from_numpy(v)
-        # if "bn" in k:
-        #     w = w.view(1, -1, 1, 1)
-        logger.info("C2 name: {: <{}} mapped name: {}".format(k, max_c2_key_size, key_map[k]))
-        new_weights[key_map[k]] = w
-
-    return new_weights
-
-
 def _load_c2_pickled_weights(file_path):
     with open(file_path, "rb") as f:
-        if torch._six.PY3:
-            data = pickle.load(f, encoding="latin1")
-        else:
-            data = pickle.load(f)
+        data = pickle.load(f, encoding="latin1")
     if "blobs" in data:
         weights = data["blobs"]
     else:
@@ -136,14 +16,117 @@ def _load_c2_pickled_weights(file_path):
     return weights
 
 
-_C2_STAGE_NAMES = {"R-50": ["1.2", "2.3", "3.5", "4.2"], "R-101": ["1.2", "2.3", "3.22", "4.2"]}
+def _convert_basic_c2_names(original_keys):
+    """
+    Apply some basic name conversion to C2 weights.
+
+    Args:
+        original_keys (list[str]):
+    Returns:
+        list[str]: The same number of strings matching those in original_keys.
+    """
+    layer_keys = copy.deepcopy(original_keys)
+    layer_keys = [{
+        'pred_b': 'fc1000_b',
+        'pred_w': 'fc1000_w'
+    }.get(k, k) for k in layer_keys]   # some hard-coded mappings
+
+    layer_keys = [k.replace("_", ".") for k in layer_keys]
+    layer_keys = [re.sub('.b$', '.bias', k) for k in layer_keys]
+    layer_keys = [re.sub('.w$', '.weight', k) for k in layer_keys]
+    layer_keys = [re.sub('bn.s$', 'bn.weight', k) for k in layer_keys]
+
+    # stages
+    layer_keys = [re.sub("^res.conv1.bn.", "bn1.", k) for k in layer_keys]
+    layer_keys = [re.sub("^res2.", "layer1.", k) for k in layer_keys]
+    layer_keys = [re.sub("^res3.", "layer2.", k) for k in layer_keys]
+    layer_keys = [re.sub("^res4.", "layer3.", k) for k in layer_keys]
+    layer_keys = [re.sub("^res5.", "layer4.", k) for k in layer_keys]
+
+    # blocks
+    layer_keys = [k.replace(".branch1.bn.", ".downsample.1.") for k in layer_keys]
+    layer_keys = [k.replace(".branch1.", ".downsample.0.") for k in layer_keys]
+    layer_keys = [k.replace(".branch2a.bn.", ".bn1.") for k in layer_keys]
+    layer_keys = [k.replace(".branch2a.", ".conv1.") for k in layer_keys]
+    layer_keys = [k.replace(".branch2b.bn.", ".bn2.") for k in layer_keys]
+    layer_keys = [k.replace(".branch2b.", ".conv2.") for k in layer_keys]
+    layer_keys = [k.replace(".branch2c.bn.", ".bn3.") for k in layer_keys]
+    layer_keys = [k.replace(".branch2c.", ".conv3.") for k in layer_keys]
+    return layer_keys
 
 
-def load_c2_format(cfg, f):
+def _convert_c2_detectron_weights(weights):
+    """
+    Apply conversion to C2 Detectrno weights, after applying the basic conversion.
+
+    Args:
+        weights (dict): name->numpy array
+    Returns:
+        dict
+    """
+    logger = logging.getLogger(__name__)
+    logger.info("Remapping C2 weights ......")
+    original_keys = sorted(weights.keys())
+    layer_keys = copy.deepcopy(original_keys)
+
+    layer_keys = _convert_basic_c2_names(layer_keys)
+
+    # RPN / Faster RCNN
+    layer_keys = [k.replace("conv.rpn.fpn2", "rpn.head.conv") for k in layer_keys]
+    layer_keys = [k.replace("conv.rpn", "rpn.head.conv") for k in layer_keys]
+
+    layer_keys = [k.replace("rpn.bbox.pred.fpn2", "rpn.head.bbox_pred") for k in layer_keys]
+    layer_keys = [k.replace("rpn.cls.logits.fpn2", "rpn.head.cls_logits") for k in layer_keys]
+    layer_keys = [k.replace("rpn.bbox.pred", "rpn.head.bbox_pred") for k in layer_keys]
+    layer_keys = [k.replace("rpn.cls.logits", "rpn.head.cls_logits") for k in layer_keys]
+
+    # Fast R-CNN
+    layer_keys = [re.sub("^bbox.pred", "bbox_pred", k) for k in layer_keys]
+    layer_keys = [re.sub("^cls.score", "cls_score", k) for k in layer_keys]
+    layer_keys = [re.sub("^fc6.", "box_head.fc1.", k) for k in layer_keys]
+    layer_keys = [re.sub("^fc7.", "box_head.fc2.", k) for k in layer_keys]
+
+    # FPN
+    def fpn_map(name):
+        splits = name.split('.')
+        if name.startswith('fpn.inner.'):
+            # fpn_inner_res2_2_sum_lateral_b
+            stage = int(splits[2][-1]) - 1
+            return "fpn_inner{}.{}".format(stage, splits[-1])
+        elif name.startswith('fpn.res'):
+            # fpn_res2_2_sum_b
+            stage = int(splits[1][-1]) - 1
+            return "fpn_layer{}.{}".format(stage, splits[-1])
+        return name
+
+    layer_keys = [fpn_map(k) for k in layer_keys]
+
+    # Mask R-CNN
+    layer_keys = [k.replace(".[mask].fcn", "mask_head.mask_fcn") for k in layer_keys]
+    layer_keys = [k.replace("mask.fcn.logits", "mask_head.predictor") for k in layer_keys]
+    layer_keys = [k.replace("conv5.mask", "mask_head.deconv") for k in layer_keys]
+    assert len(set(layer_keys)) == len(layer_keys)
+
+    max_c2_key_size = max([len(k) for k in original_keys])
+    new_weights = {}
+    for orig, renamed in zip(original_keys, layer_keys):
+        logger.info("C2 name: {: <{}} mapped name: {}".format(orig, max_c2_key_size, renamed))
+        new_weights[renamed] = weights[orig]
+    return new_weights
+
+
+def load_c2_format(filename):
+    """
+    Load a caffe2 checkpoint.
+
+    Args:
+        filename (str):
+    Returns:
+        dict: name -> torch.Tensor
+    """
     # TODO make it support other architectures
-    state_dict = _load_c2_pickled_weights(f)
-    conv_body = cfg.MODEL.BACKBONE.CONV_BODY
-    arch = conv_body.replace("-C4", "").replace("-FPN", "")
-    stages = _C2_STAGE_NAMES[arch]
-    state_dict = _rename_weights_for_resnet(state_dict, stages)
+    state_dict = _load_c2_pickled_weights(filename)
+    state_dict = {k: v for k, v in state_dict.items() if not k.endswith('_momentum')}
+    state_dict = _convert_c2_detectron_weights(state_dict)
+    state_dict = {k: torch.from_numpy(v) for k, v in state_dict.items()}
     return dict(model=state_dict)
