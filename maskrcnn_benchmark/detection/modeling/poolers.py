@@ -3,8 +3,7 @@ import torch
 from torch import nn
 
 from maskrcnn_benchmark.layers import ROIAlign
-
-from .utils import cat
+from maskrcnn_benchmark.layers import cat
 
 
 class LevelMapper(object):

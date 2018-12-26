@@ -4,6 +4,8 @@ from collections import OrderedDict
 import torch
 
 
+# TODO the current matching is not symmetric.
+# it assumes model_state_dict will have longer names.
 def align_and_update_state_dicts(model_state_dict, loaded_state_dict):
     """
     Strategy: suppose that the models that we will create will have prefixes appended
@@ -31,8 +33,8 @@ def align_and_update_state_dicts(model_state_dict, loaded_state_dict):
     idxs[max_match_size == 0] = -1
 
     # used for logging
-    max_size = max([len(key) for key in model_keys]) if model_keys else 1
-    max_size_loaded = max([len(key) for key in loaded_keys]) if loaded_keys else 1
+    max_size = max(len(key) for key in model_keys) if model_keys else 1
+    max_size_loaded = max(len(key) for key in loaded_keys) if loaded_keys else 1
     log_str_template = "{: <{}} loaded from {: <{}} of shape {}"
     logger = logging.getLogger(__name__)
     matched_model_keys = set()

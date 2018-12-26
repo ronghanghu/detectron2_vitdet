@@ -6,7 +6,7 @@ if torch._six.PY3:
     import importlib.util
     import sys
 
-    # from https://stackoverflow.com/questions/67631/how-to-import-a-module-given-the-full-path?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+    # from https://stackoverflow.com/questions/67631/how-to-import-a-module-given-the-full-path
     def import_file(module_name, file_path, make_importable=False):
         spec = importlib.util.spec_from_file_location(module_name, file_path)
         module = importlib.util.module_from_spec(spec)

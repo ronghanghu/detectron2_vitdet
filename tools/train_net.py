@@ -1,4 +1,4 @@
-r"""
+"""
 Basic training script for PyTorch
 """
 
@@ -13,14 +13,14 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 
-from maskrcnn_benchmark.config import cfg
-from maskrcnn_benchmark.data import make_detection_data_loader
-from maskrcnn_benchmark.engine.coco_evaluation import coco_evaluation
+from maskrcnn_benchmark.detection import DetectionCheckpointer
+from maskrcnn_benchmark.detection import build_detection_model
+from maskrcnn_benchmark.detection import cfg
+from maskrcnn_benchmark.detection import coco_evaluation
+from maskrcnn_benchmark.detection import make_detection_data_loader
+from maskrcnn_benchmark.detection import make_lr_scheduler
+from maskrcnn_benchmark.detection import make_optimizer
 from maskrcnn_benchmark.engine.trainer import do_train
-from maskrcnn_benchmark.modeling.detector import build_detection_model
-from maskrcnn_benchmark.solver import make_lr_scheduler
-from maskrcnn_benchmark.solver import make_optimizer
-from maskrcnn_benchmark.utils.checkpoint import DetectronCheckpointer
 from maskrcnn_benchmark.utils.collect_env import collect_env_info
 from maskrcnn_benchmark.utils.comm import get_rank
 from maskrcnn_benchmark.utils.comm import synchronize
@@ -48,7 +48,7 @@ def train(cfg, local_rank, distributed):
     output_dir = cfg.OUTPUT_DIR
 
     save_to_disk = get_rank() == 0
-    checkpointer = DetectronCheckpointer(cfg, model, optimizer, scheduler, output_dir, save_to_disk)
+    checkpointer = DetectionCheckpointer(cfg, model, optimizer, scheduler, output_dir, save_to_disk)
     extra_checkpoint_data.update(checkpointer.load(cfg.MODEL.WEIGHT))
 
     data_loader = make_detection_data_loader(

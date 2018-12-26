@@ -3,12 +3,13 @@ from copy import deepcopy
 import numpy as np
 from PIL import Image
 
-from .augmentors import Flip
-from .augmentors import Normalize
-from .augmentors import ResizeShortestEdge
-from .base import AugmentorList
+from maskrcnn_benchmark.data.transforms import AugmentorList
+from maskrcnn_benchmark.data.transforms import Flip
+from maskrcnn_benchmark.data.transforms import Normalize
+from maskrcnn_benchmark.data.transforms import ResizeShortestEdge
 
 
+# TODO this should be more accessible to users and be customizable
 class DetectionTransform:
     """
     A callable which takes a dict produced by the detection dataset, and applies transformations.

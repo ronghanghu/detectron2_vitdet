@@ -9,17 +9,19 @@ from collections import OrderedDict
 
 import numpy as np
 import torch
+from pycocotools.cocoeval import COCOeval
+import pycocotools.mask as mask_util
 from PIL import Image
 from tqdm import tqdm
 
 from maskrcnn_benchmark.data.datasets import COCOMeta
-from maskrcnn_benchmark.modeling.roi_heads.paste_mask import Masker
+from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
+from maskrcnn_benchmark.utils.comm import is_main_process
+from maskrcnn_benchmark.utils.comm import scatter_gather
+from maskrcnn_benchmark.utils.comm import synchronize
 
-from ..structures.bounding_box import BoxList
-from ..utils.comm import is_main_process
-from ..utils.comm import scatter_gather
-from ..utils.comm import synchronize
+from .modeling.roi_heads.paste_mask import Masker  # TODO move inside models
 
 
 def postprocess(result, original_width, original_height):
@@ -84,8 +86,6 @@ def compute_on_dataset(model, data_loader):
 
 
 def prepare_for_coco_evaluation(predictions):
-    import pycocotools.mask as mask_util
-    import numpy as np
 
     coco_results = []
     for roidb in tqdm(predictions):
@@ -238,8 +238,6 @@ def evaluate_box_proposals(predictions, dataset, thresholds=None, area="all", li
 
 
 def evaluate_predictions_on_coco(coco_gt, coco_results, json_result_file, iou_type="bbox"):
-    from pycocotools.cocoeval import COCOeval
-
     coco_dt = coco_gt.loadRes(str(json_result_file))
     # coco_dt = coco_gt.loadRes(coco_results)
     coco_eval = COCOeval(coco_gt, coco_dt, iou_type)
@@ -279,7 +277,6 @@ class COCOResults(object):
     def update(self, coco_eval):
         if coco_eval is None:
             return
-        from pycocotools.cocoeval import COCOeval
 
         assert isinstance(coco_eval, COCOeval)
         s = coco_eval.stats

@@ -4,6 +4,7 @@ from .batch_norm import FrozenBatchNorm2d
 from .misc import Conv2d
 from .misc import ConvTranspose2d
 from .misc import interpolate
+from .misc import cat
 from .nms import nms
 from .roi_align import ROIAlign
 from .roi_align import roi_align

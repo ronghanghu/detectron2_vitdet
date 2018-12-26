@@ -4,14 +4,16 @@ import logging
 
 import torch.utils.data
 
+from maskrcnn_benchmark.data import ConcatDataset
+from maskrcnn_benchmark.data import MapDataset
+from maskrcnn_benchmark.data import datasets as D
+from maskrcnn_benchmark.data import samplers
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.image_list import to_image_list
 from maskrcnn_benchmark.structures.segmentation_mask import SegmentationMask
 from maskrcnn_benchmark.utils.comm import get_world_size
 from maskrcnn_benchmark.utils.imports import import_file
 
-from . import datasets as D
-from . import samplers
 from .transforms import DetectionTransform
 
 
@@ -50,7 +52,7 @@ def build_dataset(dataset_list, dataset_catalog, is_train=True):
         return datasets
     else:
         # for training, concatenate all datasets into a single one
-        return [D.ConcatDataset(datasets)]
+        return [ConcatDataset(datasets)]
 
 
 def make_data_sampler(dataset, shuffle, distributed):
@@ -143,7 +145,7 @@ def make_detection_data_loader(cfg, is_train=True, is_distributed=False, start_i
             img = dataset[i]
             ratios.append(float(img["height"]) / float(img["width"]))
 
-        dataset = D.MapDataset(dataset, DetectionTransform(cfg, is_train))
+        dataset = MapDataset(dataset, DetectionTransform(cfg, is_train))
 
         sampler = make_data_sampler(dataset, shuffle, is_distributed)
         batch_sampler = make_batch_data_sampler(

@@ -146,11 +146,9 @@ class ImageAugmentor(metaclass=ABCMeta):
             classname = type(self).__name__
             argstr = []
             for idx, f in enumerate(fields):
-                assert hasattr(
-                    self, f
-                ), "Attribute {} not found! Default __repr__ only works if attributes match the constructor.".format(
-                    f
-                )
+                assert hasattr(self, f), \
+                    "Attribute {} not found! " \
+                    "Default __repr__ only works if attributes match the constructor.".format(f)
                 attr = getattr(self, f)
                 if idx >= index_field_has_default:
                     if attr is argspec.defaults[idx - index_field_has_default]:

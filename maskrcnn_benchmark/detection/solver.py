@@ -1,6 +1,6 @@
 import torch
 
-from .lr_scheduler import WarmupMultiStepLR
+from maskrcnn_benchmark.solver import WarmupMultiStepLR
 
 
 def make_optimizer(cfg, model):

@@ -3,24 +3,26 @@ import os
 
 import torch
 
-from maskrcnn_benchmark.utils.c2_model_loading import load_c2_format
-from maskrcnn_benchmark.utils.imports import import_file
 from maskrcnn_benchmark.utils.model_serialization import load_state_dict
 from maskrcnn_benchmark.utils.model_zoo import cache_url
 
 
 class Checkpointer(object):
-    def __init__(
-        self, model, optimizer=None, scheduler=None, save_dir="", save_to_disk=None, logger=None
-    ):
+    def __init__(self, model, optimizer=None, scheduler=None, save_dir="", save_to_disk=None):
+        """
+        Args:
+            model (nn.Module):
+            optimizer:
+            scheduler:
+            save_dir (str): a directory to load and save checkpoint. TODO: renamed todir
+            save_to_disk (bool): whether to do saving or not (e.g., if not the master process)
+        """
         self.model = model
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.save_dir = save_dir
         self.save_to_disk = save_to_disk
-        if logger is None:
-            logger = logging.getLogger(__name__)
-        self.logger = logger
+        self.logger = logging.getLogger(__name__)
 
     def save(self, name, **kwargs):
         """
@@ -58,6 +60,10 @@ class Checkpointer(object):
             self.logger.info("No checkpoint found. Initializing model from scratch")
             return {}
         self.logger.info("Loading checkpoint from {}".format(f))
+        if not os.path.isfile(f):
+            f = self._download_file(f)
+            assert os.path.isfile(f), "Checkpoint {} not found!".format(f)
+
         checkpoint = self._load_file(f)
         self._load_model(checkpoint)
         if "optimizer" in checkpoint and self.optimizer:
@@ -91,48 +97,41 @@ class Checkpointer(object):
             f.write(last_filename)
 
     def _load_file(self, f):
+        """
+        Load a checkpoint file. Can be overwritten by subclasses
+        to support different formats.
+
+        Args:
+            f (str): a file name
+        Returns:
+            dict: with keys "model" and optionally others that are saved by the checkpointer
+                dict["model"] must be a dict which maps strings to torch.Tensor or numpy arrays.
+        """
         return torch.load(f, map_location=torch.device("cpu"))
 
-    def _load_model(self, checkpoint):
-        load_state_dict(self.model, checkpoint.pop("model"))
+    def _download_file(self, f):
+        """
+        Called when the file does not exist.
+        Can be overwritten by subclass.
 
-
-class DetectronCheckpointer(Checkpointer):
-    def __init__(
-        self,
-        cfg,
-        model,
-        optimizer=None,
-        scheduler=None,
-        save_dir="",
-        save_to_disk=None,
-        logger=None,
-    ):
-        super(DetectronCheckpointer, self).__init__(
-            model, optimizer, scheduler, save_dir, save_to_disk, logger
-        )
-        self.cfg = cfg.clone()
-
-    def _load_file(self, f):
-        # catalog lookup
-        if f.startswith("catalog://"):
-            paths_catalog = import_file(
-                "maskrcnn_benchmark.config.paths_catalog", self.cfg.PATHS_CATALOG, True
-            )
-            catalog_f = paths_catalog.ModelCatalog.get(f[len("catalog://") :])
-            self.logger.info("{} points to {}".format(f, catalog_f))
-            f = catalog_f
+        Args:
+            f (str):
+        Returns:
+            str: a file name
+        """
+        if os.path.isfile(f):
+            return
         # download url files
         if f.startswith("http"):
             # if the file is a url path, download it and cache it
             cached_f = cache_url(f)
             self.logger.info("url {} cached in {}".format(f, cached_f))
             f = cached_f
-        # convert Caffe2 checkpoint from pkl
-        if f.endswith(".pkl"):
-            return load_c2_format(f)
-        # load native detectron.pytorch checkpoint
-        loaded = super(DetectronCheckpointer, self)._load_file(f)
-        if "model" not in loaded:
-            loaded = dict(model=loaded)
-        return loaded
+        return f
+
+    def _load_model(self, checkpoint):
+        model = checkpoint.pop("model")
+        model = {
+            k: v if isinstance(v, torch.Tensor) else torch.from_numpy(v) for k, v in model.items()
+        }
+        load_state_dict(self.model, model)

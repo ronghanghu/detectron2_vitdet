@@ -1,15 +1,14 @@
 import torch
 from torch.nn import functional as F
 
-from maskrcnn_benchmark.modeling.balanced_positive_negative_sampler import (
-    sample_with_positive_fraction,
-)
-from maskrcnn_benchmark.modeling.box_coder import BoxCoder
-from maskrcnn_benchmark.modeling.matcher import Matcher
-from maskrcnn_benchmark.modeling.poolers import Pooler
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 
+from ..backbone import resnet
+from ..balanced_positive_negative_sampler import sample_with_positive_fraction
+from ..box_coder import BoxCoder
+from ..matcher import Matcher
+from ..poolers import Pooler
 from .box_head import FastRCNNOutputHead
 from .box_head import FastRCNNOutputs
 from .box_head import fastrcnn_inference
@@ -122,8 +121,6 @@ class ROIHeads(torch.nn.Module):
 class Res5ROIHeads(ROIHeads):
     def __init__(self, cfg):
         super(Res5ROIHeads, self).__init__(cfg)
-
-        from maskrcnn_benchmark.modeling.backbone import resnet
 
         # fmt: off
         pooler_resolution             = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION

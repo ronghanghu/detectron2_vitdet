@@ -9,11 +9,11 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 
-from maskrcnn_benchmark.config import cfg
-from maskrcnn_benchmark.data import make_detection_data_loader
-from maskrcnn_benchmark.engine.coco_evaluation import coco_evaluation
-from maskrcnn_benchmark.modeling.detector import build_detection_model
-from maskrcnn_benchmark.utils.checkpoint import DetectronCheckpointer
+from maskrcnn_benchmark.detection import DetectionCheckpointer
+from maskrcnn_benchmark.detection import build_detection_model
+from maskrcnn_benchmark.detection import cfg
+from maskrcnn_benchmark.detection import coco_evaluation
+from maskrcnn_benchmark.detection import make_detection_data_loader
 from maskrcnn_benchmark.utils.collect_env import collect_env_info
 from maskrcnn_benchmark.utils.comm import get_rank
 from maskrcnn_benchmark.utils.comm import synchronize
@@ -69,7 +69,7 @@ def main_worker(worker_id, args):
     model = build_detection_model(cfg)
 
     output_dir = cfg.OUTPUT_DIR
-    checkpointer = DetectronCheckpointer(cfg, model, save_dir=output_dir)
+    checkpointer = DetectionCheckpointer(cfg, model, save_dir=output_dir)
     checkpointer.load(cfg.MODEL.WEIGHT)
 
     iou_types = ("bbox",)
