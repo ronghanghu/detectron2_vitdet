@@ -52,6 +52,7 @@ def do_train(
 
         if iteration % 20 == 0 or iteration == max_iter:
             logger.info(
+                # NOTE this format is parsed by grep
                 meters.delimiter.join(
                     [
                         "eta: {eta}",
@@ -75,6 +76,7 @@ def do_train(
 
     total_training_time = time.time() - start_training_time
     total_time_str = str(datetime.timedelta(seconds=total_training_time))
+    # NOTE this format is parsed by grep
     logger.info(
         "Total training time: {} ({:.4f} s / it)".format(
             total_time_str, total_training_time / (max_iter)

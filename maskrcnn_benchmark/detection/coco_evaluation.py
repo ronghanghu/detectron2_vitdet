@@ -293,7 +293,7 @@ class COCOResults(object):
 
 def coco_evaluation(model, data_loader, iou_types=("bbox",), box_only=False, output_folder=None):
     num_devices = torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
-    logger = logging.getLogger("maskrcnn_benchmark.inference")
+    logger = logging.getLogger(__name__)
     dataset = data_loader.dataset
     logger.info("Start evaluation on {} images".format(len(dataset)))
     start_time = time.time()
@@ -302,6 +302,7 @@ def coco_evaluation(model, data_loader, iou_types=("bbox",), box_only=False, out
     synchronize()
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=total_time))
+    # NOTE this format is parsed by grep
     logger.info(
         "Total inference time: {} ({} s / img per device, on {} devices)".format(
             total_time_str, total_time * num_devices / len(dataset), num_devices
@@ -352,8 +353,27 @@ def coco_evaluation(model, data_loader, iou_types=("bbox",), box_only=False, out
             iou_type,
         )
         results.update(res)
+    results = results.results   # get the OrderedDict from COCOResults
     logger.info(results)
+    print_copypaste_format(results)
     if output_folder:
         torch.save(results, os.path.join(output_folder, "coco_results.pth"))
 
     return results, coco_results, predictions
+
+
+def print_copypaste_format(results):
+    """
+    Print results in a format that's easy to copypaste to excel.
+    Args:
+        results: OrderedDict
+    """
+    assert isinstance(results, OrderedDict)   # unordered results cannot be properly printed
+    logger = logging.getLogger(__name__)
+    for task in ['bbox', 'segm']:
+        res = results[task]
+        if task not in results:
+            continue
+        logger.info("copypaste: Task: {}".format(task))
+        logger.info("copypaste: " + ','.join([n for n in res.keys()]))
+        logger.info("copypaste: " + ','.join(["{0:.4f}".format(v) for v in res.values()]))
