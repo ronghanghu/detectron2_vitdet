@@ -74,6 +74,7 @@ class Pooler(nn.Module):
         self.map_levels = LevelMapper(lvl_min, lvl_max)
 
     def convert_to_roi_format(self, boxes):
+        assert boxes[0].mode == "xyxy"
         concat_boxes = cat([b.bbox for b in boxes], dim=0)
         device, dtype = concat_boxes.device, concat_boxes.dtype
         ids = cat(

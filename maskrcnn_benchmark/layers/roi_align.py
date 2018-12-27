@@ -53,6 +53,11 @@ class ROIAlign(nn.Module):
         self.sampling_ratio = sampling_ratio
 
     def forward(self, input, rois):
+        """
+        Args:
+            input: NCHW images
+            rois: Bx5 boxes. First column is the index into N. The other 4 columns are xyxy.
+        """
         return roi_align(input, rois, self.output_size, self.spatial_scale, self.sampling_ratio)
 
     def __repr__(self):

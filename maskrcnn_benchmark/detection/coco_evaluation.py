@@ -8,10 +8,10 @@ import time
 from collections import OrderedDict
 
 import numpy as np
-import torch
-from pycocotools.cocoeval import COCOeval
 import pycocotools.mask as mask_util
+import torch
 from PIL import Image
+from pycocotools.cocoeval import COCOeval
 from tqdm import tqdm
 
 from maskrcnn_benchmark.data.datasets import COCOMeta
@@ -35,8 +35,8 @@ def postprocess(result, original_width, original_height):
     # maybe clip bbox again
 
     if result.has_field("mask"):
+        masks = result.get_field("mask")  # N, 1, M, M
         if True:
-            masks = result.get_field("mask")  # N, 1, M, M
             masker = Masker(threshold=MASK_THRESHOLD, padding=1)
             pasted_masks = [x[0] for x in masker.forward_single_image(masks, result)]
         else:

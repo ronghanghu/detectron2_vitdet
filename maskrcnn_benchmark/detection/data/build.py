@@ -17,11 +17,6 @@ from maskrcnn_benchmark.utils.imports import import_file
 from .transforms import DetectionTransform
 
 
-def _identity(x):
-    # lambda x:x is not pickleable
-    return x
-
-
 def build_dataset(dataset_list, dataset_catalog, is_train=True):
     """
     Arguments:

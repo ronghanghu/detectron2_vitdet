@@ -18,6 +18,8 @@ def project_masks_on_boxes(segmentation_masks, proposals, discretization_size):
     Arguments:
         segmentation_masks: an instance of SegmentationMask
         proposals: an instance of BoxList
+    Returns:
+        A tensor of shape #box x M x M, all the target masks
     """
     masks = []
     M = discretization_size

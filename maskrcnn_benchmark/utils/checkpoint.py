@@ -42,10 +42,12 @@ class Checkpointer(object):
             data["scheduler"] = self.scheduler.state_dict()
         data.update(kwargs)
 
-        save_file = os.path.join(self.save_dir, "{}.pth".format(name))
+        basename = "{}.pth".format(name)
+        save_file = os.path.join(self.save_dir, basename)
+        assert os.path.basename(save_file) == basename, basename
         self.logger.info("Saving checkpoint to {}".format(save_file))
         torch.save(data, save_file)
-        self.tag_last_checkpoint(save_file)
+        self.tag_last_checkpoint(basename)
 
     def load(self, f=None):
         """
@@ -89,12 +91,12 @@ class Checkpointer(object):
             # if file doesn't exist, maybe because it has just been
             # deleted by a separate process
             last_saved = ""
-        return last_saved
+        return os.path.join(self.save_dir, last_saved)
 
-    def tag_last_checkpoint(self, last_filename):
+    def tag_last_checkpoint(self, last_filename_basename):
         save_file = os.path.join(self.save_dir, "last_checkpoint")
         with open(save_file, "w") as f:
-            f.write(last_filename)
+            f.write(last_filename_basename)
 
     def _load_file(self, f):
         """
