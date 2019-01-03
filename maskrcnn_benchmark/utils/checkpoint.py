@@ -122,7 +122,7 @@ class Checkpointer(object):
             str: a file name
         """
         if os.path.isfile(f):
-            return
+            return f
         # download url files
         if f.startswith("http"):
             # if the file is a url path, download it and cache it

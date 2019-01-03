@@ -83,15 +83,11 @@ _C.DATALOADER.ASPECT_RATIO_GROUPING = True
 # ---------------------------------------------------------------------------- #
 _C.MODEL.BACKBONE = CN()
 
-# The backbone conv body to use
-# The string must match a function that is imported in modeling.model_builder
-# (e.g., 'FPN.add_fpn_ResNet101_conv5_body' to specify a ResNet-101-FPN
-# backbone)
-_C.MODEL.BACKBONE.CONV_BODY = "R-50-C4"
-
+_C.MODEL.BACKBONE.NAME = "ResNet"
 # Add StopGrad at a specified stage so the bottom layers are frozen
-_C.MODEL.BACKBONE.FREEZE_CONV_BODY_AT = 2
-_C.MODEL.BACKBONE.OUT_CHANNELS = 256 * 4
+_C.MODEL.BACKBONE.FREEZE_AT = 2
+_C.MODEL.BACKBONE.OUT_CHANNELS = 256 * 4  # TODO should this be derived?
+_C.MODEL.BACKBONE.USE_FPN = False
 
 
 # ---------------------------------------------------------------------------- #
@@ -202,6 +198,9 @@ _C.MODEL.ROI_MASK_HEAD.RESOLUTION = 14
 # ---------------------------------------------------------------------------- #
 _C.MODEL.RESNETS = CN()
 
+_C.MODEL.RESNETS.DEPTH = 50
+_C.MODEL.RESNETS.RETURN_FEATURES = ["res4"]  # res4 for C4 backbone, res2..5 for FPN backbone
+
 # Number of groups to use; 1 ==> ResNet; > 1 ==> ResNeXt
 _C.MODEL.RESNETS.NUM_GROUPS = 1
 
@@ -212,13 +211,8 @@ _C.MODEL.RESNETS.WIDTH_PER_GROUP = 64
 # Use True only for the original MSRA ResNet; use False for C2 and Torch models
 _C.MODEL.RESNETS.STRIDE_IN_1X1 = True
 
-# Residual transformation function
-_C.MODEL.RESNETS.TRANS_FUNC = "BottleneckWithFixedBatchNorm"
-# ResNet's stem function (conv1 and pool1)
-_C.MODEL.RESNETS.STEM_FUNC = "StemWithFixedBatchNorm"
-
 # Apply dilation in stage "res5"
-_C.MODEL.RESNETS.RES5_DILATION = 1
+# _C.MODEL.RESNETS.RES5_DILATION = 1
 
 _C.MODEL.RESNETS.RES2_OUT_CHANNELS = 256
 _C.MODEL.RESNETS.STEM_OUT_CHANNELS = 64

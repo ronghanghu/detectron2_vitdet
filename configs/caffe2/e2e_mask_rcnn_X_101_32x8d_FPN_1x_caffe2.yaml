@@ -2,7 +2,7 @@ MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
   WEIGHT: "catalog://Caffe2Detectron/COCO/36761843/e2e_mask_rcnn_X-101-32x8d-FPN_1x"
   BACKBONE:
-    CONV_BODY: "R-101-FPN"
+    USE_FPN: True
     OUT_CHANNELS: 256
   RPN:
     USE_FPN: True
@@ -25,6 +25,8 @@ MODEL:
     POOLER_SAMPLING_RATIO: 2
     RESOLUTION: 28
   RESNETS:
+    RETURN_FEATURES: ["res2", "res3", "res4", "res5"]
+    DEPTH: 101
     STRIDE_IN_1X1: False
     NUM_GROUPS: 32
     WIDTH_PER_GROUP: 8

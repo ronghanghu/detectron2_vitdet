@@ -30,7 +30,7 @@ def convert_basic_c2_names(original_keys):
     """
     layer_keys = copy.deepcopy(original_keys)
     layer_keys = [
-        {"pred_b": "fc1000_b", "pred_w": "fc1000_w"}.get(k, k) for k in layer_keys
+        {"pred_b": "linear_b", "pred_w": "linear_w"}.get(k, k) for k in layer_keys
     ]  # some hard-coded mappings
 
     layer_keys = [k.replace("_", ".") for k in layer_keys]
@@ -40,10 +40,11 @@ def convert_basic_c2_names(original_keys):
 
     # stages
     layer_keys = [re.sub("^res.conv1.bn.", "bn1.", k) for k in layer_keys]
-    layer_keys = [re.sub("^res2.", "layer1.", k) for k in layer_keys]
-    layer_keys = [re.sub("^res3.", "layer2.", k) for k in layer_keys]
-    layer_keys = [re.sub("^res4.", "layer3.", k) for k in layer_keys]
-    layer_keys = [re.sub("^res5.", "layer4.", k) for k in layer_keys]
+    # layer1-4 is used by torchvision, however we follow the C2 naming strategy (res2-5)
+    # layer_keys = [re.sub("^res2.", "layer1.", k) for k in layer_keys]
+    # layer_keys = [re.sub("^res3.", "layer2.", k) for k in layer_keys]
+    # layer_keys = [re.sub("^res4.", "layer3.", k) for k in layer_keys]
+    # layer_keys = [re.sub("^res5.", "layer4.", k) for k in layer_keys]
 
     # blocks
     layer_keys = [k.replace(".branch1.bn.", ".downsample.1.") for k in layer_keys]

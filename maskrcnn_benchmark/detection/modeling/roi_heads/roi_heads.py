@@ -126,11 +126,6 @@ class Res5ROIHeads(ROIHeads):
         pooler_resolution             = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
         pooler_scales                 = cfg.MODEL.ROI_BOX_HEAD.POOLER_SCALES
         sampling_ratio                = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
-        resnet_trans_func             = cfg.MODEL.RESNETS.TRANS_FUNC
-        num_groups                    = cfg.MODEL.RESNETS.NUM_GROUPS
-        width_per_group               = cfg.MODEL.RESNETS.WIDTH_PER_GROUP
-        stride_in_1x1                 = cfg.MODEL.RESNETS.STRIDE_IN_1X1
-        res2_out_channels             = cfg.MODEL.RESNETS.RES2_OUT_CHANNELS
         num_classes                   = cfg.MODEL.ROI_HEADS.NUM_CLASSES
         bbox_reg_weights              = cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS
         self.mask_discretization_size = cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
@@ -141,17 +136,8 @@ class Res5ROIHeads(ROIHeads):
             output_size=pooler_resolution, scales=pooler_scales, sampling_ratio=sampling_ratio
         )
 
-        self.res5_head = resnet.ResNetHead(
-            block_module=resnet_trans_func,
-            stages=(resnet.StageSpec(index=4, block_count=3, return_features=False),),
-            num_groups=num_groups,
-            width_per_group=width_per_group,
-            stride_in_1x1=stride_in_1x1,
-            stride_init=None,
-            res2_out_channels=res2_out_channels,
-        )
-
-        num_channels = self.res5_head.output_size
+        self.res5 = resnet.make_resnet_head(cfg)
+        num_channels = self.res5[-1].out_channels
         self.box_predictor = FastRCNNOutputHead(num_channels, num_classes)
         self.box_coder = BoxCoder(weights=bbox_reg_weights)
 
@@ -162,7 +148,7 @@ class Res5ROIHeads(ROIHeads):
 
     def _shared_roi_transform(self, features, proposals):
         x = self.pooler(features, proposals)
-        return self.res5_head(x)
+        return self.res5(x)
 
     def forward(self, features, proposals, targets=None):
         if self.training:

@@ -2,7 +2,7 @@ MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
   WEIGHT: "catalog://ImageNetPretrained/FAIR/20171220/X-101-32x8d"
   BACKBONE:
-    CONV_BODY: "R-101-FPN"
+    USE_FPN: True
     OUT_CHANNELS: 256
   RPN:
     USE_FPN: True
@@ -28,6 +28,8 @@ MODEL:
     STRIDE_IN_1X1: False
     NUM_GROUPS: 32
     WIDTH_PER_GROUP: 8
+    RETURN_FEATURES: ["res2", "res3", "res4", "res5"]
+    DEPTH: 101
   MASK_ON: True
 DATASETS:
   TRAIN: ("coco_2014_train", "coco_2014_valminusminival")

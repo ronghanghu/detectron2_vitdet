@@ -2,8 +2,11 @@ MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
   WEIGHT: "catalog://Caffe2Detectron/COCO/35857890/e2e_faster_rcnn_R-101-FPN_1x"
   BACKBONE:
-    CONV_BODY: "R-101-FPN"
+    USE_FPN: True
     OUT_CHANNELS: 256
+  RESNETS:
+    RETURN_FEATURES: ["res2", "res3", "res4", "res5"]
+    DEPTH: 101
   RPN:
     USE_FPN: True
     ANCHOR_STRIDE: (4, 8, 16, 32, 64)

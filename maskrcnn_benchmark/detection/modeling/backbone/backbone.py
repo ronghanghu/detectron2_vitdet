@@ -7,13 +7,13 @@ from . import resnet
 
 
 def build_resnet_backbone(cfg):
-    body = resnet.ResNet(cfg)
+    body = resnet.make_resnet_backbone(cfg)
     model = nn.Sequential(OrderedDict([("body", body)]))
     return model
 
 
 def build_resnet_fpn_backbone(cfg):
-    body = resnet.ResNet(cfg)
+    body = resnet.make_resnet_backbone(cfg)
     in_channels_stage2 = cfg.MODEL.RESNETS.RES2_OUT_CHANNELS
     out_channels = cfg.MODEL.BACKBONE.OUT_CHANNELS
     fpn = fpn_module.FPN(
@@ -34,10 +34,7 @@ _BACKBONES = {"resnet": build_resnet_backbone, "resnet-fpn": build_resnet_fpn_ba
 
 
 def build_backbone(cfg):
-    assert cfg.MODEL.BACKBONE.CONV_BODY.startswith(
-        "R-"
-    ), "Only ResNet and ResNeXt models are currently implemented"
-    # Models using FPN end with "-FPN"
-    if cfg.MODEL.BACKBONE.CONV_BODY.endswith("-FPN"):
+    assert cfg.MODEL.BACKBONE.NAME == "ResNet"
+    if cfg.MODEL.BACKBONE.USE_FPN:
         return build_resnet_fpn_backbone(cfg)
     return build_resnet_backbone(cfg)

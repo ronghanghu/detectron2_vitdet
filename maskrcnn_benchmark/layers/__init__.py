@@ -1,5 +1,3 @@
-import torch
-
 from .batch_norm import FrozenBatchNorm2d
 from .misc import Conv2d
 from .misc import ConvTranspose2d
@@ -11,6 +9,7 @@ from .roi_align import roi_align
 from .roi_pool import ROIPool
 from .roi_pool import roi_pool
 from .smooth_l1_loss import smooth_l1_loss
+from .resnet import *
 
 __all__ = [
     "nms",
@@ -23,4 +22,10 @@ __all__ = [
     "ConvTranspose2d",
     "interpolate",
     "FrozenBatchNorm2d",
+    "cat",
+    "ResNetBlockBase",
+    "BottleneckBlock",
+    "BasicStem",
+    "ResNet",
+    "make_stage"
 ]

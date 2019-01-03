@@ -10,15 +10,14 @@ from __future__ import print_function
 import os
 import sys
 
-import numpy as np
-from PIL import Image
-
 import cv2
+import numpy as np
 
 # Cityscapes imports
 from cityscapesscripts.evaluation.instance import Instance
 from cityscapesscripts.helpers.labels import id2label
 from cityscapesscripts.helpers.labels import labels
+from PIL import Image
 
 sys.path.append(os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "helpers")))
 
