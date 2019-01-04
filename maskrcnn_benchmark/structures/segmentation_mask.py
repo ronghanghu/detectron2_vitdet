@@ -74,18 +74,20 @@ class Polygons(object):
         return s
 
 
-class SegmentationMask(object):
+class SegmentationList(object):
     """
-    This class stores the segmentations for all objects in the image
+    This class stores the segmentations for all objects in one image.
     """
 
     def __init__(self, polygons, size, mode=None):
         """
         Arguments:
-            polygons: a list of list of lists of numbers. The first
+            polygons: a list of lists of lists of numbers. The first
                 level of the list correspond to individual instances,
                 the second level to all the polygons that compose the
                 object, and the third level to the polygon coordinates.
+                The third level list should have the format of
+                [x0, y0, x1, y1, ..., xn, yn].
         """
         assert isinstance(polygons, list)
 
@@ -98,13 +100,13 @@ class SegmentationMask(object):
         cropped = []
         for polygon in self.polygons:
             cropped.append(polygon.crop(box))
-        return SegmentationMask(cropped, size=(w, h), mode=self.mode)
+        return SegmentationList(cropped, size=(w, h), mode=self.mode)
 
     def resize(self, size, *args, **kwargs):
         scaled = []
         for polygon in self.polygons:
             scaled.append(polygon.resize(size, *args, **kwargs))
-        return SegmentationMask(scaled, size=size, mode=self.mode)
+        return SegmentationList(scaled, size=size, mode=self.mode)
 
     def to(self, *args, **kwargs):
         return self
@@ -121,7 +123,7 @@ class SegmentationMask(object):
                 item = item.tolist()
             for i in item:
                 selected_polygons.append(self.polygons[i])
-        return SegmentationMask(selected_polygons, size=self.size, mode=self.mode)
+        return SegmentationList(selected_polygons, size=self.size, mode=self.mode)
 
     def __iter__(self):
         return iter(self.polygons)

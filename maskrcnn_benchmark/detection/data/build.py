@@ -10,7 +10,7 @@ from maskrcnn_benchmark.data import datasets as D
 from maskrcnn_benchmark.data import samplers
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.image_list import to_image_list
-from maskrcnn_benchmark.structures.segmentation_mask import SegmentationMask
+from maskrcnn_benchmark.structures.segmentation_mask import SegmentationList
 from maskrcnn_benchmark.utils.comm import get_world_size
 from maskrcnn_benchmark.utils.imports import import_file
 
@@ -206,7 +206,7 @@ class DetectionBatchCollator:
             target.add_field("labels", classes)
 
             masks = [obj["segmentation"] for obj in annos]
-            masks = SegmentationMask(masks, image_size)
+            masks = SegmentationList(masks, image_size)
             target.add_field("masks", masks)
             target = target.clip_to_image(remove_empty=True)
             targets.append(target)

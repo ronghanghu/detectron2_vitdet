@@ -149,7 +149,7 @@ class MyDataset(object):
         return {"height": img_height, "width": img_width}
 ```
 That's it. You can also add extra fields to the boxlist, such as segmentation masks
-(using `structures.segmentation_mask.SegmentationMask`), or even your own instance type.
+(using `structures.segmentation_mask.SegmentationList`), or even your own instance type.
 
 For a full example of how the `COCODataset` is implemented, check [`maskrcnn_benchmark/data/datasets/coco.py`](maskrcnn_benchmark/data/datasets/coco.py).
 

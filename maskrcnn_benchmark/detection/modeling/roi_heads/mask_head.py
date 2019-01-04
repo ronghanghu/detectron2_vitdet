@@ -16,7 +16,7 @@ def project_masks_on_boxes(segmentation_masks, proposals, discretization_size):
     loss computation as the targets.
 
     Arguments:
-        segmentation_masks: an instance of SegmentationMask
+        segmentation_masks: an instance of SegmentationList
         proposals: an instance of BoxList
     Returns:
         A tensor of shape #box x M x M, all the target masks
