@@ -51,6 +51,9 @@ class Checkpointer(object):
 
     def load(self, f=None):
         """
+        Load from latest checkpoint.
+        When a checkpoint does not exist, load from the provided file.
+
         Returns:
             dict: extra data loaded from the checkpoint, other than model, optimizer and scheduler.
         """
@@ -86,7 +89,7 @@ class Checkpointer(object):
         save_file = os.path.join(self.save_dir, "last_checkpoint")
         try:
             with open(save_file, "r") as f:
-                last_saved = f.read()
+                last_saved = f.read().strip()
         except IOError:
             # if file doesn't exist, maybe because it has just been
             # deleted by a separate process

@@ -38,7 +38,7 @@ def is_main_process():
 
 def synchronize():
     """
-    Helper function to synchronize between multiple processes when
+    Helper function to synchronize (barrier) among all processes when
     using distributed training
     """
     if not dist.is_available():
@@ -173,9 +173,10 @@ def reduce_dict(input_dict, average=True):
     with torch.no_grad():
         names = []
         values = []
-        for k, v in input_dict.items():
+        # sort the keys so that they are consistent across processes
+        for k in sorted(input_dict.keys()):
             names.append(k)
-            values.append(v)
+            values.append(input_dict[k])
         values = torch.stack(values, dim=0)
         dist.reduce(values, dst=0)
         if dist.get_rank() == 0 and average:
