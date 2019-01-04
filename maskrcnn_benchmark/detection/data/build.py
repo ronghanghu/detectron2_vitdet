@@ -4,9 +4,9 @@ import logging
 
 import torch.utils.data
 
+from maskrcnn_benchmark.data import datasets as D
 from maskrcnn_benchmark.data import ConcatDataset
 from maskrcnn_benchmark.data import MapDataset
-from maskrcnn_benchmark.data import datasets as D
 from maskrcnn_benchmark.data import samplers
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.image_list import to_image_list

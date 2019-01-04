@@ -1,4 +1,3 @@
-
 from abc import ABCMeta
 from abc import abstractmethod
 
@@ -9,8 +8,7 @@ from torch.nn import BatchNorm2d
 from . import Conv2d
 from . import FrozenBatchNorm2d
 
-
-__all__ = ['ResNetBlockBase', 'BottleneckBlock', 'BasicStem', 'ResNet', 'make_stage']
+__all__ = ["ResNetBlockBase", "BottleneckBlock", "BasicStem", "ResNet", "make_stage"]
 
 
 def _get_norm(norm, out_channels):

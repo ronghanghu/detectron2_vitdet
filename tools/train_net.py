@@ -15,8 +15,8 @@ import torch.multiprocessing as mp
 
 from maskrcnn_benchmark.detection import DetectionCheckpointer
 from maskrcnn_benchmark.detection import build_detection_model
-from maskrcnn_benchmark.detection import cfg
 from maskrcnn_benchmark.detection import coco_evaluation
+from maskrcnn_benchmark.detection import get_cfg
 from maskrcnn_benchmark.detection import make_detection_data_loader
 from maskrcnn_benchmark.detection import make_lr_scheduler
 from maskrcnn_benchmark.detection import make_optimizer
@@ -135,6 +135,7 @@ def main_worker(worker_id, args):
         )
         torch.cuda.set_device(worker_id)
 
+    cfg = get_cfg()
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
     cfg.freeze()

@@ -353,7 +353,7 @@ def coco_evaluation(model, data_loader, iou_types=("bbox",), box_only=False, out
             iou_type,
         )
         results.update(res)
-    results = results.results   # get the OrderedDict from COCOResults
+    results = results.results  # get the OrderedDict from COCOResults
     logger.info(results)
     print_copypaste_format(results)
     if output_folder:
@@ -368,12 +368,12 @@ def print_copypaste_format(results):
     Args:
         results: OrderedDict
     """
-    assert isinstance(results, OrderedDict)   # unordered results cannot be properly printed
+    assert isinstance(results, OrderedDict)  # unordered results cannot be properly printed
     logger = logging.getLogger(__name__)
-    for task in ['bbox', 'segm']:
+    for task in ["bbox", "segm"]:
         res = results[task]
         if task not in results:
             continue
         logger.info("copypaste: Task: {}".format(task))
-        logger.info("copypaste: " + ','.join([n for n in res.keys()]))
-        logger.info("copypaste: " + ','.join(["{0:.4f}".format(v) for v in res.values()]))
+        logger.info("copypaste: " + ",".join([n for n in res.keys()]))
+        logger.info("copypaste: " + ",".join(["{0:.4f}".format(v) for v in res.values()]))

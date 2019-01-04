@@ -27,5 +27,5 @@ __all__ = [
     "BottleneckBlock",
     "BasicStem",
     "ResNet",
-    "make_stage"
+    "make_stage",
 ]

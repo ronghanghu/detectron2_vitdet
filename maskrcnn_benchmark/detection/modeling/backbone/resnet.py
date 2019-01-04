@@ -1,6 +1,9 @@
-
 from torch import nn
-from maskrcnn_benchmark.layers import BottleneckBlock, BasicStem, ResNet, make_stage
+
+from maskrcnn_benchmark.layers import BasicStem
+from maskrcnn_benchmark.layers import BottleneckBlock
+from maskrcnn_benchmark.layers import ResNet
+from maskrcnn_benchmark.layers import make_stage
 
 
 def make_resnet_head(cfg):

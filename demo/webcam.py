@@ -3,7 +3,7 @@ import time
 
 import cv2
 
-from maskrcnn_benchmark.config import cfg
+from maskrcnn_benchmark.detection import get_cfg
 from predictor import COCODemo
 
 
@@ -52,6 +52,7 @@ def main():
     args = parser.parse_args()
 
     # load config from file and command-line arguments
+    cfg = get_cfg()
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
     cfg.freeze()
