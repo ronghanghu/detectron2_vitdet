@@ -23,7 +23,7 @@ def launch(main_func, num_gpus_per_machine,
                  args=(main_func, world_size, num_gpus_per_machine,
                        machine_rank, dist_url, args), daemon=False)
     else:
-        main_func(0, *args)
+        main_func(*args)
 
 
 def _distributed_worker(local_rank, main_func,

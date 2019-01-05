@@ -6,9 +6,11 @@ Basic training script for PyTorch
 # NOTE: this should be the first import (no not reorder)
 from maskrcnn_benchmark.utils.env import setup_environment  # noqa F401 isort:skip
 
+import logging
+import datetime
+import time
 import argparse
 import os
-import sys
 
 import torch
 
@@ -19,15 +21,33 @@ from maskrcnn_benchmark.detection import get_cfg
 from maskrcnn_benchmark.detection import make_detection_data_loader
 from maskrcnn_benchmark.detection import make_lr_scheduler
 from maskrcnn_benchmark.detection import make_optimizer
-from maskrcnn_benchmark.engine.trainer import do_train
 from maskrcnn_benchmark.engine.launch import launch
 from maskrcnn_benchmark.utils.collect_env import collect_env_info
-import maskrcnn_benchmark.utils.comm as comm
+from maskrcnn_benchmark.utils.comm import reduce_dict
 from maskrcnn_benchmark.utils.logger import setup_logger
+from maskrcnn_benchmark.utils.metric_logger import MetricLogger
 from maskrcnn_benchmark.utils.miscellaneous import mkdir
+import maskrcnn_benchmark.utils.comm as comm
 
 
-def test(cfg, model):
+class PeriodicCheckpointer(object):
+    def __init__(self, checkpointer, period, max_iter):
+        self.checkpointer = checkpointer
+        self.period = period
+        self.max_iter = max_iter
+
+    def step(self, iteration, **kwargs):
+        """
+        Args:
+            kwargs: extra data to save, same as in :meth:`Checkpointer.save`
+        """
+        if iteration % self.period == 0:
+            self.checkpointer.save("model_{:07d}".format(iteration), iteration=iteration)
+        if iteration == self.max_iter:
+            self.checkpointer.save("model_final", iteration=iteration)
+
+
+def do_test(cfg, model):
     distributed = comm.get_world_size() > 1
     torch.cuda.empty_cache()  # TODO check if it helps
     iou_types = ("bbox",)
@@ -50,6 +70,79 @@ def test(cfg, model):
             output_folder=output_folder,
         )
         comm.synchronize()
+
+
+def do_train(
+    model, data_loader, optimizer, scheduler, periodic_checkpointer, start_iter=0
+):
+    logger = logging.getLogger("maskrcnn_benchmark.trainer")
+    logger.info("Start training")
+    meters = MetricLogger(delimiter="  ")
+    max_iter = len(data_loader)
+    model.train()
+    start_training_time = time.time()
+    iter_end = time.time()
+    for iteration, data in enumerate(data_loader, start_iter):
+        data_time = time.time() - iter_end
+        iteration = iteration + 1
+
+        scheduler.step()
+
+        loss_dict = model(data)
+
+        losses = sum(loss for loss in loss_dict.values())
+        if torch.isnan(losses).any():
+            raise FloatingPointError("Losses become NaN at iteration={}!".format(iteration))
+
+        # reduce losses over all GPUs for logging purposes
+        loss_dict_reduced = reduce_dict(loss_dict)
+        losses_reduced = sum(loss for loss in loss_dict_reduced.values())
+        meters.update(loss=losses_reduced, **loss_dict_reduced)
+
+        optimizer.zero_grad()
+        losses.backward()
+        optimizer.step()
+
+        batch_time = time.time() - iter_end
+        iter_end = time.time()
+        # Consider the first several iteration as warmup and don't time it.
+        if iteration <= 3:
+            start_training_time = time.time()
+        else:
+            meters.update(time=batch_time, data=data_time)
+            eta_seconds = meters.time.global_avg * (max_iter - iteration)
+            eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
+
+        # TODO Move logging logic to a centralized system (https://github.com/fairinternal/detectron2/issues/9)
+        if iteration % 20 == 0 or iteration == max_iter:
+            logger.info(
+                # NOTE this format is parsed by grep
+                meters.delimiter.join(
+                    [
+                        "eta: {eta}",
+                        "iter: {iter}",
+                        "{meters}",
+                        "lr: {lr:.6f}",
+                        "max mem: {memory:.0f}",
+                    ]
+                ).format(
+                    eta=eta_string,
+                    iter=iteration,
+                    meters=str(meters),
+                    lr=optimizer.param_groups[0]["lr"],
+                    memory=torch.cuda.max_memory_allocated() / 1024.0 / 1024.0,
+                )
+            )
+        periodic_checkpointer.step(iteration)
+
+    total_training_time = time.time() - start_training_time
+    total_time_str = str(datetime.timedelta(seconds=total_training_time))
+    # NOTE this format is parsed by grep
+    logger.info(
+        "Total training time: {} ({:.4f} s / it)".format(
+            total_time_str, total_training_time / (max_iter)
+        )
+    )
 
 
 def setup(args):
@@ -85,7 +178,7 @@ def main(args):
     if args.eval_only:
         checkpointer = DetectionCheckpointer(cfg, model, save_dir=output_dir)
         checkpointer.load(cfg.MODEL.WEIGHT)
-        test(cfg, model)
+        do_test(cfg, model)
         return
 
     optimizer = make_optimizer(cfg, model)
@@ -102,32 +195,26 @@ def main(args):
             broadcast_buffers=False,
         )
 
-    extra_checkpoint_data = {"iteration": 0}
-
-    save_to_disk = comm.get_rank() == 0
-    checkpointer = DetectionCheckpointer(cfg, model, optimizer, scheduler, output_dir, save_to_disk)
-    extra_checkpoint_data.update(checkpointer.load(cfg.MODEL.WEIGHT))
+    checkpointer = DetectionCheckpointer(cfg, model, optimizer, scheduler, output_dir)
+    start_iter = checkpointer.load(cfg.MODEL.WEIGHT).get("iteration", 0)
 
     data_loader = make_detection_data_loader(
         cfg,
         is_train=True,
         is_distributed=distributed,
-        start_iter=extra_checkpoint_data["iteration"],
+        start_iter=start_iter,
     )
-
-    checkpoint_period = cfg.SOLVER.CHECKPOINT_PERIOD
 
     do_train(
         model,
         data_loader,
         optimizer,
         scheduler,
-        checkpointer,
-        checkpoint_period,
-        extra_checkpoint_data,
+        PeriodicCheckpointer(checkpointer, cfg.SOLVER.CHECKPOINT_PERIOD, cfg.SOLVER.MAX_ITER),
+        start_iter=start_iter,
     )
 
-    test(cfg, model.module if distributed else model)
+    do_test(cfg, model.module if distributed else model)
 
 
 if __name__ == "__main__":

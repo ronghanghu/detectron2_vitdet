@@ -5,6 +5,7 @@ import torch
 
 from maskrcnn_benchmark.utils.model_serialization import load_state_dict
 from maskrcnn_benchmark.utils.model_zoo import cache_url
+import maskrcnn_benchmark.utils.comm as comm
 
 
 class Checkpointer(object):
@@ -15,12 +16,16 @@ class Checkpointer(object):
             optimizer:
             scheduler:
             save_dir (str): a directory to load and save checkpoint. TODO: renamed todir
-            save_to_disk (bool): whether to do saving or not (e.g., if not the master process)
+            save_to_disk (bool): whether to do saving or not. By default, all
+                processes will do loading, but only the master process will do
+                saving.
         """
         self.model = model
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.save_dir = save_dir
+        if save_to_disk is None:
+            save_to_disk = comm.is_main_process()
         self.save_to_disk = save_to_disk
         self.logger = logging.getLogger(__name__)
 

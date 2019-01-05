@@ -29,11 +29,7 @@ def get_rank():
 
 
 def is_main_process():
-    if not dist.is_available():
-        return True
-    if not dist.is_initialized():
-        return True
-    return dist.get_rank() == 0
+    return get_rank() == 0
 
 
 def synchronize():
