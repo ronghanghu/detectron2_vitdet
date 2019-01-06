@@ -371,9 +371,9 @@ def print_copypaste_format(results):
     assert isinstance(results, OrderedDict)  # unordered results cannot be properly printed
     logger = logging.getLogger(__name__)
     for task in ["bbox", "segm"]:
-        res = results[task]
         if task not in results:
             continue
+        res = results[task]
         logger.info("copypaste: Task: {}".format(task))
         logger.info("copypaste: " + ",".join([n for n in res.keys()]))
         logger.info("copypaste: " + ",".join(["{0:.4f}".format(v) for v in res.values()]))
