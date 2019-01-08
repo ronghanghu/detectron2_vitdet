@@ -162,11 +162,14 @@ def setup(args):
     logger.info("Collecting env info (might take some time)")
     logger.info("\n" + collect_env_info())
 
-    logger.info("Loaded configuration file {}".format(args.config_file))
-    with open(args.config_file, "r") as cf:
-        config_str = "\n" + cf.read()
-        logger.info(config_str)
-    logger.info("Running with config:\n{}".format(cfg))
+    logger.info("Loaded config file {}:\n{}".format(
+        args.config_file, open(args.config_file, "r").read()))
+    logger.info("Running with full config:\n{}".format(cfg))
+    if comm.get_rank() == 0 and output_dir:
+        path = os.path.join(output_dir, "config.yaml")
+        with open(path, "w") as f:
+            f.write(cfg.dump())
+        logger.info("Full config saved to {}".format(os.path.abspath(path)))
     return cfg
 
 

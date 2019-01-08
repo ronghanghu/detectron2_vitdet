@@ -1,8 +1,3 @@
+_BASE_: "../e2e_mask_rcnn_R_50_C4_1x.yaml"
 MODEL:
-  META_ARCHITECTURE: "GeneralizedRCNN"
   WEIGHT: "catalog://Caffe2Detectron/COCO/35858791/e2e_mask_rcnn_R-50-C4_1x"
-  ROI_HEADS:
-    NAME: "Res5ROIHeads"
-  MASK_ON: True
-DATASETS:
-  TEST: ("coco_2014_minival",)

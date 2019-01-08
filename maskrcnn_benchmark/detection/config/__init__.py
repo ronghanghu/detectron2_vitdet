@@ -1,4 +1,5 @@
 from .defaults import _C
+from maskrcnn_benchmark.utils.config import CfgNode
 
 
 def get_cfg():
@@ -8,4 +9,4 @@ def get_cfg():
     Returns:
         a yacs CfgNode instance.
     """
-    return _C.clone()
+    return CfgNode(_C.clone())

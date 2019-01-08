@@ -2,6 +2,11 @@
 
 LOG="$1"
 
+if [[ -z "$LOG" ]]; then
+	echo "Usage: $0 /path/to/log/file"
+	exit 1
+fi
+
 # [12/15 11:47:32] trainer INFO: Total training time: 12:15:04.446477 (0.4900 s / it)
 # [12/15 11:49:03] inference INFO: Total inference time: 0:01:25.326167 (0.13652186737060548 s / img per device, on 8 devices)
 
