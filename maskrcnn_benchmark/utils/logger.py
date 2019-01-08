@@ -25,7 +25,7 @@ class _ColorfulFormatter(logging.Formatter):
 def setup_logger(save_dir=None, distributed_rank=0, color=True, name="maskrcnn_benchmark"):
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
-    # don't log results for the non-master process
+    # don't log results to files for non-master processes
     if distributed_rank > 0:
         return logger
     ch = logging.StreamHandler(stream=sys.stdout)

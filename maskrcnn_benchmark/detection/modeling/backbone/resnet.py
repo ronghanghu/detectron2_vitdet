@@ -53,7 +53,12 @@ def make_resnet_backbone(cfg):
     num_blocks_per_stage = {50: [3, 4, 6, 3], 101: [3, 4, 23, 3]}[depth]
 
     stages = []
-    for idx, stage_idx in enumerate([2, 3, 4, 5]):
+
+    # Avoid creating variables without gradients
+    # It consumes extra memory and may cause allreduce to fail
+    return_stage_idx = [{"res2": 2, "res3": 3, "res4": 4, "res5": 5}[f] for f in return_features]
+    max_stage_idx = max(return_stage_idx)
+    for idx, stage_idx in enumerate(range(2, max_stage_idx + 1)):
         blocks = make_stage(
             BottleneckBlock,
             num_blocks_per_stage[idx],
