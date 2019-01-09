@@ -246,6 +246,9 @@ _C.TEST.EXPECTED_RESULTS_SIGMA_TOL = 4
 # This is global, so if we have 8 GPUs and IMS_PER_BATCH = 16, each GPU will
 # see 2 images per batch
 _C.TEST.IMS_PER_BATCH = 8
+# The period (in terms of steps) to evaluate the model during training.
+# Set to 0 to disable.
+_C.TEST.EVAL_PERIOD = 0
 
 
 # ---------------------------------------------------------------------------- #

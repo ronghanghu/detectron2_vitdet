@@ -1,5 +1,6 @@
 """
-Basic training script for PyTorch
+Detection Training Script.
+TODO rename the file.
 """
 
 # Set up custom environment before nearly anything else is imported
@@ -13,6 +14,7 @@ import os
 import time
 
 import torch
+from torch.nn.parallel import DistributedDataParallel
 
 import maskrcnn_benchmark.utils.comm as comm
 from maskrcnn_benchmark.detection import (
@@ -50,7 +52,8 @@ class PeriodicCheckpointer(object):
 
 
 def do_test(cfg, model):
-    distributed = comm.get_world_size() > 1
+    if isinstance(model, DistributedDataParallel):
+        model = model.module
     torch.cuda.empty_cache()  # TODO check if it helps
     iou_types = ("bbox",)
     if cfg.MODEL.MASK_ON:
@@ -62,7 +65,9 @@ def do_test(cfg, model):
             output_folder = os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
             mkdir(output_folder)
             output_folders[idx] = output_folder
-    data_loaders_val = make_detection_data_loader(cfg, is_train=False, is_distributed=distributed)
+    data_loaders_val = make_detection_data_loader(
+        cfg, is_train=False, is_distributed=comm.get_world_size() > 1
+    )
     for output_folder, data_loader_val in zip(output_folders, data_loaders_val):
         coco_evaluation(
             model,
@@ -72,13 +77,28 @@ def do_test(cfg, model):
             output_folder=output_folder,
         )
         comm.synchronize()
+    model.train()  # model is set to eval mode by `coco_evaluation`
 
 
-def do_train(model, data_loader, optimizer, scheduler, periodic_checkpointer, start_iter=0):
+def do_train(cfg, model):
+    optimizer = make_optimizer(cfg, model)
+    scheduler = make_lr_scheduler(cfg, optimizer)
+
+    checkpointer = DetectionCheckpointer(cfg, model, optimizer, scheduler, cfg.OUTPUT_DIR)
+    start_iter = checkpointer.load(cfg.MODEL.WEIGHT).get("iteration", 0)
+    periodic_checkpointer = PeriodicCheckpointer(
+        checkpointer, cfg.SOLVER.CHECKPOINT_PERIOD, cfg.SOLVER.MAX_ITER
+    )
+
+    data_loader = make_detection_data_loader(
+        cfg, is_train=True, is_distributed=comm.get_world_size() > 1, start_iter=start_iter
+    )
+    assert len(data_loader) == cfg.SOLVER.MAX_ITER
+
     logger = logging.getLogger("maskrcnn_benchmark.trainer")
     logger.info("Start training")
     meters = MetricLogger(delimiter="  ")
-    max_iter = len(data_loader)
+    max_iter = cfg.SOLVER.MAX_ITER
     model.train()
     start_training_time = time.time()
     iter_end = time.time()
@@ -112,6 +132,9 @@ def do_train(model, data_loader, optimizer, scheduler, periodic_checkpointer, st
             meters.update(time=batch_time, data=data_time)
             eta_seconds = meters.time.global_avg * (max_iter - iteration)
             eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
+
+        if cfg.TEST.EVAL_PERIOD > 0 and iteration % cfg.TEST.EVAL_PERIOD == 0:
+            do_test(cfg, model)
 
         # TODO Move logging logic to a centralized system (https://github.com/fairinternal/detectron2/issues/9)
         if iteration % 20 == 0 or iteration == max_iter:
@@ -185,13 +208,10 @@ def main(args):
         do_test(cfg, model)
         return
 
-    optimizer = make_optimizer(cfg, model)
-    scheduler = make_lr_scheduler(cfg, optimizer)
-
     distributed = comm.get_world_size() > 1
     if distributed:
         local_rank = comm.get_rank() % args.num_gpus
-        model = torch.nn.parallel.DistributedDataParallel(
+        model = DistributedDataParallel(
             model,
             device_ids=[local_rank],
             output_device=local_rank,
@@ -199,23 +219,8 @@ def main(args):
             broadcast_buffers=False,
         )
 
-    checkpointer = DetectionCheckpointer(cfg, model, optimizer, scheduler, output_dir)
-    start_iter = checkpointer.load(cfg.MODEL.WEIGHT).get("iteration", 0)
-
-    data_loader = make_detection_data_loader(
-        cfg, is_train=True, is_distributed=distributed, start_iter=start_iter
-    )
-
-    do_train(
-        model,
-        data_loader,
-        optimizer,
-        scheduler,
-        PeriodicCheckpointer(checkpointer, cfg.SOLVER.CHECKPOINT_PERIOD, cfg.SOLVER.MAX_ITER),
-        start_iter=start_iter,
-    )
-
-    do_test(cfg, model.module if distributed else model)
+    do_train(cfg, model)
+    do_test(cfg, model)
 
 
 if __name__ == "__main__":

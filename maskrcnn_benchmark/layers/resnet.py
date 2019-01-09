@@ -1,8 +1,6 @@
-
 from abc import ABCMeta, abstractmethod
+
 import numpy as np
-
-
 import torch.nn.functional as F
 from torch import nn
 from torch.nn import BatchNorm2d
@@ -188,7 +186,7 @@ class ResNet(nn.Module):
         self.stem = stem
         self.num_classes = num_classes
 
-        current_stride = 4    # we assume stem has stride 4
+        current_stride = 4  # we assume stem has stride 4
         self._feature_strides = {"stem": current_stride}
 
         self.stages_and_names = []
@@ -201,7 +199,8 @@ class ResNet(nn.Module):
             self.add_module(name, stage)
             self.stages_and_names.append((stage, name))
             self._feature_strides[name] = current_stride = int(
-                current_stride * np.prod([k.stride for k in blocks]))
+                current_stride * np.prod([k.stride for k in blocks])
+            )
 
         if num_classes is not None:
             self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
