@@ -1,8 +1,7 @@
 import itertools
 
 import torch
-from torch.utils.data.sampler import BatchSampler
-from torch.utils.data.sampler import Sampler
+from torch.utils.data.sampler import BatchSampler, Sampler
 
 
 class GroupedBatchSampler(BatchSampler):

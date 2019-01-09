@@ -3,9 +3,7 @@
 # Convert instances from png files to a dictionary
 # This files is created according to https://github.com/facebookresearch/Detectron/issues/111
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
 import os
 import sys
@@ -15,8 +13,7 @@ import numpy as np
 
 # Cityscapes imports
 from cityscapesscripts.evaluation.instance import Instance
-from cityscapesscripts.helpers.labels import id2label
-from cityscapesscripts.helpers.labels import labels
+from cityscapesscripts.helpers.labels import id2label, labels
 from PIL import Image
 
 sys.path.append(os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "helpers")))

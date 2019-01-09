@@ -17,9 +17,7 @@ from tqdm import tqdm
 from maskrcnn_benchmark.data.datasets import COCOMeta
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
-from maskrcnn_benchmark.utils.comm import is_main_process
-from maskrcnn_benchmark.utils.comm import scatter_gather
-from maskrcnn_benchmark.utils.comm import synchronize
+from maskrcnn_benchmark.utils.comm import is_main_process, scatter_gather, synchronize
 
 from .modeling.roi_heads.paste_mask import Masker  # TODO move inside models
 

@@ -4,8 +4,7 @@
 from PIL import Image
 
 from .base import ImageAugmentor
-from .transform import ResizeTransform
-from .transform import TransformAugmentorBase
+from .transform import ResizeTransform, TransformAugmentorBase
 
 __all__ = ["Flip", "Resize", "ResizeShortestEdge", "Normalize"]
 

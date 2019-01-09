@@ -2,8 +2,7 @@ import copy
 import logging
 import re
 
-from maskrcnn_benchmark.utils.c2_model_loading import convert_basic_c2_names
-from maskrcnn_benchmark.utils.c2_model_loading import load_c2_weights
+from maskrcnn_benchmark.utils.c2_model_loading import convert_basic_c2_names, load_c2_weights
 from maskrcnn_benchmark.utils.checkpoint import Checkpointer
 from maskrcnn_benchmark.utils.imports import import_file
 

@@ -6,28 +6,30 @@ Basic training script for PyTorch
 # NOTE: this should be the first import (no not reorder)
 from maskrcnn_benchmark.utils.env import setup_environment  # noqa F401 isort:skip
 
-import logging
-import datetime
-import time
 import argparse
+import datetime
+import logging
 import os
+import time
 
 import torch
 
-from maskrcnn_benchmark.detection import DetectionCheckpointer
-from maskrcnn_benchmark.detection import build_detection_model
-from maskrcnn_benchmark.detection import coco_evaluation
-from maskrcnn_benchmark.detection import get_cfg
-from maskrcnn_benchmark.detection import make_detection_data_loader
-from maskrcnn_benchmark.detection import make_lr_scheduler
-from maskrcnn_benchmark.detection import make_optimizer
+import maskrcnn_benchmark.utils.comm as comm
+from maskrcnn_benchmark.detection import (
+    DetectionCheckpointer,
+    build_detection_model,
+    coco_evaluation,
+    get_cfg,
+    make_detection_data_loader,
+    make_lr_scheduler,
+    make_optimizer,
+)
 from maskrcnn_benchmark.engine.launch import launch
 from maskrcnn_benchmark.utils.collect_env import collect_env_info
 from maskrcnn_benchmark.utils.comm import reduce_dict
 from maskrcnn_benchmark.utils.logger import setup_logger
 from maskrcnn_benchmark.utils.metric_logger import MetricLogger
 from maskrcnn_benchmark.utils.miscellaneous import mkdir
-import maskrcnn_benchmark.utils.comm as comm
 
 
 class PeriodicCheckpointer(object):
@@ -72,9 +74,7 @@ def do_test(cfg, model):
         comm.synchronize()
 
 
-def do_train(
-    model, data_loader, optimizer, scheduler, periodic_checkpointer, start_iter=0
-):
+def do_train(model, data_loader, optimizer, scheduler, periodic_checkpointer, start_iter=0):
     logger = logging.getLogger("maskrcnn_benchmark.trainer")
     logger.info("Start training")
     meters = MetricLogger(delimiter="  ")
@@ -162,8 +162,9 @@ def setup(args):
     logger.info("Collecting env info (might take some time)")
     logger.info("\n" + collect_env_info())
 
-    logger.info("Loaded config file {}:\n{}".format(
-        args.config_file, open(args.config_file, "r").read()))
+    logger.info(
+        "Loaded config file {}:\n{}".format(args.config_file, open(args.config_file, "r").read())
+    )
     logger.info("Running with full config:\n{}".format(cfg))
     if comm.get_rank() == 0 and output_dir:
         path = os.path.join(output_dir, "config.yaml")
@@ -202,10 +203,7 @@ def main(args):
     start_iter = checkpointer.load(cfg.MODEL.WEIGHT).get("iteration", 0)
 
     data_loader = make_detection_data_loader(
-        cfg,
-        is_train=True,
-        is_distributed=distributed,
-        start_iter=start_iter,
+        cfg, is_train=True, is_distributed=distributed, start_iter=start_iter
     )
 
     do_train(

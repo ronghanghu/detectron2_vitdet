@@ -9,13 +9,8 @@ from ..balanced_positive_negative_sampler import sample_with_positive_fraction
 from ..box_coder import BoxCoder
 from ..matcher import Matcher
 from ..poolers import Pooler
-from .box_head import FastRCNNOutputHead
-from .box_head import FastRCNNOutputs
-from .box_head import fastrcnn_inference
-from .box_head import make_box_head
-from .mask_head import make_mask_head
-from .mask_head import maskrcnn_inference
-from .mask_head import maskrcnn_loss
+from .box_head import FastRCNNOutputHead, FastRCNNOutputs, fastrcnn_inference, make_box_head
+from .mask_head import make_mask_head, maskrcnn_inference, maskrcnn_loss
 
 
 def keep_only_positive_boxes(boxes, matched_targets):

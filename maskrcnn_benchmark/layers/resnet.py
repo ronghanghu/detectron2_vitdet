@@ -1,13 +1,13 @@
-from abc import ABCMeta
-from abc import abstractmethod
+
+from abc import ABCMeta, abstractmethod
 import numpy as np
+
 
 import torch.nn.functional as F
 from torch import nn
 from torch.nn import BatchNorm2d
 
-from . import Conv2d
-from . import FrozenBatchNorm2d
+from . import Conv2d, FrozenBatchNorm2d
 
 __all__ = ["ResNetBlockBase", "BottleneckBlock", "BasicStem", "ResNet", "make_stage"]
 

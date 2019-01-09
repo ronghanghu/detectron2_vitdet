@@ -7,8 +7,7 @@ from maskrcnn_benchmark.structures.boxlist_ops import cat_boxlist
 from ..box_coder import BoxCoder
 from .anchor_generator import make_anchor_generator
 from .loss import make_rpn_loss_evaluator
-from .proposals import generate_fpn_proposals
-from .proposals import generate_rpn_proposals
+from .proposals import generate_fpn_proposals, generate_rpn_proposals
 
 
 class RPNHead(nn.Module):
