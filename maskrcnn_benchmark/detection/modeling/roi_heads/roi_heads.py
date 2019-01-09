@@ -124,7 +124,8 @@ class Res5ROIHeads(ROIHeads):
 
         # fmt: off
         pooler_resolution             = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
-        pooler_scales                 = cfg.MODEL.ROI_BOX_HEAD.POOLER_SCALES
+        backbone_feature_stride       = cfg.MODEL.BACKBONE.FEATURE_STRIDES[0]
+        pooler_scales                 = (1.0 / backbone_feature_stride, )
         sampling_ratio                = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
         num_classes                   = cfg.MODEL.ROI_HEADS.NUM_CLASSES
         bbox_reg_weights              = cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS
@@ -205,17 +206,20 @@ class StandardROIHeads(ROIHeads):
         super(StandardROIHeads, self).__init__(cfg)
 
         # fmt: off
-        pooler_resolution = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
-        pooler_scales     = cfg.MODEL.ROI_BOX_HEAD.POOLER_SCALES
-        sampling_ratio    = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
-        backbone_channels = cfg.MODEL.BACKBONE.OUT_CHANNELS
-        num_classes       = cfg.MODEL.ROI_HEADS.NUM_CLASSES
-        bbox_reg_weights  = cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS
-        self.mask_on      = cfg.MODEL.MASK_ON
+        pooler_resolution        = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
+        backbone_feature_strides = cfg.MODEL.BACKBONE.FEATURE_STRIDES
+        # Only takes the first 4 feature maps for pooling
+        # TODO make it configurable: https://github.com/fairinternal/detectron2/issues/67
+        pooler_scales            = tuple(1.0 / x for x in backbone_feature_strides[:4])
+        sampling_ratio           = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
+        backbone_channels        = cfg.MODEL.BACKBONE.OUT_CHANNELS
+        num_classes              = cfg.MODEL.ROI_HEADS.NUM_CLASSES
+        bbox_reg_weights         = cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS
+        self.mask_on             = cfg.MODEL.MASK_ON
         if self.mask_on:
             self.mask_discretization_size = cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
             mask_pooler_resolution        = cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION
-            mask_pooler_scales            = cfg.MODEL.ROI_MASK_HEAD.POOLER_SCALES
+            mask_pooler_scales            = pooler_scales
             mask_sampling_ratio           = cfg.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO
         # fmt: on
 
@@ -241,7 +245,7 @@ class StandardROIHeads(ROIHeads):
         if self.training:
             proposals, targets = self.sample_proposals_for_training(proposals, targets)
 
-        box_features = self.box_pooler(features, proposals)
+        box_features = self.box_pooler(features[:4], proposals)
         box_features = self.box_head(box_features)
         class_logits, regression_outputs = self.box_predictor(box_features)
         del box_features
@@ -266,7 +270,7 @@ class StandardROIHeads(ROIHeads):
         if self.mask_on:
             if self.training:
                 proposals, targets, _ = keep_only_positive_boxes(proposals, targets)
-            mask_features = self.mask_pooler(features, proposals)
+            mask_features = self.mask_pooler(features[:4], proposals)
             mask_logits = self.mask_head(mask_features)
 
             if self.training:

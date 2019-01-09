@@ -69,10 +69,6 @@ _C.DATASETS.TEST = ()
 _C.DATALOADER = CN()
 # Number of data loading threads
 _C.DATALOADER.NUM_WORKERS = 4
-# If > 0, this enforces that each collated batch should have a size divisible by SIZE_DIVISIBILITY
-# e.g., for many FPN models, the width and height of each image has to be a
-# multiple of 32.
-_C.DATALOADER.SIZE_DIVISIBILITY = 0
 # If True, each batch should contain only images for which the aspect ratio
 # is compatible. This groups portrait images together, and landscape images
 # are not batched with portrait images.
@@ -97,9 +93,6 @@ _C.MODEL.RPN = CN()
 _C.MODEL.RPN.USE_FPN = False
 # Base RPN anchor sizes given in absolute pixels w.r.t. the scaled network input
 _C.MODEL.RPN.ANCHOR_SIZES = (32, 64, 128, 256, 512)
-# Stride of the feature map that RPN is attached.
-# For FPN, number of strides should match number of scales
-_C.MODEL.RPN.ANCHOR_STRIDE = (16,)
 # RPN anchor aspect ratios
 _C.MODEL.RPN.ASPECT_RATIOS = (0.5, 1.0, 2.0)
 # Remove RPN anchors that go outside the image by RPN_STRADDLE_THRESH pixels
@@ -177,7 +170,6 @@ _C.MODEL.ROI_BOX_HEAD.NAME = ""
 _C.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS = (10.0, 10.0, 5.0, 5.0)
 _C.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION = 14
 _C.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO = 0
-_C.MODEL.ROI_BOX_HEAD.POOLER_SCALES = (1.0 / 16,)
 # Hidden layer dimension when using an MLP for the RoI box head
 _C.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM = 1024
 
@@ -187,7 +179,6 @@ _C.MODEL.ROI_MASK_HEAD = CN()
 _C.MODEL.ROI_MASK_HEAD.NAME = "MaskRCNNUpsampleHead"
 _C.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION = 14
 _C.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO = 0
-_C.MODEL.ROI_MASK_HEAD.POOLER_SCALES = (1.0 / 16,)
 _C.MODEL.ROI_MASK_HEAD.CONV_DIM = 256
 _C.MODEL.ROI_MASK_HEAD.RESOLUTION = 14
 

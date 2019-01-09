@@ -109,18 +109,18 @@ class AnchorGenerator(nn.Module):
         return anchors
 
 
-def make_anchor_generator(config):
-    anchor_sizes = config.MODEL.RPN.ANCHOR_SIZES
-    aspect_ratios = config.MODEL.RPN.ASPECT_RATIOS
-    anchor_stride = config.MODEL.RPN.ANCHOR_STRIDE
-    straddle_thresh = config.MODEL.RPN.STRADDLE_THRESH
+def make_anchor_generator(cfg):
+    anchor_sizes = cfg.MODEL.RPN.ANCHOR_SIZES
+    aspect_ratios = cfg.MODEL.RPN.ASPECT_RATIOS
+    anchor_stride = cfg.MODEL.BACKBONE.FEATURE_STRIDES
+    straddle_thresh = cfg.MODEL.RPN.STRADDLE_THRESH
 
-    if config.MODEL.RPN.USE_FPN:
+    if cfg.MODEL.RPN.USE_FPN:
         assert len(anchor_stride) == len(
             anchor_sizes
-        ), "FPN should have len(ANCHOR_STRIDE) == len(ANCHOR_SIZES)"
+        ), "FPN should have len(backbone_features) == len(anchor_sizes)"
     else:
-        assert len(anchor_stride) == 1, "Non-FPN should have a single ANCHOR_STRIDE"
+        assert len(anchor_stride) == 1, "Non-FPN should have a single backbone feature!"
     anchor_generator = AnchorGenerator(anchor_sizes, aspect_ratios, anchor_stride, straddle_thresh)
     return anchor_generator
 

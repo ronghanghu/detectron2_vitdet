@@ -17,7 +17,8 @@ function list-base() {
 	local dir
 	dir=$(dirname "$cfg")
 	local base
-	base=$(cat "$cfg" | grep "^_BASE_" | grep -o '".*"')
+	# grep may fail, but we don't exit error if it fail
+	base=$(cat "$cfg" | grep "^_BASE_" | grep -o '".*"') || true
 	if [[ -n "$base" ]]; then
 		local path="${base//\"}"
 		if ! [[ "$path" == /* ]]; then

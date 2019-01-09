@@ -9,14 +9,14 @@ class FPN(nn.Module):
     order, and must be consecutive
     """
 
-    def __init__(self, in_channels_list, out_channels, top_blocks=None):
+    def __init__(self, in_channels_list, out_channels, top_block=True):
         """
         Arguments:
             in_channels_list (list[int]): number of channels for each feature map that
                 will be fed
             out_channels (int): number of channels of the FPN representation
-            top_blocks (nn.Module or None): if provided, an extra operation will
-                be performed on the output of the last (smallest resolution)
+            top_block (bool): if provided, an extra 2x2 max pooling
+                is added on the output of the last (smallest resolution)
                 FPN output, and the result will extend the result list
         """
         super(FPN, self).__init__()
@@ -36,7 +36,7 @@ class FPN(nn.Module):
             self.add_module(layer_block, layer_block_module)
             self.inner_blocks.append(inner_block)
             self.layer_blocks.append(layer_block)
-        self.top_blocks = top_blocks
+        self.top_block = top_block
 
     def forward(self, x):
         """
@@ -60,13 +60,25 @@ class FPN(nn.Module):
             last_inner = inner_lateral + inner_top_down
             results.insert(0, getattr(self, layer_block)(last_inner))
 
-        if self.top_blocks is not None:
-            last_results = self.top_blocks(results[-1])
-            results.extend(last_results)
+        if self.top_block:
+            last_results = F.max_pool2d(results[-1], 1, 2, 0)
+            results.append(last_results)
 
         return tuple(results)
 
+    def compute_feature_strides(self, input_strides):
+        """
+        Args:
+            input_strides (list[int]): a list of strides correspond to the
+                input feature maps.
 
-class LastLevelMaxPool(nn.Module):
-    def forward(self, x):
-        return [F.max_pool2d(x, 1, 2, 0)]
+        Returns:
+            list[int]: the stride for each output feature map.
+        """
+        for i, stride in enumerate(input_strides):
+            if i > 0:
+                assert stride == 2 * input_strides[i - 1]
+        if self.top_block:
+            return input_strides + [input_strides[-1] * 2]
+        else:
+            return input_strides

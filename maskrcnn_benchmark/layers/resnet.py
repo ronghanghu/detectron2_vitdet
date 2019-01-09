@@ -1,5 +1,6 @@
 from abc import ABCMeta
 from abc import abstractmethod
+import numpy as np
 
 import torch.nn.functional as F
 from torch import nn
@@ -187,6 +188,9 @@ class ResNet(nn.Module):
         self.stem = stem
         self.num_classes = num_classes
 
+        current_stride = 4    # we assume stem has stride 4
+        self._feature_strides = {"stem": current_stride}
+
         self.stages_and_names = []
         for i, blocks in enumerate(stages):
             for block in blocks:
@@ -196,6 +200,8 @@ class ResNet(nn.Module):
             name = "res" + str(i + 2)
             self.add_module(name, stage)
             self.stages_and_names.append((stage, name))
+            self._feature_strides[name] = current_stride = int(
+                current_stride * np.prod([k.stride for k in blocks]))
 
         if num_classes is not None:
             self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
@@ -226,3 +232,12 @@ class ResNet(nn.Module):
             if "linear" in self.return_features:
                 outputs.append(x)
         return outputs
+
+    @property
+    def feature_strides(self):
+        """
+        Returns a dict containing strides of each featuremap.
+        The key is the name of the featuremap.
+        Could be one of "stem", "res2", ..., "res5".
+        """
+        return self._feature_strides
