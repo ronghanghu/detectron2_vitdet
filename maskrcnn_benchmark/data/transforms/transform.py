@@ -19,6 +19,10 @@ class TransformAugmentorBase(ImageAugmentor):
     It assumes that :meth:`_get_augment_params` should
     return a :class:`ImageTransform` instance, and it will use
     this instance to augment both image and coordinates.
+    In this way, augmentors that uses the same deterministic transform with
+    different parameters (e.g., CenterCrop vs RandomCrop) can
+    have their own code to instantiate the transform,
+    but share the code for the actual deterministic transform.
     """
 
     def _augment(self, img, t):
@@ -74,6 +78,10 @@ class ResizeTransform(ImageTransform):
 
 class CropTransform(ImageTransform):
     def __init__(self, h0, w0, h, w):
+        """
+        Args:
+           will crop by img[h0:h0+h, w0:w0+w]
+        """
         super(CropTransform, self).__init__()
         self._init(locals())
 
