@@ -240,8 +240,9 @@ _C.SOLVER.IMS_PER_BATCH = 16
 # Specific test options
 # ---------------------------------------------------------------------------- #
 _C.TEST = CN()
+# For end-to-end tests to verify the expected accuracy. Each item is [task, metric, value, tolerance]
+# e.g.: [['bbox', 'AP', 38.5, 0.2]]
 _C.TEST.EXPECTED_RESULTS = []
-_C.TEST.EXPECTED_RESULTS_SIGMA_TOL = 4
 # Number of images per batch
 # This is global, so if we have 8 GPUs and IMS_PER_BATCH = 16, each GPU will
 # see 2 images per batch

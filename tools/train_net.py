@@ -21,10 +21,12 @@ from maskrcnn_benchmark.detection import (
     DetectionCheckpointer,
     build_detection_model,
     coco_evaluation,
+    print_copypaste_format,
     get_cfg,
     make_detection_data_loader,
     make_lr_scheduler,
     make_optimizer,
+    verify_results
 )
 from maskrcnn_benchmark.engine.launch import launch
 from maskrcnn_benchmark.utils.collect_env import collect_env_info
@@ -51,7 +53,16 @@ class PeriodicCheckpointer(object):
             self.checkpointer.save("model_final", iteration=iteration)
 
 
-def do_test(cfg, model):
+def do_test(cfg, model, is_final=True):
+    """
+    Args:
+        is_final (bool): if True, will print results in a copy-paste friendly
+            format and will run verification.
+
+    Returns:
+        list[result]: only on the main process, result for each DATASETS.TEST. Each result is a dict of
+            dict. result[task][metric] is a float.
+    """
     if isinstance(model, DistributedDataParallel):
         model = model.module
     torch.cuda.empty_cache()  # TODO check if it helps
@@ -68,16 +79,27 @@ def do_test(cfg, model):
     data_loaders_val = make_detection_data_loader(
         cfg, is_train=False, is_distributed=comm.get_world_size() > 1
     )
+
+    results = []
     for output_folder, data_loader_val in zip(output_folders, data_loaders_val):
-        coco_evaluation(
+        results_per_dataset = coco_evaluation(
             model,
             data_loader_val,
             iou_types=iou_types,
             box_only=cfg.MODEL.RPN_ONLY,
             output_folder=output_folder,
         )
+        if comm.is_main_process():
+            results.append(results_per_dataset[0])
+            if is_final:
+                print_copypaste_format(results_per_dataset[0])
         comm.synchronize()
     model.train()  # model is set to eval mode by `coco_evaluation`
+
+    if is_final and cfg.TEST.EXPECTED_RESULTS and comm.is_main_process():
+        assert len(results) == 1, "Results verification only supports one dataset!"
+        verify_results(cfg, results[0])
+    return results
 
 
 def do_train(cfg, model):
@@ -134,7 +156,7 @@ def do_train(cfg, model):
             eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
 
         if cfg.TEST.EVAL_PERIOD > 0 and iteration % cfg.TEST.EVAL_PERIOD == 0:
-            do_test(cfg, model)
+            do_test(cfg, model, is_final=False)
 
         # TODO Move logging logic to a centralized system (https://github.com/fairinternal/detectron2/issues/9)
         if iteration % 20 == 0 or iteration == max_iter:

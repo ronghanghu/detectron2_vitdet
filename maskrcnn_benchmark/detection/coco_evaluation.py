@@ -84,6 +84,13 @@ def compute_on_dataset(model, data_loader):
 
 
 def prepare_for_coco_evaluation(predictions):
+    """
+    Args:
+        predictions (list[dict]): the same format as returned by `compute_on_dataset`.
+
+    Returns:
+        list[dict]: the format used by COCO evaluation.
+    """
 
     coco_results = []
     for roidb in tqdm(predictions):
@@ -282,14 +289,28 @@ class COCOResults(object):
         res = self.results[iou_type]
         metrics = COCOResults.METRICS[iou_type]
         for idx, metric in enumerate(metrics):
-            res[metric] = s[idx]
+            res[metric] = s[idx] * 100  # x100 makes numbers more readable
 
     def __repr__(self):
         # TODO make it pretty
         return repr(self.results)
 
 
-def coco_evaluation(model, data_loader, iou_types=("bbox",), box_only=False, output_folder=None):
+def coco_evaluation(
+        model,
+        data_loader,
+        iou_types=("bbox",),
+        box_only=False,
+        output_folder=None):
+    """
+    This function returns nothing on non-master processes (but still needs to be called).
+    On master process, it returns the following:
+
+    Returns:
+       dict of dict: results[task][metric] is a float.
+       list[dict]: one for each image, contains the outputs from the model.
+       list[dict]: one for each instance, in the COCO evaluation format.
+    """
     num_devices = torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
     logger = logging.getLogger(__name__)
     dataset = data_loader.dataset
@@ -316,6 +337,7 @@ def coco_evaluation(model, data_loader, iou_types=("bbox",), box_only=False, out
     if output_folder:
         torch.save(predictions, os.path.join(output_folder, "predictions.pth"))
 
+    # TODO(yuxin) test this codepath
     if box_only:
         logger.info("Evaluating bbox proposals")
         areas = {"all": "", "small": "s", "medium": "m", "large": "l"}
@@ -341,6 +363,9 @@ def coco_evaluation(model, data_loader, iou_types=("bbox",), box_only=False, out
             json.dump(coco_results, f)
 
     results = COCOResults(*iou_types)
+    if len(coco_results) == 0:
+        return results.results, coco_results, predictions
+
     logger.info("Evaluating predictions")
     for iou_type in iou_types:
         res = evaluate_predictions_on_coco(
@@ -353,7 +378,6 @@ def coco_evaluation(model, data_loader, iou_types=("bbox",), box_only=False, out
         results.update(res)
     results = results.results  # get the OrderedDict from COCOResults
     logger.info(results)
-    print_copypaste_format(results)
     if output_folder:
         torch.save(results, os.path.join(output_folder, "coco_results.pth"))
 
@@ -363,6 +387,7 @@ def coco_evaluation(model, data_loader, iou_types=("bbox",), box_only=False, out
 def print_copypaste_format(results):
     """
     Print results in a format that's easy to copypaste to excel.
+
     Args:
         results: OrderedDict
     """
