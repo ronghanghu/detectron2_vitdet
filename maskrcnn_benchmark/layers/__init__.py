@@ -1,15 +1,11 @@
 from .batch_norm import FrozenBatchNorm2d
-from .misc import Conv2d
-from .misc import ConvTranspose2d
-from .misc import interpolate
-from .misc import cat
+from .misc import Conv2d, ConvTranspose2d, cat, interpolate
 from .nms import nms
-from .roi_align import ROIAlign
-from .roi_align import roi_align
-from .roi_pool import ROIPool
-from .roi_pool import roi_pool
-from .smooth_l1_loss import smooth_l1_loss
 from .resnet import *
+from .roi_align import ROIAlign, roi_align
+from .roi_pool import ROIPool, roi_pool
+from .smooth_l1_loss import smooth_l1_loss
+
 
 __all__ = [
     "nms",

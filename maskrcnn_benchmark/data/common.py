@@ -1,9 +1,8 @@
 import bisect
 
 import torch.utils.data as data
-from PIL import Image
-
 from maskrcnn_benchmark.structures.bounding_box import BoxList
+from PIL import Image
 
 
 class ConcatDataset(data.dataset.ConcatDataset):

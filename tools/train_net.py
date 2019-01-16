@@ -13,20 +13,18 @@ import logging
 import os
 import time
 
-import torch
-from torch.nn.parallel import DistributedDataParallel
-
 import maskrcnn_benchmark.utils.comm as comm
+import torch
 from maskrcnn_benchmark.detection import (
     DetectionCheckpointer,
     build_detection_model,
     coco_evaluation,
-    print_copypaste_format,
     get_cfg,
     make_detection_data_loader,
     make_lr_scheduler,
     make_optimizer,
-    verify_results
+    print_copypaste_format,
+    verify_results,
 )
 from maskrcnn_benchmark.engine.launch import launch
 from maskrcnn_benchmark.utils.collect_env import collect_env_info
@@ -34,6 +32,7 @@ from maskrcnn_benchmark.utils.comm import reduce_dict
 from maskrcnn_benchmark.utils.logger import setup_logger
 from maskrcnn_benchmark.utils.metric_logger import MetricLogger
 from maskrcnn_benchmark.utils.miscellaneous import mkdir
+from torch.nn.parallel import DistributedDataParallel
 
 
 class PeriodicCheckpointer(object):

@@ -1,5 +1,6 @@
-from .defaults import _C
 from maskrcnn_benchmark.utils.config import CfgNode
+
+from .defaults import _C
 
 
 def get_cfg():

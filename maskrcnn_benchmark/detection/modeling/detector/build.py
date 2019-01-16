@@ -1,5 +1,6 @@
 from .generalized_rcnn import GeneralizedRCNN
 
+
 _DETECTION_META_ARCHITECTURES = {"GeneralizedRCNN": GeneralizedRCNN}
 
 

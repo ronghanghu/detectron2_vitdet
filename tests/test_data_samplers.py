@@ -2,9 +2,8 @@ import itertools
 import random
 import unittest
 
-from torch.utils.data.sampler import BatchSampler, RandomSampler, Sampler, SequentialSampler
-
 from maskrcnn_benchmark.data.samplers import GroupedBatchSampler, IterationBasedBatchSampler
+from torch.utils.data.sampler import BatchSampler, RandomSampler, Sampler, SequentialSampler
 
 
 class SubsetSampler(Sampler):

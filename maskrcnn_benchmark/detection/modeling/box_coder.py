@@ -2,6 +2,7 @@ import math
 
 import torch
 
+
 _DEFAULT_CLIP = math.log(1000.0 / 16)
 
 

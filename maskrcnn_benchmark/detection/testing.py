@@ -1,6 +1,6 @@
-import sys
-import pprint
 import logging
+import pprint
+import sys
 
 
 def verify_results(cfg, results):

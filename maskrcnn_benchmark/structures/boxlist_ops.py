@@ -1,5 +1,4 @@
 import torch
-
 from maskrcnn_benchmark.layers import nms as _box_nms
 
 from .bounding_box import BoxList

@@ -10,14 +10,13 @@ from collections import OrderedDict
 import numpy as np
 import pycocotools.mask as mask_util
 import torch
-from PIL import Image
-from pycocotools.cocoeval import COCOeval
-from tqdm import tqdm
-
 from maskrcnn_benchmark.data.datasets import COCOMeta
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 from maskrcnn_benchmark.utils.comm import is_main_process, scatter_gather, synchronize
+from PIL import Image
+from pycocotools.cocoeval import COCOeval
+from tqdm import tqdm
 
 from .modeling.roi_heads.paste_mask import Masker  # TODO move inside models
 
@@ -296,12 +295,7 @@ class COCOResults(object):
         return repr(self.results)
 
 
-def coco_evaluation(
-        model,
-        data_loader,
-        iou_types=("bbox",),
-        box_only=False,
-        output_folder=None):
+def coco_evaluation(model, data_loader, iou_types=("bbox",), box_only=False, output_folder=None):
     """
     This function returns nothing on non-master processes (but still needs to be called).
     On master process, it returns the following:

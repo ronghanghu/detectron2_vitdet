@@ -1,8 +1,7 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 import torch
-from torch import nn
-
 from maskrcnn_benchmark.layers import ROIAlign, cat
+from torch import nn
 
 
 class LevelMapper(object):

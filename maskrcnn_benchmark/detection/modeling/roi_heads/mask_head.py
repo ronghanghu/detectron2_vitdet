@@ -1,8 +1,7 @@
 import torch
+from maskrcnn_benchmark.layers import Conv2d, ConvTranspose2d, cat
 from torch import nn
 from torch.nn import functional as F
-
-from maskrcnn_benchmark.layers import Conv2d, ConvTranspose2d, cat
 
 
 def project_masks_on_boxes(segmentation_masks, proposals, discretization_size):

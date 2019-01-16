@@ -3,9 +3,7 @@ import copy
 import logging
 
 import torch.utils.data
-
-from maskrcnn_benchmark.data import datasets as D
-from maskrcnn_benchmark.data import ConcatDataset, MapDataset, samplers
+from maskrcnn_benchmark.data import ConcatDataset, MapDataset, datasets as D, samplers
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.image_list import to_image_list
 from maskrcnn_benchmark.structures.segmentation_mask import SegmentationList

@@ -8,6 +8,7 @@ from PIL import Image
 
 from .base import ImageAugmentor
 
+
 __all__ = []
 
 

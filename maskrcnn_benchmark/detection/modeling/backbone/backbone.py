@@ -2,8 +2,7 @@ from collections import OrderedDict
 
 from torch import nn
 
-from . import fpn as fpn_module
-from . import resnet
+from . import fpn as fpn_module, resnet
 
 
 def build_resnet_backbone(cfg):

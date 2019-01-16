@@ -1,8 +1,7 @@
 import torch
 import torch.nn.functional as F
-from torch import nn
-
 from maskrcnn_benchmark.structures.boxlist_ops import cat_boxlist
+from torch import nn
 
 from ..box_coder import BoxCoder
 from .anchor_generator import make_anchor_generator

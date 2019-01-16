@@ -1,7 +1,7 @@
 import os
 
-from yacs.config import CfgNode as _CfgNode
-from yacs.config import load_cfg
+from yacs.config import CfgNode as _CfgNode, load_cfg
+
 
 RESERVED_KEY = "_BASE_"
 

@@ -1,5 +1,4 @@
 import torch
-
 from maskrcnn_benchmark.solver import WarmupMultiStepLR
 
 

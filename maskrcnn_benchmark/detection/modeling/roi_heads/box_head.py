@@ -1,11 +1,10 @@
 import numpy as np
 import torch
-from torch import nn
-from torch.nn import functional as F
-
 from maskrcnn_benchmark.layers import cat, smooth_l1_loss
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_nms, cat_boxlist
+from torch import nn
+from torch.nn import functional as F
 
 
 def fastrcnn_losses(labels, regression_targets, class_logits, regression_outputs):

@@ -1,9 +1,8 @@
 from copy import deepcopy
 
 import numpy as np
-from PIL import Image
-
 from maskrcnn_benchmark.data.transforms import AugmentorList, Flip, Normalize, ResizeShortestEdge
+from PIL import Image
 
 
 # TODO this should be more accessible to users and be customizable

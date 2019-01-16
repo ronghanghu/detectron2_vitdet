@@ -7,6 +7,7 @@ from torch.nn import BatchNorm2d
 
 from . import Conv2d, FrozenBatchNorm2d
 
+
 __all__ = ["ResNetBlockBase", "BottleneckBlock", "BasicStem", "ResNet", "make_stage"]
 
 

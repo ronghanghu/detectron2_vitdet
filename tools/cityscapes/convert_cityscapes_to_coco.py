@@ -8,9 +8,8 @@ import json
 import os
 import sys
 
-import numpy as np
-
 import instances2dict_with_polygons as cs
+import numpy as np
 
 
 def parse_args():

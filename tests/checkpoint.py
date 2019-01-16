@@ -4,10 +4,9 @@ from collections import OrderedDict
 from tempfile import TemporaryDirectory
 
 import torch
-from torch import nn
-
 from maskrcnn_benchmark.utils.checkpoint import Checkpointer
 from maskrcnn_benchmark.utils.model_serialization import load_state_dict
+from torch import nn
 
 
 class TestCheckpointer(unittest.TestCase):
