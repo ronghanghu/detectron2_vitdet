@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
-# File: misc.py
+# File: transformers.py
 
 from PIL import Image
 
-from .base import ImageAugmentor
-from .transform import ResizeTransform, TransformAugmentorBase
+from .base import ImageTransformer
+from .transform import ResizeTransform
 
 
 __all__ = ["Flip", "Resize", "ResizeShortestEdge", "Normalize"]
 
 
-class Flip(ImageAugmentor):
+class Flip(ImageTransformer):
     """
     Random flip the image either horizontally or vertically.
     """
@@ -29,12 +29,12 @@ class Flip(ImageAugmentor):
             raise ValueError("At least one of horiz or vert has to be True!")
         self._init(locals())
 
-    def _get_augment_params(self, img):
+    def _get_transform_params(self, img):
         h, w = img.shape[:2]
         do = self._rand_range() < self.prob
         return (do, h, w)
 
-    def _augment(self, img, param):
+    def _transform_image(self, img, param):
         do, _, _ = param
         if do:
             if self.horiz:
@@ -45,7 +45,7 @@ class Flip(ImageAugmentor):
             ret = img
         return ret
 
-    def _augment_coords(self, coords, param):
+    def _transform_coords(self, coords, param):
         do, h, w = param
         if do:
             if self.vert:
@@ -55,7 +55,7 @@ class Flip(ImageAugmentor):
         return coords
 
 
-class Resize(TransformAugmentorBase):
+class Resize(ImageTransformer):
     """ Resize image to a target size"""
 
     def __init__(self, shape, interp=Image.BILINEAR):
@@ -69,13 +69,19 @@ class Resize(TransformAugmentorBase):
         shape = tuple(shape)
         self._init(locals())
 
-    def _get_augment_params(self, img):
+    def _get_transform_params(self, img):
         return ResizeTransform(
             img.shape[0], img.shape[1], self.shape[0], self.shape[1], self.interp
         )
 
+    def _transform_image(self, img, t):
+        return t.apply_image(img)
 
-class ResizeShortestEdge(TransformAugmentorBase):
+    def _transform_coords(self, coords, t):
+        return t.apply_coords(coords)
+
+
+class ResizeShortestEdge(ImageTransformer):
     """
     Try resizing the shortest edge to a certain number
     while avoiding the longest edge to exceed max_size.
@@ -96,7 +102,7 @@ class ResizeShortestEdge(TransformAugmentorBase):
             short_edge_length = (short_edge_length, short_edge_length)
         self._init(locals())
 
-    def _get_augment_params(self, img):
+    def _get_transform_params(self, img):
         h, w = img.shape[:2]
 
         if self.is_range:
@@ -117,12 +123,18 @@ class ResizeShortestEdge(TransformAugmentorBase):
         newh = int(newh + 0.5)
         return ResizeTransform(h, w, newh, neww, self.interp)
 
+    def _transform_image(self, img, t):
+        return t.apply_image(img)
 
-class Normalize(ImageAugmentor):
+    def _transform_coords(self, coords, t):
+        return t.apply_coords(coords)
+
+
+class Normalize(ImageTransformer):
     def __init__(self, mean, std):
         super(Normalize, self).__init__()
         self._init(locals())
 
-    def _augment(self, img, _):
+    def _transform_image(self, img, _):
         img = (img - self.mean).astype("float32") / self.std
         return img

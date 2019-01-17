@@ -6,42 +6,12 @@ from abc import ABCMeta, abstractmethod
 import numpy as np
 from PIL import Image
 
-from .base import ImageAugmentor
-
-
 __all__ = []
-
-
-class TransformAugmentorBase(ImageAugmentor):
-    """
-    Base class of augmentors which use :class:`ImageTransform`
-    for the actual implementation of the transformations.
-
-    It assumes that :meth:`_get_augment_params` should
-    return a :class:`ImageTransform` instance, and it will use
-    this instance to augment both image and coordinates.
-    In this way, augmentors that uses the same deterministic transform with
-    different parameters (e.g., CenterCrop vs RandomCrop) can
-    have their own code to instantiate the transform,
-    but share the code for the actual deterministic transform.
-    """
-
-    def _augment(self, img, t):
-        return t.apply_image(img)
-
-    def _augment_coords(self, coords, t):
-        return t.apply_coords(coords)
 
 
 class ImageTransform(metaclass=ABCMeta):
     """
-    A deterministic image transformation, used to implement
-    the (probably random) augmentors.
-
-    This way the deterministic part
-    (the actual transformation which may be common between augmentors)
-    can be separated from the random part
-    (the random policy which is different between augmentors).
+    Base class for image transformation ops.
     """
 
     def _init(self, params=None):

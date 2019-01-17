@@ -1,3 +1,3 @@
-from .augmentors import *
 from .base import *
+from .transformer import *
 from .transform import *

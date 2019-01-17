@@ -8,23 +8,23 @@ from abc import ABCMeta, abstractmethod
 
 import numpy as np
 
-
-__all__ = ["ImageAugmentor", "AugmentorList"]
+__all__ = ["ImageTransformer", "ImageTransformers"]
 
 
 def check_dtype(img):
-    assert isinstance(img, np.ndarray), "[Augmentor] Needs an numpy array, but got a {}!".format(
+    assert isinstance(img, np.ndarray), "[Transformer] Needs an numpy array, but got a {}!".format(
         type(img)
     )
     assert not isinstance(img.dtype, np.integer) or (
         img.dtype == np.uint8
-    ), "[Augmentor] Got image of type {}, use uint8 or floating points instead!".format(img.dtype)
+    ), "[Transformer] Got image of type {}, use uint8 or floating points instead!".format(img.dtype)
 
 
-class ImageAugmentor(metaclass=ABCMeta):
+class ImageTransformer(metaclass=ABCMeta):
     """
-    ImageAugmentor should take images of type uint8 in range [0, 255], or
-    floating point images in range [0, 1] or [0, 255].
+    ImageTransformer takes an image of type uint8 in range [0, 255], or
+    floating point in range [0, 1] or [0, 255], as input and applies
+    ImageTransform ops on the image.
     """
 
     def __init__(self):
@@ -42,95 +42,95 @@ class ImageAugmentor(metaclass=ABCMeta):
         # self.rng = get_rng(self)
         self.rng = np.random.RandomState()
 
-    def augment(self, d):
+    def transform_image(self, img):
         """
-        Perform augmentation on the data.
+        Transform the input image.
 
         Args:
-            d: input data
+            img: input image
 
         Returns:
-            augmented data
+            transformed image
         """
-        d, params = self._augment_return_params(d)
-        return d
+        img, params = self._transform_image_get_params(img)
+        return img
 
-    def augment_return_params(self, d):
+    def transform_image_get_params(self, img):
         """
-        Augment the data and return the augmentation parameters.
-        If the augmentation is non-deterministic (random),
-        the returned parameters can be used to augment another data
-        with the identical transformation (using `augment_with_params`, `augment_coords`).
-        This can be used for, e.g. augmenting image, masks, keypoints altogether with the
+        Transform the image and return the transformation parameters.
+        If the transformation is non-deterministic (random),
+        the returned parameters can be used to transform another image
+        with the identical transformation (using `transform_with_params`, `transform_coords`).
+        This can be used for, e.g. transforming image, masks, keypoints altogether with the
         same transformation.
 
         Args:
-            d: input data
+            img: input image
 
         Returns:
-            (augmented data, augmentation params)
+            (transformed image, transformation params)
         """
-        return self._augment_return_params(d)
+        return self._transform_image_get_params(img)
 
-    def _augment_return_params(self, d):
+    def _transform_image_get_params(self, img):
         """
-        Augment the image and return both image and params
+        Transform the image and return both image and params
 
         Can be overwritten by subclasses
         """
-        prms = self._get_augment_params(d)
-        return (self._augment(d, prms), prms)
+        prms = self._get_transform_params(img)
+        return (self._transform_image(img, prms), prms)
 
-    def augment_with_params(self, d, param):
+    def transform_image_with_params(self, img, param):
         """
-        Augment the data with the given param.
+        Transform the image with the given param.
 
         Args:
-            d: input data
-            param: augmentation params returned by :meth:`augment_return_params`
+            img: input image
+            param: transformation params returned by :meth:`transform_return_params`
 
         Returns:
-            augmented data
+            transformed image
         """
-        return self._augment(d, param)
+        return self._transform_image(img, param)
 
     @abstractmethod
-    def _augment(self, d, param):
+    def _transform_image(self, img, param):
         """
-        Augment with the given param and return the new data.
-        The augmentor is allowed to modify data in-place.
+        Transform with the given param and return the new image.
+        The transformer is allowed to modify image in-place.
 
         Should be overwritten by subclasses
         """
 
-    def _get_augment_params(self, d):
+    def _get_transform_params(self, img):
         """
-        Get the augmentor parameters.
+        Get the transformer parameters.
 
         Can be overwritten by subclasses.
         """
         return None
 
-    def augment_coords(self, coords, param):
+    def transform_coords(self, coords, param):
         """
-        Augment the coordinates given the param.
+        Transform the coordinates given the param.
 
-        By default, an augmentor keeps coordinates unchanged.
-        If a subclass of :class:`ImageAugmentor` changes coordinates but couldn't implement this method,
+        By default, a transformer keeps coordinates unchanged.
+        If a subclass of :class:`ImageTransformer` changes coordinates but couldn't implement this method,
         it should ``raise NotImplementedError()``.
 
         Args:
             coords: Nx2 floating point numpy array where each row is (x, y)
-            param: augmentation params returned by :meth:`augment_return_params`
+            param: transformation params returned by :meth:`transform_return_params`
 
         Returns:
             new coords
         """
-        return self._augment_coords(coords, param)
+        return self._transform_coords(coords, param)
 
-    def _augment_coords(self, coords, param):
+    def _transform_coords(self, coords, param):
         """
-        Should be overwritten by subclasses if the augmentor changes coordinates.
+        Should be overwritten by subclasses if the transformer changes coordinates.
         """
         return coords
 
@@ -147,7 +147,7 @@ class ImageAugmentor(metaclass=ABCMeta):
     def __repr__(self):
         """
         Produce something like:
-        "MyAugmentor(field1={self.field1}, field2={self.field2})"
+        "MyTransformer(field1={self.field1}, field2={self.field2})"
         """
         try:
             argspec = inspect.getargspec(self.__init__)
@@ -172,53 +172,54 @@ class ImageAugmentor(metaclass=ABCMeta):
                 argstr.append("{}={}".format(f, pprint.pformat(attr)))
             return "{}({})".format(classname, ", ".join(argstr))
         except AssertionError:
-            return super(ImageAugmentor, self).__repr__()
+            return super(ImageTransformer, self).__repr__()
 
     __str__ = __repr__
 
 
-class AugmentorList(ImageAugmentor):
+class ImageTransformers(ImageTransformer):
     """
-    Augment an image by a list of augmentors
+    Applies a list of ImageTransformers on the input image.
     """
 
-    def __init__(self, augmentors):
+    def __init__(self, transformers):
         """
         Args:
-            augmentors (list): list of :class:`ImageAugmentor` instance to be applied.
+            transformers (list): list of :class:`ImageTransformer` instance to
+            be applied.
         """
-        self.augmentors = augmentors
-        super(AugmentorList, self).__init__()
+        self.transformers = transformers
+        super(ImageTransformers, self).__init__()
 
-    def _get_augment_params(self, img):
-        # the next augmentor requires the previous one to finish
+    def _get_transform_params(self, img):
+        # the next transformer requires the previous one to finish
         raise RuntimeError(
-            "Cannot simply get all parameters of a AugmentorList without running the augmentation!"
+            "Cannot simply get all parameters of a ImageTransformers without running the transformation!"
         )
 
-    def _augment_return_params(self, img):
+    def _transform_image_get_params(self, img):
         check_dtype(img)
         assert img.ndim in [2, 3], img.ndim
 
         prms = []
-        for a in self.augmentors:
-            img, prm = a._augment_return_params(img)
+        for a in self.transformers:
+            img, prm = a._transform_image_get_params(img)
             prms.append(prm)
         return img, prms
 
-    def _augment(self, img, param):
+    def _transform_image(self, img, param):
         check_dtype(img)
         assert img.ndim in [2, 3], img.ndim
-        for aug, prm in zip(self.augmentors, param):
-            img = aug._augment(img, prm)
+        for tfm, prm in zip(self.transformers, param):
+            img = tfm._transform_image(img, prm)
         return img
 
-    def _augment_coords(self, coords, param):
-        for aug, prm in zip(self.augmentors, param):
-            coords = aug._augment_coords(coords, prm)
+    def _transform_coords(self, coords, param):
+        for tfm, prm in zip(self.transformers, param):
+            coords = tfm._transform_coords(coords, prm)
         return coords
 
     def reset_state(self):
-        """ Will reset state of each augmentor """
-        for a in self.augmentors:
+        """ Will reset state of each transformer """
+        for a in self.transformers:
             a.reset_state()
