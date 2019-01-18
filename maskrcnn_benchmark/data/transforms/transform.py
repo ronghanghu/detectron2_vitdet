@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 # File: transform.py
 
-from abc import ABCMeta, abstractmethod
-
 import numpy as np
+from abc import ABCMeta, abstractmethod
 from PIL import Image
+
 
 __all__ = []
 

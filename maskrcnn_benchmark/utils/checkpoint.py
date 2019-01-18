@@ -1,8 +1,8 @@
 import logging
 import os
+import torch
 
 import maskrcnn_benchmark.utils.comm as comm
-import torch
 from maskrcnn_benchmark.utils.model_serialization import load_state_dict
 from maskrcnn_benchmark.utils.model_zoo import cache_url
 

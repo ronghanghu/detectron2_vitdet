@@ -4,12 +4,10 @@
 # This files is created according to https://github.com/facebookresearch/Detectron/issues/111
 
 from __future__ import absolute_import, division, print_function
-
+import numpy as np
 import os
 import sys
-
 import cv2
-import numpy as np
 
 # Cityscapes imports
 from cityscapesscripts.evaluation.instance import Instance

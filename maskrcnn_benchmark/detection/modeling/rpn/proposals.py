@@ -1,4 +1,5 @@
 import torch
+
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_nms, cat_boxlist, remove_small_boxes
 

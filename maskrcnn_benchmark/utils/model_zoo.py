@@ -1,8 +1,8 @@
 import os
 import sys
+from torch.utils.model_zoo import HASH_REGEX, _download_url_to_file, urlparse
 
 from maskrcnn_benchmark.utils.comm import is_main_process, synchronize
-from torch.utils.model_zoo import HASH_REGEX, _download_url_to_file, urlparse
 
 
 # very similar to https://github.com/pytorch/pytorch/blob/master/torch/utils/model_zoo.py

@@ -1,7 +1,8 @@
 import torch
+from torch.nn import functional as F
+
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
-from torch.nn import functional as F
 
 from ..backbone import resnet
 from ..balanced_positive_negative_sampler import sample_with_positive_fraction

@@ -3,10 +3,10 @@
 
 
 import inspect
+import numpy as np
 import pprint
 from abc import ABCMeta, abstractmethod
 
-import numpy as np
 
 __all__ = ["ImageTransformer", "ImageTransformers"]
 

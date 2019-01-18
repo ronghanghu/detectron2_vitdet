@@ -9,7 +9,6 @@ is implemented
 """
 
 import math
-
 import torch
 from torch.nn.modules.utils import _ntuple
 

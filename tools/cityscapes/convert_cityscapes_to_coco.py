@@ -2,14 +2,12 @@
 # With inline utility functions to prevent dependence on the Detectron repo
 
 from __future__ import absolute_import, division, print_function, unicode_literals
-
 import argparse
 import json
+import numpy as np
 import os
 import sys
-
 import instances2dict_with_polygons as cs
-import numpy as np
 
 
 def parse_args():

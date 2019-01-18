@@ -2,21 +2,21 @@ import datetime
 import itertools
 import json
 import logging
+import numpy as np
 import os
 import tempfile
 import time
 from collections import OrderedDict
-
-import numpy as np
 import pycocotools.mask as mask_util
 import torch
+from PIL import Image
+from pycocotools.cocoeval import COCOeval
+from tqdm import tqdm
+
 from maskrcnn_benchmark.data.datasets import COCOMeta
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 from maskrcnn_benchmark.utils.comm import is_main_process, scatter_gather, synchronize
-from PIL import Image
-from pycocotools.cocoeval import COCOeval
-from tqdm import tqdm
 
 from .modeling.roi_heads.paste_mask import Masker  # TODO move inside models
 

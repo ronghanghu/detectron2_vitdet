@@ -1,5 +1,4 @@
 import itertools
-
 import torch
 from torch.utils.data.sampler import BatchSampler, Sampler
 

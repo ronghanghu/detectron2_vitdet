@@ -5,9 +5,10 @@ file
 
 import numpy as np
 import torch
+from torch.nn import functional as F
+
 from maskrcnn_benchmark.layers import smooth_l1_loss
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou, cat_boxlist
-from torch.nn import functional as F
 
 from ..balanced_positive_negative_sampler import sample_with_positive_fraction
 from ..matcher import Matcher

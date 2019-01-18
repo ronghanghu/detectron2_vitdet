@@ -1,5 +1,4 @@
 from collections import OrderedDict
-
 from torch import nn
 
 from . import fpn as fpn_module, resnet

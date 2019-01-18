@@ -1,5 +1,4 @@
 from bisect import bisect_right
-
 import torch
 
 

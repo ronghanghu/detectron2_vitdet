@@ -1,8 +1,13 @@
-from copy import deepcopy
-
 import numpy as np
-from maskrcnn_benchmark.data.transforms import ImageTransformers, Flip, Normalize, ResizeShortestEdge
+from copy import deepcopy
 from PIL import Image
+
+from maskrcnn_benchmark.data.transforms import (
+    Flip,
+    ImageTransformers,
+    Normalize,
+    ResizeShortestEdge,
+)
 
 
 # TODO this should be more accessible to users and be customizable
