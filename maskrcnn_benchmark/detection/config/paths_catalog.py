@@ -65,13 +65,13 @@ class ModelCatalog(object):
     @staticmethod
     def get(name):
         if name.startswith("Caffe2Detectron/COCO"):
-            return ModelCatalog.get_c2_detectron_12_2017_baselines(name)
+            return ModelCatalog._get_c2_detectron_12_2017_baselines(name)
         if name.startswith("ImageNetPretrained"):
-            return ModelCatalog.get_c2_imagenet_pretrained(name)
+            return ModelCatalog._get_c2_imagenet_pretrained(name)
         raise RuntimeError("model not present in the catalog {}".format(name))
 
     @staticmethod
-    def get_c2_imagenet_pretrained(name):
+    def _get_c2_imagenet_pretrained(name):
         prefix = ModelCatalog.S3_C2_DETECTRON_URL
         name = name[len("ImageNetPretrained/") :]
         name = ModelCatalog.C2_IMAGENET_MODELS[name]
@@ -79,7 +79,7 @@ class ModelCatalog(object):
         return url
 
     @staticmethod
-    def get_c2_detectron_12_2017_baselines(name):
+    def _get_c2_detectron_12_2017_baselines(name):
         # Detectron C2 models are stored following the structure
         # prefix/<model_id>/2012_2017_baselines/<model_name>.yaml.<signature>/suffix
         # we use as identifiers in the catalog Caffe2Detectron/COCO/<model_id>/<model_name>
