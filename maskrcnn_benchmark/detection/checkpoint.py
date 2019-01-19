@@ -45,11 +45,11 @@ def _convert_c2_detectron_weights(weights):
         if name.startswith("fpn.inner."):
             # fpn_inner_res2_2_sum_lateral_b
             stage = int(splits[2][-1]) - 1
-            return "fpn_inner{}.{}".format(stage, splits[-1])
+            return "fpn_lateral{}.{}".format(stage, splits[-1])
         elif name.startswith("fpn.res"):
             # fpn_res2_2_sum_b
             stage = int(splits[1][-1]) - 1
-            return "fpn_layer{}.{}".format(stage, splits[-1])
+            return "fpn_output{}.{}".format(stage, splits[-1])
         return name
 
     layer_keys = [fpn_map(k) for k in layer_keys]

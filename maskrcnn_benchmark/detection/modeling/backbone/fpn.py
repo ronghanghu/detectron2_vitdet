@@ -1,64 +1,63 @@
 import torch.nn.functional as F
 from torch import nn
 
+import maskrcnn_benchmark.layers.weight_init as weight_init
+
 
 class FPN(nn.Module):
     """
     Module that adds FPN on top of a list of feature maps.
-    The feature maps are currently supposed to be in increasing depth
-    order, and must be consecutive
     """
 
     def __init__(self, in_channels_list, out_channels, top_block=True):
         """
-        Arguments:
-            in_channels_list (list[int]): number of channels for each feature map that
-                will be fed
-            out_channels (int): number of channels of the FPN representation
-            top_block (bool): if provided, an extra 2x2 max pooling
-                is added on the output of the last (smallest resolution)
+        Args:
+            in_channels_list (list[int]): number of channels for each input feature
+                map in `forward()`.
+            out_channels (int): number of channels in the output feature maps.
+            top_block (bool, optional): if provided, an extra 2x2 max pooling
+                is added on the output of the last (lowest resolution)
                 FPN output, and the result will extend the result list
         """
         super(FPN, self).__init__()
-        self.inner_blocks = []
-        self.layer_blocks = []
+        lateral_convs = []
+        output_convs = []
         for idx, in_channels in enumerate(in_channels_list, 1):
-            inner_block = "fpn_inner{}".format(idx)
-            layer_block = "fpn_layer{}".format(idx)
-            inner_block_module = nn.Conv2d(in_channels, out_channels, 1)
-            layer_block_module = nn.Conv2d(out_channels, out_channels, 3, 1, 1)
-            for module in [inner_block_module, layer_block_module]:
-                # Caffe2 implementation uses XavierFill, which in fact
-                # corresponds to kaiming_uniform_ in PyTorch
-                nn.init.kaiming_uniform_(module.weight, a=1)
-                nn.init.constant_(module.bias, 0)
-            self.add_module(inner_block, inner_block_module)
-            self.add_module(layer_block, layer_block_module)
-            self.inner_blocks.append(inner_block)
-            self.layer_blocks.append(layer_block)
+            lateral_conv = nn.Conv2d(in_channels, out_channels, kernel_size=1)
+            output_conv = nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1)
+            weight_init.c2_xavier_fill(lateral_conv)
+            weight_init.c2_xavier_fill(output_conv)
+            self.add_module("fpn_lateral{}".format(idx), lateral_conv)
+            self.add_module("fpn_output{}".format(idx), output_conv)
+            lateral_convs.append(lateral_conv)
+            output_convs.append(output_conv)
+        # Place convs into top-down order (from low to high resolution)
+        # to make the top-down computation in forward clearer.
+        self.lateral_convs = lateral_convs[::-1]
+        self.output_convs = output_convs[::-1]
         self.top_block = top_block
 
     def forward(self, x):
         """
-        Arguments:
-            x (list[Tensor]): feature maps for each feature level.
+        Args:
+            x (list[Tensor]): feature maps for each feature level in high to low
+                resolution order.
+
         Returns:
-            results (tuple[Tensor]): feature maps after FPN layers.
-                They are ordered from highest resolution first.
+            tuple[Tensor]: feature maps from FPN in high to low resolution order.
         """
-        last_inner = getattr(self, self.inner_blocks[-1])(x[-1])
+        # Reverse feature maps into top-down order (from low to high resolution)
+        x = x[::-1]
         results = []
-        results.append(getattr(self, self.layer_blocks[-1])(last_inner))
-        for feature, inner_block, layer_block in zip(
-            x[:-1][::-1], self.inner_blocks[:-1][::-1], self.layer_blocks[:-1][::-1]
+        prev_features = self.lateral_convs[0](x[0])
+        results.append(self.output_convs[0](prev_features))
+        for features, lateral_conv, output_conv in zip(
+            x[1:], self.lateral_convs[1:], self.output_convs[1:]
         ):
-            inner_top_down = F.interpolate(last_inner, scale_factor=2, mode="nearest")
-            inner_lateral = getattr(self, inner_block)(feature)
-            # TODO use size instead of scale to make it robust to different sizes
-            # inner_top_down = F.upsample(last_inner, size=inner_lateral.shape[-2:],
-            # mode='bilinear', align_corners=False)
-            last_inner = inner_lateral + inner_top_down
-            results.insert(0, getattr(self, layer_block)(last_inner))
+            top_down_features = F.interpolate(prev_features, scale_factor=2, mode="nearest")
+            lateral_features = lateral_conv(features)
+            prev_features = lateral_features + top_down_features
+            results.insert(0, output_conv(prev_features))
 
         if self.top_block:
             last_results = F.max_pool2d(results[-1], 1, 2, 0)

@@ -3,7 +3,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from maskrcnn_benchmark.layers import cat, smooth_l1_loss
+from maskrcnn_benchmark.layers import cat, smooth_l1_loss, weight_init
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_nms, cat_boxlist
 
@@ -235,10 +235,7 @@ class FastRCNN2MLPHead(nn.Module):
         self._output_size = mlp_dim
 
         for l in [self.fc1, self.fc2]:
-            # Caffe2 implementation uses XavierFill, which in fact
-            # corresponds to kaiming_uniform_ in PyTorch
-            nn.init.kaiming_uniform_(l.weight, a=1)
-            nn.init.constant_(l.bias, 0)
+            weight_init.c2_xavier_fill(l)
 
     def forward(self, x):
         x = x.view(x.size(0), -1)
