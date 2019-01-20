@@ -16,7 +16,7 @@ from tqdm import tqdm
 from maskrcnn_benchmark.data.datasets import COCOMeta
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
-from maskrcnn_benchmark.utils.comm import is_main_process, scatter_gather, synchronize
+from maskrcnn_benchmark.utils.comm import is_main_process, all_gather, synchronize
 
 from .modeling.roi_heads.paste_mask import Masker  # TODO move inside models
 
@@ -322,7 +322,7 @@ def coco_evaluation(model, data_loader, iou_types=("bbox",), box_only=False, out
         )
     )
 
-    all_predictions = scatter_gather(predictions)
+    all_predictions = all_gather(predictions)
     if not is_main_process():
         return
     # concat the lists

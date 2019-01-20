@@ -200,7 +200,11 @@ def setup(args):
         mkdir(output_dir)
 
     logger = setup_logger(output_dir, distributed_rank=comm.get_rank())
-    logger.info("Using {} GPUs".format(args.num_gpus))
+    logger.info(
+        "Using {} GPUs per machine. Rank of current process: {}".format(
+            args.num_gpus, comm.get_rank()
+        )
+    )
     logger.info(args)
 
     logger.info("Collecting env info (might take some time)")
@@ -248,7 +252,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PyTorch Object Detection Training")
     parser.add_argument("--config-file", default="", metavar="FILE", help="path to config file")
     parser.add_argument("--eval-only", action="store_true", help="perform evaluation only")
-    parser.add_argument("--num-gpus", type=int, default=1)
+    parser.add_argument("--num-gpus", type=int, default=1, help="number of gpus per machine")
+    parser.add_argument("--num-machines", type=int, default=1)
+    parser.add_argument(
+        "--machine-rank", type=int, default=0, help="the rank of this machine (unique per machine)"
+    )
     parser.add_argument("--dist-url", default="tcp://127.0.0.1:12456")
     parser.add_argument(
         "opts",
@@ -258,4 +266,11 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    launch(main, args.num_gpus, dist_url=args.dist_url, args=(args,))
+    launch(
+        main,
+        args.num_gpus,
+        num_machines=args.num_machines,
+        machine_rank=args.machine_rank,
+        dist_url=args.dist_url,
+        args=(args,),
+    )
