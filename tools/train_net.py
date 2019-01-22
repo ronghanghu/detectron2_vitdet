@@ -257,7 +257,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--machine-rank", type=int, default=0, help="the rank of this machine (unique per machine)"
     )
-    parser.add_argument("--dist-url", default="tcp://127.0.0.1:12456")
+    port = 2**15 + 2**14 + hash(os.getuid()) % 2**14
+    parser.add_argument("--dist-url", default="tcp://127.0.0.1:{}".format(port))
     parser.add_argument(
         "opts",
         help="Modify config options using the command-line",
