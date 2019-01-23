@@ -2,17 +2,19 @@ MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
   BACKBONE:
     USE_FPN: True
-    OUT_CHANNELS: 256
   RESNETS:
     RETURN_FEATURES: ["res2", "res3", "res4", "res5"]
+  FPN:
+    IN_FEATURES: ["res2", "res3", "res4", "res5"]
   RPN:
-    USE_FPN: True
+    IN_FEATURES: ["p2", "p3", "p4", "p5", "p6"]
     PRE_NMS_TOP_N_TRAIN: 2000
     PRE_NMS_TOP_N_TEST: 1000
     POST_NMS_TOP_N_TEST: 1000
     FPN_POST_NMS_TOP_N_TEST: 1000
   ROI_HEADS:
     NAME: "StandardROIHeads"
+    IN_FEATURES: ["p2", "p3", "p4", "p5"]
   ROI_BOX_HEAD:
     NAME: "FastRCNN2MLPHead"
     POOLER_RESOLUTION: 7

@@ -112,15 +112,11 @@ class AnchorGenerator(nn.Module):
 def make_anchor_generator(cfg):
     anchor_sizes = cfg.MODEL.RPN.ANCHOR_SIZES
     aspect_ratios = cfg.MODEL.RPN.ASPECT_RATIOS
-    anchor_stride = cfg.MODEL.BACKBONE.FEATURE_STRIDES
+    feature_strides = dict(
+        zip(cfg.MODEL.BACKBONE.FEATURE_NAMES, cfg.MODEL.BACKBONE.FEATURE_STRIDES)
+    )
+    anchor_stride = [feature_strides[f] for f in cfg.MODEL.RPN.IN_FEATURES]
     straddle_thresh = cfg.MODEL.RPN.STRADDLE_THRESH
-
-    if cfg.MODEL.RPN.USE_FPN:
-        assert len(anchor_stride) == len(
-            anchor_sizes
-        ), "FPN should have len(backbone_features) == len(anchor_sizes)"
-    else:
-        assert len(anchor_stride) == 1, "Non-FPN should have a single backbone feature!"
     anchor_generator = AnchorGenerator(anchor_sizes, aspect_ratios, anchor_stride, straddle_thresh)
     return anchor_generator
 

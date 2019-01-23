@@ -1,3 +1,4 @@
+from .backbone import Backbone
 from .batch_norm import FrozenBatchNorm2d
 from .misc import Conv2d, ConvTranspose2d, cat, interpolate
 from .nms import nms
@@ -24,4 +25,5 @@ __all__ = [
     "BasicStem",
     "ResNet",
     "make_stage",
+    "Backbone",
 ]

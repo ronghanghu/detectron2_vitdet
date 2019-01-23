@@ -74,6 +74,7 @@ _C.DATALOADER.NUM_WORKERS = 4
 # are not batched with portrait images.
 _C.DATALOADER.ASPECT_RATIO_GROUPING = True
 
+
 # ---------------------------------------------------------------------------- #
 # Backbone options
 # ---------------------------------------------------------------------------- #
@@ -82,15 +83,24 @@ _C.MODEL.BACKBONE = CN()
 _C.MODEL.BACKBONE.NAME = "ResNet"
 # Add StopGrad at a specified stage so the bottom layers are frozen
 _C.MODEL.BACKBONE.FREEZE_AT = 2
-_C.MODEL.BACKBONE.OUT_CHANNELS = 256 * 4  # TODO should this be derived?
 _C.MODEL.BACKBONE.USE_FPN = False
+
+
+# ---------------------------------------------------------------------------- #
+# FPN options
+# ---------------------------------------------------------------------------- #
+_C.MODEL.FPN = CN()
+# Names of the input feature maps to be used by FPN
+# They must have contiguous power of 2 strides
+# e.g., ["res2", "res3", "res4", "res5"]
+_C.MODEL.FPN.IN_FEATURES = []
+_C.MODEL.FPN.OUT_CHANNELS = 256
 
 
 # ---------------------------------------------------------------------------- #
 # RPN options
 # ---------------------------------------------------------------------------- #
 _C.MODEL.RPN = CN()
-_C.MODEL.RPN.USE_FPN = False
 # Base RPN anchor sizes given in absolute pixels w.r.t. the scaled network input
 _C.MODEL.RPN.ANCHOR_SIZES = (32, 64, 128, 256, 512)
 # RPN anchor aspect ratios
@@ -126,6 +136,9 @@ _C.MODEL.RPN.MIN_SIZE = 0
 # all FPN levels
 _C.MODEL.RPN.FPN_POST_NMS_TOP_N_TRAIN = 2000
 _C.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST = 2000
+# Names of the input feature maps to be used by RPN
+# e.g., ["p2", "p3", "p4", "p5", "p6"] for FPN
+_C.MODEL.RPN.IN_FEATURES = ["res4"]
 
 
 # ---------------------------------------------------------------------------- #
@@ -134,6 +147,10 @@ _C.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST = 2000
 _C.MODEL.ROI_HEADS = CN()
 _C.MODEL.ROI_HEADS.NAME = "Res5ROIHeads"
 _C.MODEL.ROI_HEADS.NUM_CLASSES = 81
+# Names of the input feature maps to be used by ROI heads
+# Currently all heads (box, mask, ...) use the same input feature map list
+# e.g., ["p2", "p3", "p4", "p5"] is commonly used for FPN
+_C.MODEL.ROI_HEADS.IN_FEATURES = ["res4"]
 # Overlap threshold for an RoI to be considered foreground (if >= FG_IOU_THRESHOLD)
 _C.MODEL.ROI_HEADS.FG_IOU_THRESHOLD = 0.5
 # Overlap threshold for an RoI to be considered background

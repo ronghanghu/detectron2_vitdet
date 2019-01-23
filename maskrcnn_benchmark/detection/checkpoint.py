@@ -44,11 +44,11 @@ def _convert_c2_detectron_weights(weights):
         splits = name.split(".")
         if name.startswith("fpn.inner."):
             # fpn_inner_res2_2_sum_lateral_b
-            stage = int(splits[2][-1]) - 1
+            stage = int(splits[2][-1])
             return "fpn_lateral{}.{}".format(stage, splits[-1])
         elif name.startswith("fpn.res"):
             # fpn_res2_2_sum_b
-            stage = int(splits[1][-1]) - 1
+            stage = int(splits[1][-1])
             return "fpn_output{}.{}".format(stage, splits[-1])
         return name
 

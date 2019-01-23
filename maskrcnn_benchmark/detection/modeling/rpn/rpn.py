@@ -51,7 +51,18 @@ class RPNModule(torch.nn.Module):
 
         self.rpn_cfg = cfg.MODEL.RPN.clone()
         self.rpn_only = cfg.MODEL.RPN_ONLY
-        in_channels = cfg.MODEL.BACKBONE.OUT_CHANNELS
+        self.in_features = cfg.MODEL.RPN.IN_FEATURES
+        feature_channels = dict(
+            zip(cfg.MODEL.BACKBONE.FEATURE_NAMES, cfg.MODEL.BACKBONE.FEATURE_CHANNELS)
+        )
+        # If RPN is applied on multiple feature maps (as in FPN), then we share
+        # the same RPNHead and therefore the channel counts must be the same
+        in_channels = [feature_channels[f] for f in self.in_features]
+        if len(in_channels) > 1:
+            # Check all channel counts are the equal
+            for c in in_channels[1:]:
+                assert c == in_channels[0]
+        in_channels = in_channels[0]
 
         anchor_generator = make_anchor_generator(cfg)
 
@@ -74,6 +85,7 @@ class RPNModule(torch.nn.Module):
                 correspond to different feature levels
             targets (list[BoxList): ground-truth boxes present in the image (optional)
         """
+        features = [features[f] for f in self.in_features]
         num_images = len(images.image_sizes)
         objectness, rpn_box_regression = self.head(features)
         anchors = self.anchor_generator(images, features)

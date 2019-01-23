@@ -10,7 +10,10 @@ class DatasetCatalog(object):
         "coco_2014_train": ("coco/train2014", "coco/annotations/instances_train2014.json"),
         "coco_2014_val": ("coco/val2014", "coco/annotations/instances_val2014.json"),
         "coco_2014_minival": ("coco/val2014", "coco/annotations/instances_minival2014.json"),
-        "coco_2014_minival_100": ("coco/val2014", "coco/annotations/instances_minival2014_100.json"),
+        "coco_2014_minival_100": (
+            "coco/val2014",
+            "coco/annotations/instances_minival2014_100.json",
+        ),
         "coco_2014_valminusminival": (
             "coco/val2014",
             "coco/annotations/instances_valminusminival2014.json",

@@ -14,7 +14,7 @@ from ..rpn.rpn import build_rpn
 
 class GeneralizedRCNN(nn.Module):
     """
-    Main class for generalized r-cnn. Supports boxes, masks and keypoints
+    Main class for Generalized R-CNN. Supports boxes, masks and keypoints
     This is very similar to what we had before, the difference being that now
     we construct the modules in __init__, instead of passing them as arguments
     """
@@ -48,7 +48,7 @@ class GeneralizedRCNN(nn.Module):
         features = self.backbone(images.tensors)
         proposals, proposal_losses = self.rpn(images, features, targets)
         if self.roi_heads:
-            x, result, detector_losses = self.roi_heads(features, proposals, targets)
+            result, detector_losses = self.roi_heads(features, proposals, targets)
         else:
             # RPN-only models don't have roi_heads
             result = proposals

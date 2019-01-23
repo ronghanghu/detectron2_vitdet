@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch import nn
 from torch.nn import BatchNorm2d
 
-from . import Conv2d, FrozenBatchNorm2d
+from . import Backbone, Conv2d, FrozenBatchNorm2d
 
 
 __all__ = ["ResNetBlockBase", "BottleneckBlock", "BasicStem", "ResNet", "make_stage"]
@@ -167,8 +167,16 @@ class BasicStem(nn.Module):
         x = F.max_pool2d(x, kernel_size=3, stride=2, padding=1)
         return x
 
+    @property
+    def out_channels(self):
+        return self.conv1.out_channels
 
-class ResNet(nn.Module):
+    @property
+    def stride(self):
+        return 4  # = stride 2 conv -> stride 2 max pool
+
+
+class ResNet(Backbone):
     def __init__(self, stem, stages, num_classes=None, return_features=None):
         """
         Args:
@@ -185,9 +193,11 @@ class ResNet(nn.Module):
         super(ResNet, self).__init__()
         self.stem = stem
         self.num_classes = num_classes
+        self._size_divisibility = 0
 
-        current_stride = 4  # we assume stem has stride 4
+        current_stride = self.stem.stride
         self._feature_strides = {"stem": current_stride}
+        self._feature_channels = {"stem": self.stem.out_channels}
 
         self.stages_and_names = []
         for i, blocks in enumerate(stages):
@@ -201,6 +211,7 @@ class ResNet(nn.Module):
             self._feature_strides[name] = current_stride = int(
                 current_stride * np.prod([k.stride for k in blocks])
             )
+            self._feature_channels[name] = blocks[-1].out_channels
 
         if num_classes is not None:
             self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
@@ -210,33 +221,24 @@ class ResNet(nn.Module):
 
         if return_features is None:
             return_features = [name]
-        self.return_features = set(return_features)
-        assert len(self.return_features)
+        self._return_features = return_features
+        assert len(self._return_features)
         children = [x[0] for x in self.named_children()]
-        for return_feature in self.return_features:
+        for return_feature in self._return_features:
             assert return_feature in children, "Available children: {}".format(", ".join(children))
 
     def forward(self, x):
-        outputs = []
+        outputs = {}
         x = self.stem(x)
-        if "stem" in self.return_features:
-            outputs.append(x)
+        if "stem" in self._return_features:
+            outputs["stem"] = x
         for stage, name in self.stages_and_names:
             x = stage(x)
-            if name in self.return_features:
-                outputs.append(x)
+            if name in self._return_features:
+                outputs[name] = x
         if self.num_classes is not None:
             x = self.avgpool(x)
             x = self.linear(x)
-            if "linear" in self.return_features:
-                outputs.append(x)
+            if "linear" in self._return_features:
+                outputs["linear"] = x
         return outputs
-
-    @property
-    def feature_strides(self):
-        """
-        Returns a dict containing strides of each featuremap.
-        The key is the name of the featuremap.
-        Could be one of "stem", "res2", ..., "res5".
-        """
-        return self._feature_strides
