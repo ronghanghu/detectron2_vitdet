@@ -46,6 +46,8 @@ def make_resnet_backbone(cfg):
     bottleneck_channels = num_groups * width_per_group
     out_channels = resnet_cfg.RES2_OUT_CHANNELS
     stride_in_1x1 = resnet_cfg.STRIDE_IN_1X1
+    res5_dilation = resnet_cfg.RES5_DILATION
+    assert res5_dilation in {1, 2}
 
     num_blocks_per_stage = {50: [3, 4, 6, 3], 101: [3, 4, 23, 3]}[depth]
 
@@ -56,16 +58,19 @@ def make_resnet_backbone(cfg):
     return_stage_idx = [{"res2": 2, "res3": 3, "res4": 4, "res5": 5}[f] for f in return_features]
     max_stage_idx = max(return_stage_idx)
     for idx, stage_idx in enumerate(range(2, max_stage_idx + 1)):
+        dilation = res5_dilation if stage_idx == 5 else 1
+        first_stride = 1 if idx == 0 or (stage_idx == 5 and dilation == 2) else 2
         blocks = make_stage(
             BottleneckBlock,
             num_blocks_per_stage[idx],
-            first_stride=1 if idx == 0 else 2,
+            first_stride=first_stride,
             in_channels=in_channels,
             bottleneck_channels=bottleneck_channels,
             out_channels=out_channels,
             num_groups=num_groups,
             norm="FrozenBN",
             stride_in_1x1=stride_in_1x1,
+            dilation=dilation,
         )
         in_channels = out_channels
         out_channels *= 2

@@ -1,0 +1,6 @@
+_BASE_: "Base-Dilated-C5.yaml"
+MODEL:
+  WEIGHT: "catalog://ImageNetPretrained/MSRA/R-50"
+  MASK_ON: True
+  RESNETS:
+    DEPTH: 50

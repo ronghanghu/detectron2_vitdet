@@ -57,7 +57,8 @@ class BottleneckBlock(ResNetBlockBase):
         stride=1,
         num_groups=1,
         norm="BN",
-        stride_in_1x1=False
+        stride_in_1x1=False,
+        dilation=1,
     ):
         """
         Args:
@@ -93,9 +94,10 @@ class BottleneckBlock(ResNetBlockBase):
             bottleneck_channels,
             kernel_size=3,
             stride=stride_3x3,
-            padding=1,
+            padding=1 * dilation,
             bias=False,
             groups=num_groups,
+            dilation=dilation,
         )
         self.bn2 = _get_norm(norm, bottleneck_channels)
 
