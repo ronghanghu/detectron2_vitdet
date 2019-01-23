@@ -196,7 +196,6 @@ class Res5ROIHeads(ROIHeads):
         if self.training:
             del features
             losses = outputs.losses()
-
             if self.mask_on:
                 proposals, targets, pos_masks = keep_only_positive_boxes(proposals, targets)
                 # don't need to do feature extraction again,
@@ -292,6 +291,15 @@ class StandardROIHeads(ROIHeads):
 
         if self.training:
             losses = outputs.losses()
+            if self.mask_on:
+                # During training the same proposals used by the box head are used by
+                # the mask head. The loss is only defined on positive proposals.
+                proposals, targets, _ = keep_only_positive_boxes(proposals, targets)
+                mask_features = self.mask_pooler(features, proposals)
+                mask_logits = self.mask_head(mask_features)
+                losses["loss_mask"] = maskrcnn_loss(
+                    proposals, mask_logits, targets, self.mask_discretization_size
+                )
         else:
             losses = {}
             proposals = fastrcnn_inference(
@@ -302,18 +310,12 @@ class StandardROIHeads(ROIHeads):
                 self.test_nms_thresh,
                 self.test_detections_per_img,
             )
-
-        if self.mask_on:
-            if self.training:
-                proposals, targets, _ = keep_only_positive_boxes(proposals, targets)
-            mask_features = self.mask_pooler(features, proposals)
-            mask_logits = self.mask_head(mask_features)
-
-            if self.training:
-                losses["loss_mask"] = maskrcnn_loss(
-                    proposals, mask_logits, targets, self.mask_discretization_size
-                )
-            else:
+            # The name `proposals` is now a misnomer; they are really final detections.
+            if self.mask_on:
+                # During inference cascaded prediction is used: the mask head is only
+                # applied to the top scoring box detections.
+                mask_features = self.mask_pooler(features, proposals)
+                mask_logits = self.mask_head(mask_features)
                 maskrcnn_inference(mask_logits, proposals)
 
         return proposals, losses
