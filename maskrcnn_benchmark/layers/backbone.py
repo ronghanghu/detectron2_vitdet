@@ -53,26 +53,26 @@ class Backbone(nn.Module, metaclass=ABCMeta):
         return self._feature_channels
 
     @property
-    def return_features(self):
+    def out_features(self):
         """
-        List of feature maps names that will be returned by :meth:`forward`.
+        List of output feature maps names that will be returned by :meth:`forward`.
         """
-        return self._return_features
+        return self._out_features
 
     @property
-    def return_feature_strides(self):
+    def out_feature_strides(self):
         """
         Dict containing strides (values) of each named feature map (keys) *returned*
         by the backbone when :meth:`forward` is called. Example keys (depending on
         backbone type): "stem", "res2", ..., "res5".
         """
-        return {f: self._feature_strides[f] for f in self._return_features}
+        return {f: self._feature_strides[f] for f in self._out_features}
 
     @property
-    def return_feature_channels(self):
+    def out_feature_channels(self):
         """
         Dict containing the number of channels (values) in each named feature map
         (keys) *returned* by the backbone when :meth:`forward` is called. Example
         keys (depending on backbone type): "stem", "res2", ..., "res5".
         """
-        return {f: self._feature_channels[f] for f in self._return_features}
+        return {f: self._feature_channels[f] for f in self._out_features}

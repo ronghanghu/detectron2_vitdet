@@ -58,8 +58,8 @@ class FPN(Backbone):
         self._feature_strides = {"p{}".format(int(math.log2(s))): s for s in in_strides}
         if self.top_block:
             self._feature_strides["p{}".format(stage + 1)] = 2 ** (stage + 1)
-        self._return_features = list(self._feature_strides.keys())
-        self._feature_channels = {k: out_channels for k in self._return_features}
+        self._out_features = list(self._feature_strides.keys())
+        self._feature_channels = {k: out_channels for k in self._out_features}
         self._size_divisibility = in_strides[-1]
 
     def forward(self, x):
@@ -91,7 +91,7 @@ class FPN(Backbone):
         if self.top_block:
             results.append(F.max_pool2d(results[-1], kernel_size=1, stride=2, padding=0))
 
-        return dict(zip(self._return_features, results))
+        return dict(zip(self._out_features, results))
 
 
 def _assert_strides_are_log2_contiguous(strides):

@@ -37,7 +37,7 @@ def make_resnet_backbone(cfg):
         for p in stem.parameters():
             p.requires_grad = False
 
-    return_features = resnet_cfg.RETURN_FEATURES
+    out_features = resnet_cfg.OUT_FEATURES
     depth = resnet_cfg.DEPTH
 
     num_groups = resnet_cfg.NUM_GROUPS
@@ -55,8 +55,8 @@ def make_resnet_backbone(cfg):
 
     # Avoid creating variables without gradients
     # It consumes extra memory and may cause allreduce to fail
-    return_stage_idx = [{"res2": 2, "res3": 3, "res4": 4, "res5": 5}[f] for f in return_features]
-    max_stage_idx = max(return_stage_idx)
+    out_stage_idx = [{"res2": 2, "res3": 3, "res4": 4, "res5": 5}[f] for f in out_features]
+    max_stage_idx = max(out_stage_idx)
     for idx, stage_idx in enumerate(range(2, max_stage_idx + 1)):
         dilation = res5_dilation if stage_idx == 5 else 1
         first_stride = 1 if idx == 0 or (stage_idx == 5 and dilation == 2) else 2
@@ -80,4 +80,4 @@ def make_resnet_backbone(cfg):
             for block in blocks:
                 block.freeze()
         stages.append(blocks)
-    return ResNet(stem, stages, return_features=return_features)
+    return ResNet(stem, stages, out_features=out_features)

@@ -179,18 +179,18 @@ class BasicStem(nn.Module):
 
 
 class ResNet(Backbone):
-    def __init__(self, stem, stages, num_classes=None, return_features=None):
+    def __init__(self, stem, stages, num_classes=None, out_features=None):
         """
         Args:
             stem (nn.Module): a stem module
             stages (list[list[ResNetBlock]]): several (typically 4) stages,
                 each contains multiple :class:`ResNetBlockBase`.
             num_classes (None or int): if None, will not perform classification.
-            return_features (iterable[str]): name of the layers whose outputs should be returned in forward.
-                Can be anything in "stem", "linear", or "res2" ...
-                If None, will return the output of the last layer.
-                Note that the outputs will always be returned in the same order as they are in the model,
-                regardless of their order in `return_features`.
+            out_features (iterable[str]): name of the layers whose outputs should
+                be returned in forward. Can be anything in "stem", "linear", or "res2" ...
+                If None, will return the output of the last layer. Note that the
+                outputs will always be returned in the same order as they are in the
+                model, regardless of their order in `out_features`.
         """
         super(ResNet, self).__init__()
         self.stem = stem
@@ -221,26 +221,26 @@ class ResNet(Backbone):
             nn.init.normal_(self.linear.weight, stddev=0.01)
             name = "linear"
 
-        if return_features is None:
-            return_features = [name]
-        self._return_features = return_features
-        assert len(self._return_features)
+        if out_features is None:
+            out_features = [name]
+        self._out_features = out_features
+        assert len(self._out_features)
         children = [x[0] for x in self.named_children()]
-        for return_feature in self._return_features:
-            assert return_feature in children, "Available children: {}".format(", ".join(children))
+        for out_feature in self._out_features:
+            assert out_feature in children, "Available children: {}".format(", ".join(children))
 
     def forward(self, x):
         outputs = {}
         x = self.stem(x)
-        if "stem" in self._return_features:
+        if "stem" in self._out_features:
             outputs["stem"] = x
         for stage, name in self.stages_and_names:
             x = stage(x)
-            if name in self._return_features:
+            if name in self._out_features:
                 outputs[name] = x
         if self.num_classes is not None:
             x = self.avgpool(x)
             x = self.linear(x)
-            if "linear" in self._return_features:
+            if "linear" in self._out_features:
                 outputs["linear"] = x
         return outputs

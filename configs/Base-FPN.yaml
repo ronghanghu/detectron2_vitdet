@@ -3,7 +3,7 @@ MODEL:
   BACKBONE:
     USE_FPN: True
   RESNETS:
-    RETURN_FEATURES: ["res2", "res3", "res4", "res5"]
+    OUT_FEATURES: ["res2", "res3", "res4", "res5"]
   FPN:
     IN_FEATURES: ["res2", "res3", "res4", "res5"]
   RPN:

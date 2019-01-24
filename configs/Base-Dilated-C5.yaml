@@ -1,7 +1,7 @@
 MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
   RESNETS:
-    RETURN_FEATURES: ["res5"]
+    OUT_FEATURES: ["res5"]
     RES5_DILATION: 2
   RPN:
     IN_FEATURES: ["res5"]
