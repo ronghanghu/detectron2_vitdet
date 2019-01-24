@@ -117,7 +117,7 @@ def make_detection_data_loader(cfg, is_train=True, is_distributed=False, start_i
             "TEST.IMS_PER_BATCH (for inference). For training, you must "
             "also adjust the learning rate and schedule length according "
             "to the linear scaling rule. See for example: "
-            "https://github.com/facebookresearch/Detectron/blob/master/configs/getting_started/tutorial_1gpu_e2e_faster_rcnn_R-50-FPN.yaml#L14"
+            "https://github.com/facebookresearch/Detectron/blob/master/configs/getting_started/tutorial_1gpu_e2e_faster_rcnn_R-50-FPN.yaml#L14"  # noqa B950
         )
 
     # group images which have similar aspect ratio. In this case, we only
@@ -175,14 +175,16 @@ class DetectionBatchCollator:
     def __call__(self, roidbs):
         """
         Args:
-            roidbs (list[dict]): each contains "image" and "annotations", produced by :class:`DetectionTransform`.
+            roidbs (list[dict]): each contains "image" and "annotations", produced
+                by :class:`DetectionTransform`.
 
         Returns:
             images: ImageList
             targets: list[BoxList]. None when not training.
             roidbs: the rest of the roidbs
         """
-        # important to remove the numpy images so that they will not go through the dataloader and hurt performance
+        # important to remove the numpy images so that they will not go through
+        # the dataloader and hurt performance
         numpy_images = [x.pop("image") for x in roidbs]
         images = [torch.as_tensor(x.transpose(2, 0, 1).astype("float32")) for x in numpy_images]
         images = to_image_list(images, self.size_divisible)

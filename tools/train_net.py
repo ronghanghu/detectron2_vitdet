@@ -157,7 +157,8 @@ def do_train(cfg, model):
         if cfg.TEST.EVAL_PERIOD > 0 and iteration % cfg.TEST.EVAL_PERIOD == 0:
             do_test(cfg, model, is_final=False)
 
-        # TODO Move logging logic to a centralized system (https://github.com/fairinternal/detectron2/issues/9)
+        # TODO Move logging logic to a centralized system
+        # (https://github.com/fairinternal/detectron2/issues/9)
         if iteration % 20 == 0 or iteration == max_iter:
             logger.info(
                 # NOTE this format is parsed by grep
@@ -225,6 +226,8 @@ def setup(args):
 def main(args):
     cfg = setup(args)
     model = build_detection_model(cfg)
+    logger = logging.getLogger("maskrcnn_benchmark")
+    logger.info("Model:\n{}".format(model))
     output_dir = cfg.OUTPUT_DIR
 
     if args.eval_only:

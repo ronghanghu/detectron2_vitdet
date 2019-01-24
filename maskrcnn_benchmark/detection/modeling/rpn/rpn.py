@@ -55,6 +55,7 @@ class RPNModule(torch.nn.Module):
         feature_channels = dict(
             zip(cfg.MODEL.BACKBONE.FEATURE_NAMES, cfg.MODEL.BACKBONE.FEATURE_CHANNELS)
         )
+
         # If RPN is applied on multiple feature maps (as in FPN), then we share
         # the same RPNHead and therefore the channel counts must be the same
         in_channels = [feature_channels[f] for f in self.in_features]
@@ -211,7 +212,4 @@ class RPNModule(torch.nn.Module):
 
 
 def build_rpn(cfg):
-    """
-    This gives the gist of it. Not super important because it doesn't change as much
-    """
     return RPNModule(cfg)
