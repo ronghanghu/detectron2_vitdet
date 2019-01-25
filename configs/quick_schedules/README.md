@@ -12,12 +12,18 @@ Reference devgpu configuration:
 
 configs/quick_schedules/e2e_mask_rcnn_R_50_C4_inference_acc_test.yaml
 ```
+# Before https://github.com/fairinternal/detectron2/pull/84
 Total inference time: 0:00:30.808294 (0.6161658811569214 s / img per device, on 2 devices)
+# After https://github.com/fairinternal/detectron2/pull/84
+Total inference time: 0:00:36.952044 (0.7390408849716187 s / img per device, on 2 devices)
 ```
 
 configs/quick_schedules/e2e_mask_rcnn_R_50_FPN_inference_acc_test.yaml
 ```
+# Before https://github.com/fairinternal/detectron2/pull/84
 Total inference time: 0:00:21.773355 (0.435467095375061 s / img per device, on 2 devices)
+# After https://github.com/fairinternal/detectron2/pull/84
+Total inference time: 0:00:28.766723 (0.5753344583511353 s / img per device, on 2 devices)
 ```
 
 ### Training
