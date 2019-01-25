@@ -149,7 +149,7 @@ def rpn_losses(labels, regression_targets, label_logits, regression_predictions)
     return objectness_loss, box_loss
 
 
-def make_rpn_loss_evaluator(cfg, box_coder):
+def build_rpn_loss_evaluator(cfg, box_coder):
     matcher = Matcher(
         cfg.MODEL.RPN.FG_IOU_THRESHOLD,
         cfg.MODEL.RPN.BG_IOU_THRESHOLD,

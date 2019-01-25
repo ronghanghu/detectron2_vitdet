@@ -9,8 +9,8 @@ from ..balanced_positive_negative_sampler import sample_with_positive_fraction
 from ..box_coder import BoxCoder
 from ..matcher import Matcher
 from ..poolers import Pooler
-from .box_head import FastRCNNOutputHead, FastRCNNOutputs, fastrcnn_inference, make_box_head
-from .mask_head import make_mask_head, maskrcnn_inference, maskrcnn_loss
+from .box_head import FastRCNNOutputHead, FastRCNNOutputs, build_box_head, fastrcnn_inference
+from .mask_head import build_mask_head, maskrcnn_inference, maskrcnn_loss
 
 
 def keep_only_positive_boxes(boxes, matched_targets):
@@ -162,13 +162,13 @@ class Res5ROIHeads(ROIHeads):
             output_size=pooler_resolution, scales=pooler_scales, sampling_ratio=sampling_ratio
         )
 
-        self.res5 = resnet.make_resnet_head(cfg)
+        self.res5 = resnet.build_resnet_head(cfg)
         num_channels = self.res5[-1].out_channels
         self.box_predictor = FastRCNNOutputHead(num_channels, num_classes)
         self.box_coder = BoxCoder(weights=bbox_reg_weights)
 
         if self.mask_on:
-            self.mask_head = make_mask_head(
+            self.mask_head = build_mask_head(
                 cfg, (num_channels, pooler_resolution, pooler_resolution)
             )
 
@@ -259,7 +259,7 @@ class StandardROIHeads(ROIHeads):
         self.box_pooler = Pooler(
             output_size=pooler_resolution, scales=pooler_scales, sampling_ratio=sampling_ratio
         )
-        self.box_head = make_box_head(cfg, (in_channels, pooler_resolution, pooler_resolution))
+        self.box_head = build_box_head(cfg, (in_channels, pooler_resolution, pooler_resolution))
 
         self.box_predictor = FastRCNNOutputHead(self.box_head.output_size, num_classes)
         self.box_coder = BoxCoder(weights=bbox_reg_weights)
@@ -270,7 +270,7 @@ class StandardROIHeads(ROIHeads):
                 scales=mask_pooler_scales,
                 sampling_ratio=mask_sampling_ratio,
             )
-            self.mask_head = make_mask_head(cfg, in_channels)
+            self.mask_head = build_mask_head(cfg, in_channels)
 
     def forward(self, features, proposals, targets=None):
         """

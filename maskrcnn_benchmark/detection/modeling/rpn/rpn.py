@@ -5,8 +5,8 @@ from torch import nn
 from maskrcnn_benchmark.structures.boxlist_ops import cat_boxlist
 
 from ..box_coder import BoxCoder
-from .anchor_generator import make_anchor_generator
-from .loss import make_rpn_loss_evaluator
+from .anchor_generator import build_anchor_generator
+from .loss import build_rpn_loss_evaluator
 from .proposals import generate_fpn_proposals, generate_rpn_proposals
 
 
@@ -65,13 +65,13 @@ class RPNModule(torch.nn.Module):
                 assert c == in_channels[0]
         in_channels = in_channels[0]
 
-        anchor_generator = make_anchor_generator(cfg)
+        anchor_generator = build_anchor_generator(cfg)
 
         head = RPNHead(in_channels, anchor_generator.num_anchors_per_location()[0])
 
         self.rpn_box_coder = BoxCoder(weights=(1.0, 1.0, 1.0, 1.0))
 
-        loss_evaluator = make_rpn_loss_evaluator(cfg, self.rpn_box_coder)
+        loss_evaluator = build_rpn_loss_evaluator(cfg, self.rpn_box_coder)
 
         self.anchor_generator = anchor_generator
         self.head = head

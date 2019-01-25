@@ -3,7 +3,7 @@ import torch
 from maskrcnn_benchmark.solver import WarmupMultiStepLR
 
 
-def make_optimizer(cfg, model):
+def build_optimizer(cfg, model):
     params = []
     for key, value in model.named_parameters():
         if not value.requires_grad:
@@ -19,7 +19,7 @@ def make_optimizer(cfg, model):
     return optimizer
 
 
-def make_lr_scheduler(cfg, optimizer):
+def build_lr_scheduler(cfg, optimizer):
     return WarmupMultiStepLR(
         optimizer,
         cfg.SOLVER.STEPS,

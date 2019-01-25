@@ -109,7 +109,7 @@ class AnchorGenerator(nn.Module):
         return anchors
 
 
-def make_anchor_generator(cfg):
+def build_anchor_generator(cfg):
     anchor_sizes = cfg.MODEL.RPN.ANCHOR_SIZES
     aspect_ratios = cfg.MODEL.RPN.ASPECT_RATIOS
     feature_strides = dict(

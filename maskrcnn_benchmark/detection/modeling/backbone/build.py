@@ -6,9 +6,9 @@ from . import fpn, resnet
 def build_backbone(cfg):
     assert cfg.MODEL.BACKBONE.NAME == "ResNet"
     if cfg.MODEL.BACKBONE.USE_FPN:
-        backbone = fpn.make_resnet_fpn_backbone(cfg)
+        backbone = fpn.build_resnet_fpn_backbone(cfg)
     else:
-        backbone = resnet.make_resnet_backbone(cfg)
+        backbone = resnet.build_resnet_backbone(cfg)
     assert isinstance(backbone, Backbone)
 
     # TODO: find a better way then the defrost/mutate cfg/freeze pattern used here

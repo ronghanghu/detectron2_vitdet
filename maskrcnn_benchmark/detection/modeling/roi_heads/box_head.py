@@ -248,7 +248,7 @@ class FastRCNN2MLPHead(nn.Module):
         return self._output_size
 
 
-def make_box_head(cfg, input_size):
+def build_box_head(cfg, input_size):
     """
     Args:
         input_size: channels, or (channels, height, width)

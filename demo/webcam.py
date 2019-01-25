@@ -1,9 +1,10 @@
 import argparse
 import time
 import cv2
-from predictor import COCODemo
 
 from maskrcnn_benchmark.detection import get_cfg
+
+from predictor import COCODemo
 
 
 """

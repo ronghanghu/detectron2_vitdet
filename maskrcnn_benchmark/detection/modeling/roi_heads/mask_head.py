@@ -151,7 +151,7 @@ class MaskRCNNConvUpsampleHead(nn.Module):
         return self.predictor(x)
 
 
-def make_mask_head(cfg, input_size):
+def build_mask_head(cfg, input_size):
     """
     input_size: int (channels) or tuple (channels, height, width)
     """

@@ -18,12 +18,12 @@ from torch.nn.parallel import DistributedDataParallel
 import maskrcnn_benchmark.utils.comm as comm
 from maskrcnn_benchmark.detection import (
     DetectionCheckpointer,
+    build_detection_data_loader,
     build_detection_model,
+    build_lr_scheduler,
+    build_optimizer,
     coco_evaluation,
     get_cfg,
-    make_detection_data_loader,
-    make_lr_scheduler,
-    make_optimizer,
     print_copypaste_format,
     verify_results,
 )
@@ -75,7 +75,7 @@ def do_test(cfg, model, is_final=True):
             output_folder = os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
             mkdir(output_folder)
             output_folders[idx] = output_folder
-    data_loaders_val = make_detection_data_loader(
+    data_loaders_val = build_detection_data_loader(
         cfg, is_train=False, is_distributed=comm.get_world_size() > 1
     )
 
@@ -102,8 +102,8 @@ def do_test(cfg, model, is_final=True):
 
 
 def do_train(cfg, model):
-    optimizer = make_optimizer(cfg, model)
-    scheduler = make_lr_scheduler(cfg, optimizer)
+    optimizer = build_optimizer(cfg, model)
+    scheduler = build_lr_scheduler(cfg, optimizer)
 
     checkpointer = DetectionCheckpointer(cfg, model, optimizer, scheduler, cfg.OUTPUT_DIR)
     start_iter = checkpointer.load(cfg.MODEL.WEIGHT).get("iteration", 0)
@@ -111,7 +111,7 @@ def do_train(cfg, model):
         checkpointer, cfg.SOLVER.CHECKPOINT_PERIOD, cfg.SOLVER.MAX_ITER
     )
 
-    data_loader = make_detection_data_loader(
+    data_loader = build_detection_data_loader(
         cfg, is_train=True, is_distributed=comm.get_world_size() > 1, start_iter=start_iter
     )
     assert len(data_loader) == cfg.SOLVER.MAX_ITER

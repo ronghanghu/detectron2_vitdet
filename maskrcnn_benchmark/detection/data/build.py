@@ -46,7 +46,7 @@ def build_dataset(dataset_list, dataset_catalog, is_train=True):
         return [ConcatDataset(datasets)]
 
 
-def make_data_sampler(dataset, shuffle, distributed):
+def build_data_sampler(dataset, shuffle, distributed):
     # "samplers" have a bad __init__ interface ... because only the length of dataset is used by the samplers
     if distributed:
         return torch.utils.data.distributed.DistributedSampler(dataset)
@@ -64,7 +64,7 @@ def _quantize(x, bins):
     return quantized
 
 
-def make_batch_data_sampler(
+def build_batch_data_sampler(
     aspect_ratios, sampler, aspect_grouping, images_per_batch, num_iters=None, start_iter=0
 ):
     if aspect_grouping:
@@ -83,7 +83,7 @@ def make_batch_data_sampler(
     return batch_sampler
 
 
-def make_detection_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0):
+def build_detection_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0):
     num_gpus = get_world_size()
     if is_train:
         images_per_batch = cfg.SOLVER.IMS_PER_BATCH
@@ -140,8 +140,8 @@ def make_detection_data_loader(cfg, is_train=True, is_distributed=False, start_i
 
         dataset = MapDataset(dataset, DetectionTransform(cfg, is_train))
 
-        sampler = make_data_sampler(dataset, shuffle, is_distributed)
-        batch_sampler = make_batch_data_sampler(
+        sampler = build_data_sampler(dataset, shuffle, is_distributed)
+        batch_sampler = build_batch_data_sampler(
             ratios, sampler, aspect_grouping, images_per_gpu, num_iters, start_iter
         )
         num_workers = cfg.DATALOADER.NUM_WORKERS

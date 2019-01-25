@@ -3,7 +3,7 @@ from torch import nn
 from maskrcnn_benchmark.layers import BasicStem, BottleneckBlock, ResNet, make_stage
 
 
-def make_resnet_head(cfg):
+def build_resnet_head(cfg):
     # For now, assumed to be a res5 head.
     stage_channel_factor = 2 ** 3  # res5 is 8x res2
     resnet_cfg = cfg.MODEL.RESNETS
@@ -27,7 +27,7 @@ def make_resnet_head(cfg):
     return nn.Sequential(*blocks)
 
 
-def make_resnet_backbone(cfg):
+def build_resnet_backbone(cfg):
     # TODO registration of new blocks/stems
     resnet_cfg = cfg.MODEL.RESNETS
     stem = BasicStem(out_channels=resnet_cfg.STEM_OUT_CHANNELS, norm="FrozenBN")

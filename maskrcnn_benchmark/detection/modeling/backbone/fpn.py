@@ -106,7 +106,7 @@ def _assert_strides_are_log2_contiguous(strides):
         )
 
 
-def make_resnet_fpn_backbone(cfg):
+def build_resnet_fpn_backbone(cfg):
     """
     Args:
         cfg (yacs.CfgNode)
@@ -114,7 +114,7 @@ def make_resnet_fpn_backbone(cfg):
     Returns:
         backbone (Backbone): backbone module, must be a subclass of :class:`Backbone`.
     """
-    bottom_up = resnet.make_resnet_backbone(cfg)
+    bottom_up = resnet.build_resnet_backbone(cfg)
     in_features = cfg.MODEL.FPN.IN_FEATURES
     out_channels = cfg.MODEL.FPN.OUT_CHANNELS
     backbone = FPN(bottom_up=bottom_up, in_features=in_features, out_channels=out_channels)
