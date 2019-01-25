@@ -9,7 +9,6 @@ import time
 from collections import OrderedDict
 import pycocotools.mask as mask_util
 import torch
-from PIL import Image
 from pycocotools.cocoeval import COCOeval
 from tqdm import tqdm
 
@@ -22,50 +21,36 @@ from .modeling.roi_heads.paste_mask import Masker  # TODO move inside models
 
 
 def postprocess(result, original_width, original_height):
-    result = result.copy_with_fields(result.fields())
+    """
+    Postprocess the output boxes.
+    It will scale the boxes according to original image size,
+    and paste the mask to the original image.
+
+    Args:
+        result (BoxList): the output from the model. will be modified.
+    """
     MASK_THRESHOLD = 0.5
     # we assume we did the scaling without changing the aspect ratio
     scale = np.sqrt(result.size[0] * 1.0 / original_width * result.size[1] / original_height)
     result.size = (original_width, original_height)
-    bbox = result.bbox = result.bbox / scale
+    result.bbox = result.bbox / scale
     result.clip_to_image()
-    # maybe clip bbox again
 
     if result.has_field("mask"):
         masks = result.get_field("mask")  # N, 1, M, M
-        if True:
-            masker = Masker(threshold=MASK_THRESHOLD, padding=1)
-            pasted_masks = [x[0] for x in masker.forward_single_image(masks, result)]
-        else:
-            pasted_masks = []
-            for box, mask in zip(bbox, masks):
-                # This quantization logic is copied from tensorpack/examples/FasterRCNN
-
-                # First, translate floating point coord to integer coord
-                # box fpcoor=0.0 -> intcoor=0.0
-                x0, y0 = list(map(int, box[:2] + 0.5))
-                # box fpcoor=h -> intcoor=h-1, inclusive
-                x1, y1 = list(map(int, box[2:] - 0.5))  # inclusive
-                x1 = max(x0, x1)  # require at least 1x1
-                y1 = max(y0, y1)
-                w = x1 + 1 - x0
-                h = y1 + 1 - y0
-
-                # rounding errors could happen here, because masks were not originally computed for this shape.
-                # but it's hard to do better, because the network does not know the "original" scale
-                mask = Image.fromarray(mask.numpy()[0]).resize((w, h))
-                ret = np.zeros((original_height, original_width), dtype="uint8")
-                ret[y0 : y1 + 1, x0 : x1 + 1] = (np.asarray(mask) > MASK_THRESHOLD).astype("uint8")
-                pasted_masks.append(ret)
-        result.add_field("mask", pasted_masks)
-    return result
+        masker = Masker(threshold=MASK_THRESHOLD, padding=1)
+        pasted_masks = [x[0] for x in masker.forward_single_image(masks, result)]
+        rles = [mask_util.encode(np.array(mask[:, :, None], order="F"))[0] for mask in pasted_masks]
+        for rle in rles:
+            rle["counts"] = rle["counts"].decode("utf-8")
+        result.add_field("pasted_mask_rle", rles)
 
 
 def compute_on_dataset(model, data_loader):
     """
     Returns:
         list[dict]. Each dict has: "id", "original_height", "original_width", "result".
-            "result" is a `BoxList` containing the outputs of the model.
+            "result" is a `BoxList` containing the post-processed outputs of the model.
     """
     model.eval()
     results = []
@@ -76,6 +61,8 @@ def compute_on_dataset(model, data_loader):
             outputs = model(batch)
             for roidb, output in zip(roidbs, outputs):
                 output = output.to(cpu_device)
+                postprocess(output, roidb["original_width"], roidb["original_height"])
+
                 result = {k: roidb[k] for k in ["original_height", "original_width", "id"]}
                 result["result"] = output
                 results.append(result)
@@ -98,7 +85,6 @@ def prepare_for_coco_evaluation(predictions):
         if num_instance == 0:
             continue
 
-        prediction = postprocess(prediction, roidb["original_width"], roidb["original_height"])
         prediction = prediction.convert("xywh")
         boxes = prediction.bbox.tolist()
         scores = prediction.get_field("scores").tolist()
@@ -106,13 +92,7 @@ def prepare_for_coco_evaluation(predictions):
 
         has_mask = prediction.has_field("mask")
         if has_mask:
-            masks = prediction.get_field("mask")
-
-            rles = [
-                mask_util.encode(np.array(mask[:, :, np.newaxis], order="F"))[0] for mask in masks
-            ]
-            for rle in rles:
-                rle["counts"] = rle["counts"].decode("utf-8")
+            rles = prediction.get_field("pasted_mask_rle")
 
         mapped_labels = [COCOMeta().contiguous_id_to_json_id[i] for i in labels]
 
@@ -167,7 +147,6 @@ def evaluate_box_proposals(predictions, dataset, thresholds=None, area="all", li
         prediction = roidb["result"]
         image_width = roidb["original_width"]
         image_height = roidb["original_height"]
-        prediction = postprocess(prediction, roidb["original_width"], roidb["original_height"])
 
         # sort predictions in descending order
         # TODO maybe remove this and make it explicit in the documentation
