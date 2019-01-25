@@ -113,7 +113,7 @@ def make_anchor_generator(cfg):
     anchor_sizes = cfg.MODEL.RPN.ANCHOR_SIZES
     aspect_ratios = cfg.MODEL.RPN.ASPECT_RATIOS
     feature_strides = dict(
-        zip(cfg.MODEL.BACKBONE.FEATURE_NAMES, cfg.MODEL.BACKBONE.FEATURE_STRIDES)
+        zip(cfg.MODEL.BACKBONE.OUT_FEATURES, cfg.MODEL.BACKBONE.OUT_FEATURE_STRIDES)
     )
     anchor_stride = [feature_strides[f] for f in cfg.MODEL.RPN.IN_FEATURES]
     straddle_thresh = cfg.MODEL.RPN.STRADDLE_THRESH

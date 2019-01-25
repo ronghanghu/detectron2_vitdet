@@ -53,7 +53,7 @@ class RPNModule(torch.nn.Module):
         self.rpn_only = cfg.MODEL.RPN_ONLY
         self.in_features = cfg.MODEL.RPN.IN_FEATURES
         feature_channels = dict(
-            zip(cfg.MODEL.BACKBONE.FEATURE_NAMES, cfg.MODEL.BACKBONE.FEATURE_CHANNELS)
+            zip(cfg.MODEL.BACKBONE.OUT_FEATURES, cfg.MODEL.BACKBONE.OUT_FEATURE_CHANNELS)
         )
 
         # If RPN is applied on multiple feature maps (as in FPN), then we share

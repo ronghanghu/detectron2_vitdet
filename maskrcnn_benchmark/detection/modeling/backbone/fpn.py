@@ -4,6 +4,8 @@ from torch import nn
 
 from maskrcnn_benchmark.layers import Backbone, weight_init
 
+from . import resnet
+
 
 class FPN(Backbone):
     """
@@ -102,3 +104,18 @@ def _assert_strides_are_log2_contiguous(strides):
         assert stride == 2 * strides[i - 1], "Stides {} {} are not log2 contiguous".format(
             stride, strides[i - 1]
         )
+
+
+def make_resnet_fpn_backbone(cfg):
+    """
+    Args:
+        cfg (yacs.CfgNode)
+
+    Returns:
+        backbone (Backbone): backbone module, must be a subclass of :class:`Backbone`.
+    """
+    bottom_up = resnet.make_resnet_backbone(cfg)
+    in_features = cfg.MODEL.FPN.IN_FEATURES
+    out_channels = cfg.MODEL.FPN.OUT_CHANNELS
+    backbone = FPN(bottom_up=bottom_up, in_features=in_features, out_channels=out_channels)
+    return backbone
