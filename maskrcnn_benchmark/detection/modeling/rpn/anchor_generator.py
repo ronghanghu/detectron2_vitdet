@@ -30,32 +30,47 @@ class BufferList(nn.Module):
 
 class AnchorGenerator(nn.Module):
     """
-    For a set of image sizes and feature maps, computes a set
-    of anchors
+    For a set of image sizes and feature maps, computes a set of anchors.
     """
 
-    def __init__(
-        self,
-        sizes=(128, 256, 512),
-        aspect_ratios=(0.5, 1.0, 2.0),
-        anchor_strides=(8, 16, 32),
-        straddle_thresh=0,
-    ):
+    def __init__(self, feature_strides, sizes, aspect_ratios, boundary_thresh=0):
+        """
+        Args:
+            feature_strides (list[number]): list of feature map strides (with respect
+                to the input image) for each input feature map.
+            sizes (list[list[number]]): sizes[i] is the list of anchor sizes to use
+                for the i-th feature map. If len(sizes) == 1, then the same list of
+                anchor sizes, given by sizes[0], is used for all feature maps. Anchor
+                sizes are given in absolute lengths in units of the input image;
+                they do not dynamically scale if the input image size changes.
+            aspect_ratios (list[list[number]]): aspect_ratios[i] is the list of
+                anchor aspect ratios to use for the i-th feature map. If
+                len(aspect_ratios) == 1, then the same list of anchor aspect ratios,
+                given by aspect_ratios[0], is used for all feature maps.
+            boundary_thresh (int): if >= 0, then anchors that extend beyond the image
+                boundary by more than boundary_thresh are not used. Set to a very large
+                number or < 0 to disable this behavior.
+        """
         super(AnchorGenerator, self).__init__()
 
-        if len(anchor_strides) == 1:
-            anchor_stride = anchor_strides[0]
-            cell_anchors = [generate_anchors(anchor_stride, sizes, aspect_ratios).float()]
-        else:
-            if len(anchor_strides) != len(sizes):
-                raise RuntimeError("FPN should have #anchor_strides == #sizes")
-            cell_anchors = [
-                generate_anchors(anchor_stride, (size,), aspect_ratios).float()
-                for anchor_stride, size in zip(anchor_strides, sizes)
-            ]
-        self.strides = anchor_strides
+        # If one size (or aspect ratio) is specified and there are multiple feature
+        # maps, then we "broadcast" anchors of that single size (or aspect ratio)
+        # over all feature maps.
+        num_feature_maps = len(feature_strides)
+        if len(sizes) == 1:
+            sizes *= num_feature_maps
+        if len(aspect_ratios) == 1:
+            aspect_ratios *= num_feature_maps
+        assert num_feature_maps == len(sizes)
+        assert num_feature_maps == len(aspect_ratios)
+
+        cell_anchors = [
+            generate_anchors(anchor_stride, s, a).float()
+            for anchor_stride, s, a in zip(feature_strides, sizes, aspect_ratios)
+        ]
+        self.strides = feature_strides
         self.cell_anchors = BufferList(cell_anchors)
-        self.straddle_thresh = straddle_thresh
+        self.boundary_thresh = boundary_thresh
 
     def num_anchors_per_location(self):
         return [len(cell_anchors) for cell_anchors in self.cell_anchors]
@@ -83,12 +98,12 @@ class AnchorGenerator(nn.Module):
     def add_visibility_to(self, boxlist):
         image_width, image_height = boxlist.size
         anchors = boxlist.bbox
-        if self.straddle_thresh >= 0:
+        if self.boundary_thresh >= 0:
             inds_inside = (
-                (anchors[..., 0] >= -self.straddle_thresh)
-                & (anchors[..., 1] >= -self.straddle_thresh)
-                & (anchors[..., 2] < image_width + self.straddle_thresh)
-                & (anchors[..., 3] < image_height + self.straddle_thresh)
+                (anchors[..., 0] >= -self.boundary_thresh)
+                & (anchors[..., 1] >= -self.boundary_thresh)
+                & (anchors[..., 2] < image_width + self.boundary_thresh)
+                & (anchors[..., 3] < image_height + self.boundary_thresh)
             )
         else:
             device = anchors.device
@@ -110,14 +125,14 @@ class AnchorGenerator(nn.Module):
 
 
 def build_anchor_generator(cfg):
-    anchor_sizes = cfg.MODEL.RPN.ANCHOR_SIZES
-    aspect_ratios = cfg.MODEL.RPN.ASPECT_RATIOS
+    sizes = cfg.MODEL.RPN.ANCHOR_SIZES
+    aspect_ratios = cfg.MODEL.RPN.ANCHOR_ASPECT_RATIOS
     feature_strides = dict(
         zip(cfg.MODEL.BACKBONE.OUT_FEATURES, cfg.MODEL.BACKBONE.OUT_FEATURE_STRIDES)
     )
-    anchor_stride = [feature_strides[f] for f in cfg.MODEL.RPN.IN_FEATURES]
-    straddle_thresh = cfg.MODEL.RPN.STRADDLE_THRESH
-    anchor_generator = AnchorGenerator(anchor_sizes, aspect_ratios, anchor_stride, straddle_thresh)
+    feature_strides = [feature_strides[f] for f in cfg.MODEL.RPN.IN_FEATURES]
+    boundary_thresh = cfg.MODEL.RPN.BOUNDARY_THRESH
+    anchor_generator = AnchorGenerator(feature_strides, sizes, aspect_ratios, boundary_thresh)
     return anchor_generator
 
 

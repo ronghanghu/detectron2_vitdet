@@ -101,13 +101,24 @@ _C.MODEL.FPN.OUT_CHANNELS = 256
 # RPN options
 # ---------------------------------------------------------------------------- #
 _C.MODEL.RPN = CN()
-# Base RPN anchor sizes given in absolute pixels w.r.t. the scaled network input
-_C.MODEL.RPN.ANCHOR_SIZES = (32, 64, 128, 256, 512)
-# RPN anchor aspect ratios
-_C.MODEL.RPN.ASPECT_RATIOS = (0.5, 1.0, 2.0)
-# Remove RPN anchors that go outside the image by RPN_STRADDLE_THRESH pixels
+# Names of the input feature maps to be used by RPN
+# e.g., ["p2", "p3", "p4", "p5", "p6"] for FPN
+_C.MODEL.RPN.IN_FEATURES = ["res4"]
+# RPN anchor sizes given in absolute pixels w.r.t. the scaled network input.
+# Format: list of lists of sizes. ANCHOR_SIZES[i] specifies the list of sizes
+# to use for IN_FEATURES[i]; len(ANCHOR_SIZES) == len(IN_FEATURES) must be true,
+# or len(ANCHOR_SIZES) == 1 is true and size list ANCHOR_SIZES[0] is used for all
+# IN_FEATURES.
+_C.MODEL.RPN.ANCHOR_SIZES = [[32, 64, 128, 256, 512]]
+# RPN anchor aspect ratios.
+# Format is list of lists of sizes. ANCHOR_ASPECT_RATIOS[i] specifies the list of aspect ratios
+# to use for IN_FEATURES[i]; len(ANCHOR_ASPECT_RATIOS) == len(IN_FEATURES) must be true,
+# or len(ANCHOR_ASPECT_RATIOS) == 1 is true and aspect ratio list ANCHOR_ASPECT_RATIOS[0] is used
+# for all IN_FEATURES.
+_C.MODEL.RPN.ANCHOR_ASPECT_RATIOS = [[0.5, 1.0, 2.0]]
+# Remove RPN anchors that go outside the image by BOUNDARY_THRESH pixels
 # Set to -1 or a large value, e.g. 100000, to disable pruning anchors
-_C.MODEL.RPN.STRADDLE_THRESH = 0
+_C.MODEL.RPN.BOUNDARY_THRESH = 0
 # Minimum overlap required between an anchor and ground-truth box for the
 # (anchor, gt box) pair to be a positive example (IoU >= FG_IOU_THRESHOLD
 # ==> positive RPN example)
@@ -136,9 +147,6 @@ _C.MODEL.RPN.MIN_SIZE = 0
 # all FPN levels
 _C.MODEL.RPN.FPN_POST_NMS_TOP_N_TRAIN = 2000
 _C.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST = 2000
-# Names of the input feature maps to be used by RPN
-# e.g., ["p2", "p3", "p4", "p5", "p6"] for FPN
-_C.MODEL.RPN.IN_FEATURES = ["res4"]
 
 
 # ---------------------------------------------------------------------------- #

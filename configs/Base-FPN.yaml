@@ -8,6 +8,8 @@ MODEL:
     IN_FEATURES: ["res2", "res3", "res4", "res5"]
   RPN:
     IN_FEATURES: ["p2", "p3", "p4", "p5", "p6"]
+    ANCHOR_SIZES: [[32], [64], [128], [256], [512]]  # One size for each in feature map
+    ANCHOR_ASPECT_RATIOS: [[0.5, 1.0, 2.0]]  # Three aspect ratios (same for all in feature maps)
     PRE_NMS_TOP_N_TRAIN: 2000
     PRE_NMS_TOP_N_TEST: 1000
     POST_NMS_TOP_N_TEST: 1000
