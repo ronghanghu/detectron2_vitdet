@@ -32,7 +32,7 @@ from maskrcnn_benchmark.utils.collect_env import collect_env_info
 from maskrcnn_benchmark.utils.comm import reduce_dict
 from maskrcnn_benchmark.utils.logger import setup_logger
 from maskrcnn_benchmark.utils.metric_logger import MetricLogger
-from maskrcnn_benchmark.utils.miscellaneous import mkdir
+from maskrcnn_benchmark.utils.misc import mkdir
 
 
 class PeriodicCheckpointer(object):

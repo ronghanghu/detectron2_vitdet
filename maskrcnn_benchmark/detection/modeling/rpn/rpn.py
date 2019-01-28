@@ -87,9 +87,7 @@ class RPN(nn.Module):
         same RPNHead and therefore the channel counts and number of cell anchors
         must be the same. Check that this is true and return the counts.
         """
-        feature_channels = dict(
-            zip(cfg.MODEL.BACKBONE.OUT_FEATURES, cfg.MODEL.BACKBONE.OUT_FEATURE_CHANNELS)
-        )
+        feature_channels = dict(cfg.MODEL.BACKBONE.OUT_FEATURE_CHANNELS)
         in_channels = [feature_channels[f] for f in self.in_features]
         # Check all channel counts are equal
         for c in in_channels:

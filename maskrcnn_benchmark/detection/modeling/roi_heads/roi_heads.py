@@ -56,10 +56,8 @@ class ROIHeads(torch.nn.Module):
         self.test_nms_thresh          = cfg.MODEL.ROI_HEADS.NMS
         self.test_detections_per_img  = cfg.MODEL.ROI_HEADS.DETECTIONS_PER_IMG
         self.in_features              = cfg.MODEL.ROI_HEADS.IN_FEATURES
-        self.feature_strides          = dict(zip(cfg.MODEL.BACKBONE.OUT_FEATURES,
-                                                 cfg.MODEL.BACKBONE.OUT_FEATURE_STRIDES))
-        self.feature_channels         = dict(zip(cfg.MODEL.BACKBONE.OUT_FEATURES,
-                                                 cfg.MODEL.BACKBONE.OUT_FEATURE_CHANNELS))
+        self.feature_strides          = dict(cfg.MODEL.BACKBONE.OUT_FEATURE_STRIDES)
+        self.feature_channels         = dict(cfg.MODEL.BACKBONE.OUT_FEATURE_CHANNELS)
         # fmt: on
 
     def sample_proposals_for_training(self, proposals, targets):

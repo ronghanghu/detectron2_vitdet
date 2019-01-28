@@ -13,10 +13,9 @@ def build_backbone(cfg):
 
     # TODO: find a better way then the defrost/mutate cfg/freeze pattern used here
     cfg.defrost()
-    # Hack: seprate keys (OUT_FEATURES) and values because we cannot have a dict in yacs
-    cfg.MODEL.BACKBONE.OUT_FEATURES = tuple(backbone.out_features)
-    cfg.MODEL.BACKBONE.OUT_FEATURE_STRIDES = tuple(backbone.out_feature_strides.values())
-    cfg.MODEL.BACKBONE.OUT_FEATURE_CHANNELS = tuple(backbone.out_feature_channels.values())
+    # Convert dicts to immutable ((key1, val1), (key2, val2), ...) tuples
+    cfg.MODEL.BACKBONE.OUT_FEATURE_STRIDES = tuple(backbone.out_feature_strides.items())
+    cfg.MODEL.BACKBONE.OUT_FEATURE_CHANNELS = tuple(backbone.out_feature_channels.items())
     # If > 0, this enforces that each collated batch should have a size divisible by SIZE_DIVISIBILITY
     # Image shape has to be divisible up to the last feature map extracted from the backbone
     # Otherwise FPN cannot add two featuremaps together.
