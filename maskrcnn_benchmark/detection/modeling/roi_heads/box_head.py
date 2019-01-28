@@ -129,7 +129,9 @@ class FastRCNNOutputs(object):
     e.g. class-agnostic regression, predicted_labels, decoded_boxes_for_gt_labels, fg_proposals
     """
 
-    def __init__(self, box_coder, class_logits, regression_outputs, proposals, targets=None):
+    def __init__(
+        self, box2box_transform, class_logits, regression_outputs, proposals, targets=None
+    ):
         """
         Args:
             class_logits (Tensor): #box x #class
@@ -137,7 +139,7 @@ class FastRCNNOutputs(object):
             proposals (list[BoxList]): has a field "labels" if training
             targets (list[BoxList]): None if testing
         """
-        self.box_coder = box_coder
+        self.box2box_transform = box2box_transform
         self.num_img = len(proposals)
         self.image_shapes = [box.size for box in proposals]
         self.num_boxes = [len(box) for box in proposals]
@@ -157,7 +159,7 @@ class FastRCNNOutputs(object):
             dict
         """
         regression_targets = [
-            self.box_coder.encode(targets_per_image.bbox, proposals_per_image)
+            self.box2box_transform.get_deltas(proposals_per_image, targets_per_image.bbox)
             for targets_per_image, proposals_per_image in zip(self.targets, self.proposals)
         ]
 
@@ -174,10 +176,10 @@ class FastRCNNOutputs(object):
         Returns:
             list[Tensor]: the Tensor for each image has shape (#box, #class, 4)
         """
-        decoded = self.box_coder.decode(
+        boxes = self.box2box_transform.apply_deltas(
             self.regression_outputs.view(sum(self.num_boxes), -1), torch.cat(self.proposals, dim=0)
         )
-        return decoded.split(self.num_boxes, dim=0)
+        return boxes.split(self.num_boxes, dim=0)
 
     def predict_probs(self):
         """

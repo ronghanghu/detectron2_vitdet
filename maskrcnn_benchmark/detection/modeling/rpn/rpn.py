@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from ..box_coder import BoxCoder
+from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher
 from .anchor_generator import build_anchor_generator
 from .rpn_outputs import RPNOutputs
@@ -73,7 +73,7 @@ class RPN(nn.Module):
         }
 
         self.anchor_generator = build_anchor_generator(cfg)
-        self.box_coder = BoxCoder(weights=(1.0, 1.0, 1.0, 1.0))
+        self.box2box_transform = Box2BoxTransform(weights=(1.0, 1.0, 1.0, 1.0))
         self.anchor_matcher = Matcher(
             cfg.MODEL.RPN.FG_IOU_THRESHOLD,
             cfg.MODEL.RPN.BG_IOU_THRESHOLD,
@@ -119,7 +119,7 @@ class RPN(nn.Module):
         # TODO: The anchors only depend on the feature map shape; there's probably
         # an opportunity for some optimizations (e.g., caching anchors).
         outputs = RPNOutputs(
-            self.box_coder,
+            self.box2box_transform,
             self.anchor_matcher,
             self.batch_size_per_image,
             self.positive_fraction,

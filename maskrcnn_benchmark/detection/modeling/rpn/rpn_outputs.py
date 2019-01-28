@@ -66,7 +66,7 @@ class RPNOutputs(object):
 
     def __init__(
         self,
-        box_coder,
+        box2box_transform,
         anchor_matcher,
         batch_size_per_image,
         positive_fraction,
@@ -78,7 +78,8 @@ class RPNOutputs(object):
     ):
         """
         Args:
-            box_coder (BoxCoder): :class:`BoxCoder` instance for anchor-proposal tranformations.
+            box2box_transform (Box2BoxTransform): :class:`Box2BoxTransform` instance for
+                anchor-proposal tranformations.
             anchor_matcher (Matcher): :class:`Matcher` instance for matching anchors to
                 ground-truth boxes; used to determine training labels.
             batch_size_per_image (int): number of proposals to sample when training
@@ -95,7 +96,7 @@ class RPNOutputs(object):
             targets (list[BoxList, optional): A list of N elements. Element i a BoxList storing
                 the ground-truth boxes for image i.
         """
-        self.box_coder = box_coder
+        self.box2box_transform = box2box_transform
         self.anchor_matcher = anchor_matcher
         self.batch_size_per_image = batch_size_per_image
         self.positive_fraction = positive_fraction
@@ -126,8 +127,8 @@ class RPNOutputs(object):
 
             # compute regression targets
             # TODO wasted computation for ignored boxes
-            regression_targets_per_image = self.box_coder.encode(
-                matched_targets, anchors_per_image.bbox
+            regression_targets_per_image = self.box2box_transform.get_deltas(
+                anchors_per_image.bbox, matched_targets
             )
 
             labels.append(labels_per_image)
@@ -245,7 +246,7 @@ class RPNOutputs(object):
             deltas_i = deltas_i.view(N, -1, 4, Hi, Wi).permute(0, 3, 4, 1, 2).reshape(-1, 4)
             # Concatenate anchors to shape (N*Hi*Wi*A, 4)
             anchors_i = torch.cat([a.bbox for a in anchors_i], dim=0).reshape(-1, 4)
-            proposals_i = self.box_coder.decode(deltas_i, anchors_i)
+            proposals_i = self.box2box_transform.apply_deltas(deltas_i, anchors_i)
             # Append feature map proposals with shape (N, Hi*Wi*A, 4)
             proposals.append(proposals_i.view(N, -1, 4))
 

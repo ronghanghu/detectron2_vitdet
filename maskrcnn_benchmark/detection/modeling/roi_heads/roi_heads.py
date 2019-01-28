@@ -6,7 +6,7 @@ from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 
 from ..backbone import resnet
 from ..balanced_positive_negative_sampler import sample_with_positive_fraction
-from ..box_coder import BoxCoder
+from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher
 from ..poolers import Pooler
 from .box_head import FastRCNNOutputHead, FastRCNNOutputs, build_box_head, fastrcnn_inference
@@ -165,7 +165,7 @@ class Res5ROIHeads(ROIHeads):
         self.res5 = resnet.build_resnet_head(cfg)
         num_channels = self.res5[-1].out_channels
         self.box_predictor = FastRCNNOutputHead(num_channels, num_classes)
-        self.box_coder = BoxCoder(weights=bbox_reg_weights)
+        self.box2box_transform = Box2BoxTransform(weights=bbox_reg_weights)
 
         if self.mask_on:
             self.mask_head = build_mask_head(
@@ -190,7 +190,7 @@ class Res5ROIHeads(ROIHeads):
         del feature_pooled
 
         outputs = FastRCNNOutputs(
-            self.box_coder, class_logits, regression_outputs, proposals, targets
+            self.box2box_transform, class_logits, regression_outputs, proposals, targets
         )
 
         if self.training:
@@ -261,7 +261,7 @@ class StandardROIHeads(ROIHeads):
         self.box_head = build_box_head(cfg, (in_channels, pooler_resolution, pooler_resolution))
 
         self.box_predictor = FastRCNNOutputHead(self.box_head.output_size, num_classes)
-        self.box_coder = BoxCoder(weights=bbox_reg_weights)
+        self.box2box_transform = Box2BoxTransform(weights=bbox_reg_weights)
 
         if self.mask_on:
             self.mask_pooler = Pooler(
@@ -285,7 +285,7 @@ class StandardROIHeads(ROIHeads):
         del box_features
 
         outputs = FastRCNNOutputs(
-            self.box_coder, class_logits, regression_outputs, proposals, targets
+            self.box2box_transform, class_logits, regression_outputs, proposals, targets
         )
 
         if self.training:
