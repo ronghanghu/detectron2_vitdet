@@ -250,10 +250,9 @@ class StandardROIHeads(ROIHeads):
         # If StandardROIHeads is applied on multiple feature maps (as in FPN),
         # then we share the same predictors and therefore the channel counts must be the same
         in_channels = [self.feature_channels[f] for f in self.in_features]
-        if len(in_channels) > 1:
-            # Check all channel counts are the equal
-            for c in in_channels[1:]:
-                assert c == in_channels[0]
+        # Check all channel counts are equal
+        for c in in_channels:
+            assert c == in_channels[0]
         in_channels = in_channels[0]
 
         self.box_pooler = Pooler(

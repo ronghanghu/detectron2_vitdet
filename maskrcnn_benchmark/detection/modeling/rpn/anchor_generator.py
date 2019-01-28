@@ -72,7 +72,8 @@ class AnchorGenerator(nn.Module):
         self.cell_anchors = BufferList(cell_anchors)
         self.boundary_thresh = boundary_thresh
 
-    def num_anchors_per_location(self):
+    @property
+    def num_cell_anchors(self):
         return [len(cell_anchors) for cell_anchors in self.cell_anchors]
 
     def grid_anchors(self, grid_sizes):

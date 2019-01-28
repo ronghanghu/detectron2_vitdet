@@ -133,20 +133,18 @@ _C.MODEL.RPN.BATCH_SIZE_PER_IMAGE = 256
 _C.MODEL.RPN.POSITIVE_FRACTION = 0.5
 # Number of top scoring RPN proposals to keep before applying NMS
 # When FPN is used, this is *per FPN level* (not total)
-_C.MODEL.RPN.PRE_NMS_TOP_N_TRAIN = 12000
-_C.MODEL.RPN.PRE_NMS_TOP_N_TEST = 6000
+_C.MODEL.RPN.PRE_NMS_TOPK_TRAIN = 12000
+_C.MODEL.RPN.PRE_NMS_TOPK_TEST = 6000
 # Number of top scoring RPN proposals to keep after applying NMS
-_C.MODEL.RPN.POST_NMS_TOP_N_TRAIN = 2000
-_C.MODEL.RPN.POST_NMS_TOP_N_TEST = 1000
+# When FPN is used, this limit is applied per level and then again to the union
+# of proposals from all levels
+_C.MODEL.RPN.POST_NMS_TOPK_TRAIN = 2000
+_C.MODEL.RPN.POST_NMS_TOPK_TEST = 1000
 # NMS threshold used on RPN proposals
 _C.MODEL.RPN.NMS_THRESH = 0.7
 # Proposal height and width both need to be greater than RPN_MIN_SIZE
 # (a the scale used during training or inference)
 _C.MODEL.RPN.MIN_SIZE = 0
-# Number of top scoring RPN proposals to keep after combining proposals from
-# all FPN levels
-_C.MODEL.RPN.FPN_POST_NMS_TOP_N_TRAIN = 2000
-_C.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST = 2000
 
 
 # ---------------------------------------------------------------------------- #

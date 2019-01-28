@@ -3,8 +3,9 @@
 import glob
 import os
 import torch
-from setuptools import find_packages, setup
 from torch.utils.cpp_extension import CUDA_HOME, CppExtension, CUDAExtension
+
+from setuptools import find_packages, setup
 
 
 def get_extensions():
