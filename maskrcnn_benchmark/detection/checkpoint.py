@@ -4,7 +4,8 @@ import re
 
 from maskrcnn_benchmark.utils.c2_model_loading import convert_basic_c2_names, load_c2_weights
 from maskrcnn_benchmark.utils.checkpoint import Checkpointer
-from maskrcnn_benchmark.utils.imports import import_file
+
+from .config import paths_catalog
 
 
 # TODO make it support RetinaNet, etc
@@ -77,9 +78,6 @@ class DetectionCheckpointer(Checkpointer):
     def _download_file(self, f):
         # catalog lookup
         if f.startswith("catalog://"):
-            paths_catalog = import_file(
-                "maskrcnn_benchmark.config.paths_catalog", self.cfg.PATHS_CATALOG, True
-            )
             catalog_f = paths_catalog.ModelCatalog.get(f[len("catalog://") :])
             self.logger.info("{} points to {}".format(f, catalog_f))
             f = catalog_f

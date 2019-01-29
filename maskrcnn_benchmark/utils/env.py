@@ -8,7 +8,7 @@ def setup_environment():
     function allows the user to specify a Python source file that performs
     custom setup work that may be necessary to their computing environment.
     """
-    custom_module_path = os.environ.get("TORCH_DETECTRON_ENV_MODULE")
+    custom_module_path = os.environ.get("DETECTRON2_ENV_MODULE")
     if custom_module_path:
         setup_custom_environment(custom_module_path)
     else:

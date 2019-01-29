@@ -269,6 +269,14 @@ if __name__ == "__main__":
         nargs=argparse.REMAINDER,
     )
     args = parser.parse_args()
+    if "PATHS_CATALOG" in args.opts:
+        import sys
+
+        print(
+            "PATHS_CATALOG was removed! See infra/fb/README for updated instructions.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     launch(
         main,

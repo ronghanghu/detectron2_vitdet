@@ -8,8 +8,8 @@ from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.image_list import to_image_list
 from maskrcnn_benchmark.structures.segmentation_mask import SegmentationList
 from maskrcnn_benchmark.utils.comm import get_world_size
-from maskrcnn_benchmark.utils.imports import import_file
 
+from ..config import paths_catalog
 from .transforms import DetectionTransform
 
 
@@ -125,7 +125,6 @@ def build_detection_data_loader(cfg, is_train=True, is_distributed=False, start_
     # but the code supports more general grouping strategy
     aspect_grouping = [1] if cfg.DATALOADER.ASPECT_RATIO_GROUPING else []
 
-    paths_catalog = import_file("maskrcnn_benchmark.config.paths_catalog", cfg.PATHS_CATALOG, True)
     DatasetCatalog = paths_catalog.DatasetCatalog
     dataset_list = cfg.DATASETS.TRAIN if is_train else cfg.DATASETS.TEST
 

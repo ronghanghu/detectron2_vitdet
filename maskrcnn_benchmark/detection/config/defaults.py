@@ -1,4 +1,3 @@
-import os
 from yacs.config import CfgNode as CN
 
 
@@ -279,5 +278,3 @@ _C.TEST.EVAL_PERIOD = 0
 # Misc options
 # ---------------------------------------------------------------------------- #
 _C.OUTPUT_DIR = "./output"
-
-_C.PATHS_CATALOG = os.path.join(os.path.dirname(__file__), "paths_catalog.py")
