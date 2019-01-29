@@ -14,6 +14,7 @@ from maskrcnn_benchmark.structures.boxlist_ops import (
 from ..balanced_positive_negative_sampler import sample_with_positive_fraction
 from ..matcher import Matcher
 
+
 # TODO: comments for future refactoring of this module
 #
 # From @yuxinwu:
@@ -429,8 +430,6 @@ class RPNOutputs(object):
             boxlist.add_field("objectness", scores)
             boxlist = boxlist.clip_to_image(remove_empty=False)
             boxlist = remove_small_boxes(boxlist, min_size)
-            boxlist = boxlist_nms(
-                boxlist, nms_thresh, topk=post_nms_topk, score_field="objectness"
-            )
+            boxlist = boxlist_nms(boxlist, nms_thresh, topk=post_nms_topk, score_field="objectness")
             result.append(boxlist)
         return result
