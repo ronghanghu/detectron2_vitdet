@@ -1,15 +1,15 @@
 import torch
 from torch.nn import functional as F
 
-from maskrcnn_benchmark.utils.registry import Registry
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
+from maskrcnn_benchmark.utils.registry import Registry
 
 from ..backbone import resnet
-from ..balanced_positive_negative_sampler import sample_with_positive_fraction
 from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher
 from ..poolers import Pooler
+from ..sampling import subsample_labels
 from .box_head import FastRCNNOutputHead, FastRCNNOutputs, build_box_head, fastrcnn_inference
 from .mask_head import build_mask_head, maskrcnn_inference, maskrcnn_loss
 
@@ -113,7 +113,7 @@ class ROIHeads(torch.nn.Module):
                 ] = -1  # -1 is ignored by sampler
 
                 # apply sampling
-                sampled_pos_inds, sampled_neg_inds = sample_with_positive_fraction(
+                sampled_pos_inds, sampled_neg_inds = subsample_labels(
                     labels_per_image, self.batch_size_per_image, self.positive_sample_fraction
                 )
                 sampled_inds = torch.cat([sampled_pos_inds, sampled_neg_inds], dim=0)
@@ -308,9 +308,10 @@ class StandardROIHeads(ROIHeads):
                 losses["loss_mask"] = maskrcnn_loss(
                     proposals, mask_logits, targets, self.mask_discretization_size
                 )
+            return proposals, losses
         else:
             losses = {}
-            proposals = fastrcnn_inference(
+            detections = fastrcnn_inference(
                 outputs.predict_boxes(),
                 outputs.predict_probs(),
                 outputs.image_shapes,
@@ -318,12 +319,10 @@ class StandardROIHeads(ROIHeads):
                 self.test_nms_thresh,
                 self.test_detections_per_img,
             )
-            # The name `proposals` is now a misnomer; they are really final detections.
             if self.mask_on:
                 # During inference cascaded prediction is used: the mask head is only
                 # applied to the top scoring box detections.
-                mask_features = self.mask_pooler(features, proposals)
+                mask_features = self.mask_pooler(features, detections)
                 mask_logits = self.mask_head(mask_features)
-                maskrcnn_inference(mask_logits, proposals)
-
-        return proposals, losses
+                maskrcnn_inference(mask_logits, detections)
+            return detections, losses

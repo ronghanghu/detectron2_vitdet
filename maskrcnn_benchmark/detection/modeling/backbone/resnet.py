@@ -5,13 +5,14 @@ from maskrcnn_benchmark.layers import BasicStem, BottleneckBlock, ResNet, make_s
 
 def build_resnet_head(cfg):
     # For now, assumed to be a res5 head.
-    stage_channel_factor = 2 ** 3  # res5 is 8x res2
-    resnet_cfg = cfg.MODEL.RESNETS
-    num_groups = resnet_cfg.NUM_GROUPS
-    width_per_group = resnet_cfg.WIDTH_PER_GROUP
-    bottleneck_channels = num_groups * width_per_group * stage_channel_factor
-    out_channels = resnet_cfg.RES2_OUT_CHANNELS * stage_channel_factor
-    stride_in_1x1 = resnet_cfg.STRIDE_IN_1X1
+    # fmt: off
+    stage_channel_factor    = 2 ** 3  # res5 is 8x res2
+    num_groups              = cfg.MODEL.RESNETS.NUM_GROUPS
+    width_per_group         = cfg.MODEL.RESNETS.WIDTH_PER_GROUP
+    bottleneck_channels     = num_groups * width_per_group * stage_channel_factor
+    out_channels            = cfg.MODEL.RESNETS.RES2_OUT_CHANNELS * stage_channel_factor
+    stride_in_1x1           = cfg.MODEL.RESNETS.STRIDE_IN_1X1
+    # fmt: on
 
     blocks = make_stage(
         BottleneckBlock,
@@ -29,24 +30,24 @@ def build_resnet_head(cfg):
 
 def build_resnet_backbone(cfg):
     # TODO registration of new blocks/stems
-    resnet_cfg = cfg.MODEL.RESNETS
-    stem = BasicStem(out_channels=resnet_cfg.STEM_OUT_CHANNELS, norm="FrozenBN")
+    stem = BasicStem(out_channels=cfg.MODEL.RESNETS.STEM_OUT_CHANNELS, norm="FrozenBN")
     freeze_at = cfg.MODEL.BACKBONE.FREEZE_AT
 
     if freeze_at >= 1:
         for p in stem.parameters():
             p.requires_grad = False
 
-    out_features = resnet_cfg.OUT_FEATURES
-    depth = resnet_cfg.DEPTH
-
-    num_groups = resnet_cfg.NUM_GROUPS
-    width_per_group = resnet_cfg.WIDTH_PER_GROUP
-    in_channels = resnet_cfg.STEM_OUT_CHANNELS
+    # fmt: off
+    out_features        = cfg.MODEL.RESNETS.OUT_FEATURES
+    depth               = cfg.MODEL.RESNETS.DEPTH
+    num_groups          = cfg.MODEL.RESNETS.NUM_GROUPS
+    width_per_group     = cfg.MODEL.RESNETS.WIDTH_PER_GROUP
     bottleneck_channels = num_groups * width_per_group
-    out_channels = resnet_cfg.RES2_OUT_CHANNELS
-    stride_in_1x1 = resnet_cfg.STRIDE_IN_1X1
-    res5_dilation = resnet_cfg.RES5_DILATION
+    in_channels         = cfg.MODEL.RESNETS.STEM_OUT_CHANNELS
+    out_channels        = cfg.MODEL.RESNETS.RES2_OUT_CHANNELS
+    stride_in_1x1       = cfg.MODEL.RESNETS.STRIDE_IN_1X1
+    res5_dilation       = cfg.MODEL.RESNETS.RES5_DILATION
+    # fmt: on
     assert res5_dilation in {1, 2}
 
     num_blocks_per_stage = {50: [3, 4, 6, 3], 101: [3, 4, 23, 3]}[depth]

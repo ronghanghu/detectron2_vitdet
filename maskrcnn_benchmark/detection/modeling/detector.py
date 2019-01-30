@@ -2,6 +2,7 @@ import torch
 from torch import nn
 
 from maskrcnn_benchmark.utils.registry import Registry
+
 from .backbone import build_backbone
 from .roi_heads.roi_heads import build_roi_heads
 from .rpn.rpn import build_rpn

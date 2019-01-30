@@ -11,8 +11,8 @@ from maskrcnn_benchmark.structures.boxlist_ops import (
     remove_small_boxes,
 )
 
-from ..balanced_positive_negative_sampler import sample_with_positive_fraction
 from ..matcher import Matcher
+from ..sampling import subsample_labels
 
 
 # TODO: comments for future refactoring of this module
@@ -152,7 +152,7 @@ class RPNOutputs(object):
             the label vector to the ignore value (-1) for all elements that are not
             included in the sample.
             """
-            pos_idx, neg_idx = sample_with_positive_fraction(
+            pos_idx, neg_idx = subsample_labels(
                 label, self.batch_size_per_image, self.positive_fraction
             )
             # Fill with the ignore label (-1), then set positive and negative labels

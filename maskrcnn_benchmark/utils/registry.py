@@ -1,5 +1,3 @@
-
-
 class Registry(object):
     """
     The registry that provides name -> object mapping, to support third-party users' custom modules.
@@ -18,6 +16,7 @@ class Registry(object):
 
         BACKBONE_REGISTRY.register(obj=MyBackbone)
     """
+
     def __init__(self, name):
         """
         Args:
@@ -28,8 +27,9 @@ class Registry(object):
         self._obj_map = {}
 
     def _do_register(self, name, obj):
-        assert name not in self._obj_map, \
-            "An object named '{}' was already registered in '{}' registry!".format(name, self._name)
+        assert (
+            name not in self._obj_map
+        ), "An object named '{}' was already registered in '{}' registry!".format(name, self._name)
         self._obj_map[name] = obj
 
     def register(self, obj=None):
