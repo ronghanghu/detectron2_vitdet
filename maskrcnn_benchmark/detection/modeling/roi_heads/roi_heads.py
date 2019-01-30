@@ -1,6 +1,7 @@
 import torch
 from torch.nn import functional as F
 
+from maskrcnn_benchmark.utils.registry import Registry
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 
@@ -11,6 +12,14 @@ from ..matcher import Matcher
 from ..poolers import Pooler
 from .box_head import FastRCNNOutputHead, FastRCNNOutputs, build_box_head, fastrcnn_inference
 from .mask_head import build_mask_head, maskrcnn_inference, maskrcnn_loss
+
+
+ROI_HEADS_REGISTRY = Registry("ROI_HEADS")
+
+
+def build_roi_heads(cfg):
+    name = cfg.MODEL.ROI_HEADS.NAME
+    return ROI_HEADS_REGISTRY.get(name)(cfg)
 
 
 def keep_only_positive_boxes(boxes, matched_targets):
@@ -140,6 +149,7 @@ class ROIHeads(torch.nn.Module):
         raise NotImplementedError()
 
 
+@ROI_HEADS_REGISTRY.register()
 class Res5ROIHeads(ROIHeads):
     def __init__(self, cfg):
         super(Res5ROIHeads, self).__init__(cfg)
@@ -221,6 +231,7 @@ class Res5ROIHeads(ROIHeads):
             return results, {}
 
 
+@ROI_HEADS_REGISTRY.register()
 class StandardROIHeads(ROIHeads):
     """
     Standard in a sense that no ROI transform sharing or feature sharing.
@@ -316,8 +327,3 @@ class StandardROIHeads(ROIHeads):
                 maskrcnn_inference(mask_logits, proposals)
 
         return proposals, losses
-
-
-def build_roi_heads(cfg):
-    name = cfg.MODEL.ROI_HEADS.NAME
-    return {"Res5ROIHeads": Res5ROIHeads, "StandardROIHeads": StandardROIHeads}[name](cfg)

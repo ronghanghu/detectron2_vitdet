@@ -1,17 +1,21 @@
-"""
-Proposal implementation for the model builder
-Everything that constructs something is a function that is
-or can be accessed by a string
-"""
-
 import torch
 from torch import nn
 
-from ..backbone import build_backbone
-from ..roi_heads.roi_heads import build_roi_heads
-from ..rpn.rpn import build_rpn
+from maskrcnn_benchmark.utils.registry import Registry
+from .backbone import build_backbone
+from .roi_heads.roi_heads import build_roi_heads
+from .rpn.rpn import build_rpn
 
 
+META_ARCH_REGISTRY = Registry("META_ARCH")
+
+
+def build_detection_model(cfg):
+    meta_arch = cfg.MODEL.META_ARCHITECTURE
+    return META_ARCH_REGISTRY.get(meta_arch)(cfg)
+
+
+@META_ARCH_REGISTRY.register()
 class GeneralizedRCNN(nn.Module):
     """
     Main class for Generalized R-CNN. Supports boxes, masks and keypoints
@@ -34,13 +38,14 @@ class GeneralizedRCNN(nn.Module):
         """
         Arguments:
             data: a tuple, produced by :class:`DetectionBatchCollator`.
-        """
-        images, targets, _ = data
-        """
+
+        For now, the data contains images, targets, and roidb
         images: ImageList
         targets: list[BoxList]
-        _: other information that's not useful in training
+        roidb: other information that's not useful in training
         """
+
+        images, targets, _ = data
         images = images.to(self.device)
         if targets is not None:
             targets = [t.to(self.device) for t in targets]
