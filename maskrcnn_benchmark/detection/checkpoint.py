@@ -88,9 +88,9 @@ class DetectionCheckpointer(Checkpointer):
         if f.endswith(".pkl"):
             model = load_c2_weights(f)
             model = _convert_c2_detectron_weights(model)
-            return dict(model=model)
+            return {"model": model}
         # load native detectron.pytorch checkpoint
         loaded = super()._load_file(f)
         if "model" not in loaded:
-            loaded = dict(model=loaded)
+            loaded = {"model": model}
         return loaded

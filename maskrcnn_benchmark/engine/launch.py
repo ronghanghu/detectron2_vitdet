@@ -3,7 +3,6 @@ import torch.distributed as dist
 import torch.multiprocessing as mp
 
 
-# TODO support distributed launch here
 def launch(main_func, num_gpus_per_machine, num_machines=1, machine_rank=0, dist_url=None, args=()):
     """
     Args:

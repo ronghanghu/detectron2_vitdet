@@ -1,3 +1,4 @@
+import importlib
 import os
 
 from maskrcnn_benchmark.utils.imports import import_file
@@ -5,7 +6,8 @@ from maskrcnn_benchmark.utils.imports import import_file
 
 def setup_environment():
     """Perform environment setup work. The default setup is a no-op, but this
-    function allows the user to specify a Python source file that performs
+    function allows the user to specify a Python source file or a module in
+    the $DETECTRON2_ENV_MODULE environment variable, that performs
     custom setup work that may be necessary to their computing environment.
     """
     custom_module_path = os.environ.get("DETECTRON2_ENV_MODULE")
@@ -16,15 +18,19 @@ def setup_environment():
         pass
 
 
-def setup_custom_environment(custom_module_path):
-    """Load custom environment setup from a Python source file and run the setup
-    function.
+def setup_custom_environment(custom_module):
     """
-    module = import_file("maskrcnn_benchmark.utils.env.custom_module", custom_module_path)
+    Load custom environment setup by importing a Python source file or a
+    module, and run the setup function.
+    """
+    if custom_module.endswith(".py"):
+        module = import_file("maskrcnn_benchmark.utils.env.custom_module", custom_module)
+    else:
+        module = importlib.import_module(custom_module)
     assert hasattr(module, "setup_environment") and callable(module.setup_environment), (
         "Custom environment module defined in {} does not have the "
         "required callable attribute 'setup_environment'."
-    ).format(custom_module_path)
+    ).format(custom_module)
     module.setup_environment()
 
 

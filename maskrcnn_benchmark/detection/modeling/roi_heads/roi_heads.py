@@ -10,7 +10,8 @@ from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher
 from ..poolers import Pooler
 from ..sampling import subsample_labels
-from .box_head import FastRCNNOutputHead, FastRCNNOutputs, build_box_head, fastrcnn_inference
+from .box_head import build_box_head
+from .fast_rcnn import FastRCNNOutputHead, FastRCNNOutputs, fastrcnn_inference
 from .mask_head import build_mask_head, maskrcnn_inference, maskrcnn_loss
 
 
