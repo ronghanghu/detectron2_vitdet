@@ -216,7 +216,7 @@ class RPNOutputs(object):
             return proposals
 
         device = proposals[0].bbox.device
-        gt_boxes = [target.copy_with_fields([]) for target in self.targets]
+        gt_boxes = [target.view_with_fields([]) for target in self.targets]
         # Later cat of bbox requires all fields to be present for all bbox
         # so we need to add a dummy for objectness that's missing
         for gt_box in gt_boxes:

@@ -121,7 +121,7 @@ class BoxList(object):
 
         return area
 
-    def copy_with_fields(self, fields):
+    def view_with_fields(self, fields):
         bbox = BoxList(self.bbox, self.size, self.mode)
         if not isinstance(fields, (list, tuple)):
             fields = [fields]
