@@ -30,18 +30,18 @@ def boxlist_nms(boxlist, nms_thresh, topk=-1, score_field="score"):
     return boxlist.convert(mode)
 
 
-def remove_small_boxes(boxlist, min_size):
+def remove_small_boxes(boxlist, min_box_side_len):
     """
-    Only keep boxes with both sides >= min_size
+    Only keep boxes with both sides >= min_box_side_len
 
     Arguments:
         boxlist (Boxlist)
-        min_size (int)
+        min_box_side_len (int)
     """
     # TODO maybe add an API for querying the ws / hs
     xywh_boxes = boxlist.convert("xywh").bbox
     _, _, ws, hs = xywh_boxes.unbind(dim=1)
-    keep = ((ws >= min_size) & (hs >= min_size)).nonzero().squeeze(1)
+    keep = ((ws >= min_box_side_len) & (hs >= min_box_side_len)).nonzero().squeeze(1)
     return boxlist[keep]
 
 

@@ -39,7 +39,7 @@ class DatasetCatalog(object):
             attrs = DatasetCatalog.DATASETS[name]
             args = {
                 "root": os.path.join(data_dir, attrs[0]),
-                "ann_file": os.path.join(data_dir, attrs[1])
+                "ann_file": os.path.join(data_dir, attrs[1]),
             }
             return {"factory": "COCODetection", "args": args}
         raise RuntimeError("Dataset not available: {}".format(name))

@@ -29,10 +29,12 @@ def _convert_c2_detectron_weights(weights):
     layer_keys = [k.replace("conv.rpn.fpn2", "rpn.head.conv") for k in layer_keys]
     layer_keys = [k.replace("conv.rpn", "rpn.head.conv") for k in layer_keys]
 
-    layer_keys = [k.replace("rpn.bbox.pred.fpn2", "rpn.head.bbox_pred") for k in layer_keys]
-    layer_keys = [k.replace("rpn.cls.logits.fpn2", "rpn.head.cls_logits") for k in layer_keys]
-    layer_keys = [k.replace("rpn.bbox.pred", "rpn.head.bbox_pred") for k in layer_keys]
-    layer_keys = [k.replace("rpn.cls.logits", "rpn.head.cls_logits") for k in layer_keys]
+    layer_keys = [k.replace("rpn.bbox.pred.fpn2", "rpn.head.anchor_deltas") for k in layer_keys]
+    layer_keys = [
+        k.replace("rpn.cls.logits.fpn2", "rpn.head.objectness_logits") for k in layer_keys
+    ]
+    layer_keys = [k.replace("rpn.bbox.pred", "rpn.head.anchor_deltas") for k in layer_keys]
+    layer_keys = [k.replace("rpn.cls.logits", "rpn.head.objectness_logits") for k in layer_keys]
 
     # Fast R-CNN
     layer_keys = [re.sub("^bbox.pred", "bbox_pred", k) for k in layer_keys]

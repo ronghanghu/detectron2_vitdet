@@ -1,17 +1,57 @@
+import math
 import torch
 import torch.nn.functional as F
 from torch import nn
 
+from maskrcnn_benchmark.structures.boxlist_ops import cat_boxlist
+
 from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher
 from .anchor_generator import build_anchor_generator
-from .rpn_outputs import RPNOutputs
+from .rpn_outputs import RPNOutputs, sample_rpn_proposals
+
+
+# In the future when we have more proposal mechanisms (including precomputed)
+# this function should move into a shared module.
+def add_ground_truth_to_proposals(gt_box_list, proposals):
+    """
+    Augment `proposals` with ground-truth boxes from `gt_box_list`.
+
+    Args:
+        gt_box_list (list[BoxList]): list of N elements. Element i is a BoxList
+            representing the gound-truth for image i.
+        proposals (list[BoxList]): list of N elements. Element i is a BoxList
+            representing the proposals for image i, as returned by :meth:`proposals`.
+
+    Returns:
+        list[BoxList]: list of N BoxLists.
+    """
+    if gt_box_list is None:
+        return proposals
+
+    assert len(proposals) == len(gt_box_list)
+    device = proposals[0].bbox.device
+    gt_box_list = [gt_box_list_i.view_with_fields([]) for gt_box_list_i in gt_box_list]
+    # Concating gt_box_list with proposals requires them to have the same fields
+    # Assign all ground-truth boxes an objectness logit corresponding to P(object) \approx 1.
+    gt_obj_logit = math.log((1.0 - 1e-10) / (1 - (1.0 - 1e-10)))
+    for gt_box_list_i in gt_box_list:
+        gt_box_list_i.add_field(
+            "objectness_logits", gt_obj_logit * torch.ones(len(gt_box_list_i), device=device)
+        )
+
+    proposals = [
+        cat_boxlist((proposals_i, gt_box_list_i))
+        for proposals_i, gt_box_list_i in zip(proposals, gt_box_list)
+    ]
+
+    return proposals
 
 
 class RPNHead(nn.Module):
     """
     RPN classification and regression heads. Uses a 3x3 conv to produce a shared
-    hidden state from which one 1x1 conv predicts objectness scores for each anchor
+    hidden state from which one 1x1 conv predicts objectness logits for each anchor
     and a second 1x1 conv predicts bounding-box deltas specifying how to deform
     each anchor into an object proposal.
     """
@@ -23,11 +63,14 @@ class RPNHead(nn.Module):
             num_cell_anchors (int): number of cell anchors
         """
         super(RPNHead, self).__init__()
+        # 3x3 conv for the hidden representation
         self.conv = nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1)
-        self.cls_logits = nn.Conv2d(in_channels, num_cell_anchors, kernel_size=1, stride=1)
-        self.bbox_pred = nn.Conv2d(in_channels, num_cell_anchors * 4, kernel_size=1, stride=1)
+        # 1x1 conv for predicting objectness logits
+        self.objectness_logits = nn.Conv2d(in_channels, num_cell_anchors, kernel_size=1, stride=1)
+        # 1x1 conv for predicting box2box transform deltas
+        self.anchor_deltas = nn.Conv2d(in_channels, num_cell_anchors * 4, kernel_size=1, stride=1)
 
-        for l in [self.conv, self.cls_logits, self.bbox_pred]:
+        for l in [self.conv, self.objectness_logits, self.anchor_deltas]:
             nn.init.normal_(l.weight, std=0.01)
             nn.init.constant_(l.bias, 0)
 
@@ -36,13 +79,13 @@ class RPNHead(nn.Module):
         Args:
             features (list[Tensor]): list of feature maps
         """
-        cls_logits = []
-        bbox_pred = []
+        objectness_logits_pred = []
+        anchor_deltas_pred = []
         for x in features:
             t = F.relu(self.conv(x))
-            cls_logits.append(self.cls_logits(t))
-            bbox_pred.append(self.bbox_pred(t))
-        return cls_logits, bbox_pred
+            objectness_logits_pred.append(self.objectness_logits(t))
+            anchor_deltas_pred.append(self.anchor_deltas(t))
+        return objectness_logits_pred, anchor_deltas_pred
 
 
 class RPN(nn.Module):
@@ -100,7 +143,7 @@ class RPN(nn.Module):
 
         return RPNHead(in_channels[0], num_cell_anchors[0])
 
-    def forward(self, images, features, targets=None):
+    def forward(self, images, features, gt_box_list=None):
         """
         Args:
             images (ImageList): input images of length `N`
@@ -108,11 +151,11 @@ class RPN(nn.Module):
                 map name to tensor. Axis 0 represents the number of images `N` in
                 the input data; axes 1-3 are channels, height, and width, which may
                 vary between feature maps (e.g., if a feature pyramid is used).
-            targets (list[BoxList, optional): length `N` list of `BoxList`s. Each
+            gt_box_list (list[BoxList, optional): length `N` list of `BoxList`s. Each
                 `BoxList` stores ground-truth boxes for the corresponding image.
         """
         features = [features[f] for f in self.in_features]
-        objectness, anchor_deltas = self.head(features)
+        objectness_logits_pred, anchor_deltas_pred = self.head(features)
         anchors = self.anchor_generator(images, features)
         # TODO: The anchors only depend on the feature map shape; there's probably
         # an opportunity for some optimizations (e.g., caching anchors).
@@ -122,17 +165,17 @@ class RPN(nn.Module):
             self.batch_size_per_image,
             self.positive_fraction,
             images,
-            objectness,
-            anchor_deltas,
+            objectness_logits_pred,
+            anchor_deltas_pred,
             anchors,
-            targets,
+            gt_box_list,
         )
 
         if self.training:
             losses = outputs.losses()
             if self.rpn_only:
                 # When training an RPN-only model, the loss is determined by the
-                # predicted objectness and anchor_deltas values and there is
+                # objectness_logits_pred and anchor_deltas_pred values and there is
                 # no need to transform the anchors into predicted boxes; this is an
                 # optimization that avoids the unnecessary transformation.
                 return None, losses
@@ -140,17 +183,29 @@ class RPN(nn.Module):
             losses = {}
 
         with torch.no_grad():
-            proposals = outputs.proposals(
-                nms_thresh=self.nms_thresh,
-                pre_nms_topk=self.pre_nms_topk[self.training],
-                post_nms_topk=self.post_nms_topk[self.training],
-                min_size=self.min_size,
-                training=self.training,
+            proposals = sample_rpn_proposals(
+                outputs.predict_proposals(),
+                outputs.predict_objectness_logits(),
+                images,
+                self.nms_thresh,
+                self.pre_nms_topk[self.training],
+                self.post_nms_topk[self.training],
+                self.min_size,
+                self.training,
             )
 
             # Augment RPN proposals with ground-truth boxes
             if self.training:
-                proposals = outputs.add_gt_proposals(proposals)
+                # When training starts, RPN will produce low quality proposals due
+                # to random initialization. It's possible that none of these initial
+                # proposals have high enough overlap with the gt objects to be used
+                # as positive examples for the second stage components (box head,
+                # cls head, mask head). Adding the gt boxes to the set of proposals
+                # ensures that the second stage components will have some positive
+                # examples from the start of training. This augmentation improves
+                # convergence and empirically improves box AP on COCO by about 0.5
+                # points (under one tested configuration).
+                proposals = add_ground_truth_to_proposals(gt_box_list, proposals)
 
             if self.rpn_only:
                 # We must be in testing mode (self.training and self.rpn_only returns early)
@@ -159,7 +214,9 @@ class RPN(nn.Module):
                 # and don't bother to sort them in decreasing score order. For RPN-only
                 # models, the proposals are the final output and we return them in
                 # high-to-low confidence order.
-                inds = [box.get_field("objectness").sort(descending=True)[1] for box in proposals]
+                inds = [
+                    box.get_field("objectness_logits").sort(descending=True)[1] for box in proposals
+                ]
                 proposals = [box[ind] for box, ind in zip(proposals, inds)]
 
         return proposals, losses

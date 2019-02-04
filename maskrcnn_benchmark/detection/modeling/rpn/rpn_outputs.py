@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from maskrcnn_benchmark.layers import smooth_l1_loss
+from maskrcnn_benchmark.layers import cat, smooth_l1_loss
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import (
     boxlist_iou,
@@ -17,54 +17,209 @@ from ..sampling import subsample_labels
 
 # TODO: comments for future refactoring of this module
 #
-# From @yuxinwu:
-# On a high level I think the RPNOutputs class encapsulates too many functionalities.
-# This makes it hard to, for example, reuse the proposal sampling & add_gt_proposals
-# logic for models with pre-computed proposals.
-# The analogous class to FastRCNNoutputs is to decode the direct outputs of a RPN head
-# network. Post processing afterwards may be moved outside for reuse in models with
-# pre-computed proposals.
-#
 # From @rbg:
 # This code involves a significant amount of tensor reshaping and permuting. Look for
 # ways to simplify this.
 
+"""
+Shape shorthand in this module:
 
-def rpn_losses(labels, regression_targets, label_logits, regression_predictions):
+    N: number of images in the minibatch
+    L: number of feature maps per image on which RPN is run
+    A: number of cell anchors (must be the same for all feature maps)
+    Hi, Wi: height and width of the i-th feature map
+    4: size of the box parameterization
+
+Naming convention:
+
+    objectness: refers to the binary classification of an anchor as object vs. not
+    object.
+
+    deltas: refers to the 4-d (dx, dy, dw, dh) deltas that parameterize the box2box
+    transform (see :class:`box_regression.Box2BoxTransform`).
+
+    objectness_logits_pred: predicted objectness scores in [-inf, +inf]; use
+        sigmoid(objectness_logits_pred) to estimate P(object).
+
+    objectness_logits_gt: ground-truth binary classification labels for objectness
+
+    anchor_deltas_pred: predicted box2box transform deltas
+
+    anchor_deltas_gt: ground-truth box2box transform deltas
+"""
+
+
+def sample_rpn_proposals(
+    proposals,
+    objectness_logits_pred,
+    images,
+    nms_thresh,
+    pre_nms_topk,
+    post_nms_topk,
+    min_box_side_len,
+    training,
+):
     """
+    Return scored object proposals after applying box regression to the anchors, NMS,
+    taking the top k, etc.
+
     Args:
-        labels: (N,), each in {-1, 0, 1}. -1 means ignore
-        regression_targets: (N, 4)
-        label_logits: (N,)
-        regression_predictions: (N, 4)
+        proposals (list[Tensor]): A list of L tensors. Tensor i has shape (N, Hi*Wi*A, 4).
+        objectness_logits_pred (list[Tensor]): A list of L tensors. Tensor i has shape (N, Hi*Wi*A).
+        images (ImageList): Input images as an :class:`ImageList`.
+        nms_thresh (float): IoU threshold to use for NMS
+        pre_nms_topk (int): number of top k scoring proposals to keep before applying NMS.
+            When RPN is run on multiple feature maps (as in FPN) this number is per
+            feature map.
+        post_nms_topk (int): number of top k scoring proposals to keep after applying NMS.
+            When RPN is run on multiple feature maps (as in FPN) this number is total,
+            over all feature maps.
+        min_box_side_len (float): minimum proposal box side length in pixels (absolute units
+            wrt input images).
+        training (bool): True if proposals are to be used in training, otherwise False.
+            This arg exists only to support a legacy bug; look for the "NB: Legacy bug ..."
+            comment.
 
     Returns:
-        objectness_loss, box_loss, both unnormalized (summed over samples).
+        proposals (list[BoxLists]): list of N BoxLists. BoxList i stores post_nms_topk object
+            proposals for image i.
     """
-    pos_masks = labels == 1
-    box_loss = smooth_l1_loss(
-        regression_predictions[pos_masks],
-        regression_targets[pos_masks],
-        beta=1.0 / 9,
-        size_average=False,
+    # FIXME: make size order consistent everywhere: ImageList uses (height, width)
+    # while BoxList uses (width, height)
+    image_sizes = [size[::-1] for size in images.image_sizes]  # to (w, h) order
+
+    proposals = [
+        _sample_rpn_proposals_single_feature_map(
+            proposals_i,
+            objectness_logits_pred_i,
+            image_sizes,
+            nms_thresh,
+            pre_nms_topk,
+            post_nms_topk,
+            min_box_side_len,
+        )
+        for proposals_i, objectness_logits_pred_i in zip(proposals, objectness_logits_pred)
+    ]  # (L, N) BoxList.
+
+    if len(proposals) == 1:
+        # Single feature map, no need to merge
+        return proposals[0]
+
+    # Merge proposals from all levels within each image
+    proposals = list(zip(*proposals))  # transpose to (N, L) BoxList
+    # concat proposals across feature maps
+    proposals = [cat_boxlist(boxlist) for boxlist in proposals]  # cat to (N, ) BoxList
+    num_images = len(proposals)
+
+    # NB: Legacy bug to address -- there's different behavior during training vs. testing.
+    # During training, topk is over *all* the proposals combined over all images.
+    # During testing, it is over the proposals for each image separately.
+    # TODO: resolve this difference and make it consistent. It should be per image,
+    # and not per batch, see: https://github.com/facebookresearch/Detectron/issues/459.
+    if training:
+        objectness_logits_pred = torch.cat(
+            [boxlist.get_field("objectness_logits") for boxlist in proposals], dim=0
+        )
+        box_sizes = [len(boxlist) for boxlist in proposals]
+        topk = min(post_nms_topk, len(objectness_logits_pred))
+        _, inds_sorted = torch.topk(objectness_logits_pred, topk, dim=0, sorted=True)
+        inds_mask = torch.zeros_like(objectness_logits_pred, dtype=torch.uint8)
+        inds_mask[inds_sorted] = 1
+        inds_mask = inds_mask.split(box_sizes)
+        for i in range(num_images):
+            proposals[i] = proposals[i][inds_mask[i]]
+    else:
+        for i in range(num_images):
+            objectness_logits_pred = proposals[i].get_field("objectness_logits")
+            topk = min(post_nms_topk, len(objectness_logits_pred))
+            _, inds_sorted = torch.topk(objectness_logits_pred, topk, dim=0, sorted=True)
+            proposals[i] = proposals[i][inds_sorted]
+    return proposals
+
+
+def _sample_rpn_proposals_single_feature_map(
+    proposals,
+    objectness_logits_pred,
+    image_sizes,
+    nms_thresh,
+    pre_nms_topk,
+    post_nms_topk,
+    min_box_side_len,
+):
+    """
+    Applies NMS, clips proposals, removes small proposals, and the returns the
+    `post_nms_topk` highest scoring proposals for a single feature map.
+
+    Args:
+        image_sizes: N (width, height) tuples.
+        Otherwise, see `sample_rpn_proposals`.
+
+    Returns:
+        list[BoxLists]: list of N BoxLists. BoxList i stores post_nms_topk object
+            proposals for image i.
+    """
+    N, Hi_Wi_A = objectness_logits_pred.shape
+    device = objectness_logits_pred.device
+    assert proposals.shape[:2] == (N, Hi_Wi_A)
+
+    pre_nms_topk = min(pre_nms_topk, Hi_Wi_A)
+    objectness_logits_pred, topk_idx = objectness_logits_pred.topk(pre_nms_topk, dim=1)
+
+    batch_idx = torch.arange(N, device=device)[:, None]
+    proposals = proposals[batch_idx, topk_idx]  # shape is now (N, pre_nms_topk, 4)
+
+    result = []
+    for proposals_i, objectness_logits_pred_i, image_size_i in zip(
+        proposals, objectness_logits_pred, image_sizes
+    ):
+        """
+        proposals_i: tensor of shape (topk, 4)
+        objectness_logits_pred_i: top-k objectness_logits_pred_i of shape (topk, )
+        image_size_i: image (width, height)
+        """
+        boxlist = BoxList(proposals_i, image_size_i, mode="xyxy")
+        # TODO why using "field" at all? Avoid storing arbitrary states
+        boxlist.add_field("objectness_logits", objectness_logits_pred_i)
+        boxlist = boxlist.clip_to_image(remove_empty=False)
+        boxlist = remove_small_boxes(boxlist, min_box_side_len)
+        boxlist = boxlist_nms(
+            boxlist, nms_thresh, topk=post_nms_topk, score_field="objectness_logits"
+        )
+        result.append(boxlist)
+    return result
+
+
+def rpn_losses(objectness_logits_gt, anchor_deltas_gt, objectness_logits_pred, anchor_deltas_pred):
+    """
+    Args:
+        objectness_logits_gt (Tensor): shape (N,), each element in {-1, 0, 1} representing
+            ground-truth objectness labels with: -1 = ignore; 0 = not object; 1 = object.
+        anchor_deltas_gt (Tensor): shape (N, 4), row i represents ground-truth
+            box2box transform targets (dx, dy, dw, dh) that map anchor i to its
+            matched ground-truth box.
+        objectness_logits_pred (Tensor): shape (N,), each element is a predicted objectness
+            logit.
+        anchor_deltas_pred (Tensor): shape (N, 4), each row is a predicted box2box
+            transform (dx, dy, dw, dh).
+
+    Returns:
+        objectness_loss, localization_loss, both unnormalized (summed over samples).
+    """
+    pos_masks = objectness_logits_gt == 1
+    localization_loss = smooth_l1_loss(
+        anchor_deltas_pred[pos_masks], anchor_deltas_gt[pos_masks], beta=1.0 / 9, size_average=False
     )
 
-    valid_masks = labels >= 0
+    valid_masks = objectness_logits_gt >= 0
     objectness_loss = F.binary_cross_entropy_with_logits(
-        label_logits[valid_masks], labels[valid_masks].to(torch.float32), reduction="sum"
+        objectness_logits_pred[valid_masks],
+        objectness_logits_gt[valid_masks].to(torch.float32),
+        reduction="sum",
     )
-    return objectness_loss, box_loss
+    return objectness_loss, localization_loss
 
 
 class RPNOutputs(object):
-    """
-    Shape shorthand in this class:
-        N: number of images in the minibatch
-        L: number of feature maps per image
-        A: number of cell anchors (must be the same for all feature maps)
-        Hi, Wi: height and width of the i-th feature map
-    """
-
     def __init__(
         self,
         box2box_transform,
@@ -72,10 +227,10 @@ class RPNOutputs(object):
         batch_size_per_image,
         positive_fraction,
         images,
-        objectness,
-        anchor_deltas,
+        objectness_logits_pred,
+        anchor_deltas_pred,
         anchors,
-        targets=None,
+        gt_box_list=None,
     ):
         """
         Args:
@@ -86,64 +241,72 @@ class RPNOutputs(object):
             batch_size_per_image (int): number of proposals to sample when training
             positive_fraction (float): target fraction of sampled proposals that should be positive
             images (ImageList): :class:`ImageList` instance representing N input images
-            objectness (list[Tensor]): A list of L elements. Element i is a tensor of shape
+            objectness_logits_pred (list[Tensor]): A list of L elements. Element i is a tensor of shape
                 (N, A, Hi, Wi) representing the predicted objectness logits for anchors.
-            anchor_deltas (list[Tensor]): A list of L elements. Element i is a tensor of shape
+            anchor_deltas_pred (list[Tensor]): A list of L elements. Element i is a tensor of shape
                 (N, A*4, Hi, Wi) representing the predicted "deltas" used to transform anchors
                 to proposals.
             anchors (list[list[BoxLists]]): A list of N elements. Each element is a list of L
                 BoxLists. BoxList (n, l) stores the entire anchor array for feature map l in image
                 n (i.e. the cell anchors repeated over all locations in feature map (n, l)).
-            targets (list[BoxList, optional): A list of N elements. Element i a BoxList storing
-                the ground-truth boxes for image i.
+            gt_box_list (list[BoxList], optional): A list of N elements. Element i a BoxList storing
+                the ground-truth ("gt") boxes for image i.
         """
         self.box2box_transform = box2box_transform
         self.anchor_matcher = anchor_matcher
         self.batch_size_per_image = batch_size_per_image
         self.positive_fraction = positive_fraction
-        self.images = images
-        self.objectness = objectness
-        self.anchor_deltas = anchor_deltas
+        self.objectness_logits_pred = objectness_logits_pred
+        self.anchor_deltas_pred = anchor_deltas_pred
         self.anchors = anchors
-        self.targets = targets
-        self.num_feature_maps = len(objectness)
+        self.gt_box_list = gt_box_list
+        self.num_feature_maps = len(objectness_logits_pred)
         self.num_images = len(images)
 
-    def prepare_targets(self):
-        labels = []
-        regression_targets = []
+    def _get_ground_truth(self):
+        """
+        Returns:
+            objectness_logits_gt: list of N tensors. Tensor i is a vector whose length is the
+                total number of anchors in image i (i.e., len(anchors[i])). Label values are
+                in {-1, 0, 1}, with meanings: -1 = ignore; 0 = negative class; 1 = positive class.
+            anchor_deltas_gt: list of N tensors. Tensor i has shape (len(anchors[i]), 4).
+        """
+        objectness_logits_gt = []
+        anchor_deltas_gt = []
         # Concatenate anchors from all feature maps into a single BoxList per image
-        anchors = [cat_boxlist(anchors_per_image) for anchors_per_image in self.anchors]
-        for anchors_per_image, targets_per_image in zip(anchors, self.targets):
-            match_quality_matrix = boxlist_iou(targets_per_image, anchors_per_image)
+        anchors = [cat_boxlist(anchors_i) for anchors_i in self.anchors]
+        for anchors_i, gt_box_list_i in zip(anchors, self.gt_box_list):
+            """
+            anchors_i: anchors for i-th image
+            gt_box_list_i: ground-truth boxes for i-th image
+            """
+            match_quality_matrix = boxlist_iou(gt_box_list_i, anchors_i)
             matched_idxs = self.anchor_matcher(match_quality_matrix)
             # NB: need to clamp the indices because matched_idxs can be <0
-            matched_targets = targets_per_image.bbox[matched_idxs.clamp(min=0)]
+            matched_gt_boxes = gt_box_list_i.bbox[matched_idxs.clamp(min=0)]
 
-            labels_per_image = (matched_idxs >= 0).to(dtype=torch.int32)
+            objectness_logits_gt_i = (matched_idxs >= 0).to(dtype=torch.int32)
             # discard anchors that go out of the boundaries of the image
-            labels_per_image[~anchors_per_image.get_field("visibility")] = -1
+            objectness_logits_gt_i[~anchors_i.get_field("visibility")] = -1
             # discard indices that are neither foreground or background
-            labels_per_image[matched_idxs == Matcher.BETWEEN_THRESHOLDS] = -1
+            objectness_logits_gt_i[matched_idxs == Matcher.BETWEEN_THRESHOLDS] = -1
 
-            # compute regression targets
             # TODO wasted computation for ignored boxes
-            regression_targets_per_image = self.box2box_transform.get_deltas(
-                anchors_per_image.bbox, matched_targets
-            )
+            anchor_deltas_gt_i = self.box2box_transform.get_deltas(anchors_i.bbox, matched_gt_boxes)
 
-            labels.append(labels_per_image)
-            regression_targets.append(regression_targets_per_image)
+            objectness_logits_gt.append(objectness_logits_gt_i)
+            anchor_deltas_gt.append(anchor_deltas_gt_i)
 
-        return labels, regression_targets
+        return objectness_logits_gt, anchor_deltas_gt
 
     def losses(self):
-        labels, regression_targets = self.prepare_targets()
         """
-        labels: list of N tensors. Tensor i is a vector whose length is the total number of
-            anchors in image i (i.e., len(anchors[i])). Label values are in {-1, 0, 1},
-            with meanings: -1 = ignore; 0 = negative class; 1 = positive class.
-        regression_targets: list of N tensors. Tensor i has shape (len(anchors[i]), 4).
+        Return the losses from a set of RPN predictions and their associated ground-truth.
+
+        Returns:
+            dict[loss name -> loss value]: A dict mapping from loss name to loss value.
+                Loss names are: `loss_rpn_cls` for objectness classification and
+                `loss_rpn_loc` for proposal localization.
         """
 
         def resample(label):
@@ -161,275 +324,106 @@ class RPNOutputs(object):
             label.scatter_(0, neg_idx, 0)
             return label
 
-        labels = torch.stack([resample(label) for label in labels], dim=0)  # N x #all_anchors
-        num_anchors_per_map = [np.prod(x.shape[1:]) for x in self.objectness]
-        total_num_anchors = sum(num_anchors_per_map)
-        assert labels.shape[1] == total_num_anchors
-        labels = torch.split(labels, num_anchors_per_map, dim=1)  # N x (HxWx#anchors_per_map)
+        objectness_logits_gt, anchor_deltas_gt = self._get_ground_truth()
+        """
+        objectness_logits_gt: list of N tensors. Tensor i is a vector whose length is the
+            total number of anchors in image i (i.e., len(anchors[i]))
+        anchor_deltas_gt: list of N tensors. Tensor i has shape (len(anchors[i]), 4).
+        """
 
-        regression_targets = torch.stack(regression_targets, dim=0)
-        assert regression_targets.shape[1] == total_num_anchors
-        regression_targets = torch.split(regression_targets, num_anchors_per_map, dim=1)
+        # Collect all objectness labels and delta targets over feature maps and images
+        # The final ordering is L, N, H, W, A from slowest to fastest axis.
+        num_anchors_per_map = [np.prod(x.shape[1:]) for x in self.objectness_logits_pred]
+        num_anchors_per_image = sum(num_anchors_per_map)
 
-        # For each feature map, permute the outputs to a format that is compatible with the labels.
-        obj_losses, box_losses = [], []
-        for map_idx in range(self.num_feature_maps):
-            labels_per_map, objectness_per_map, anchor_deltas_per_map, regression_targets_per_map = (
-                labels[map_idx],
-                self.objectness[map_idx],
-                self.anchor_deltas[map_idx],
-                regression_targets[map_idx],
-            )
-            N, A, H, W = objectness_per_map.shape
-            objectness_per_map = objectness_per_map.permute(0, 2, 3, 1).flatten()
-            anchor_deltas_per_map = anchor_deltas_per_map.view(N, -1, 4, H, W)
-            anchor_deltas_per_map = anchor_deltas_per_map.permute(0, 3, 4, 1, 2).reshape(-1, 4)
+        # Stack to: (N, num_anchors_per_image)
+        objectness_logits_gt = torch.stack(
+            [resample(label) for label in objectness_logits_gt], dim=0
+        )
+        assert objectness_logits_gt.shape[1] == num_anchors_per_image
+        # Split to tuple of L tensors, each with shape (N, num_anchors_per_map)
+        objectness_logits_gt = torch.split(objectness_logits_gt, num_anchors_per_map, dim=1)
+        # Concat from all feature maps
+        objectness_logits_gt = cat([x.flatten() for x in objectness_logits_gt], dim=0)
 
-            obj_loss, box_loss = rpn_losses(
-                labels_per_map.flatten(),
-                regression_targets_per_map.reshape(-1, 4),
-                objectness_per_map,
-                anchor_deltas_per_map,
-            )
-            obj_losses.append(obj_loss)
-            box_losses.append(box_loss)
+        # Stack to: (N, num_anchors_per_image, 4)
+        anchor_deltas_gt = torch.stack(anchor_deltas_gt, dim=0)
+        assert anchor_deltas_gt.shape[1] == num_anchors_per_image
+        # Split to tuple of L tensors, each with shape (N, num_anchors_per_image)
+        anchor_deltas_gt = torch.split(anchor_deltas_gt, num_anchors_per_map, dim=1)
+        # Concat from all feature maps
+        anchor_deltas_gt = cat([x.reshape(-1, 4) for x in anchor_deltas_gt], dim=0)
 
-        obj_loss, box_loss = sum(obj_losses), sum(box_losses)
-        normalizer = self.batch_size_per_image * self.num_images
-        loss_objectness = obj_loss / normalizer
-        loss_box_reg = box_loss / normalizer
-        losses = {"loss_rpn_cls": loss_objectness, "loss_rpn_box": loss_box_reg}
+        # Collect all objectness logits and delta predictions over feature maps
+        # and images to arrive at the same shape as the labels and targets
+        # The final ordering is L, N, H, W, A from slowest to fastest axis.
+        objectness_logits_pred = cat(
+            [
+                # Reshape: (N, A, Hi, Wi) -> (N, Hi, Wi, A) -> (N*Hi*Wi*A, )
+                x.permute(0, 2, 3, 1).flatten()
+                for x in self.objectness_logits_pred
+            ],
+            dim=0,
+        )
+        anchor_deltas_pred = cat(
+            [
+                # Reshape: (N, A*4, Hi, Wi) -> (N, A, 4, Hi, Wi) -> (N, Hi, Wi, A, 4)
+                #          -> (N*Hi*Wi*A, 4)
+                x.view(x.shape[0], -1, 4, x.shape[-2], x.shape[-1])
+                .permute(0, 3, 4, 1, 2)
+                .reshape(-1, 4)
+                for x in self.anchor_deltas_pred
+            ],
+            dim=0,
+        )
+
+        objectness_loss, localization_loss = rpn_losses(
+            objectness_logits_gt, anchor_deltas_gt, objectness_logits_pred, anchor_deltas_pred
+        )
+        normalizer = 1.0 / (self.batch_size_per_image * self.num_images)
+        loss_cls = objectness_loss * normalizer  # cls: classification loss
+        loss_loc = localization_loss * normalizer  # loc: localization loss
+        losses = {"loss_rpn_cls": loss_cls, "loss_rpn_loc": loss_loc}
+
         return losses
 
-    def add_gt_proposals(self, proposals):
-        """
-        Augment `proposals` with ground-truth boxes.
-
-        Args:
-            proposals (list[BoxList]): list of N elements. Element i is a BoxList
-                representing the proposals for image i, as returned by :meth:`proposals`.
-
-        Returns:
-            list[BoxList]: list of N BoxLists.
-        """
-        if self.targets is None:
-            return proposals
-
-        device = proposals[0].bbox.device
-        gt_boxes = [target.view_with_fields([]) for target in self.targets]
-        # Later cat of bbox requires all fields to be present for all bbox
-        # so we need to add a dummy for objectness that's missing
-        for gt_box in gt_boxes:
-            gt_box.add_field("objectness", torch.ones(len(gt_box), device=device))
-
-        proposals = [
-            cat_boxlist((proposal, gt_box)) for proposal, gt_box in zip(proposals, gt_boxes)
-        ]
-
-        return proposals
-
-    def _transform_anchors_to_proposals(self):
+    def predict_proposals(self):
         """
         Transform anchors into proposals by applying the predicted anchor deltas.
-        Objectness scores are returned in a format that allows for easier indexing.
 
         Returns:
-            proposals (list[Tensor]): A list of L tensors. Tensor i has shape (N, Hi*Wi*A, 4)
-            objectness (list[Tensor]): list of L tensors. Tensor i has shape (N, Hi*Wi*A)
+            proposals (list[Tensor]): A list of L tensors. Tensor i has shape
+                (N, Hi*Wi*A, 4).
         """
         proposals = []
         # Transpose anchors from images-by-feature-maps (N, L) to feature-maps-by-images (L, N)
         anchors = list(zip(*self.anchors))
         # For each feature map
-        for anchors_i, deltas_i in zip(anchors, self.anchor_deltas):
-            N, _, Hi, Wi = deltas_i.shape
+        for anchors_i, anchor_deltas_pred_i in zip(anchors, self.anchor_deltas_pred):
+            N, _, Hi, Wi = anchor_deltas_pred_i.shape
             # Reshape: (N, A*4, Hi, Wi) -> (N, A, 4, Hi, Wi) -> (N, Hi, Wi, A, 4) -> (N*Hi*Wi*A, 4)
-            deltas_i = deltas_i.view(N, -1, 4, Hi, Wi).permute(0, 3, 4, 1, 2).reshape(-1, 4)
+            anchor_deltas_pred_i = (
+                anchor_deltas_pred_i.view(N, -1, 4, Hi, Wi).permute(0, 3, 4, 1, 2).reshape(-1, 4)
+            )
             # Concatenate anchors to shape (N*Hi*Wi*A, 4)
             anchors_i = torch.cat([a.bbox for a in anchors_i], dim=0).reshape(-1, 4)
-            proposals_i = self.box2box_transform.apply_deltas(deltas_i, anchors_i)
+            proposals_i = self.box2box_transform.apply_deltas(anchor_deltas_pred_i, anchors_i)
             # Append feature map proposals with shape (N, Hi*Wi*A, 4)
             proposals.append(proposals_i.view(N, -1, 4))
-
-        objectness = [
-            # Reshape: (N, A, Hi, Wi) -> (N, Hi, Wi, A) -> (N, Hi*Wi*A)
-            score.permute(0, 2, 3, 1).reshape(self.num_images, -1)
-            for score in self.objectness
-        ]
-        return proposals, objectness
-
-    def proposals(self, nms_thresh, pre_nms_topk, post_nms_topk, min_size, training):
-        """
-        Return scored object proposals after applying box regression to the anchors, NMS,
-        taking the top k, etc.
-
-        Args:
-            nms_thresh (float): IoU threshold to use for NMS
-            pre_nms_topk (int): number of top k scoring proposals to keep before applying NMS.
-                When RPN is run on multiple feature maps (as in FPN) this number is per
-                feature map.
-            post_nms_topk (int): number of top k scoring proposals to keep after applying NMS.
-                When RPN is run on multiple feature maps (as in FPN) this number is total,
-                over all feature maps.
-            min_size (float): minimum proposal size in pixels (absolute units wrt input images).
-            training (bool): True if proposals are to be used in training, otherwise False.
-
-        Returns:
-            proposals (list[BoxLists]): list of N BoxLists. BoxList i stores post_nms_topk object
-                proposals for image i.
-        """
-        proposals, objectness = self._transform_anchors_to_proposals()
-        proposals = self._post_process_proposals(
-            proposals,
-            objectness,
-            self.images.image_sizes,
-            nms_thresh=nms_thresh,
-            pre_nms_topk=pre_nms_topk,
-            post_nms_topk=post_nms_topk,
-            min_size=min_size,
-            training=training,
-        )
         return proposals
 
-    def _post_process_proposals(
-        self,
-        boxes,
-        objectness,
-        image_sizes,
-        nms_thresh,
-        pre_nms_topk,
-        post_nms_topk,
-        min_size=0,
-        training=False,
-    ):
-        # Convert from (h, w) to (w, h)
-        # FIXME: make size order consistent everywhere
-        image_sizes = [size[::-1] for size in image_sizes]
-        if self.num_feature_maps > 1:
-            return self._post_process_proposals_multi_feature_maps(
-                boxes,
-                objectness,
-                image_sizes,
-                nms_thresh,
-                pre_nms_topk,
-                post_nms_topk,
-                min_size,
-                training,
-            )
-        else:
-            return self._post_process_proposals_single_feature_map(
-                boxes[0],
-                objectness[0],
-                image_sizes,
-                nms_thresh,
-                pre_nms_topk,
-                post_nms_topk,
-                min_size,
-            )
-
-    def _post_process_proposals_multi_feature_maps(
-        self,
-        multi_map_boxes,
-        multi_map_objectness,
-        image_sizes,
-        nms_thresh,
-        pre_nms_topk,
-        post_nms_topk,
-        min_size=0,
-        training=False,
-    ):
+    def predict_objectness_logits(self):
         """
-        Generate RPN proposals from multiple feature maps (e.g., as in FPN).
-        Currently it does so by merging the outputs of `post_process_proposals`.
+        Return objectness logits in the same format as the proposals returned by
+        :meth:`predict_proposals`.
 
-        Args:
-            multi_map_boxes(list[Tensor]): list of L tensors. Each tensor has size (N, Hi*Wi*A, 4).
-            multi_map_objectness(list[Tensor]): list of L tensors. Each tensor has size
+        Returns:
+            objectness_logits_pred (list[Tensor]): A list of L tensors. Tensor i has shape
                 (N, Hi*Wi*A).
-            image_sizes: N (w, h) tuples.
-
-        Returns:
-            list[BoxList], with N BoxList. Each BoxList is the proposals on the corresponding image.
         """
-        # TODO an alternative is to merge them first, then do topk and NMS
-        multi_map_proposals = [
-            self._post_process_proposals_single_feature_map(
-                boxes, objectness, image_sizes, nms_thresh, pre_nms_topk, post_nms_topk, min_size
-            )
-            for boxes, objectness in zip(multi_map_boxes, multi_map_objectness)
-        ]  # (L, N) BoxList.
-        multi_map_proposals = list(zip(*multi_map_proposals))  # (N, L) BoxList
-        # concat proposals across feature maps
-        proposals_per_img = [
-            cat_boxlist(boxlist) for boxlist in multi_map_proposals
-        ]  # (N, ) BoxList
-        num_img = len(proposals_per_img)
-
-        # Legacy bug to address -- there's different behavior during training vs. testing.
-        # During training, topk is over *all* the proposals combined over all images.
-        # During testing, it is over the proposals for each image separately.
-        # TODO: resolve this difference and make it consistent. It should be per image,
-        # and not per batch, see: https://github.com/facebookresearch/Detectron/issues/459.
-        if training:
-            objectness = torch.cat(
-                [boxlist.get_field("objectness") for boxlist in proposals_per_img], dim=0
-            )
-            box_sizes = [len(boxlist) for boxlist in proposals_per_img]
-            topk = min(post_nms_topk, len(objectness))
-            _, inds_sorted = torch.topk(objectness, topk, dim=0, sorted=True)
-            inds_mask = torch.zeros_like(objectness, dtype=torch.uint8)
-            inds_mask[inds_sorted] = 1
-            inds_mask = inds_mask.split(box_sizes)
-            for i in range(num_img):
-                proposals_per_img[i] = proposals_per_img[i][inds_mask[i]]
-        else:
-            for i in range(num_img):
-                objectness = proposals_per_img[i].get_field("objectness")
-                topk = min(post_nms_topk, len(objectness))
-                _, inds_sorted = torch.topk(objectness, topk, dim=0, sorted=True)
-                proposals_per_img[i] = proposals_per_img[i][inds_sorted]
-        return proposals_per_img
-
-    def _post_process_proposals_single_feature_map(
-        self, boxes, objectness, image_sizes, nms_thresh, pre_nms_topk, post_nms_topk, min_size=0
-    ):
-        """
-        Generate RPN proposals from RPN boxes at all locations.
-        It does so by NMS and keeping the topk.
-
-        Args:
-            boxes: tensor of size (N, Hi*Wi*A, 4), decoded boxes, where N is the total number of anchors
-                on the feature map.
-            objectness: tensor of size (N, Hi*Wi*A), before sigmoid
-            image_sizes: N (w, h) tuples.
-            pre_nms_topk, post_nms_topk: int
-            min_size: int
-
-        Returns:
-            list[BoxList], with B BoxList. Each BoxList is the proposals on the corresponding image.
-        """
-        N, Hi_Wi_A = objectness.shape
-        device = objectness.device
-        assert boxes.shape[:2] == (N, Hi_Wi_A)
-
-        pre_nms_topk = min(pre_nms_topk, Hi_Wi_A)
-        objectness, topk_idx = objectness.topk(pre_nms_topk, dim=1)
-
-        batch_idx = torch.arange(N, device=device)[:, None]
-        boxes = boxes[batch_idx, topk_idx]  # N, topk, 4
-
-        result = []
-        for proposals, scores, im_shape in zip(boxes, objectness, image_sizes):
-            """
-            proposals: tensor of shape (topk, 4)
-            scores: top-k scores of shape (topk, )
-            """
-
-            boxlist = BoxList(proposals, im_shape, mode="xyxy")
-            # TODO why using "field" at all? Avoid storing arbitrary states
-            boxlist.add_field("objectness", scores)
-            boxlist = boxlist.clip_to_image(remove_empty=False)
-            boxlist = remove_small_boxes(boxlist, min_size)
-            boxlist = boxlist_nms(boxlist, nms_thresh, topk=post_nms_topk, score_field="objectness")
-            result.append(boxlist)
-        return result
+        objectness_logits_pred = [
+            # Reshape: (N, A, Hi, Wi) -> (N, Hi, Wi, A) -> (N, Hi*Wi*A)
+            score.permute(0, 2, 3, 1).reshape(self.num_images, -1)
+            for score in self.objectness_logits_pred
+        ]
+        return objectness_logits_pred
