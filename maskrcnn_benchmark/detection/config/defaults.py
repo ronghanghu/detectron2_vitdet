@@ -278,3 +278,14 @@ _C.TEST.EVAL_PERIOD = 0
 # Misc options
 # ---------------------------------------------------------------------------- #
 _C.OUTPUT_DIR = "./output"
+
+# global config is for quick hack purposes.
+# You can set them in command line or config files,
+# and access it with:
+#
+# from detectron2.detection import global_cfg
+# print(global_cfg.HACK)
+#
+# Do not commit any configs into it.
+_C.GLOBAL = CN()
+_C.GLOBAL.HACK = 1.0

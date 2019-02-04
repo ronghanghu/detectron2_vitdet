@@ -25,6 +25,7 @@ from maskrcnn_benchmark.detection import (
     coco_evaluation,
     get_cfg,
     print_copypaste_format,
+    set_global_cfg,
     verify_results,
 )
 from maskrcnn_benchmark.engine.launch import launch
@@ -195,6 +196,7 @@ def setup(args):
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
     cfg.freeze()
+    set_global_cfg(cfg.GLOBAL)
 
     output_dir = cfg.OUTPUT_DIR
     if output_dir:
