@@ -12,6 +12,7 @@ import torch
 from pycocotools.cocoeval import COCOeval
 from tqdm import tqdm
 
+from maskrcnn_benchmark.data import MapDataset
 from maskrcnn_benchmark.data.datasets import COCOMeta
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
@@ -120,12 +121,15 @@ def prepare_for_coco_evaluation(dataset_predictions):
 
 
 # inspired from Detectron
-# TODO(yuxin) this has not been tested for a long time; should not use "dataset"
-def evaluate_box_proposals(dataset_predictions, dataset, thresholds=None, area="all", limit=None):
+# TODO(yuxin) this has not been tested for a long time; should not use "map_dataset"
+def evaluate_box_proposals(
+    dataset_predictions, map_dataset, thresholds=None, area="all", limit=None
+):
     """Evaluate detection proposal recall metrics. This function is a much
     faster alternative to the official COCO API recall evaluation code. However,
     it produces slightly different results.
     """
+    assert isinstance(map_dataset, MapDataset)
     # Record max overlap value for each gt box
     # Return vector of overlap values
     areas = {
@@ -163,8 +167,8 @@ def evaluate_box_proposals(dataset_predictions, dataset, thresholds=None, area="
         inds = predictions.get_field("objectness_logits").sort(descending=True)[1]
         predictions = predictions[inds]
 
-        ann_ids = dataset.ds.coco.getAnnIds(imgIds=prediction_dict["image_id"])
-        anno = dataset.ds.coco.loadAnns(ann_ids)
+        ann_ids = map_dataset.dataset.coco_api.getAnnIds(imgIds=prediction_dict["image_id"])
+        anno = map_dataset.dataset.coco_api.loadAnns(ann_ids)
         gt_boxes = [obj["bbox"] for obj in anno if obj["iscrowd"] == 0]
         gt_boxes = torch.as_tensor(gt_boxes).reshape(-1, 4)  # guard against no boxes
         gt_boxes = BoxList(gt_boxes, (image_width, image_height), mode="xywh").convert("xyxy")
@@ -296,8 +300,9 @@ def coco_evaluation(model, data_loader, iou_types=("bbox",), box_only=False, out
     """
     num_devices = torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
     logger = logging.getLogger(__name__)
-    dataset = data_loader.dataset
-    logger.info("Start evaluation on {} images".format(len(dataset)))
+    map_dataset = data_loader.dataset
+    assert isinstance(map_dataset, MapDataset)
+    logger.info("Start evaluation on {} images".format(len(map_dataset)))
     start_time = time.time()
     dataset_predictions = compute_on_dataset(model, data_loader)
     # wait for all processes to complete before measuring the time
@@ -307,7 +312,7 @@ def coco_evaluation(model, data_loader, iou_types=("bbox",), box_only=False, out
     # NOTE this format is parsed by grep
     logger.info(
         "Total inference time: {} ({} s / img per device, on {} devices)".format(
-            total_time_str, total_time * num_devices / len(dataset), num_devices
+            total_time_str, total_time * num_devices / len(map_dataset), num_devices
         )
     )
 
@@ -327,7 +332,9 @@ def coco_evaluation(model, data_loader, iou_types=("bbox",), box_only=False, out
         res = COCOResults("box_proposal")
         for limit in [100, 1000]:
             for area, suffix in areas.items():
-                stats = evaluate_box_proposals(dataset_predictions, dataset, area=area, limit=limit)
+                stats = evaluate_box_proposals(
+                    dataset_predictions, map_dataset, area=area, limit=limit
+                )
                 key = "AR{}@{:d}".format(suffix, limit)
                 res.results["box_proposal"][key] = stats["ar"].item()
         logger.info(res)
@@ -352,11 +359,7 @@ def coco_evaluation(model, data_loader, iou_types=("bbox",), box_only=False, out
     logger.info("Evaluating predictions")
     for iou_type in iou_types:
         res = evaluate_predictions_on_coco(
-            # TODO shouldn't use dataset.ds
-            dataset.ds.coco,
-            coco_results,
-            file_path,
-            iou_type,
+            map_dataset.dataset.coco_api, coco_results, file_path, iou_type
         )
         results.update(res)
     results = results.results  # get the OrderedDict from COCOResults

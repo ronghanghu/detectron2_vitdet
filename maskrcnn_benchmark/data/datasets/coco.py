@@ -31,20 +31,20 @@ class COCODetection(data.Dataset):
         from pycocotools.coco import COCO
 
         self.root = root
-        self.coco = COCO(ann_file)
+        self.coco_api = COCO(ann_file)
 
         self.meta = COCOMeta()
 
         # initialize the metadata
-        cat_ids = self.coco.getCatIds()
-        self.meta.class_names = [c["name"] for c in self.coco.loadCats(cat_ids)]
+        cat_ids = self.coco_api.getCatIds()
+        self.meta.class_names = [c["name"] for c in self.coco_api.loadCats(cat_ids)]
 
         # The values are shifted by + 1 to reserve category 0 for background
         self.meta.json_id_to_contiguous_id = id_map = {v: i + 1 for i, v in enumerate(cat_ids)}
         self.meta.contiguous_id_to_json_id = {v: k for k, v in id_map.items()}
 
         # sort indices for reproducible results
-        img_ids = sorted(list(self.coco.imgs.keys()))
+        img_ids = sorted(list(self.coco_api.imgs.keys()))
         # imgs is a list of dicts, each looks something like:
         # {'license': 4,
         #  'url': 'http://farm6.staticflickr.com/5454/9413846304_881d5e5c3b_z.jpg',
@@ -53,7 +53,7 @@ class COCODetection(data.Dataset):
         #  'width': 640,
         #  'date_captured': '2013-11-17 05:57:24',
         #  'id': 1268}
-        imgs = self.coco.loadImgs(img_ids)
+        imgs = self.coco_api.loadImgs(img_ids)
         # anns is a list[list[dict]], where each dict is an annotation
         # record for an object. The inner list enumerates the objects in an image
         # and the outer list enumerates over images. Example of anns[0]:
@@ -69,7 +69,7 @@ class COCODetection(data.Dataset):
         #   'category_id': 16,
         #   'id': 42986},
         #  ...]
-        anns = [self.coco.imgToAnns[img_id] for img_id in img_ids]
+        anns = [self.coco_api.imgToAnns[img_id] for img_id in img_ids]
 
         imgs_anns = list(zip(imgs, anns))
 
