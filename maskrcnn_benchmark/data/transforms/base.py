@@ -23,8 +23,13 @@ def check_dtype(img):
 class ImageTransformer(metaclass=ABCMeta):
     """
     ImageTransformer takes an image of type uint8 in range [0, 255], or
-    floating point in range [0, 1] or [0, 255], as input and applies
-    ImageTransform ops on the image.
+    floating point in range [0, 1] or [0, 255] as input.
+    It applies image transformation on the image, and optionally
+    returns the "transformation parameters" which can be used
+    to transform another image, or transform the coordinates in the image.
+
+    The implementation may choose to modify the input image or coordinates
+    in-place for efficient transformation.
     """
 
     def __init__(self):
@@ -84,6 +89,7 @@ class ImageTransformer(metaclass=ABCMeta):
     def transform_image_with_params(self, img, param):
         """
         Transform the image with the given param.
+        The transform is allowed to modify image in-place.
 
         Args:
             img: input image
@@ -97,9 +103,7 @@ class ImageTransformer(metaclass=ABCMeta):
     @abstractmethod
     def _transform_image(self, img, param):
         """
-        Transform with the given param and return the new image.
-        The transformer is allowed to modify image in-place.
-
+        Transform the image with the given param.
         Should be overwritten by subclasses
         """
 
