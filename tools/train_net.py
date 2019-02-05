@@ -32,8 +32,8 @@ from maskrcnn_benchmark.engine.launch import launch
 from maskrcnn_benchmark.utils.collect_env import collect_env_info
 from maskrcnn_benchmark.utils.comm import reduce_dict
 from maskrcnn_benchmark.utils.logger import setup_logger
-from maskrcnn_benchmark.utils.metric_logger import MetricLogger
 from maskrcnn_benchmark.utils.misc import mkdir
+from maskrcnn_benchmark.utils.monitors import EventStorage, JSONWriter, get_event_storage
 
 
 class PeriodicCheckpointer(object):
@@ -51,6 +51,41 @@ class PeriodicCheckpointer(object):
             self.checkpointer.save("model_{:07d}".format(iteration), iteration=iteration)
         if iteration == self.max_iter:
             self.checkpointer.save("model_final", iteration=iteration)
+
+
+class MetricPrinter:
+    def __init__(self, max_iter):
+        self.logger = logging.getLogger("maskrcnn_benchmark.trainer")
+        self._max_iter = max_iter
+
+    def write(self):
+        storage = get_event_storage()
+        iteration = storage.iteration
+        eta_seconds = storage.history("time").median(1000) * (self._max_iter - iteration)
+        eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
+
+        # NOTE: max mem is parsed by grep
+        self.logger.info(
+            """\
+eta: {eta}  iter: {iter}  {losses}  \
+time: {time:.4f} data_time: {data_time:.4f}  \
+lr: {lr:.6f}  max mem: {memory:.0f}M \
+""".format(
+                eta=eta_string,
+                iter=iteration,
+                losses="  ".join(
+                    [
+                        "{}: {:.3f}".format(k, v.median(20))
+                        for k, v in storage.histories().items()
+                        if "loss" in k
+                    ]
+                ),
+                time=storage.history("time").global_avg(),
+                data_time=storage.history("data_time").median(20),
+                lr=storage.history("lr").latest(),
+                memory=torch.cuda.max_memory_allocated() / 1024.0 / 1024.0,
+            )
+        )
 
 
 def do_test(cfg, model, is_final=True):
@@ -119,67 +154,55 @@ def do_train(cfg, model):
 
     logger = logging.getLogger("maskrcnn_benchmark.trainer")
     logger.info("Start training")
-    meters = MetricLogger(delimiter="  ")
     max_iter = cfg.SOLVER.MAX_ITER
     model.train()
     start_training_time = time.time()
     iter_end = time.time()
-    for iteration, data in enumerate(data_loader, start_iter):
-        data_time = time.time() - iter_end
-        iteration = iteration + 1
 
-        scheduler.step()
+    writers = (
+        [MetricPrinter(max_iter), JSONWriter(os.path.join(cfg.OUTPUT_DIR, "metrics.json"))]
+        if comm.is_main_process()
+        else []
+    )
+    with EventStorage(start_iter) as storage:
+        for iteration, data in enumerate(data_loader, start_iter):
+            data_time = time.time() - iter_end
+            iteration = iteration + 1
+            storage.step()
 
-        loss_dict = model(data)
+            scheduler.step()
+            storage.put_scalar("lr", optimizer.param_groups[0]["lr"], smoothing_hint=False)
 
-        losses = sum(loss for loss in loss_dict.values())
-        if torch.isnan(losses).any():
-            raise FloatingPointError("Losses become NaN at iteration={}!".format(iteration))
+            loss_dict = model(data)
 
-        # reduce losses over all GPUs for logging purposes
-        loss_dict_reduced = reduce_dict(loss_dict)
-        losses_reduced = sum(loss for loss in loss_dict_reduced.values())
-        meters.update(loss=losses_reduced, **loss_dict_reduced)
+            losses = sum(loss for loss in loss_dict.values())
+            if torch.isnan(losses).any():
+                raise FloatingPointError("Losses become NaN at iteration={}!".format(iteration))
 
-        optimizer.zero_grad()
-        losses.backward()
-        optimizer.step()
+            # reduce losses over all GPUs for logging purposes
+            loss_dict_reduced = reduce_dict(loss_dict)
+            losses_reduced = sum(loss for loss in loss_dict_reduced.values())
+            storage.put_scalars(loss=losses_reduced, **loss_dict_reduced)
 
-        batch_time = time.time() - iter_end
-        iter_end = time.time()
-        # Consider the first several iteration as warmup and don't time it.
-        if iteration <= 3:
-            start_training_time = time.time()
-        else:
-            meters.update(time=batch_time, data=data_time)
-            eta_seconds = meters.time.global_avg * (max_iter - iteration)
-            eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
+            optimizer.zero_grad()
+            losses.backward()
+            optimizer.step()
 
-        if cfg.TEST.EVAL_PERIOD > 0 and iteration % cfg.TEST.EVAL_PERIOD == 0:
-            do_test(cfg, model, is_final=False)
+            batch_time = time.time() - iter_end
+            iter_end = time.time()
+            # Consider the first several iteration as warmup and don't time it.
+            if iteration <= 3:
+                start_training_time = time.time()
+            else:
+                storage.put_scalars(time=batch_time, data_time=data_time)
 
-        # TODO Move logging logic to a centralized system
-        # (https://github.com/fairinternal/detectron2/issues/9)
-        if iteration % 20 == 0 or iteration == max_iter:
-            logger.info(
-                # NOTE this format is parsed by grep
-                meters.delimiter.join(
-                    [
-                        "eta: {eta}",
-                        "iter: {iter}",
-                        "{meters}",
-                        "lr: {lr:.6f}",
-                        "max mem: {memory:.0f}",
-                    ]
-                ).format(
-                    eta=eta_string,
-                    iter=iteration,
-                    meters=str(meters),
-                    lr=optimizer.param_groups[0]["lr"],
-                    memory=torch.cuda.max_memory_allocated() / 1024.0 / 1024.0,
-                )
-            )
-        periodic_checkpointer.step(iteration)
+            if cfg.TEST.EVAL_PERIOD > 0 and iteration % cfg.TEST.EVAL_PERIOD == 0:
+                do_test(cfg, model, is_final=False)
+
+            if iteration - start_iter > 5 and (iteration % 20 == 0 or iteration == max_iter):
+                for writer in writers:
+                    writer.write()
+            periodic_checkpointer.step(iteration)
 
     total_training_time = time.time() - start_training_time
     total_time_str = str(datetime.timedelta(seconds=total_training_time))
