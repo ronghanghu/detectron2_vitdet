@@ -4,7 +4,6 @@ MODEL:
 DATASETS:
   TEST: ("coco_2014_minival_100",)
 TEST:
-  IMS_PER_BATCH: 4  # ok for 2 GPUs each with 12GB memory
-  EXPECTED_RESULTS: [["bbox", "AP", 45.3080, 0.01], ["segm", "AP", 40.1749, 0.01]]
+  EXPECTED_RESULTS: [["bbox", "AP", 45.3729, 0.01], ["segm", "AP", 40.1963, 0.01]]
   # Expected results for coco_2014_minival:
   # EXPECTED_RESULTS: [["bbox", "AP", 37.4847, 0.01], ["segm", "AP", 33.3929, 0.01]]

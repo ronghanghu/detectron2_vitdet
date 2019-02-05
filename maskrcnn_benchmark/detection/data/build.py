@@ -47,9 +47,13 @@ def build_dataset(dataset_list, dataset_catalog, is_train=True):
 
 
 def build_data_sampler(dataset, shuffle, distributed):
-    # "samplers" have a bad __init__ interface ... because only the length of dataset is used by the samplers
+    # "samplers" have a bad __init__ interface; they take a dataset, but internally
+    # only make use of the dataset length
     if distributed:
+        # NB: the distributed sampler always shuffles data
+        assert shuffle  # make sure there are no surprises
         return torch.utils.data.distributed.DistributedSampler(dataset)
+
     if shuffle:
         sampler = torch.utils.data.sampler.RandomSampler(dataset)
     else:
@@ -57,20 +61,52 @@ def build_data_sampler(dataset, shuffle, distributed):
     return sampler
 
 
-def _quantize(x, bins):
-    bins = copy.copy(bins)
-    bins = sorted(bins)
-    quantized = list(map(lambda y: bisect.bisect_right(bins, y), x))
+def _quantize(x, bin_edges):
+    bin_edges = copy.copy(bin_edges)
+    bin_edges = sorted(bin_edges)
+    quantized = list(map(lambda y: bisect.bisect_right(bin_edges, y), x))
     return quantized
 
 
 def build_batch_data_sampler(
-    aspect_ratios, sampler, aspect_grouping, images_per_batch, num_iters=None, start_iter=0
+    sampler,
+    images_per_batch,
+    group_bin_edges=None,
+    grouping_features=None,
+    max_iters=None,
+    start_iter=0,
 ):
-    if aspect_grouping:
-        if not isinstance(aspect_grouping, (list, tuple)):
-            aspect_grouping = [aspect_grouping]
-        group_ids = _quantize(aspect_ratios, aspect_grouping)
+    """
+    Return a dataset index sampler that batches dataset indices.
+
+    Args:
+        sampler (torch.utils.data.sampler.Sampler): any subclass of
+            :class:`torch.utils.data.sampler.Sampler`.
+        images_per_batch (int): the batch size. Note that the sampler may return
+            batches that have between 1 and images_per_batch (inclusive) elements
+            because the underlying index set (and grouping partitions, if grouping
+            is used) may not be divisible by images_per_batch.
+        group_bin_edges (None, list[number], tuple[number]): If None, then grouping
+            is disabled. If a list or tuple is given, the values are used as bin
+            edges for defining len(group_bin_edges) + 1 groups. When batches are
+            sampled, only elements from the same group are returned together.
+        grouping_features (None, list[number], tuple[number]): If None, then grouping
+            is disabled. If a list or tuple is given, it must specify for each index
+            in the underlying dataset the value to be used for placing that dataset
+            index into one of the grouping bins.
+        max_iters (None or int): If an int, then the batch sampler will produce max_iters
+            count batches, possibly cycling through the underlying sampler multiple times.
+            If None, then only a single epoch of the underlying sampler is used.
+        start_iter (int): If max_iters is specified, this determines the iteration at
+            which to start.
+
+    Returns:
+        A BatchSampler or subclass of BatchSampler.
+    """
+    if group_bin_edges and grouping_features:
+        assert isinstance(group_bin_edges, (list, tuple))
+        assert isinstance(grouping_features, (list, tuple))
+        group_ids = _quantize(grouping_features, group_bin_edges)
         batch_sampler = samplers.GroupedBatchSampler(
             sampler, group_ids, images_per_batch, drop_uneven=False
         )
@@ -78,8 +114,8 @@ def build_batch_data_sampler(
         batch_sampler = torch.utils.data.sampler.BatchSampler(
             sampler, images_per_batch, drop_last=False
         )
-    if num_iters is not None:
-        batch_sampler = samplers.IterationBasedBatchSampler(batch_sampler, num_iters, start_iter)
+    if max_iters is not None:
+        batch_sampler = samplers.IterationBasedBatchSampler(batch_sampler, max_iters, start_iter)
     return batch_sampler
 
 
@@ -94,36 +130,31 @@ def build_detection_data_loader(cfg, is_train=True, is_distributed=False, start_
         )
         images_per_gpu = images_per_batch // num_gpus
         shuffle = True
-        num_iters = cfg.SOLVER.MAX_ITER
+        max_iters = cfg.SOLVER.MAX_ITER
     else:
-        images_per_batch = cfg.TEST.IMS_PER_BATCH
-        assert (
-            images_per_batch % num_gpus == 0
-        ), "TEST.IMS_PER_BATCH ({}) must be divisible by the number of GPUs ({}) used.".format(
-            images_per_batch, num_gpus
-        )
-        images_per_gpu = images_per_batch // num_gpus
+        # Always use 1 image per GPU during inference since this is the
+        # standard when reporting inference time in papers.
+        images_per_batch = num_gpus
+        images_per_gpu = 1
+        # The distributed sampler always suffles (there's no sequential option)
         shuffle = False if not is_distributed else True
-        num_iters = None
+        max_iters = None
         start_iter = 0
 
     if images_per_gpu > 1:
         logger = logging.getLogger(__name__)
         logger.warning(
-            "When using more than one image per GPU you may encounter "
+            "When training with more than one image per GPU you may encounter "
             "an out-of-memory (OOM) error if your GPU does not have "
             "sufficient memory. If this happens, you can reduce "
-            "SOLVER.IMS_PER_BATCH (for training) or "
-            "TEST.IMS_PER_BATCH (for inference). For training, you must "
-            "also adjust the learning rate and schedule length according "
-            "to the linear scaling rule. See for example: "
-            "https://github.com/facebookresearch/Detectron/blob/master/configs/getting_started/tutorial_1gpu_e2e_faster_rcnn_R-50-FPN.yaml#L14"  # noqa B950
+            "SOLVER.IMS_PER_BATCH. You must also adjust the learning rate and "
+            "schedule length according to the linear scaling rule. See for "
+            "example: using://git.io/fhSc4."
         )
 
-    # group images which have similar aspect ratio. In this case, we only
-    # group in two cases: those with width / height > 1, and the other way around,
-    # but the code supports more general grouping strategy
-    aspect_grouping = [1] if cfg.DATALOADER.ASPECT_RATIO_GROUPING else []
+    # Bin edges for batching images with similar aspect ratios. If ASPECT_RATIO_GROUPING
+    # is enabled, we define two bins with an edge at height / width = 1.
+    group_bin_edges = [1] if cfg.DATALOADER.ASPECT_RATIO_GROUPING else []
 
     DatasetCatalog = paths_catalog.DatasetCatalog
     dataset_list = cfg.DATASETS.TRAIN if is_train else cfg.DATASETS.TEST
@@ -132,21 +163,18 @@ def build_detection_data_loader(cfg, is_train=True, is_distributed=False, start_
 
     data_loaders = []
     for dataset in datasets:
-        ratios = []
-        for i in range(len(dataset)):
-            img = dataset[i]
-            ratios.append(float(img["height"]) / float(img["width"]))
+        aspect_ratios = [float(img["height"]) / float(img["width"]) for img in dataset]
 
         dataset = MapDataset(dataset, DetectionTransform(cfg, is_train))
 
         sampler = build_data_sampler(dataset, shuffle, is_distributed)
         batch_sampler = build_batch_data_sampler(
-            ratios, sampler, aspect_grouping, images_per_gpu, num_iters, start_iter
+            sampler, images_per_gpu, group_bin_edges, aspect_ratios, max_iters, start_iter
         )
-        num_workers = cfg.DATALOADER.NUM_WORKERS
+
         data_loader = torch.utils.data.DataLoader(
             dataset,
-            num_workers=num_workers,
+            num_workers=cfg.DATALOADER.NUM_WORKERS,
             batch_sampler=batch_sampler,
             collate_fn=DetectionBatchCollator(is_train, cfg.DATALOADER.SIZE_DIVISIBILITY),
         )
@@ -163,8 +191,9 @@ class DetectionBatchCollator:
     Batch collator will run inside the dataloader processes.
     This batch collator batch the detection images and labels into torch.Tensor.
 
-    Note that it's best to do this step in the dataloader process, instead of in the main process,
-    because Pytorch's dataloader is less efficient when handling large numpy arrays rather than torch.Tensor.
+    Note that it's best to do this step in the dataloader process, instead of in
+    the main process, because Pytorch's dataloader is less efficient when handling
+    large numpy arrays rather than torch.Tensor.
     """
 
     def __init__(self, is_train, size_divisible):

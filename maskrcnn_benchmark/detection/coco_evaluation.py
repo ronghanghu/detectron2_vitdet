@@ -79,7 +79,14 @@ def prepare_for_coco_evaluation(predictions):
     """
 
     coco_results = []
+    processed_ids = {}
     for roidb in tqdm(predictions):
+        if roidb["id"] in processed_ids:
+            # The same image may be processed multiple times due to the underlying
+            # dataset sampler, such as torch.utils.data.distributed.DistributedSampler:
+            # https://git.io/fhScl
+            continue
+        processed_ids[roidb["id"]] = True
         prediction = roidb["result"]
         num_instance = len(prediction)
         if num_instance == 0:

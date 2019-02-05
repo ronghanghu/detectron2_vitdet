@@ -17,5 +17,4 @@ SOLVER:
   STEPS: (11000, 11600)
   MAX_ITER: 12000
 TEST:
-  IMS_PER_BATCH: 8
   EXPECTED_RESULTS: [["bbox", "AP", 41.21, 0.7], ["segm", "AP", 34.8, 0.5]]
