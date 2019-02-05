@@ -1,5 +1,4 @@
 import numpy as np
-from copy import deepcopy
 from PIL import Image
 
 from maskrcnn_benchmark.data.transforms import (
@@ -40,32 +39,50 @@ class DetectionTransform:
         self.tfms = ImageTransformers(tfms)
         self.is_train = is_train
 
-    def __call__(self, roidb):
-        roidb = deepcopy(roidb)
-        image = Image.open(roidb["file_name"]).convert("RGB")
+    def __call__(self, dataset_dict):
+        """
+        Transform the dataset_dict according to the configured transformations.
+        The dataset_dict is modified in place.
+
+        Args:
+            dataset_dict (dict): A dict with the following keys:
+                file_name: str with the path to the image for this dataset entry
+                annotations: list of dicts where each dict has the following keys:
+                    bbox: bounding box for an object given by x0, y0, width, height
+                    segmentation: polygon vertices in the COCO dataset format
+                    is_crowd (optional): bool indicating if the object is a crowd
+                        region or not
+
+        Returns:
+            dict: the in-place modified dataset_dict where the annotations are
+                replaced by transformed annotations (according to the configured
+                transformations) and the following keys are inserted:
+                    image: the transformed image as a uint8 numpy array
+                    transformed_width: the width of the transformed image
+                    transformed_height: the height of the transformed image
+        """
+        image = Image.open(dataset_dict["file_name"]).convert("RGB")
         image = np.asarray(image, dtype="uint8")
         if self.to_bgr:
             image = image[:, :, ::-1]
 
         image, tfm_params = self.tfms.transform_image_get_params(image)
-        roidb["image"] = image
-        roidb["original_width"] = roidb["width"]
-        roidb["original_height"] = roidb["height"]
-        roidb["width"] = image.shape[1]
-        roidb["height"] = image.shape[0]
+        dataset_dict["image"] = image
+        dataset_dict["transformed_width"] = image.shape[1]
+        dataset_dict["transformed_height"] = image.shape[0]
 
         if not self.is_train:
-            del roidb["annotations"]
-            return roidb
+            del dataset_dict["annotations"]
+            return dataset_dict
 
         annos = [
             self.map_instance(obj, tfm_params)
-            for obj in roidb["annotations"]
+            for obj in dataset_dict["annotations"]
             if obj.get("iscrowd", 0) == 0
         ]
         # should not be empty during training
-        roidb["annotations"] = annos
-        return roidb
+        dataset_dict["annotations"] = annos
+        return dataset_dict
 
     def map_instance(self, annotation, tfm_params):
         x, y, w, h = annotation["bbox"]

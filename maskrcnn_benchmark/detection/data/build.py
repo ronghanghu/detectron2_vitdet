@@ -163,7 +163,9 @@ def build_detection_data_loader(cfg, is_train=True, is_distributed=False, start_
 
     data_loaders = []
     for dataset in datasets:
-        aspect_ratios = [float(img["height"]) / float(img["width"]) for img in dataset]
+        aspect_ratios = [
+            float(img["original_height"]) / float(img["original_width"]) for img in dataset
+        ]
 
         dataset = MapDataset(dataset, DetectionTransform(cfg, is_train))
 
@@ -200,31 +202,31 @@ class DetectionBatchCollator:
         self.size_divisible = size_divisible
         self.is_train = is_train
 
-    def __call__(self, roidbs):
+    def __call__(self, dataset_dicts):
         """
         Args:
-            roidbs (list[dict]): each contains "image" and "annotations", produced
-                by :class:`DetectionTransform`.
+            dataset_dicts (list[dict]): each dict contains keys "image" and
+                "annotations", produced by :class:`DetectionTransform`.
 
         Returns:
             images: ImageList
             targets: list[BoxList]. None when not training.
-            roidbs: the rest of the roidbs
+            dataset_dicts: the rest of the dataset_dicts
         """
         # important to remove the numpy images so that they will not go through
         # the dataloader and hurt performance
-        numpy_images = [x.pop("image") for x in roidbs]
+        numpy_images = [x.pop("image") for x in dataset_dicts]
         images = [torch.as_tensor(x.transpose(2, 0, 1).astype("float32")) for x in numpy_images]
         images = to_image_list(images, self.size_divisible)
 
         if not self.is_train:
-            return images, None, roidbs
+            return images, None, dataset_dicts
 
         targets = []
-        for image, roidb in zip(numpy_images, roidbs):
-            image_size = image.shape[1], image.shape[0]
+        for dataset_dict in dataset_dicts:
+            image_size = (dataset_dict["transformed_width"], dataset_dict["transformed_height"])
 
-            annos = roidb.pop("annotations")
+            annos = dataset_dict.pop("annotations")
             boxes = [obj["bbox"] for obj in annos]
             boxes = torch.as_tensor(boxes).reshape(-1, 4)
             target = BoxList(boxes, image_size, mode="xywh").convert("xyxy")
@@ -238,4 +240,4 @@ class DetectionBatchCollator:
             target.add_field("masks", masks)
             target = target.clip_to_image(remove_empty=True)
             targets.append(target)
-        return images, targets, roidbs
+        return images, targets, dataset_dicts

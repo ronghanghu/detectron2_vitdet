@@ -40,10 +40,10 @@ class GeneralizedRCNN(nn.Module):
         Arguments:
             data: a tuple, produced by :class:`DetectionBatchCollator`.
 
-        For now, the data contains images, targets, and roidb
+        For now, the data contains images, targets, and dataset_dict
         images: ImageList
         targets: list[BoxList]
-        roidb: other information that's not useful in training
+        dataset_dict: other information that's not useful in training
         """
 
         images, targets, _ = data

@@ -49,30 +49,32 @@ def postprocess(result, original_width, original_height):
 def compute_on_dataset(model, data_loader):
     """
     Returns:
-        list[dict]. Each dict has: "id", "original_height", "original_width", "result".
-            "result" is a `BoxList` containing the post-processed outputs of the model.
+        list[dict]. Each dict has: "image_id", "original_height", "original_width", "box_list".
+            "box_list" is a `BoxList` containing the post-processed outputs of the model.
     """
     model.eval()
-    results = []
+    dataset_predictions = []
     cpu_device = torch.device("cpu")
     for batch in tqdm(data_loader):
-        _, __, roidbs = batch
+        _, __, dataset_dicts = batch
         with torch.no_grad():
             outputs = model(batch)
-            for roidb, output in zip(roidbs, outputs):
+            for dataset_dict, output in zip(dataset_dicts, outputs):
                 output = output.to(cpu_device)
-                postprocess(output, roidb["original_width"], roidb["original_height"])
+                postprocess(output, dataset_dict["original_width"], dataset_dict["original_height"])
 
-                result = {k: roidb[k] for k in ["original_height", "original_width", "id"]}
-                result["result"] = output
-                results.append(result)
-    return results
+                prediction_dict = {
+                    k: dataset_dict[k] for k in ["original_height", "original_width", "image_id"]
+                }
+                prediction_dict["box_list"] = output
+                dataset_predictions.append(prediction_dict)
+    return dataset_predictions
 
 
-def prepare_for_coco_evaluation(predictions):
+def prepare_for_coco_evaluation(dataset_predictions):
     """
     Args:
-        predictions (list[dict]): the same format as returned by `compute_on_dataset`.
+        dataset_predictions (list[dict]): the same format as returned by `compute_on_dataset`.
 
     Returns:
         list[dict]: the format used by COCO evaluation.
@@ -80,32 +82,33 @@ def prepare_for_coco_evaluation(predictions):
 
     coco_results = []
     processed_ids = {}
-    for roidb in tqdm(predictions):
-        if roidb["id"] in processed_ids:
+    for prediction_dict in tqdm(dataset_predictions):
+        img_id = prediction_dict["image_id"]
+        if img_id in processed_ids:
             # The same image may be processed multiple times due to the underlying
             # dataset sampler, such as torch.utils.data.distributed.DistributedSampler:
             # https://git.io/fhScl
             continue
-        processed_ids[roidb["id"]] = True
-        prediction = roidb["result"]
-        num_instance = len(prediction)
+        processed_ids[img_id] = True
+        predictions = prediction_dict["box_list"]
+        num_instance = len(predictions)
         if num_instance == 0:
             continue
 
-        prediction = prediction.convert("xywh")
-        boxes = prediction.bbox.tolist()
-        scores = prediction.get_field("scores").tolist()
-        labels = prediction.get_field("labels").tolist()
+        predictions = predictions.convert("xywh")
+        boxes = predictions.bbox.tolist()
+        scores = predictions.get_field("scores").tolist()
+        labels = predictions.get_field("labels").tolist()
 
-        has_mask = prediction.has_field("mask")
+        has_mask = predictions.has_field("mask")
         if has_mask:
-            rles = prediction.get_field("pasted_mask_rle")
+            rles = predictions.get_field("pasted_mask_rle")
 
         mapped_labels = [COCOMeta().contiguous_id_to_json_id[i] for i in labels]
 
         for k in range(num_instance):
             result = {
-                "image_id": roidb["id"],
+                "image_id": img_id,
                 "category_id": mapped_labels[k],
                 "bbox": boxes[k],
                 "score": scores[k],
@@ -118,7 +121,7 @@ def prepare_for_coco_evaluation(predictions):
 
 # inspired from Detectron
 # TODO(yuxin) this has not been tested for a long time; should not use "dataset"
-def evaluate_box_proposals(predictions, dataset, thresholds=None, area="all", limit=None):
+def evaluate_box_proposals(dataset_predictions, dataset, thresholds=None, area="all", limit=None):
     """Evaluate detection proposal recall metrics. This function is a much
     faster alternative to the official COCO API recall evaluation code. However,
     it produces slightly different results.
@@ -150,17 +153,17 @@ def evaluate_box_proposals(predictions, dataset, thresholds=None, area="all", li
     gt_overlaps = []
     num_pos = 0
 
-    for roidb in predictions:
-        prediction = roidb["result"]
-        image_width = roidb["original_width"]
-        image_height = roidb["original_height"]
+    for prediction_dict in dataset_predictions:
+        predictions = prediction_dict["box_list"]
+        image_width = prediction_dict["original_width"]
+        image_height = prediction_dict["original_height"]
 
         # sort predictions in descending order
         # TODO maybe remove this and make it explicit in the documentation
-        inds = prediction.get_field("objectness_logits").sort(descending=True)[1]
-        prediction = prediction[inds]
+        inds = predictions.get_field("objectness_logits").sort(descending=True)[1]
+        predictions = predictions[inds]
 
-        ann_ids = dataset.ds.coco.getAnnIds(imgIds=roidb["id"])
+        ann_ids = dataset.ds.coco.getAnnIds(imgIds=prediction_dict["image_id"])
         anno = dataset.ds.coco.loadAnns(ann_ids)
         gt_boxes = [obj["bbox"] for obj in anno if obj["iscrowd"] == 0]
         gt_boxes = torch.as_tensor(gt_boxes).reshape(-1, 4)  # guard against no boxes
@@ -178,16 +181,16 @@ def evaluate_box_proposals(predictions, dataset, thresholds=None, area="all", li
         if len(gt_boxes) == 0:
             continue
 
-        if len(prediction) == 0:
+        if len(predictions) == 0:
             continue
 
-        if limit is not None and len(prediction) > limit:
-            prediction = prediction[:limit]
+        if limit is not None and len(predictions) > limit:
+            predictions = predictions[:limit]
 
-        overlaps = boxlist_iou(prediction, gt_boxes)
+        overlaps = boxlist_iou(predictions, gt_boxes)
 
         _gt_overlaps = torch.zeros(len(gt_boxes))
-        for j in range(min(len(prediction), len(gt_boxes))):
+        for j in range(min(len(predictions), len(gt_boxes))):
             # find which proposal box maximally covers each gt box
             # and get the iou amount of coverage for each gt box
             max_overlaps, argmax_overlaps = overlaps.max(dim=0)
@@ -296,7 +299,7 @@ def coco_evaluation(model, data_loader, iou_types=("bbox",), box_only=False, out
     dataset = data_loader.dataset
     logger.info("Start evaluation on {} images".format(len(dataset)))
     start_time = time.time()
-    predictions = compute_on_dataset(model, data_loader)
+    dataset_predictions = compute_on_dataset(model, data_loader)
     # wait for all processes to complete before measuring the time
     synchronize()
     total_time = time.time() - start_time
@@ -308,14 +311,14 @@ def coco_evaluation(model, data_loader, iou_types=("bbox",), box_only=False, out
         )
     )
 
-    all_predictions = all_gather(predictions)
+    all_predictions = all_gather(dataset_predictions)
     if not is_main_process():
         return
     # concat the lists
-    predictions = list(itertools.chain(*all_predictions))
+    dataset_predictions = list(itertools.chain(*all_predictions))
 
     if output_folder:
-        torch.save(predictions, os.path.join(output_folder, "predictions.pth"))
+        torch.save(dataset_predictions, os.path.join(output_folder, "predictions.pth"))
 
     # TODO(yuxin) test this codepath
     if box_only:
@@ -324,7 +327,7 @@ def coco_evaluation(model, data_loader, iou_types=("bbox",), box_only=False, out
         res = COCOResults("box_proposal")
         for limit in [100, 1000]:
             for area, suffix in areas.items():
-                stats = evaluate_box_proposals(predictions, dataset, area=area, limit=limit)
+                stats = evaluate_box_proposals(dataset_predictions, dataset, area=area, limit=limit)
                 key = "AR{}@{:d}".format(suffix, limit)
                 res.results["box_proposal"][key] = stats["ar"].item()
         logger.info(res)
@@ -333,7 +336,7 @@ def coco_evaluation(model, data_loader, iou_types=("bbox",), box_only=False, out
         return
 
     logger.info("Preparing results for COCO format")
-    coco_results = prepare_for_coco_evaluation(predictions)
+    coco_results = prepare_for_coco_evaluation(dataset_predictions)
 
     with tempfile.NamedTemporaryFile() as f:
         file_path = f.name
@@ -344,7 +347,7 @@ def coco_evaluation(model, data_loader, iou_types=("bbox",), box_only=False, out
 
     results = COCOResults(*iou_types)
     if len(coco_results) == 0:
-        return results.results, coco_results, predictions
+        return results.results, coco_results, dataset_predictions
 
     logger.info("Evaluating predictions")
     for iou_type in iou_types:
@@ -361,7 +364,7 @@ def coco_evaluation(model, data_loader, iou_types=("bbox",), box_only=False, out
     if output_folder:
         torch.save(results, os.path.join(output_folder, "coco_results.pth"))
 
-    return results, coco_results, predictions
+    return results, coco_results, dataset_predictions
 
 
 def print_copypaste_format(results):
