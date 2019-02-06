@@ -1,14 +1,16 @@
 from maskrcnn_benchmark.layers import Backbone
 
-from . import fpn, resnet
+from . import BACKBONE_REGISTRY, fpn, resnet  # noqa
 
 
 def build_backbone(cfg):
-    assert cfg.MODEL.BACKBONE.NAME == "ResNet"
-    if cfg.MODEL.BACKBONE.USE_FPN:
-        backbone = fpn.build_resnet_fpn_backbone(cfg)
-    else:
-        backbone = resnet.build_resnet_backbone(cfg)
+    """
+    Returns:
+        an instance of :class:`Backbone`
+    """
+    backbone_name = cfg.MODEL.BACKBONE.NAME
+    backbone = BACKBONE_REGISTRY.get(backbone_name)(cfg)
+
     assert isinstance(backbone, Backbone)
 
     # TODO: find a better way then the defrost/mutate cfg/freeze pattern used here

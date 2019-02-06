@@ -4,7 +4,7 @@ from torch import nn
 
 from maskrcnn_benchmark.layers import Backbone, weight_init
 
-from . import resnet
+from . import resnet, BACKBONE_REGISTRY
 
 
 class FPN(Backbone):
@@ -106,6 +106,7 @@ def _assert_strides_are_log2_contiguous(strides):
         )
 
 
+@BACKBONE_REGISTRY.register()
 def build_resnet_fpn_backbone(cfg):
     """
     Args:

@@ -79,10 +79,9 @@ _C.DATALOADER.ASPECT_RATIO_GROUPING = True
 # ---------------------------------------------------------------------------- #
 _C.MODEL.BACKBONE = CN()
 
-_C.MODEL.BACKBONE.NAME = "ResNet"
+_C.MODEL.BACKBONE.NAME = "build_resnet_backbone"
 # Add StopGrad at a specified stage so the bottom layers are frozen
 _C.MODEL.BACKBONE.FREEZE_AT = 2
-_C.MODEL.BACKBONE.USE_FPN = False
 
 
 # ---------------------------------------------------------------------------- #

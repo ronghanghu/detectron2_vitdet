@@ -1,7 +1,7 @@
 MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
   BACKBONE:
-    USE_FPN: True
+    NAME: "build_resnet_fpn_backbone"
   RESNETS:
     OUT_FEATURES: ["res2", "res3", "res4", "res5"]
   FPN:

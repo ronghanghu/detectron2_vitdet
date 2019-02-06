@@ -1,6 +1,8 @@
 from torch import nn
 
-from maskrcnn_benchmark.layers import BasicStem, BottleneckBlock, ResNet, make_stage
+from maskrcnn_benchmark.layers import BasicStem, BottleneckBlock, make_stage, ResNet
+
+from . import BACKBONE_REGISTRY
 
 
 def build_resnet_head(cfg):
@@ -28,6 +30,7 @@ def build_resnet_head(cfg):
     return nn.Sequential(*blocks)
 
 
+@BACKBONE_REGISTRY.register()
 def build_resnet_backbone(cfg):
     # TODO registration of new blocks/stems
     stem = BasicStem(out_channels=cfg.MODEL.RESNETS.STEM_OUT_CHANNELS, norm="FrozenBN")
