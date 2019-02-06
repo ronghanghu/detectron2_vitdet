@@ -126,6 +126,28 @@ class JSONWriter:
         self._file_handle.close()
 
 
+class TensorboardXWriter:
+    def __init__(self, log_dir: str, window_size: int = 20, **kwargs):
+        """
+        Args:
+            log_dir (str): The directory to save the output events
+            window_size (int): the scalars will be median-smoothed by this window size
+            kwargs: other arguments passed to `tensorboardX.SummaryWriter(...)`
+        """
+        self._window_size = window_size
+        import tensorboardX
+
+        self._writer = tensorboardX.SummaryWriter(log_dir, **kwargs)
+
+    def write(self):
+        storage = get_event_storage()
+        for k, v in storage.latest_with_smoothing_hint(self._window_size).items():
+            self._writer.add_scalar(k, v, storage.iteration)
+
+    def __del__(self):
+        self._writer.close()
+
+
 class EventStorage:
     """
     The user-facing class that provides metric storage functionalities.
