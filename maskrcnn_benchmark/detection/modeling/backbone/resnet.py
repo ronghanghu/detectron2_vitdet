@@ -1,6 +1,6 @@
 from torch import nn
 
-from maskrcnn_benchmark.layers import BasicStem, BottleneckBlock, make_stage, ResNet
+from maskrcnn_benchmark.layers import BasicStem, BottleneckBlock, ResNet, make_stage
 
 from . import BACKBONE_REGISTRY
 

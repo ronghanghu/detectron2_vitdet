@@ -4,7 +4,7 @@ from torch import nn
 
 from maskrcnn_benchmark.layers import Backbone, weight_init
 
-from . import resnet, BACKBONE_REGISTRY
+from . import BACKBONE_REGISTRY, resnet
 
 
 class FPN(Backbone):
