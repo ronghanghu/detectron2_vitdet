@@ -56,7 +56,7 @@ class GeneralizedRCNN(nn.Module):
         if self.roi_heads:
             result, detector_losses = self.roi_heads(features, proposals, targets)
         else:
-            # RPN-only models don't have roi_heads
+            # RPN-only models don't have roi_heads.
             result = proposals
             detector_losses = {}
 

@@ -3,6 +3,9 @@ import torch
 
 def subsample_labels(labels, num_samples, positive_fraction):
     """
+    Return `num_samples` random samples from `labels`, with a fraction of
+    positives no larger than `positive_fraction`.
+
     Args:
         labels (Tensor): (N, ) label vector with values:
               -1: ignore

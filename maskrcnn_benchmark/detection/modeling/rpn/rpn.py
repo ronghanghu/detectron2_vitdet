@@ -8,7 +8,7 @@ from maskrcnn_benchmark.structures.boxlist_ops import cat_boxlist
 from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher
 from .anchor_generator import build_anchor_generator
-from .rpn_outputs import RPNOutputs, sample_rpn_proposals
+from .rpn_outputs import RPNOutputs, find_top_rpn_proposals
 
 
 # In the future when we have more proposal mechanisms (including precomputed)
@@ -100,7 +100,7 @@ class RPN(nn.Module):
         self.rpn_only               = cfg.MODEL.RPN_ONLY
         self.in_features            = cfg.MODEL.RPN.IN_FEATURES
         self.nms_thresh             = cfg.MODEL.RPN.NMS_THRESH
-        self.min_size               = cfg.MODEL.RPN.MIN_SIZE
+        self.min_box_side_len       = cfg.MODEL.RPN.MIN_SIZE
         self.batch_size_per_image   = cfg.MODEL.RPN.BATCH_SIZE_PER_IMAGE
         self.positive_fraction      = cfg.MODEL.RPN.POSITIVE_FRACTION
         # fmt: on
@@ -183,19 +183,24 @@ class RPN(nn.Module):
             losses = {}
 
         with torch.no_grad():
-            proposals = sample_rpn_proposals(
+            # Find the top proposals by applying NMS and removing boxes that
+            # are too small. The proposals are treated as fixed for approximate
+            # joint training with roi heads. This approach ignores the derivative
+            # w.r.t. the proposal boxes’ coordinates that are also network
+            # responses, so is approximate.
+            proposals = find_top_rpn_proposals(
                 outputs.predict_proposals(),
                 outputs.predict_objectness_logits(),
                 images,
                 self.nms_thresh,
                 self.pre_nms_topk[self.training],
                 self.post_nms_topk[self.training],
-                self.min_size,
+                self.min_box_side_len,
                 self.training,
             )
 
-            # Augment RPN proposals with ground-truth boxes
             if self.training:
+                # Augment RPN proposals with ground-truth boxes.
                 # When training starts, RPN will produce low quality proposals due
                 # to random initialization. It's possible that none of these initial
                 # proposals have high enough overlap with the gt objects to be used

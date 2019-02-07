@@ -72,7 +72,10 @@ class ROIHeads(torch.nn.Module):
 
     def sample_proposals_for_training(self, proposals, targets):
         """
-        Sample the proposals and prepare their training targets.
+        Perform box matching between `proposals` and `targets`, and label the
+        proposals as positive/negative/ignored. Return `self.batch_size_per_image`
+        random samples from `proposals` with a fraction of positives that is no
+        larger than `self.positive_sample_fraction.
 
         Args:
             proposals (list[BoxList]): length `N` (number of images) list of

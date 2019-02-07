@@ -49,7 +49,7 @@ Naming convention:
 """
 
 
-def sample_rpn_proposals(
+def find_top_rpn_proposals(
     proposals,
     objectness_logits_pred,
     images,
@@ -60,8 +60,11 @@ def sample_rpn_proposals(
     training,
 ):
     """
-    Return scored object proposals after applying box regression to the anchors, NMS,
-    taking the top k, etc.
+    For each feature map, select the `pre_nms_topk` highest scoring proposals,
+    apply NMS, clip proposals, and remove small boxes. Return the `post_nms_topk`
+    highest scoring proposals among all the feature maps if `training` is True,
+    otherwise, returns the highest `post_nms_topk` scoring proposals for each
+    feature map.
 
     Args:
         proposals (list[Tensor]): A list of L tensors. Tensor i has shape (N, Hi*Wi*A, 4).
@@ -89,7 +92,7 @@ def sample_rpn_proposals(
     image_sizes = [size[::-1] for size in images.image_sizes]  # to (w, h) order
 
     proposals = [
-        _sample_rpn_proposals_single_feature_map(
+        _find_top_rpn_proposals_single_feature_map(
             proposals_i,
             objectness_logits_pred_i,
             image_sizes,
@@ -137,7 +140,7 @@ def sample_rpn_proposals(
     return proposals
 
 
-def _sample_rpn_proposals_single_feature_map(
+def _find_top_rpn_proposals_single_feature_map(
     proposals,
     objectness_logits_pred,
     image_sizes,
@@ -147,8 +150,9 @@ def _sample_rpn_proposals_single_feature_map(
     min_box_side_len,
 ):
     """
-    Applies NMS, clips proposals, removes small proposals, and the returns the
-    `post_nms_topk` highest scoring proposals for a single feature map.
+    Select the `pre_nms_topk` highest scoring proposals, applies NMS, clip
+    proposals, remove small boxes, and finally return the `post_nms_topk`
+    highest scoring proposals from a single feature map.
 
     Args:
         image_sizes: N (width, height) tuples.
