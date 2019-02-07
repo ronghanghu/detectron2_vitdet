@@ -150,7 +150,6 @@ def do_train(cfg, model):
     data_loader = build_detection_data_loader(
         cfg, is_train=True, is_distributed=comm.get_world_size() > 1, start_iter=start_iter
     )
-    assert len(data_loader) == cfg.SOLVER.MAX_ITER
 
     logger = logging.getLogger("maskrcnn_benchmark.trainer")
     logger.info("Start training")
@@ -165,7 +164,7 @@ def do_train(cfg, model):
         else []
     )
     with EventStorage(start_iter) as storage:
-        for iteration, data in enumerate(data_loader, start_iter):
+        for data, iteration in zip(data_loader, range(start_iter, max_iter)):
             data_time = time.time() - iter_end
             iteration = iteration + 1
             storage.step()

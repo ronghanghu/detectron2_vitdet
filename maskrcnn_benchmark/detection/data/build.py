@@ -47,21 +47,6 @@ def build_dataset(dataset_list, dataset_catalog, is_train=True):
         return [ConcatDataset(datasets)]
 
 
-def build_data_sampler(dataset, shuffle, distributed):
-    # "samplers" have a bad __init__ interface; they take a dataset, but internally
-    # only make use of the dataset length
-    if distributed:
-        # NB: the distributed sampler always shuffles data
-        assert shuffle  # make sure there are no surprises
-        return torch.utils.data.distributed.DistributedSampler(dataset)
-
-    if shuffle:
-        sampler = torch.utils.data.sampler.RandomSampler(dataset)
-    else:
-        sampler = torch.utils.data.sampler.SequentialSampler(dataset)
-    return sampler
-
-
 def _quantize(x, bin_edges):
     bin_edges = copy.copy(bin_edges)
     bin_edges = sorted(bin_edges)
@@ -73,9 +58,7 @@ def build_batch_data_sampler(
     sampler,
     images_per_batch,
     group_bin_edges=None,
-    grouping_features=None,
-    max_iters=None,
-    start_iter=0,
+    grouping_features=None
 ):
     """
     Return a dataset index sampler that batches dataset indices.
@@ -95,11 +78,6 @@ def build_batch_data_sampler(
             is disabled. If a list or tuple is given, it must specify for each index
             in the underlying dataset the value to be used for placing that dataset
             index into one of the grouping bins.
-        max_iters (None or int): If an int, then the batch sampler will produce max_iters
-            count batches, possibly cycling through the underlying sampler multiple times.
-            If None, then only a single epoch of the underlying sampler is used.
-        start_iter (int): If max_iters is specified, this determines the iteration at
-            which to start.
 
     Returns:
         A BatchSampler or subclass of BatchSampler.
@@ -108,15 +86,11 @@ def build_batch_data_sampler(
         assert isinstance(group_bin_edges, (list, tuple))
         assert isinstance(grouping_features, (list, tuple))
         group_ids = _quantize(grouping_features, group_bin_edges)
-        batch_sampler = samplers.GroupedBatchSampler(
-            sampler, group_ids, images_per_batch, drop_uneven=False
-        )
+        batch_sampler = samplers.GroupedBatchSampler(sampler, group_ids, images_per_batch)
     else:
         batch_sampler = torch.utils.data.sampler.BatchSampler(
             sampler, images_per_batch, drop_last=False
         )
-    if max_iters is not None:
-        batch_sampler = samplers.IterationBasedBatchSampler(batch_sampler, max_iters, start_iter)
     return batch_sampler
 
 
@@ -130,17 +104,11 @@ def build_detection_data_loader(cfg, is_train=True, is_distributed=False, start_
             images_per_batch, num_gpus
         )
         images_per_gpu = images_per_batch // num_gpus
-        shuffle = True
-        max_iters = cfg.SOLVER.MAX_ITER
     else:
         # Always use 1 image per GPU during inference since this is the
         # standard when reporting inference time in papers.
         images_per_batch = num_gpus
         images_per_gpu = 1
-        # The distributed sampler always suffles (there's no sequential option)
-        shuffle = False if not is_distributed else True
-        max_iters = None
-        start_iter = 0
 
     if images_per_gpu > 1:
         logger = logging.getLogger(__name__)
@@ -155,7 +123,7 @@ def build_detection_data_loader(cfg, is_train=True, is_distributed=False, start_
 
     # Bin edges for batching images with similar aspect ratios. If ASPECT_RATIO_GROUPING
     # is enabled, we define two bins with an edge at height / width = 1.
-    group_bin_edges = [1] if cfg.DATALOADER.ASPECT_RATIO_GROUPING else []
+    group_bin_edges = [1] if cfg.DATALOADER.ASPECT_RATIO_GROUPING and is_train else []
 
     DatasetCatalog = paths_catalog.DatasetCatalog
     dataset_list = cfg.DATASETS.TRAIN if is_train else cfg.DATASETS.TEST
@@ -170,9 +138,13 @@ def build_detection_data_loader(cfg, is_train=True, is_distributed=False, start_
 
         dataset = MapDataset(dataset, DetectionTransform(cfg, is_train))
 
-        sampler = build_data_sampler(dataset, shuffle, is_distributed)
+        if is_train:
+            sampler = samplers.TrainingSampler(len(dataset), seed=start_iter)
+        else:
+            sampler = samplers.InferenceSampler(len(dataset))
+
         batch_sampler = build_batch_data_sampler(
-            sampler, images_per_gpu, group_bin_edges, aspect_ratios, max_iters, start_iter
+            sampler, images_per_gpu, group_bin_edges, aspect_ratios
         )
 
         data_loader = torch.utils.data.DataLoader(
