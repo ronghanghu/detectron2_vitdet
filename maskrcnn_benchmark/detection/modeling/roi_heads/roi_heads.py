@@ -8,7 +8,7 @@ from maskrcnn_benchmark.utils.registry import Registry
 from ..backbone import resnet
 from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher
-from ..poolers import Pooler
+from ..poolers import ROIPooler
 from ..sampling import subsample_labels
 from .box_head import build_box_head
 from .fast_rcnn import FastRCNNOutputHead, FastRCNNOutputs, fastrcnn_inference
@@ -170,7 +170,7 @@ class Res5ROIHeads(ROIHeads):
         self.mask_on                  = cfg.MODEL.MASK_ON
         # fmt: on
 
-        self.pooler = Pooler(
+        self.pooler = ROIPooler(
             output_size=pooler_resolution, scales=pooler_scales, sampling_ratio=sampling_ratio
         )
 
@@ -268,7 +268,7 @@ class StandardROIHeads(ROIHeads):
             assert c == in_channels[0]
         in_channels = in_channels[0]
 
-        self.box_pooler = Pooler(
+        self.box_pooler = ROIPooler(
             output_size=pooler_resolution, scales=pooler_scales, sampling_ratio=sampling_ratio
         )
         self.box_head = build_box_head(cfg, (in_channels, pooler_resolution, pooler_resolution))
@@ -277,7 +277,7 @@ class StandardROIHeads(ROIHeads):
         self.box2box_transform = Box2BoxTransform(weights=bbox_reg_weights)
 
         if self.mask_on:
-            self.mask_pooler = Pooler(
+            self.mask_pooler = ROIPooler(
                 output_size=mask_pooler_resolution,
                 scales=mask_pooler_scales,
                 sampling_ratio=mask_sampling_ratio,

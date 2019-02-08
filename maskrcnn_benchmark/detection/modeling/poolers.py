@@ -1,114 +1,161 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+import math
+import sys
 import torch
 from torch import nn
 
 from maskrcnn_benchmark.layers import ROIAlign, cat
 
 
-class LevelMapper(object):
-    """Determine which FPN level each RoI in a set of RoIs should map to based
-    on the heuristic in the FPN paper.
+def assign_boxes_to_levels(box_lists, min_level, max_level, canonical_box_size, canonical_level):
+    """
+    Map each box in `box_lists` to a feature map level index and return the assignment
+    vector.
+
+    Args:
+        box_lists (list[BoxList]): A list of N BoxLists, where N is the number of images
+            in the batch.
+        min_level (int): Smallest feature map level index. The input is considered index 0,
+            the output of stage 1 is index 1, and so.
+        max_level (int): Largest feature map level index.
+        canonical_box_size (int): A canonical box size in pixels (sqrt(box area)).
+        canonical_level (int): The feature map level index on which a canonically-sized box
+            should be placed.
+
+    Returns:
+        A tensor of length M, where M is the total number of boxes aggregated over all
+            N batch images. The memory layout corresponds to the concatenation of boxes
+            from all images. Each element is the feature map index, as an offset from
+            `self.min_level`, for the corresponding box (so value i means the box is at
+            `self.min_level + i`).
+    """
+    eps = sys.float_info.epsilon
+    box_sizes = torch.sqrt(cat([box_list.area() for box_list in box_lists]))
+    # Eqn.(1) in FPN paper
+    level_assignments = torch.floor(
+        canonical_level + torch.log2(box_sizes / canonical_box_size + eps)
+    )
+    level_assignments = torch.clamp(level_assignments, min=min_level, max=max_level)
+    return level_assignments.to(torch.int64) - min_level
+
+
+def convert_boxes_to_pooler_format(box_lists):
+    """
+    Convert all boxes in `box_lists` to the low-level format used by ROI pooling ops
+    (see description under Returns).
+
+    Args:
+        box_lists (list[BoxList]): A list of N BoxLists, where N is the number of images
+            in the batch.
+
+    Returns:
+        A tensor of shape (M, 5), where M is the total number of boxes aggregated over all
+            N batch images. The 5 columns are (batch index, x0, y0, x1, y1), where batch index
+            is the index in [0, N) indentifying which batch image the box with corners at
+            (x0, y0, x1, y1) comes from.
+    """
+    assert box_lists[0].mode == "xyxy", "The box_lists argument must be in xyxy format."
+
+    dtype = box_lists[0].bbox.dtype
+    device = box_lists[0].bbox.device
+
+    def fmt_box_list(box_list, batch_index):
+        repeated_index = torch.full((len(box_list), 1), batch_index, dtype=dtype, device=device)
+        return cat((repeated_index, box_list.bbox), dim=1)
+
+    pooler_fmt_boxes = cat(
+        [fmt_box_list(box_list, i) for i, box_list in enumerate(box_lists)], dim=0
+    )
+
+    return pooler_fmt_boxes
+
+
+class ROIPooler(nn.Module):
+    """
+    Region of interest feature map pooler that supports pooling from one or more
+    feature maps.
     """
 
-    def __init__(self, k_min, k_max, canonical_scale=224, canonical_level=4, eps=1e-6):
+    def __init__(
+        self, output_size, scales, sampling_ratio, canonical_box_size=224, canonical_level=4
+    ):
         """
-        Arguments:
-            k_min (int)
-            k_max (int)
-            canonical_scale (int)
-            canonical_level (int)
-            eps (float)
+        Args:
+            output_size (int, tuple[int] or list[int]): output size of the pooled region,
+                e.g., 14 x 14. If tuple or list is given, the length must be 2.
+            scales (list[float]): The scale for each low-level pooling op relative to
+                the input image. For a feature map with stride s relative to the input
+                image, scale is defined as a 1 / s.
+            sampling_ratio (int): The `sampling_ratio` parameter for the ROIAlign
+                pooling op.
+            canonical_box_size (int): A canonical box size in pixels (sqrt(box area)). The default
+                is heuristically defined as 224 pixels in the FPN paper (based on ImageNet
+                pre-training).
+            canonical_level (int): The feature map level index on which a canonically-sized box
+                should be placed. The default is defined as level 4 in the FPN paper.
         """
-        self.k_min = k_min
-        self.k_max = k_max
-        self.s0 = canonical_scale
-        self.lvl0 = canonical_level
-        self.eps = eps
+        super(ROIPooler, self).__init__()
 
-    def __call__(self, boxlists):
-        """
-        Arguments:
-            boxlists (list[BoxList])
-        """
-        # Compute level ids
-        s = torch.sqrt(cat([boxlist.area() for boxlist in boxlists]))
-
-        # Eqn.(1) in FPN paper
-        target_lvls = torch.floor(self.lvl0 + torch.log2(s / self.s0 + self.eps))
-        target_lvls = torch.clamp(target_lvls, min=self.k_min, max=self.k_max)
-        return target_lvls.to(torch.int64) - self.k_min
-
-
-class Pooler(nn.Module):
-    """
-    Pooler for Detection with or without FPN.
-    It currently hard-code ROIAlign in the implementation,
-    but that can be made more generic later on.
-    Also, the requirement of passing the scales is not strictly necessary, as they
-    can be inferred from the size of the feature map / size of original image,
-    which is available thanks to the BoxList.
-    """
-
-    def __init__(self, output_size, scales, sampling_ratio):
-        """
-        Arguments:
-            output_size (int, tuple[int] or list[int]): output size for the pooled region
-            scales (list[float]): scales for each Pooler
-            sampling_ratio (int): sampling ratio for ROIAlign
-        """
-        super(Pooler, self).__init__()
         if isinstance(output_size, int):
             output_size = (output_size, output_size)
-        poolers = []
-        for scale in scales:
-            poolers.append(
-                ROIAlign(output_size, spatial_scale=scale, sampling_ratio=sampling_ratio)
-            )
-        self.poolers = nn.ModuleList(poolers)
+        assert len(output_size) == 2
+        assert isinstance(output_size[0], int) and isinstance(output_size[1], int)
         self.output_size = output_size
-        # get the levels in the feature map by leveraging the fact that the network always
-        # downsamples by a factor of 2 at each level.
-        lvl_min = -torch.log2(torch.tensor(scales[0], dtype=torch.float32)).item()
-        lvl_max = -torch.log2(torch.tensor(scales[-1], dtype=torch.float32)).item()
-        self.map_levels = LevelMapper(lvl_min, lvl_max)
 
-    def convert_to_roi_format(self, boxes):
-        assert boxes[0].mode == "xyxy"
-        concat_boxes = cat([b.bbox for b in boxes], dim=0)
-        device, dtype = concat_boxes.device, concat_boxes.dtype
-        ids = cat(
-            [torch.full((len(b), 1), i, dtype=dtype, device=device) for i, b in enumerate(boxes)],
-            dim=0,
+        # TODO: make the low-level pooling op configurable via cfg so user can
+        # specify choice of ROIAlign, ROIPool, etc.
+        self.level_poolers = nn.ModuleList(
+            ROIAlign(output_size, spatial_scale=scale, sampling_ratio=sampling_ratio)
+            for scale in scales
         )
-        rois = torch.cat([ids, concat_boxes], dim=1)
-        return rois
 
-    def forward(self, x, boxes):
+        # Map scale (defined as 1 / stride) to its feature map level under the
+        # assumption that stride is a power of 2.
+        min_level = -math.log2(scales[0])
+        max_level = -math.log2(scales[-1])
+        assert math.isclose(min_level, int(min_level)) and math.isclose(max_level, int(max_level))
+        self.min_level = int(min_level)
+        self.max_level = int(max_level)
+        assert 0 < self.min_level and self.min_level <= self.max_level
+        assert self.min_level <= canonical_level and canonical_level <= self.max_level
+        self.canonical_level = canonical_level
+        assert canonical_box_size > 0
+        self.canonical_box_size = canonical_box_size
+
+    def forward(self, x, box_lists):
         """
-        Arguments:
-            x (list[Tensor]): feature maps for each level
-            boxes (list[BoxList]): boxes to be used to perform the pooling operation.
+        Args:
+            x (list[Tensor]): A list of feature maps with scales matching thosed used to
+                construct this module.
+            box_lists (list[BoxList]): A list of N BoxLists, where N is the number of images
+                in the batch.
+
         Returns:
-            result (Tensor)
+            A tensor of shape (M, C, output_size, output_size) where M is the total number of
+                boxes aggregated over all N batch images and C is the number of channels in `x`.
         """
-        num_levels = len(self.poolers)
-        rois = self.convert_to_roi_format(boxes)
-        if num_levels == 1:
-            return self.poolers[0](x[0], rois)
+        num_level_assignments = len(self.level_poolers)
+        pooler_fmt_boxes = convert_boxes_to_pooler_format(box_lists)
 
-        levels = self.map_levels(boxes)
+        if num_level_assignments == 1:
+            return self.level_poolers[0](x[0], pooler_fmt_boxes)
 
-        num_rois = len(rois)
+        level_assignments = assign_boxes_to_levels(
+            box_lists, self.min_level, self.max_level, self.canonical_box_size, self.canonical_level
+        )
+
+        num_boxes = len(pooler_fmt_boxes)
         num_channels = x[0].shape[1]
         output_size = self.output_size[0]
 
         dtype, device = x[0].dtype, x[0].device
-        result = torch.zeros(
-            (num_rois, num_channels, output_size, output_size), dtype=dtype, device=device
+        output = torch.zeros(
+            (num_boxes, num_channels, output_size, output_size), dtype=dtype, device=device
         )
-        for level, (per_level_feature, pooler) in enumerate(zip(x, self.poolers)):
-            idx_in_level = torch.nonzero(levels == level).squeeze(1)
-            rois_per_level = rois[idx_in_level]
-            result[idx_in_level] = pooler(per_level_feature, rois_per_level)
 
-        return result
+        for level, (x_level, pooler) in enumerate(zip(x, self.level_poolers)):
+            inds = torch.nonzero(level_assignments == level).squeeze(1)
+            pooler_fmt_boxes_level = pooler_fmt_boxes[inds]
+            output[inds] = pooler(x_level, pooler_fmt_boxes_level)
+
+        return output
