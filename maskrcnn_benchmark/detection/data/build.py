@@ -14,37 +14,23 @@ from ..config import paths_catalog
 from .transforms import DetectionTransform
 
 
-def build_dataset(dataset_list, dataset_catalog, is_train=True):
+def build_dataset(dataset_name, is_train=True):
     """
     Arguments:
-        dataset_list (list[str]): Contains the names of the datasets, i.e.,
-            coco_2014_trian, coco_2014_val, etc
-        dataset_catalog (DatasetCatalog): contains the information on how to
-            construct a dataset.
+        dataset_name (str): The name of the dataset, handled by the DatasetCatalog,
+            e.g., coco_2014_train.
         is_train (bool): whether to setup the dataset for training or testing
     """
-    if not isinstance(dataset_list, (list, tuple)):
-        raise RuntimeError("dataset_list should be a list of strings, got {}".format(dataset_list))
-    assert len(dataset_list)
-    datasets = []
-    for dataset_name in dataset_list:
-        data = dataset_catalog.get(dataset_name)
-        factory = getattr(D, data["factory"])
-        args = data["args"]
+    data = paths_catalog.DatasetCatalog.get(dataset_name)
+    factory = getattr(D, data["factory"])  # TODO get rid of this
+    args = data["args"]
 
-        if data["factory"] == "COCODetection":
-            # for COCODataset, we want to remove images without annotations during training
-            args["remove_images_without_annotations"] = is_train
-        # make dataset from factory
-        dataset = factory(**args)
-        datasets.append(dataset)
-
-    # for testing, return a list of datasets
-    if not is_train or len(datasets) <= 1:
-        return datasets
-    else:
-        # for training, concatenate all datasets into a single one
-        return [ConcatDataset(datasets)]
+    if data["factory"] == "COCODetection":
+        # for COCODataset, we want to remove images without annotations during training
+        args["remove_images_without_annotations"] = is_train
+    # make dataset from factory
+    dataset = factory(**args)
+    return dataset
 
 
 def _quantize(x, bin_edges):
@@ -55,13 +41,11 @@ def _quantize(x, bin_edges):
 
 
 def build_batch_data_sampler(
-    sampler,
-    images_per_batch,
-    group_bin_edges=None,
-    grouping_features=None
+    sampler, images_per_batch, group_bin_edges=None, grouping_features=None
 ):
     """
-    Return a dataset index sampler that batches dataset indices.
+    Return a dataset index sampler that batches dataset indices possibly with
+    grouping to improve training efficiency.
 
     Args:
         sampler (torch.utils.data.sampler.Sampler): any subclass of
@@ -94,21 +78,19 @@ def build_batch_data_sampler(
     return batch_sampler
 
 
-def build_detection_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0):
+def build_detection_train_loader(cfg, start_iter=0):
+    """
+    Returns:
+        a torch DataLoader object
+    """
     num_gpus = get_world_size()
-    if is_train:
-        images_per_batch = cfg.SOLVER.IMS_PER_BATCH
-        assert (
-            images_per_batch % num_gpus == 0
-        ), "SOLVER.IMS_PER_BATCH ({}) must be divisible by the number of GPUs ({}) used.".format(
-            images_per_batch, num_gpus
-        )
-        images_per_gpu = images_per_batch // num_gpus
-    else:
-        # Always use 1 image per GPU during inference since this is the
-        # standard when reporting inference time in papers.
-        images_per_batch = num_gpus
-        images_per_gpu = 1
+    images_per_batch = cfg.SOLVER.IMS_PER_BATCH
+    assert (
+        images_per_batch % num_gpus == 0
+    ), "SOLVER.IMS_PER_BATCH ({}) must be divisible by the number of GPUs ({}) used.".format(
+        images_per_batch, num_gpus
+    )
+    images_per_gpu = images_per_batch // num_gpus
 
     if images_per_gpu > 1:
         logger = logging.getLogger(__name__)
@@ -121,43 +103,54 @@ def build_detection_data_loader(cfg, is_train=True, is_distributed=False, start_
             "example: using://git.io/fhSc4."
         )
 
+    datasets = [build_dataset(dataset_name, True) for dataset_name in cfg.DATASETS.TRAIN]
+    dataset = ConcatDataset(datasets)
+
     # Bin edges for batching images with similar aspect ratios. If ASPECT_RATIO_GROUPING
     # is enabled, we define two bins with an edge at height / width = 1.
-    group_bin_edges = [1] if cfg.DATALOADER.ASPECT_RATIO_GROUPING and is_train else []
+    group_bin_edges = [1] if cfg.DATALOADER.ASPECT_RATIO_GROUPING else []
+    aspect_ratios = [
+        float(img["original_height"]) / float(img["original_width"]) for img in dataset
+    ]
 
-    DatasetCatalog = paths_catalog.DatasetCatalog
-    dataset_list = cfg.DATASETS.TRAIN if is_train else cfg.DATASETS.TEST
+    dataset = MapDataset(dataset, DetectionTransform(cfg, True))
 
-    datasets = build_dataset(dataset_list, DatasetCatalog, is_train)
+    sampler = samplers.TrainingSampler(len(dataset), seed=start_iter)
+    batch_sampler = build_batch_data_sampler(
+        sampler, images_per_gpu, group_bin_edges, aspect_ratios
+    )
 
+    data_loader = torch.utils.data.DataLoader(
+        dataset,
+        num_workers=cfg.DATALOADER.NUM_WORKERS,
+        batch_sampler=batch_sampler,
+        collate_fn=DetectionBatchCollator(True, cfg.DATALOADER.SIZE_DIVISIBILITY),
+    )
+    return data_loader
+
+
+def build_detection_test_loader(cfg):
+    """
+    Returns:
+        list[DataLoader]: a list of torch DataLoader, one for each test dataset.
+    """
     data_loaders = []
-    for dataset in datasets:
-        aspect_ratios = [
-            float(img["original_height"]) / float(img["original_width"]) for img in dataset
-        ]
+    for dataset_name in cfg.DATASETS.TEST:
+        dataset = build_dataset(dataset_name, False)
+        dataset = MapDataset(dataset, DetectionTransform(cfg, False))
 
-        dataset = MapDataset(dataset, DetectionTransform(cfg, is_train))
-
-        if is_train:
-            sampler = samplers.TrainingSampler(len(dataset), seed=start_iter)
-        else:
-            sampler = samplers.InferenceSampler(len(dataset))
-
-        batch_sampler = build_batch_data_sampler(
-            sampler, images_per_gpu, group_bin_edges, aspect_ratios
-        )
+        sampler = samplers.InferenceSampler(len(dataset))
+        # Always use 1 image per GPU during inference since this is the
+        # standard when reporting inference time in papers.
+        batch_sampler = torch.utils.data.sampler.BatchSampler(sampler, 1, drop_last=False)
 
         data_loader = torch.utils.data.DataLoader(
             dataset,
             num_workers=cfg.DATALOADER.NUM_WORKERS,
             batch_sampler=batch_sampler,
-            collate_fn=DetectionBatchCollator(is_train, cfg.DATALOADER.SIZE_DIVISIBILITY),
+            collate_fn=DetectionBatchCollator(False, cfg.DATALOADER.SIZE_DIVISIBILITY),
         )
         data_loaders.append(data_loader)
-    if is_train:
-        # during training, a single (possibly concatenated) data_loader is returned
-        assert len(data_loaders) == 1
-        return data_loaders[0]
     return data_loaders
 
 

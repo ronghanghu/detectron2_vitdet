@@ -74,21 +74,6 @@ class COCODetection(data.Dataset):
         imgs_anns = list(zip(imgs, anns))
 
         logger = logging.getLogger(__name__)
-        if remove_images_without_annotations:
-            num_before = len(imgs_anns)
-
-            def has_annotation(anns):
-                for ann in anns:
-                    if ann["iscrowd"] == 0:
-                        return True
-                return False
-
-            imgs_anns = [x for x in imgs_anns if has_annotation(x[1])]
-
-            num_after = len(imgs_anns)
-            logger.info(
-                "Remove {} images with no usable annotations.".format(num_before - num_after)
-            )
         logger.info("Loaded {} images from {}".format(len(imgs_anns), ann_file))
 
         self.dataset_dicts = []
@@ -110,6 +95,31 @@ class COCODetection(data.Dataset):
                 objs.append(obj)
             record["annotations"] = objs
             self.dataset_dicts.append(record)
+        if remove_images_without_annotations:
+            self._remove_images_without_annotations()
+
+    def _remove_images_without_annotations(self):
+        """
+        Filter out images without non-crowd annotations.
+        A common training-time preprocessing on COCO dataset.
+        """
+        num_before = len(self.dataset_dicts)
+
+        def valid(anns):
+            for ann in anns:
+                if ann["iscrowd"] == 0:
+                    return True
+            return False
+
+        self.dataset_dicts = [x for x in self.dataset_dicts if valid(x["annotations"])]
+
+        num_after = len(self.dataset_dicts)
+        logger = logging.getLogger(__name__)
+        logger.info(
+            "Removed {} images with no usable annotations. {} images left.".format(
+                num_before - num_after, num_after
+            )
+        )
 
     def __len__(self):
         return len(self.dataset_dicts)

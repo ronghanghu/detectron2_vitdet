@@ -41,5 +41,5 @@ class GroupedBatchSampler(BatchSampler):
             group_buffer = self.buffer_per_group[group_id]
             group_buffer.append(idx)
             if len(group_buffer) == self.batch_size:
-                yield group_buffer[:]   # yield a copy of the list
+                yield group_buffer[:]  # yield a copy of the list
                 del group_buffer[:]

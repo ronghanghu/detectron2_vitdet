@@ -18,8 +18,9 @@ from torch.nn.parallel import DistributedDataParallel
 import maskrcnn_benchmark.utils.comm as comm
 from maskrcnn_benchmark.detection import (
     DetectionCheckpointer,
-    build_detection_data_loader,
     build_detection_model,
+    build_detection_test_loader,
+    build_detection_train_loader,
     build_lr_scheduler,
     build_optimizer,
     coco_evaluation,
@@ -111,9 +112,7 @@ def do_test(cfg, model, is_final=True):
             output_folder = os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
             mkdir(output_folder)
             output_folders[idx] = output_folder
-    data_loaders_val = build_detection_data_loader(
-        cfg, is_train=False, is_distributed=comm.get_world_size() > 1
-    )
+    data_loaders_val = build_detection_test_loader(cfg)
 
     results = []
     for output_folder, data_loader_val in zip(output_folders, data_loaders_val):
@@ -147,9 +146,7 @@ def do_train(cfg, model):
         checkpointer, cfg.SOLVER.CHECKPOINT_PERIOD, cfg.SOLVER.MAX_ITER
     )
 
-    data_loader = build_detection_data_loader(
-        cfg, is_train=True, is_distributed=comm.get_world_size() > 1, start_iter=start_iter
-    )
+    data_loader = build_detection_train_loader(cfg, start_iter=start_iter)
 
     logger = logging.getLogger("maskrcnn_benchmark.trainer")
     logger.info("Start training")
