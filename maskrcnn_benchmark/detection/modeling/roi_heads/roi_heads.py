@@ -11,8 +11,8 @@ from ..matcher import Matcher
 from ..poolers import ROIPooler
 from ..sampling import subsample_labels
 from .box_head import build_box_head
-from .fast_rcnn import FastRCNNOutputHead, FastRCNNOutputs, fastrcnn_inference
-from .mask_head import build_mask_head, maskrcnn_inference, maskrcnn_loss
+from .fast_rcnn import FastRCNNOutputHead, FastRCNNOutputs, fast_rcnn_inference
+from .mask_head import build_mask_head, mask_rcnn_inference, mask_rcnn_loss
 
 
 ROI_HEADS_REGISTRY = Registry("ROI_HEADS")
@@ -145,7 +145,7 @@ class ROIHeads(torch.nn.Module):
 
         Returns:
             results (list[BoxList]): length `N` list of `BoxList`s containing the
-                detected objects. Returned during inference only; may be None
+                detected objects. Returned during inference only; may be []
                 during training.
             losses (dict[str: Tensor]): mapping from a named loss to a tensor
                 storing the loss. Used during training only.
@@ -161,13 +161,13 @@ class Res5ROIHeads(ROIHeads):
         assert len(self.in_features) == 1
 
         # fmt: off
-        pooler_resolution             = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
-        pooler_scales                 = (1.0 / self.feature_strides[self.in_features[0]], )
-        sampling_ratio                = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
-        num_classes                   = cfg.MODEL.ROI_HEADS.NUM_CLASSES
-        bbox_reg_weights              = cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS
-        self.mask_discretization_size = cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
-        self.mask_on                  = cfg.MODEL.MASK_ON
+        pooler_resolution   = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
+        pooler_scales       = (1.0 / self.feature_strides[self.in_features[0]], )
+        sampling_ratio      = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
+        num_classes         = cfg.MODEL.ROI_HEADS.NUM_CLASSES
+        bbox_reg_weights    = cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS
+        self.mask_side_len  = cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
+        self.mask_on        = cfg.MODEL.MASK_ON
         # fmt: on
 
         self.pooler = ROIPooler(
@@ -215,12 +215,12 @@ class Res5ROIHeads(ROIHeads):
                 mask_features = box_features[torch.cat(pos_masks, dim=0)]
                 del box_features
                 mask_logits = self.mask_head(mask_features)
-                losses["loss_mask"] = maskrcnn_loss(
-                    proposals, mask_logits, targets, self.mask_discretization_size
+                losses["loss_mask"] = mask_rcnn_loss(
+                    mask_logits, proposals, targets, self.mask_side_len
                 )
-            return None, losses
+            return [], losses
         else:
-            results = fastrcnn_inference(
+            box_lists_pred = fast_rcnn_inference(
                 outputs.predict_boxes(),
                 outputs.predict_probs(),
                 outputs.image_shapes,
@@ -229,10 +229,10 @@ class Res5ROIHeads(ROIHeads):
                 self.test_detections_per_img,
             )
             if self.mask_on:
-                x = self._shared_roi_transform(features, results)
+                x = self._shared_roi_transform(features, box_lists_pred)
                 mask_logits = self.mask_head(x)
-                maskrcnn_inference(mask_logits, results)
-            return results, {}
+                mask_rcnn_inference(mask_logits, box_lists_pred)
+            return box_lists_pred, {}
 
 
 @ROI_HEADS_REGISTRY.register()
@@ -253,11 +253,10 @@ class StandardROIHeads(ROIHeads):
         num_classes              = cfg.MODEL.ROI_HEADS.NUM_CLASSES
         bbox_reg_weights         = cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS
         self.mask_on             = cfg.MODEL.MASK_ON
-        if self.mask_on:
-            self.mask_discretization_size = cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
-            mask_pooler_resolution        = cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION
-            mask_pooler_scales            = pooler_scales
-            mask_sampling_ratio           = cfg.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO
+        self.mask_side_len       = cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
+        mask_pooler_resolution   = cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION
+        mask_pooler_scales       = pooler_scales
+        mask_sampling_ratio      = cfg.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO
         # fmt: on
 
         # If StandardROIHeads is applied on multiple feature maps (as in FPN),
@@ -309,13 +308,12 @@ class StandardROIHeads(ROIHeads):
                 proposals, targets, _ = keep_only_positive_boxes(proposals, targets)
                 mask_features = self.mask_pooler(features, proposals)
                 mask_logits = self.mask_head(mask_features)
-                losses["loss_mask"] = maskrcnn_loss(
-                    proposals, mask_logits, targets, self.mask_discretization_size
+                losses["loss_mask"] = mask_rcnn_loss(
+                    mask_logits, proposals, targets, self.mask_side_len
                 )
-            return proposals, losses
+            return [], losses
         else:
-            losses = {}
-            detections = fastrcnn_inference(
+            box_lists_pred = fast_rcnn_inference(
                 outputs.predict_boxes(),
                 outputs.predict_probs(),
                 outputs.image_shapes,
@@ -326,7 +324,7 @@ class StandardROIHeads(ROIHeads):
             if self.mask_on:
                 # During inference cascaded prediction is used: the mask head is only
                 # applied to the top scoring box detections.
-                mask_features = self.mask_pooler(features, detections)
+                mask_features = self.mask_pooler(features, box_lists_pred)
                 mask_logits = self.mask_head(mask_features)
-                maskrcnn_inference(mask_logits, detections)
-            return detections, losses
+                mask_rcnn_inference(mask_logits, box_lists_pred)
+            return box_lists_pred, {}

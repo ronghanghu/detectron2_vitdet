@@ -4,9 +4,12 @@ from torchvision import transforms as T
 
 from maskrcnn_benchmark import layers as L
 from maskrcnn_benchmark.modeling.detector import build_detection_model
-from maskrcnn_benchmark.modeling.roi_heads.paste_mask import Masker
+from maskrcnn_benchmark.modeling.roi_heads.paste_mask import paste_masks_in_image
 from maskrcnn_benchmark.structures.image_list import to_image_list
 from maskrcnn_benchmark.utils.checkpoint import DetectronCheckpointer
+
+
+raise NotImplementedError("This module has not been maintained and no longer works.")
 
 
 class COCODemo(object):
@@ -115,8 +118,8 @@ class COCODemo(object):
 
         self.transforms = self.build_transform()
 
-        mask_threshold = -1 if show_mask_heatmaps else 0.5
-        self.masker = Masker(threshold=mask_threshold, padding=1)
+        self.mask_threshold = -1 if show_mask_heatmaps else 0.5
+        self.padding = 1
 
         # used to make colors for each class
         self.palette = torch.tensor([2 ** 25 - 1, 2 ** 15 - 1, 2 ** 21 - 1])
@@ -210,7 +213,7 @@ class COCODemo(object):
             # if we have masks, paste the masks in the right position
             # in the image, as defined by the bounding boxes
             masks = prediction.get_field("mask")
-            masks = self.masker(masks, prediction)
+            masks = paste_masks_in_image(masks, prediction, self.mask_threshold, self.padding)
             prediction.add_field("mask", masks)
         return prediction
 

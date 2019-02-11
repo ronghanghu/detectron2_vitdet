@@ -34,6 +34,7 @@ class FastRCNN2MLPHead(nn.Module):
         return self._output_size
 
 
+# TODO: use registration
 def build_box_head(cfg, input_size):
     """
     Args:

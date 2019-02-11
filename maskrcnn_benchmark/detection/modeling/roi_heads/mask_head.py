@@ -5,136 +5,159 @@ from torch.nn import functional as F
 from maskrcnn_benchmark.layers import Conv2d, ConvTranspose2d, cat
 
 
-def project_masks_on_boxes(segmentation_masks, proposals, discretization_size):
+def get_mask_ground_truth(masks_gt, box_list_pred, mask_side_len):
     """
-    Given segmentation masks and the bounding boxes corresponding
-    to the location of the masks in the image, this function
-    crops and resizes the masks in the position defined by the
-    boxes. This prepares the masks for them to be fed to the
-    loss computation as the targets.
+    Given original ground-truth masks for an image, construct new ground-truth masks
+    for a set of predicted boxes in that image. For each box, its ground-truth mask is
+    constructed by clipping the corresponding original mask to the box, scaling it to
+    the desired size and then rasterizing it into a tensor.
 
-    Arguments:
-        segmentation_masks: an instance of SegmentationList
-        proposals: an instance of BoxList
+    Args:
+        masks_gt (SegmentationList): A SegmentationList storing ground-truth masks for an image.
+        box_list_pred (BoxList): A BoxList storing the predicted boxes for which ground-truth
+            masks will be constructed.
+        mask_side_len (int): The side length of the rasterized ground-truth masks.
+
     Returns:
-        A tensor of shape #box x M x M, all the target masks
+        mask_logits_gt (Tensor): A tensor of shape (Bimg, mask_side_len, mask_side_len), where
+            Bimg is the number of predicted boxes for this image. mask_logits_gt[i] stores the
+            ground-truth for the predicted mask logits for the i-th predicted box.
     """
-    masks = []
-    M = discretization_size
-    device = proposals.bbox.device
-    proposals = proposals.convert("xyxy")
-    assert segmentation_masks.size == proposals.size, "{}, {}".format(segmentation_masks, proposals)
-    # TODO put the proposals on the CPU, as the representation for the
-    # masks is not efficient GPU-wise (possibly several small tensors for
-    # representing a single instance mask)
-    proposals = proposals.bbox.to(torch.device("cpu"))
-    # TODO use RoIAlign.
-    for segmentation_mask, proposal in zip(segmentation_masks, proposals):
-        # crop the masks, resize them to the desired resolution and
-        # then convert them to the tensor representation,
-        # instead of the list representation that was used
-        cropped_mask = segmentation_mask.crop(proposal)
-        scaled_mask = cropped_mask.resize((M, M))
-        mask = scaled_mask.convert(mode="mask")
-        masks.append(mask)
-    if len(masks) == 0:
+    device = box_list_pred.bbox.device
+    box_list_pred = box_list_pred.convert("xyxy")
+    assert masks_gt.size == box_list_pred.size, "{}, {}".format(masks_gt, box_list_pred)
+    # Put box_list_pred on the CPU, as the representation for masks is not efficient
+    # GPU-wise (possibly several small tensors for representing a single instance mask)
+    box_list_pred = box_list_pred.bbox.to(torch.device("cpu"))
+    mask_shape = (mask_side_len, mask_side_len)
+
+    mask_logits_gt = []
+    for mask_gt, box_pred in zip(masks_gt, box_list_pred):
+        """
+        mask_gt: a :class:`Polygons` instance
+        box_pred: a tensor of shape (4,)
+        """
+        # Clip the ground-truth mask to the predicted box
+        clipped_mask_gt = mask_gt.crop(box_pred)
+        # Scale to the target mask shape
+        scaled_clipped_mask_gt = clipped_mask_gt.resize(mask_shape)
+        # Rasterize the scaled, clipped ground-truth mask
+        rasterized_mask_gt = scaled_clipped_mask_gt.convert(mode="mask")
+        mask_logits_gt.append(rasterized_mask_gt)
+    if len(mask_logits_gt) == 0:
         return torch.empty(0, dtype=torch.float32, device=device)
-    return torch.stack(masks, dim=0).to(device, dtype=torch.float32)
+    return torch.stack(mask_logits_gt, dim=0).to(device, dtype=torch.float32)
 
 
-def maskrcnn_loss(proposals, mask_logits, matched_targets, discretization_size):
+def mask_rcnn_loss(mask_logits_pred, box_lists_pred, box_lists_gt, mask_side_len):
     """
-    Arguments:
-        proposals (list[BoxList]): all the foreground proposals
-        mask_logits (Tensor)
-        matched_targets (list[BoxList]): one-to-one corresponds to the proposals.
+    Compute the mask prediction loss defined in the Mask R-CNN paper.
 
-    Return:
-        mask_loss (Tensor): scalar tensor containing the loss
+    Args:
+        mask_logits_pred (Tensor): A tensor of shape (B, C, Hmask, Wmask), where B is the
+            total number of predicted masks in all images, C is the number of classes,
+            and Hmask, Wmask are the height and width of the mask predictions. The values
+            are logits.
+        box_lists_pred (list[BoxList]): A list of N BoxLists, where N is the number of images
+            in the batch. These boxes are predictions from the model that are in 1:1
+            correspondence with the mask_logits_pred.
+        box_lists_gt (list[BoxList]): Ground-truth boxes in one-to-one corresponds with
+            box_lists_pred.
+        mask_side_len (int): The side length of the rasterized ground-truth masks.
+
+    Returns:
+        mask_loss (Tensor): A scalar tensor containing the loss.
     """
-    labels = []
-    mask_targets = []
-    for proposals_per_image, matched_targets_per_image in zip(proposals, matched_targets):
-        labels_per_image = matched_targets_per_image.get_field("labels").to(dtype=torch.int64)
-        segmentation_masks = matched_targets_per_image.get_field("masks")
-        masks_per_image = project_masks_on_boxes(
-            segmentation_masks, proposals_per_image, discretization_size
+    class_gt = []
+    mask_logits_gt = []
+    for box_list_pred_per_image, box_list_gt_per_image in zip(box_lists_pred, box_lists_gt):
+        class_gt_per_image = box_list_gt_per_image.get_field("labels").to(dtype=torch.int64)
+        masks_gt = box_list_gt_per_image.get_field("masks")
+        mask_logits_gt_per_image = get_mask_ground_truth(
+            masks_gt, box_list_pred_per_image, mask_side_len
         )
+        class_gt.append(class_gt_per_image)
+        mask_logits_gt.append(mask_logits_gt_per_image)
 
-        labels.append(labels_per_image)
-        mask_targets.append(masks_per_image)
+    class_gt = cat(class_gt, dim=0)
+    mask_logits_gt = cat(mask_logits_gt, dim=0)
 
-    labels = cat(labels, dim=0)
-    mask_targets = cat(mask_targets, dim=0)
-
-    positive_inds = torch.nonzero(labels > 0).squeeze(1)
-    labels_pos = labels[positive_inds]
+    # Masks should not be predicted for boxes that were not matched to a gt box.
+    assert torch.all(class_gt > 0)
 
     # torch.mean (in binary_cross_entropy_with_logits) doesn't
     # accept empty tensors, so handle it separately
-    if mask_targets.numel() == 0:
-        return mask_logits.sum() * 0
+    if mask_logits_gt.numel() == 0:
+        return mask_logits_pred.sum() * 0
 
+    indices = torch.arange(len(class_gt))
     mask_loss = F.binary_cross_entropy_with_logits(
-        mask_logits[positive_inds, labels_pos], mask_targets
+        mask_logits_pred[indices, class_gt], mask_logits_gt, reduction="mean"
     )
     return mask_loss
 
 
-def maskrcnn_inference(mask_logits, boxes):
+def mask_rcnn_inference(mask_logits_pred, box_lists_pred):
     """
-    From the results of the CNN, post process the masks
-    by taking the mask corresponding to the class with max
-    probability (which are of fixed size and directly output
-    by the CNN) and add it to the boxlist as an extra "mask" field.
+    Convert mask_logits_pred to estimated foreground probability masks while also
+    extracting only the masks for the predicted classes in box_lists_pred. For each
+    predicted box, the mask of the same class is attached to the box by adding a
+    new "mask" field to box_lists_pred.
 
     Args:
-        mask_logits (Tensor): NCHW tensor.
-        boxes (list[BoxList]): boxes with "labels" field.
+        mask_logits_pred (Tensor): A tensor of shape (B, C, Hmask, Wmask), where B is the
+            total number of predicted masks in all images, C is the number of classes,
+            and Hmask, Wmask are the height and width of the mask predictions. The values
+            are logits.
+        box_lists_pred (list[BoxList]): A list of N BoxLists, where N is the number of images
+            in the batch. Each BoxList has a "labels" field.
 
     Returns:
-        None. boxes will contain an extra "mask" field.
-        The field contain the mask in the CNN output size.
-
-        It does not make sense to resize to image size here, because that is a quantization step, and
-        should be done by the caller of the entire model who knows the true original size of the image.
+        None. box_lists_pred will contain an extra "mask" field storing a mask of size (Hmask,
+            Wmask) for predicted class. Note that the masks are returned as a soft (non-quantized)
+            masks the resolution predicted by the network; post-processing steps, such as resizing
+            the predicted masks to the original image resolution and/or binarizing them, is left
+            to the caller.
     """
-    mask_prob = mask_logits.sigmoid()
+    mask_probs_pred = mask_logits_pred.sigmoid()
 
-    # select masks coresponding to the predicted classes
-    num_masks = mask_logits.shape[0]
-    labels = [bbox.get_field("labels") for bbox in boxes]
-    labels = torch.cat(labels)
-    index = torch.arange(num_masks, device=labels.device)
-    mask_prob = mask_prob[index, labels][:, None]
+    # Select masks coresponding to the predicted classes
+    num_masks = mask_logits_pred.shape[0]
+    class_pred = torch.cat([box_list.get_field("labels") for box_list in box_lists_pred])
+    indices = torch.arange(num_masks, device=class_pred.device)
+    mask_probs_pred = mask_probs_pred[indices, class_pred][:, None]
 
-    boxes_per_image = [len(box) for box in boxes]
-    mask_prob = mask_prob.split(boxes_per_image, dim=0)
+    num_boxes_per_image = [len(box_list) for box_list in box_lists_pred]
+    mask_probs_pred = mask_probs_pred.split(num_boxes_per_image, dim=0)
 
-    for prob, box in zip(mask_prob, boxes):
+    for prob, box in zip(mask_probs_pred, box_lists_pred):
         box.add_field("mask", prob)
 
 
 class MaskRCNNConvUpsampleHead(nn.Module):
     def __init__(self, num_convs, num_classes, input_channels, feature_channels):
         super(MaskRCNNConvUpsampleHead, self).__init__()
-        self.blocks = []
+        self.convs = []
 
         for k in range(num_convs):
             layer = Conv2d(
                 input_channels if k == 0 else feature_channels,
                 feature_channels,
-                3,
+                kernel_size=3,
                 stride=1,
                 padding=1,
             )
             self.add_module("mask_fcn{}".format(k + 1), layer)
-            self.blocks.append(layer)
+            self.convs.append(layer)
 
         self.deconv = ConvTranspose2d(
-            feature_channels if num_convs > 0 else input_channels, feature_channels, 2, 2, 0
+            feature_channels if num_convs > 0 else input_channels,
+            feature_channels,
+            kernel_size=2,
+            stride=2,
+            padding=0,
         )
-        self.predictor = Conv2d(feature_channels, num_classes, 1, 1, 0)
+        self.predictor = Conv2d(feature_channels, num_classes, kernel_size=1, stride=1, padding=0)
 
         for name, param in self.named_parameters():
             if "bias" in name:
@@ -145,12 +168,13 @@ class MaskRCNNConvUpsampleHead(nn.Module):
                 nn.init.kaiming_normal_(param, mode="fan_out", nonlinearity="relu")
 
     def forward(self, x):
-        for layer in self.blocks:
-            x = F.relu(layer(x))
+        for conv in self.convs:
+            x = F.relu(conv(x))
         x = F.relu(self.deconv(x))
         return self.predictor(x)
 
 
+# TODO: use registration
 def build_mask_head(cfg, input_size):
     """
     input_size: int (channels) or tuple (channels, height, width)

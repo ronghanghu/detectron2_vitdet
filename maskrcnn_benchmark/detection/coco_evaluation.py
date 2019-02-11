@@ -18,7 +18,7 @@ from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 from maskrcnn_benchmark.utils.comm import all_gather, is_main_process, synchronize
 
-from .modeling.roi_heads.paste_mask import Masker  # TODO move inside models
+from .modeling.roi_heads.paste_mask import paste_masks_in_image
 
 
 def postprocess(result, original_width, original_height):
@@ -39,8 +39,9 @@ def postprocess(result, original_width, original_height):
 
     if result.has_field("mask"):
         masks = result.get_field("mask")  # N, 1, M, M
-        masker = Masker(threshold=MASK_THRESHOLD, padding=1)
-        pasted_masks = [x[0] for x in masker.forward_single_image(masks, result)]
+        pasted_masks = [
+            x[0] for x in paste_masks_in_image(masks, result, threshold=MASK_THRESHOLD, padding=1)
+        ]
         rles = [mask_util.encode(np.array(mask[:, :, None], order="F"))[0] for mask in pasted_masks]
         for rle in rles:
             rle["counts"] = rle["counts"].decode("utf-8")

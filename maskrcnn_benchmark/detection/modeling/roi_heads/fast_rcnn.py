@@ -8,7 +8,7 @@ from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_nms, cat_boxlist
 
 
-def fastrcnn_losses(labels, regression_targets, class_logits, regression_outputs):
+def fast_rcnn_losses(labels, regression_targets, class_logits, regression_outputs):
     """
     Computes the box classification & regression loss for Faster R-CNN.
 
@@ -41,7 +41,7 @@ def fastrcnn_losses(labels, regression_targets, class_logits, regression_outputs
     return classification_loss, box_loss
 
 
-def fastrcnn_inference_single(
+def fast_rcnn_inference_single_image(
     boxes, scores, image_shape, score_thresh, nms_thresh, detections_per_img
 ):
     """
@@ -96,9 +96,9 @@ def fastrcnn_inference_single(
     return result
 
 
-def fastrcnn_inference(boxes, scores, image_shapes, score_thresh, nms_thresh, detections_per_img):
+def fast_rcnn_inference(boxes, scores, image_shapes, score_thresh, nms_thresh, detections_per_img):
     """
-    Call `fastrcnn_inference_single` for all images.
+    Call `fast_rcnn_inference_single_image` for all images.
 
     Args:
         boxes (list[Tensor]):
@@ -109,7 +109,7 @@ def fastrcnn_inference(boxes, scores, image_shapes, score_thresh, nms_thresh, de
         list[BoxList]:
     """
     return [
-        fastrcnn_inference_single(
+        fast_rcnn_inference_single_image(
             boxes_per_image,
             probs_per_image,
             image_shape,
@@ -163,7 +163,7 @@ class FastRCNNOutputs(object):
             for targets_per_image, proposals_per_image in zip(self.targets, self.proposals)
         ]
 
-        loss_classifier, loss_box_reg = fastrcnn_losses(
+        loss_classifier, loss_box_reg = fast_rcnn_losses(
             cat(self.labels, dim=0),
             cat(regression_targets, dim=0),
             self.class_logits,
