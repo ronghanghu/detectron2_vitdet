@@ -100,18 +100,18 @@ def prepare_for_coco_evaluation(dataset_predictions):
         predictions = predictions.convert("xywh")
         boxes = predictions.bbox.tolist()
         scores = predictions.get_field("scores").tolist()
-        labels = predictions.get_field("labels").tolist()
+        classes = predictions.get_field("classes_pred").tolist()
 
         has_mask = predictions.has_field("mask")
         if has_mask:
             rles = predictions.get_field("pasted_mask_rle")
 
-        mapped_labels = [COCOMeta().contiguous_id_to_json_id[i] for i in labels]
+        mapped_classes = [COCOMeta().contiguous_id_to_json_id[i] for i in classes]
 
         for k in range(num_instance):
             result = {
                 "image_id": img_id,
-                "category_id": mapped_labels[k],
+                "category_id": mapped_classes[k],
                 "bbox": boxes[k],
                 "score": scores[k],
             }

@@ -255,7 +255,7 @@ class COCODemo(object):
             predictions (BoxList): the result of the computation by the model.
                 It should contain the field `labels`.
         """
-        labels = predictions.get_field("labels")
+        labels = predictions.get_field("classes_pred")
         boxes = predictions.bbox
 
         colors = self.compute_colors_for_labels(labels).tolist()
@@ -278,7 +278,7 @@ class COCODemo(object):
                 It should contain the field `mask` and `labels`.
         """
         masks = predictions.get_field("mask").numpy()
-        labels = predictions.get_field("labels")
+        labels = predictions.get_field("classes_pred")
 
         colors = self.compute_colors_for_labels(labels).tolist()
 
@@ -336,7 +336,7 @@ class COCODemo(object):
                 It should contain the field `scores` and `labels`.
         """
         scores = predictions.get_field("scores").tolist()
-        labels = predictions.get_field("labels").tolist()
+        labels = predictions.get_field("classes_pred").tolist()
         labels = [self.CATEGORIES[i] for i in labels]
         boxes = predictions.bbox
 

@@ -8,36 +8,37 @@ from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_nms, cat_boxlist
 
 
-def fast_rcnn_losses(labels, regression_targets, class_logits, regression_outputs):
+def fast_rcnn_losses(classes_gt, box_deltas_gt, class_logits_pred, box_deltas_pred):
     """
     Computes the box classification & regression loss for Faster R-CNN.
 
     Arguments:
-        labels (Tensor): #box labels. Each of range [0, #class].
-        class_logits (Tensor): #box x #class
+        classes_gt (Tensor): #box classes_gt. Each of range [0, #class].
+        class_logits_pred (Tensor): #box x #class
         box_regression (Tensor): #box x (#class x 4)
 
     Returns:
         classification_loss, regression_loss
     """
-    device = class_logits.device
+    device = class_logits_pred.device
 
-    classification_loss = F.cross_entropy(class_logits, labels)
+    classification_loss = F.cross_entropy(class_logits_pred, classes_gt)
 
     # get indices that correspond to the regression targets for
-    # the corresponding ground truth labels, to be used with
+    # the corresponding ground truth classes_gt, to be used with
     # advanced indexing
-    sampled_pos_inds_subset = torch.nonzero(labels > 0).squeeze(1)
-    labels_pos = labels[sampled_pos_inds_subset]
-    map_inds = 4 * labels_pos[:, None] + torch.tensor([0, 1, 2, 3], device=device)
+    fg_inds = torch.nonzero(classes_gt > 0).squeeze(1)
+    fg_classes_gt = classes_gt[fg_inds]
+    # box_deltas_pred for class i are located at [4*i : 4*i + 4]
+    map_inds = 4 * fg_classes_gt[:, None] + torch.tensor([0, 1, 2, 3], device=device)
 
     box_loss = smooth_l1_loss(
-        regression_outputs[sampled_pos_inds_subset[:, None], map_inds],
-        regression_targets[sampled_pos_inds_subset],
+        box_deltas_pred[fg_inds[:, None], map_inds],
+        box_deltas_gt[fg_inds],
         size_average=False,
         beta=1,
     )
-    box_loss = box_loss / labels.numel()
+    box_loss = box_loss / classes_gt.numel()
     return classification_loss, box_loss
 
 
@@ -77,7 +78,7 @@ def fast_rcnn_inference_single_image(
         boxlist_for_class = boxlist_nms(boxlist_for_class, nms_thresh, score_field="scores")
         num_labels = len(boxlist_for_class)
         boxlist_for_class.add_field(
-            "labels", torch.full((num_labels,), j, dtype=torch.int64, device=device)
+            "classes_pred", torch.full((num_labels,), j, dtype=torch.int64, device=device)
         )
         result.append(boxlist_for_class)
 
@@ -129,47 +130,46 @@ class FastRCNNOutputs(object):
     e.g. class-agnostic regression, predicted_labels, decoded_boxes_for_gt_labels, fg_proposals
     """
 
-    def __init__(
-        self, box2box_transform, class_logits, regression_outputs, proposals, targets=None
-    ):
+    def __init__(self, box2box_transform, class_logits_pred, box_deltas_pred, proposals):
         """
         Args:
-            class_logits (Tensor): #box x #class
-            regression_outputs (Tensor): #box x #class x 4
-            proposals (list[BoxList]): has a field "labels" if training
+            class_logits_pred (Tensor): #box x #class
+            box_deltas_pred (Tensor): #box x #class x 4
+            proposals (list[BoxList]): has a field "classes_gt" if training
             targets (list[BoxList]): None if testing
         """
         self.box2box_transform = box2box_transform
         self.num_img = len(proposals)
         self.image_shapes = [box.size for box in proposals]
         self.num_boxes = [len(box) for box in proposals]
-        self.num_classes = class_logits.shape[1]
+        self.num_classes = class_logits_pred.shape[1]
 
-        self.proposals = [box.bbox for box in proposals]
-        if proposals[0].has_field("labels"):
-            self.labels = [box.get_field("labels") for box in proposals]
+        self.proposal_boxes = [box_list.bbox for box_list in proposals]
+        if proposals[0].has_field("boxes_gt"):
+            self.boxes_gt = [box_list.get_field("boxes_gt") for box_list in proposals]
+        if proposals[0].has_field("classes_gt"):
+            self.classes_gt = [box.get_field("classes_gt") for box in proposals]
 
-        self.class_logits = class_logits
-        self.regression_outputs = regression_outputs
-        self.targets = targets
+        self.class_logits_pred = class_logits_pred
+        self.box_deltas_pred = box_deltas_pred
 
     def losses(self):
         """
         Returns:
             dict
         """
-        regression_targets = [
-            self.box2box_transform.get_deltas(proposals_per_image, targets_per_image.bbox)
-            for targets_per_image, proposals_per_image in zip(self.targets, self.proposals)
+        box_deltas_gt = [
+            self.box2box_transform.get_deltas(boxes_pred, boxes_gt)
+            for boxes_pred, boxes_gt in zip(self.proposal_boxes, self.boxes_gt)
         ]
 
-        loss_classifier, loss_box_reg = fast_rcnn_losses(
-            cat(self.labels, dim=0),
-            cat(regression_targets, dim=0),
-            self.class_logits,
-            self.regression_outputs,
+        loss_cls, loss_box_reg = fast_rcnn_losses(
+            cat(self.classes_gt, dim=0),
+            cat(box_deltas_gt, dim=0),
+            self.class_logits_pred,
+            self.box_deltas_pred,
         )
-        return {"loss_classifier": loss_classifier, "loss_box_reg": loss_box_reg}
+        return {"loss_cls": loss_cls, "loss_box_reg": loss_box_reg}
 
     def predict_boxes(self):
         """
@@ -177,7 +177,8 @@ class FastRCNNOutputs(object):
             list[Tensor]: the Tensor for each image has shape (#box, #class, 4)
         """
         boxes = self.box2box_transform.apply_deltas(
-            self.regression_outputs.view(sum(self.num_boxes), -1), torch.cat(self.proposals, dim=0)
+            self.box_deltas_pred.view(sum(self.num_boxes), -1),
+            torch.cat(self.proposal_boxes, dim=0),
         )
         return boxes.split(self.num_boxes, dim=0)
 
@@ -186,7 +187,7 @@ class FastRCNNOutputs(object):
         Returns:
             list[Tensor]: the Tensor for each image has shape (#box, #class)
         """
-        probs = F.softmax(self.class_logits, -1)
+        probs = F.softmax(self.class_logits_pred, -1)
         return probs.split(self.num_boxes, dim=0)
 
 

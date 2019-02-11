@@ -49,7 +49,7 @@ def get_mask_ground_truth(masks_gt, box_list_pred, mask_side_len):
     return torch.stack(mask_logits_gt, dim=0).to(device, dtype=torch.float32)
 
 
-def mask_rcnn_loss(mask_logits_pred, box_lists_pred, box_lists_gt, mask_side_len):
+def mask_rcnn_loss(mask_logits_pred, box_lists_pred, mask_side_len):
     """
     Compute the mask prediction loss defined in the Mask R-CNN paper.
 
@@ -60,9 +60,8 @@ def mask_rcnn_loss(mask_logits_pred, box_lists_pred, box_lists_gt, mask_side_len
             are logits.
         box_lists_pred (list[BoxList]): A list of N BoxLists, where N is the number of images
             in the batch. These boxes are predictions from the model that are in 1:1
-            correspondence with the mask_logits_pred.
-        box_lists_gt (list[BoxList]): Ground-truth boxes in one-to-one corresponds with
-            box_lists_pred.
+            correspondence with the mask_logits_pred. The ground-truth labels (class, box, mask,
+            ...) associated with each box are stored in fields.
         mask_side_len (int): The side length of the rasterized ground-truth masks.
 
     Returns:
@@ -70,9 +69,9 @@ def mask_rcnn_loss(mask_logits_pred, box_lists_pred, box_lists_gt, mask_side_len
     """
     class_gt = []
     mask_logits_gt = []
-    for box_list_pred_per_image, box_list_gt_per_image in zip(box_lists_pred, box_lists_gt):
-        class_gt_per_image = box_list_gt_per_image.get_field("labels").to(dtype=torch.int64)
-        masks_gt = box_list_gt_per_image.get_field("masks")
+    for box_list_pred_per_image in box_lists_pred:
+        class_gt_per_image = box_list_pred_per_image.get_field("classes_gt").to(dtype=torch.int64)
+        masks_gt = box_list_pred_per_image.get_field("masks_gt")
         mask_logits_gt_per_image = get_mask_ground_truth(
             masks_gt, box_list_pred_per_image, mask_side_len
         )
@@ -110,7 +109,7 @@ def mask_rcnn_inference(mask_logits_pred, box_lists_pred):
             and Hmask, Wmask are the height and width of the mask predictions. The values
             are logits.
         box_lists_pred (list[BoxList]): A list of N BoxLists, where N is the number of images
-            in the batch. Each BoxList has a "labels" field.
+            in the batch. Each BoxList has a "classes_pred" field.
 
     Returns:
         None. box_lists_pred will contain an extra "mask" field storing a mask of size (Hmask,
@@ -123,7 +122,7 @@ def mask_rcnn_inference(mask_logits_pred, box_lists_pred):
 
     # Select masks coresponding to the predicted classes
     num_masks = mask_logits_pred.shape[0]
-    class_pred = torch.cat([box_list.get_field("labels") for box_list in box_lists_pred])
+    class_pred = torch.cat([box_list.get_field("classes_pred") for box_list in box_lists_pred])
     indices = torch.arange(num_masks, device=class_pred.device)
     mask_probs_pred = mask_probs_pred[indices, class_pred][:, None]
 

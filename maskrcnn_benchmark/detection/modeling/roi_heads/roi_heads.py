@@ -23,29 +23,27 @@ def build_roi_heads(cfg):
     return ROI_HEADS_REGISTRY.get(name)(cfg)
 
 
-def keep_only_positive_boxes(boxes, matched_targets):
+def select_foreground_proposals(box_lists):
     """
-    Given a set of BoxList containing the `labels` field,
-    return a set of BoxList for which `labels > 0`.
+    Given a list of N BoxLists (for N images), each containing a `classes_gt` field,
+    return a list of BoxLists that contain only boxes with `classes_gt > 0`.
 
-    Arguments:
-        boxes (list[BoxList])
-        matched_targets (list[BoxList]):
+    Args:
+        box_lists (list[BoxList]): A list of N BoxLists, where N is the number of
+            images in the batch.
     """
-    assert isinstance(boxes, (list, tuple))
-    assert isinstance(boxes[0], BoxList)
-    assert boxes[0].has_field("labels")
-    positive_boxes = []
-    positive_masks = []
-    positive_targets = []
-    for boxes_per_image, targets_per_image in zip(boxes, matched_targets):
-        labels = boxes_per_image.get_field("labels")
-        inds_mask = labels > 0
-        inds = inds_mask.nonzero().squeeze(1)
-        positive_boxes.append(boxes_per_image[inds])
-        positive_targets.append(targets_per_image[inds])
-        positive_masks.append(inds_mask)
-    return positive_boxes, positive_targets, positive_masks
+    assert isinstance(box_lists, (list, tuple))
+    assert isinstance(box_lists[0], BoxList)
+    assert box_lists[0].has_field("classes_gt")
+    fg_box_lists = []
+    fg_selection_masks = []
+    for box_list_per_image in box_lists:
+        classes_gt = box_list_per_image.get_field("classes_gt")
+        fg_selection_mask = classes_gt > 0
+        fg_inds = fg_selection_mask.nonzero().squeeze(1)
+        fg_box_lists.append(box_list_per_image[fg_inds])
+        fg_selection_masks.append(fg_selection_mask)
+    return fg_box_lists, fg_selection_masks
 
 
 class ROIHeads(torch.nn.Module):
@@ -70,10 +68,10 @@ class ROIHeads(torch.nn.Module):
         self.feature_channels         = dict(cfg.MODEL.BACKBONE.OUT_FEATURE_CHANNELS)
         # fmt: on
 
-    def sample_proposals_for_training(self, proposals, targets):
+    def label_and_sample_proposals(self, proposals, targets):
         """
         Perform box matching between `proposals` and `targets`, and label the
-        proposals as positive/negative/ignored. Return `self.batch_size_per_image`
+        proposals with training labels. Return `self.batch_size_per_image`
         random samples from `proposals` with a fraction of positives that is no
         larger than `self.positive_sample_fraction.
 
@@ -87,48 +85,59 @@ class ROIHeads(torch.nn.Module):
 
         Returns:
             list[BoxList]: length `N` list of `BoxList`s containing the proposals
-                sampled for training. Each `BoxList` has a "labels" field, labeling
-                each box with a category ranging in [0, #class].
-            list[BoxList]: The matched targets for each sampled proposal.
-                Only those for foreground proposals are meaningful.
+                sampled for training. Each `BoxList` has the following fields:
+                - classes_gt: labeling each box with a category ranging in [0, #class].
+                - boxes_gt: the ground-truth box that the proposal is assigned to
+                  (this is only meaningful if the proposal has a label > 0; if label = 0
+                   then the ground-truth box is random)
+                - masks_gt: the ground-truth mask of the box that the proposal is
+                  assigned to.
         """
-        sampled_targets = []
+        proposals_with_gt = []
 
         with torch.no_grad():
-            for image_idx, (proposals_per_image, targets_per_image) in enumerate(
-                zip(proposals, targets)
-            ):
+            for proposals_per_image, targets_per_image in zip(proposals, targets):
                 match_quality_matrix = boxlist_iou(targets_per_image, proposals_per_image)
                 matched_idxs = self.proposal_matcher(match_quality_matrix)
-                # Fast RCNN only need "labels" field for selecting the targets
+                # Fast RCNN only need "classes_gt" field for selecting the targets
                 # Get the targets corresponding GT for each proposal
                 # Need to clamp the indices because matched_idxs can be < 0
                 matched_idxs_clamped = matched_idxs.clamp(min=0)
 
-                labels_per_image = targets_per_image.get_field("labels")[matched_idxs_clamped].to(
+                classes_gt = targets_per_image.get_field("classes_gt")[matched_idxs_clamped].to(
                     dtype=torch.int64
                 )
 
                 # Label background (below the low threshold)
-                labels_per_image[matched_idxs == Matcher.BELOW_LOW_THRESHOLD] = 0
+                classes_gt[matched_idxs == Matcher.BELOW_LOW_THRESHOLD] = 0
                 # Label ignore proposals (between low and high thresholds)
-                labels_per_image[
-                    matched_idxs == Matcher.BETWEEN_THRESHOLDS
-                ] = -1  # -1 is ignored by sampler
+                classes_gt[matched_idxs == Matcher.BETWEEN_THRESHOLDS] = -1
 
-                # apply sampling
-                sampled_pos_inds, sampled_neg_inds = subsample_labels(
-                    labels_per_image, self.batch_size_per_image, self.positive_sample_fraction
+                sampled_fg_inds, sampled_bg_inds = subsample_labels(
+                    classes_gt, self.batch_size_per_image, self.positive_sample_fraction
                 )
-                sampled_inds = torch.cat([sampled_pos_inds, sampled_neg_inds], dim=0)
+                sampled_inds = torch.cat([sampled_fg_inds, sampled_bg_inds], dim=0)
 
-                # It's still unnecessary to index the masks here.
-                # Because for masks we only need the positives.
-                # This will have another tiny (2~3%) perf improvement.
-                sampled_targets.append(targets_per_image[matched_idxs_clamped[sampled_inds]])
-                proposals[image_idx] = proposals_per_image[sampled_inds]
-                proposals[image_idx].add_field("labels", labels_per_image[sampled_inds])
-        return proposals, sampled_targets
+                proposals_per_image = proposals_per_image[sampled_inds]
+                proposals_per_image.add_field("classes_gt", classes_gt[sampled_inds])
+
+                # Avoid indexing the BoxList targets_per_image directly, as in the
+                # commented-out row below. It is considerably slower.
+                # TODO: investigate and optimize this access pattern.
+                # boxes_gt = targets_per_image[matched_idxs_clamped[sampled_inds]].bbox  # slow!
+                boxes_gt = targets_per_image.bbox[matched_idxs_clamped[sampled_inds]]
+                proposals_per_image.add_field("boxes_gt", boxes_gt)
+
+                if targets_per_image.has_field("masks_gt"):
+                    # See note above about not indexing the targets_per_image directly
+                    masks_gt = targets_per_image.get_field("masks_gt")[
+                        matched_idxs_clamped[sampled_inds]
+                    ]
+                    proposals_per_image.add_field("masks_gt", masks_gt)
+
+                proposals_with_gt.append(proposals_per_image)
+
+        return proposals_with_gt
 
     def forward(self, features, proposals, targets=None):
         """
@@ -194,30 +203,30 @@ class Res5ROIHeads(ROIHeads):
         """
         features = [features[f] for f in self.in_features]
         if self.training:
-            proposals, targets = self.sample_proposals_for_training(proposals, targets)
+            proposals = self.label_and_sample_proposals(proposals, targets)
 
         box_features = self._shared_roi_transform(features, proposals)
         feature_pooled = F.avg_pool2d(box_features, 7)  # gap
-        class_logits, regression_outputs = self.box_predictor(feature_pooled)
+        class_logits_pred, box_deltas_pred = self.box_predictor(feature_pooled)
         del feature_pooled
 
         outputs = FastRCNNOutputs(
-            self.box2box_transform, class_logits, regression_outputs, proposals, targets
+            self.box2box_transform, class_logits_pred, box_deltas_pred, proposals
         )
 
         if self.training:
             del features
             losses = outputs.losses()
             if self.mask_on:
-                proposals, targets, pos_masks = keep_only_positive_boxes(proposals, targets)
-                # don't need to do feature extraction again,
-                # just use the box features for all the positivie proposals
-                mask_features = box_features[torch.cat(pos_masks, dim=0)]
+                proposals, fg_selection_masks = select_foreground_proposals(proposals)
+                # Since the ROI feature transform is shared between boxes and masks,
+                # we don't need to recompute features. The mask loss is only defined
+                # on foreground proposals, so we need to select out the foreground
+                # features.
+                mask_features = box_features[torch.cat(fg_selection_masks, dim=0)]
                 del box_features
                 mask_logits = self.mask_head(mask_features)
-                losses["loss_mask"] = mask_rcnn_loss(
-                    mask_logits, proposals, targets, self.mask_side_len
-                )
+                losses["loss_mask"] = mask_rcnn_loss(mask_logits, proposals, self.mask_side_len)
             return [], losses
         else:
             box_lists_pred = fast_rcnn_inference(
@@ -289,15 +298,15 @@ class StandardROIHeads(ROIHeads):
         """
         features = [features[f] for f in self.in_features]
         if self.training:
-            proposals, targets = self.sample_proposals_for_training(proposals, targets)
+            proposals = self.label_and_sample_proposals(proposals, targets)
 
         box_features = self.box_pooler(features, proposals)
         box_features = self.box_head(box_features)
-        class_logits, regression_outputs = self.box_predictor(box_features)
+        class_logits_pred, box_deltas_pred = self.box_predictor(box_features)
         del box_features
 
         outputs = FastRCNNOutputs(
-            self.box2box_transform, class_logits, regression_outputs, proposals, targets
+            self.box2box_transform, class_logits_pred, box_deltas_pred, proposals
         )
 
         if self.training:
@@ -305,12 +314,10 @@ class StandardROIHeads(ROIHeads):
             if self.mask_on:
                 # During training the same proposals used by the box head are used by
                 # the mask head. The loss is only defined on positive proposals.
-                proposals, targets, _ = keep_only_positive_boxes(proposals, targets)
+                proposals, _ = select_foreground_proposals(proposals)
                 mask_features = self.mask_pooler(features, proposals)
                 mask_logits = self.mask_head(mask_features)
-                losses["loss_mask"] = mask_rcnn_loss(
-                    mask_logits, proposals, targets, self.mask_side_len
-                )
+                losses["loss_mask"] = mask_rcnn_loss(mask_logits, proposals, self.mask_side_len)
             return [], losses
         else:
             box_lists_pred = fast_rcnn_inference(

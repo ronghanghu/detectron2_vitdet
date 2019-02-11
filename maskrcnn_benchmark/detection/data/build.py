@@ -199,11 +199,11 @@ class DetectionBatchCollator:
 
             classes = [obj["category_id"] for obj in annos]
             classes = torch.tensor(classes)
-            target.add_field("labels", classes)
+            target.add_field("classes_gt", classes)
 
             masks = [obj["segmentation"] for obj in annos]
             masks = SegmentationList(masks, image_size)
-            target.add_field("masks", masks)
+            target.add_field("masks_gt", masks)
             target = target.clip_to_image(remove_empty=True)
             targets.append(target)
         return images, targets, dataset_dicts
