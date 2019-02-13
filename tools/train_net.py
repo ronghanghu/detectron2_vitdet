@@ -38,20 +38,22 @@ from maskrcnn_benchmark.utils.monitors import EventStorage, JSONWriter, get_even
 
 
 class PeriodicCheckpointer(object):
-    def __init__(self, checkpointer, period, max_iter):
+    def __init__(self, checkpointer, cfg, period, max_iter):
         self.checkpointer = checkpointer
         self.period = period
         self.max_iter = max_iter
+        self.cfg = cfg.clone()
 
     def step(self, iteration, **kwargs):
         """
         Args:
             kwargs: extra data to save, same as in :meth:`Checkpointer.save`
         """
+        additional_state = {"iteration": iteration, "cfg": self.cfg.dump()}
         if iteration % self.period == 0:
-            self.checkpointer.save("model_{:07d}".format(iteration), iteration=iteration)
+            self.checkpointer.save("model_{:07d}".format(iteration), **additional_state)
         if iteration == self.max_iter:
-            self.checkpointer.save("model_final", iteration=iteration)
+            self.checkpointer.save("model_final", **additional_state)
 
 
 class MetricPrinter:
@@ -140,10 +142,10 @@ def do_train(cfg, model):
     optimizer = build_optimizer(cfg, model)
     scheduler = build_lr_scheduler(cfg, optimizer)
 
-    checkpointer = DetectionCheckpointer(cfg, model, optimizer, scheduler, cfg.OUTPUT_DIR)
+    checkpointer = DetectionCheckpointer(model, optimizer, scheduler, cfg.OUTPUT_DIR)
     start_iter = checkpointer.load(cfg.MODEL.WEIGHT).get("iteration", 0)
     periodic_checkpointer = PeriodicCheckpointer(
-        checkpointer, cfg.SOLVER.CHECKPOINT_PERIOD, cfg.SOLVER.MAX_ITER
+        checkpointer, cfg, cfg.SOLVER.CHECKPOINT_PERIOD, cfg.SOLVER.MAX_ITER
     )
 
     data_loader = build_detection_train_loader(cfg, start_iter=start_iter)
@@ -253,7 +255,7 @@ def main(args):
     output_dir = cfg.OUTPUT_DIR
 
     if args.eval_only:
-        checkpointer = DetectionCheckpointer(cfg, model, save_dir=output_dir)
+        checkpointer = DetectionCheckpointer(model, save_dir=output_dir)
         checkpointer.load(cfg.MODEL.WEIGHT)
         do_test(cfg, model)
         return
