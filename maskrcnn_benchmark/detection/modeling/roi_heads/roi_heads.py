@@ -184,13 +184,13 @@ class Res5ROIHeads(ROIHeads):
         )
 
         self.res5 = resnet.build_resnet_head(cfg)
-        num_channels = self.res5[-1].out_channels
-        self.box_predictor = FastRCNNOutputHead(num_channels, num_classes)
+        out_channels = self.res5[-1].out_channels
+        self.box_predictor = FastRCNNOutputHead(out_channels, num_classes)
         self.box2box_transform = Box2BoxTransform(weights=bbox_reg_weights)
 
         if self.mask_on:
             self.mask_head = build_mask_head(
-                cfg, (num_channels, pooler_resolution, pooler_resolution)
+                cfg, (out_channels, pooler_resolution, pooler_resolution)
             )
 
     def _shared_roi_transform(self, features, proposals):
@@ -207,11 +207,11 @@ class Res5ROIHeads(ROIHeads):
 
         box_features = self._shared_roi_transform(features, proposals)
         feature_pooled = F.avg_pool2d(box_features, 7)  # gap
-        class_logits_pred, box_deltas_pred = self.box_predictor(feature_pooled)
+        class_logits_pred, proposal_deltas_pred = self.box_predictor(feature_pooled)
         del feature_pooled
 
         outputs = FastRCNNOutputs(
-            self.box2box_transform, class_logits_pred, box_deltas_pred, proposals
+            self.box2box_transform, class_logits_pred, proposal_deltas_pred, proposals
         )
 
         if self.training:
@@ -302,11 +302,11 @@ class StandardROIHeads(ROIHeads):
 
         box_features = self.box_pooler(features, proposals)
         box_features = self.box_head(box_features)
-        class_logits_pred, box_deltas_pred = self.box_predictor(box_features)
+        class_logits_pred, proposal_deltas_pred = self.box_predictor(box_features)
         del box_features
 
         outputs = FastRCNNOutputs(
-            self.box2box_transform, class_logits_pred, box_deltas_pred, proposals
+            self.box2box_transform, class_logits_pred, proposal_deltas_pred, proposals
         )
 
         if self.training:
