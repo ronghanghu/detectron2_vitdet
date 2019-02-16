@@ -12,12 +12,12 @@ import torch
 from pycocotools.cocoeval import COCOeval
 from tqdm import tqdm
 
-from maskrcnn_benchmark.data import MapDataset
 from maskrcnn_benchmark.data.datasets import COCOMeta
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 from maskrcnn_benchmark.utils.comm import all_gather, is_main_process, synchronize
 
+from .data.build import build_detection_test_loader
 from .modeling.roi_heads.paste_mask import paste_masks_in_image
 
 
@@ -48,13 +48,30 @@ def postprocess(result, original_width, original_height):
         result.add_field("pasted_mask_rle", rles)
 
 
-def compute_on_dataset(model, data_loader):
+def compute_on_dataset(model, data_loader, aggregate_across_ranks=True):
     """
+    Run model on the dataloader and returns all outputs.
+
+    Args:
+        model: a callable that takes an object from data_loader and returns some outputs
+        data_loader: an iterable with a length
+        aggregate_across_ranks (bool): if True, the results will be
+            concatenated across all ranks. This is useful when all ranks each
+            run on a disjoint subset of a large dataset.
+            If False, each rank will return only the results it computed on the given data_loader.
+
     Returns:
         list[dict]. Each dict has: "image_id", "original_height", "original_width", "box_list".
             "box_list" is a `BoxList` containing the post-processed outputs of the model.
     """
+    num_devices = torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
+    logger = logging.getLogger(__name__)
+    logger.info("Start evaluation on {} images".format(len(data_loader)))
+    start_time = time.time()
+
+    old_training_mode = model.training
     model.eval()
+
     dataset_predictions = []
     cpu_device = torch.device("cpu")
     for batch in tqdm(data_loader):
@@ -70,6 +87,23 @@ def compute_on_dataset(model, data_loader):
                 }
                 prediction_dict["box_list"] = output
                 dataset_predictions.append(prediction_dict)
+
+    # wait for all processes to complete before measuring the time
+    synchronize()
+    total_time = time.time() - start_time
+    total_time_str = str(datetime.timedelta(seconds=total_time))
+    # NOTE this format is parsed by grep
+    logger.info(
+        "Total inference time: {} ({} s / img per device, on {} devices)".format(
+            total_time_str, total_time * num_devices / len(data_loader), num_devices
+        )
+    )
+
+    if aggregate_across_ranks:
+        dataset_predictions = all_gather(dataset_predictions)
+        dataset_predictions = list(itertools.chain(*dataset_predictions))
+    model.train(old_training_mode)
+
     return dataset_predictions
 
 
@@ -122,15 +156,13 @@ def prepare_for_coco_evaluation(dataset_predictions):
 
 
 # inspired from Detectron
-# TODO(yuxin) this has not been tested for a long time; should not use "map_dataset"
 def evaluate_box_proposals(
-    dataset_predictions, map_dataset, thresholds=None, area="all", limit=None
+    dataset_predictions, coco_dataset, thresholds=None, area="all", limit=None
 ):
     """Evaluate detection proposal recall metrics. This function is a much
     faster alternative to the official COCO API recall evaluation code. However,
     it produces slightly different results.
     """
-    assert isinstance(map_dataset, MapDataset)
     # Record max overlap value for each gt box
     # Return vector of overlap values
     areas = {
@@ -168,8 +200,8 @@ def evaluate_box_proposals(
         inds = predictions.get_field("objectness_logits").sort(descending=True)[1]
         predictions = predictions[inds]
 
-        ann_ids = map_dataset.dataset.coco_api.getAnnIds(imgIds=prediction_dict["image_id"])
-        anno = map_dataset.dataset.coco_api.loadAnns(ann_ids)
+        ann_ids = coco_dataset.coco_api.getAnnIds(imgIds=prediction_dict["image_id"])
+        anno = coco_dataset.coco_api.loadAnns(ann_ids)
         gt_boxes = [obj["bbox"] for obj in anno if obj["iscrowd"] == 0]
         gt_boxes = torch.as_tensor(gt_boxes).reshape(-1, 4)  # guard against no boxes
         gt_boxes = BoxList(gt_boxes, (image_width, image_height), mode="xywh").convert("xyxy")
@@ -289,52 +321,39 @@ class COCOResults(object):
         return repr(self.results)
 
 
-def coco_evaluation(model, data_loader, iou_types=("bbox",), box_only=False, output_folder=None):
+def coco_evaluation(cfg, model, coco_dataset, output_folder=None):
     """
     This function returns nothing on non-master processes (but still needs to be called).
     On master process, it returns the following:
+
+    Args:
+        model: the detection model
+        coco_dataset (COCODetection): the COCO detection dataset
 
     Returns:
        dict of dict: results[task][metric] is a float.
        list[dict]: one for each image, contains the outputs from the model.
        list[dict]: one for each instance, in the COCO evaluation format.
     """
-    num_devices = torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
-    logger = logging.getLogger(__name__)
-    map_dataset = data_loader.dataset
-    assert isinstance(map_dataset, MapDataset)
-    logger.info("Start evaluation on {} images".format(len(map_dataset)))
-    start_time = time.time()
-    dataset_predictions = compute_on_dataset(model, data_loader)
-    # wait for all processes to complete before measuring the time
-    synchronize()
-    total_time = time.time() - start_time
-    total_time_str = str(datetime.timedelta(seconds=total_time))
-    # NOTE this format is parsed by grep
-    logger.info(
-        "Total inference time: {} ({} s / img per device, on {} devices)".format(
-            total_time_str, total_time * num_devices / len(map_dataset), num_devices
-        )
-    )
-
-    all_predictions = all_gather(dataset_predictions)
+    # TODO(yuxin) split the "computation" and "evaluation" to two functions
+    data_loader = build_detection_test_loader(cfg, coco_dataset)
+    dataset_predictions = compute_on_dataset(model, data_loader, aggregate_across_ranks=True)
     if not is_main_process():
         return
-    # concat the lists
-    dataset_predictions = list(itertools.chain(*all_predictions))
 
     if output_folder:
         torch.save(dataset_predictions, os.path.join(output_folder, "predictions.pth"))
 
+    logger = logging.getLogger(__name__)
     # TODO(yuxin) test this codepath
-    if box_only:
+    if cfg.MODEL.RPN_ONLY:
         logger.info("Evaluating bbox proposals")
         areas = {"all": "", "small": "s", "medium": "m", "large": "l"}
         res = COCOResults("box_proposal")
         for limit in [100, 1000]:
             for area, suffix in areas.items():
                 stats = evaluate_box_proposals(
-                    dataset_predictions, map_dataset, area=area, limit=limit
+                    dataset_predictions, coco_dataset, area=area, limit=limit
                 )
                 key = "AR{}@{:d}".format(suffix, limit)
                 res.results["box_proposal"][key] = stats["ar"].item()
@@ -353,15 +372,17 @@ def coco_evaluation(model, data_loader, iou_types=("bbox",), box_only=False, out
         with open(file_path, "w") as f:
             json.dump(coco_results, f)
 
+    iou_types = ("bbox",)
+    if cfg.MODEL.MASK_ON:
+        iou_types = iou_types + ("segm",)
+
     results = COCOResults(*iou_types)
     if len(coco_results) == 0:
         return results.results, coco_results, dataset_predictions
 
     logger.info("Evaluating predictions")
     for iou_type in iou_types:
-        res = evaluate_predictions_on_coco(
-            map_dataset.dataset.coco_api, coco_results, file_path, iou_type
-        )
+        res = evaluate_predictions_on_coco(coco_dataset.coco_api, coco_results, file_path, iou_type)
         results.update(res)
     results = results.results  # get the OrderedDict from COCOResults
     logger.info(results)

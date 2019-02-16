@@ -16,10 +16,13 @@ from .transforms import DetectionTransform
 
 def build_dataset(dataset_name, is_train=True):
     """
-    Arguments:
+    Args:
         dataset_name (str): The name of the dataset, handled by the DatasetCatalog,
             e.g., coco_2014_train.
         is_train (bool): whether to setup the dataset for training or testing
+
+    Returns:
+        a COCODetection instance (to be made more general).
     """
     data = paths_catalog.DatasetCatalog.get(dataset_name)
     factory = getattr(D, data["factory"])  # TODO get rid of this
@@ -129,29 +132,30 @@ def build_detection_train_loader(cfg, start_iter=0):
     return data_loader
 
 
-def build_detection_test_loader(cfg):
+def build_detection_test_loader(cfg, dataset):
     """
+    Args:
+        cfg: the yacs config
+        dataset: a torch Dataset
+
     Returns:
-        list[DataLoader]: a list of torch DataLoader, one for each test dataset.
+        DataLoader: a torch DataLoader, that loads the given detection
+            dataset, with test-time transformation and batching.
     """
-    data_loaders = []
-    for dataset_name in cfg.DATASETS.TEST:
-        dataset = build_dataset(dataset_name, False)
-        dataset = MapDataset(dataset, DetectionTransform(cfg, False))
+    dataset = MapDataset(dataset, DetectionTransform(cfg, False))
 
-        sampler = samplers.InferenceSampler(len(dataset))
-        # Always use 1 image per GPU during inference since this is the
-        # standard when reporting inference time in papers.
-        batch_sampler = torch.utils.data.sampler.BatchSampler(sampler, 1, drop_last=False)
+    sampler = samplers.InferenceSampler(len(dataset))
+    # Always use 1 image per GPU during inference since this is the
+    # standard when reporting inference time in papers.
+    batch_sampler = torch.utils.data.sampler.BatchSampler(sampler, 1, drop_last=False)
 
-        data_loader = torch.utils.data.DataLoader(
-            dataset,
-            num_workers=cfg.DATALOADER.NUM_WORKERS,
-            batch_sampler=batch_sampler,
-            collate_fn=DetectionBatchCollator(False, cfg.DATALOADER.SIZE_DIVISIBILITY),
-        )
-        data_loaders.append(data_loader)
-    return data_loaders
+    data_loader = torch.utils.data.DataLoader(
+        dataset,
+        num_workers=cfg.DATALOADER.NUM_WORKERS,
+        batch_sampler=batch_sampler,
+        collate_fn=DetectionBatchCollator(False, cfg.DATALOADER.SIZE_DIVISIBILITY),
+    )
+    return data_loader
 
 
 class DetectionBatchCollator:

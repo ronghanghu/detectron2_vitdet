@@ -18,8 +18,8 @@ from torch.nn.parallel import DistributedDataParallel
 import maskrcnn_benchmark.utils.comm as comm
 from maskrcnn_benchmark.detection import (
     DetectionCheckpointer,
+    build_dataset,
     build_detection_model,
-    build_detection_test_loader,
     build_detection_train_loader,
     build_lr_scheduler,
     build_optimizer,
@@ -104,33 +104,22 @@ def do_test(cfg, model, is_final=True):
     if isinstance(model, DistributedDataParallel):
         model = model.module
     torch.cuda.empty_cache()  # TODO check if it helps
-    iou_types = ("bbox",)
-    if cfg.MODEL.MASK_ON:
-        iou_types = iou_types + ("segm",)
-    output_folders = [None] * len(cfg.DATASETS.TEST)
-    if cfg.OUTPUT_DIR:
-        dataset_names = cfg.DATASETS.TEST
-        for idx, dataset_name in enumerate(dataset_names):
-            output_folder = os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
-            mkdir(output_folder)
-            output_folders[idx] = output_folder
-    data_loaders_val = build_detection_test_loader(cfg)
 
     results = []
-    for output_folder, data_loader_val in zip(output_folders, data_loaders_val):
-        results_per_dataset = coco_evaluation(
-            model,
-            data_loader_val,
-            iou_types=iou_types,
-            box_only=cfg.MODEL.RPN_ONLY,
-            output_folder=output_folder,
-        )
+    for dataset_name in cfg.DATASETS.TEST:
+        if cfg.OUTPUT_DIR:
+            output_folder = os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
+            mkdir(output_folder)
+        else:
+            output_folder = None
+
+        coco_dataset = build_dataset(dataset_name, False)
+        results_per_dataset = coco_evaluation(cfg, model, coco_dataset, output_folder=output_folder)
         if comm.is_main_process():
             results.append(results_per_dataset[0])
             if is_final:
                 print_copypaste_format(results_per_dataset[0])
         comm.synchronize()
-    model.train()  # model is set to eval mode by `coco_evaluation`
 
     if is_final and cfg.TEST.EXPECTED_RESULTS and comm.is_main_process():
         assert len(results) == 1, "Results verification only supports one dataset!"
