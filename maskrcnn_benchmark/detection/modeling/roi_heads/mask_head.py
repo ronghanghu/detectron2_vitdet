@@ -3,6 +3,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from maskrcnn_benchmark.layers import Conv2d, ConvTranspose2d, cat
+from maskrcnn_benchmark.utils.events import get_event_storage
 
 
 def get_mask_ground_truth(masks_gt, box_list_pred, mask_side_len):
@@ -19,7 +20,7 @@ def get_mask_ground_truth(masks_gt, box_list_pred, mask_side_len):
         mask_side_len (int): The side length of the rasterized ground-truth masks.
 
     Returns:
-        mask_logits_gt (Tensor): A tensor of shape (Bimg, mask_side_len, mask_side_len), where
+        mask_logits_gt (Tensor): A byte tensor of shape (Bimg, mask_side_len, mask_side_len), where
             Bimg is the number of predicted boxes for this image. mask_logits_gt[i] stores the
             ground-truth for the predicted mask logits for the i-th predicted box.
     """
@@ -45,8 +46,8 @@ def get_mask_ground_truth(masks_gt, box_list_pred, mask_side_len):
         rasterized_mask_gt = scaled_clipped_mask_gt.convert(mode="mask")
         mask_logits_gt.append(rasterized_mask_gt)
     if len(mask_logits_gt) == 0:
-        return torch.empty(0, dtype=torch.float32, device=device)
-    return torch.stack(mask_logits_gt, dim=0).to(device, dtype=torch.float32)
+        return torch.empty(0, dtype=torch.uint8, device=device)
+    return torch.stack(mask_logits_gt, dim=0).to(device=device)
 
 
 def mask_rcnn_loss(mask_logits_pred, box_lists_pred, mask_side_len):
@@ -90,8 +91,15 @@ def mask_rcnn_loss(mask_logits_pred, box_lists_pred, mask_side_len):
         return mask_logits_pred.sum() * 0
 
     indices = torch.arange(len(class_gt))
+    mask_logits_pred = mask_logits_pred[indices, class_gt]
+
+    # Log the training accuracy (using gt classes and 0.5 threshold)
+    mask_accurate = (mask_logits_pred > 0.5) == mask_logits_gt
+    mask_accuracy = mask_accurate.nonzero().size(0) / mask_accurate.numel()
+    get_event_storage().put_scalar("mask_rcnn/accuracy", mask_accuracy)
+
     mask_loss = F.binary_cross_entropy_with_logits(
-        mask_logits_pred[indices, class_gt], mask_logits_gt, reduction="mean"
+        mask_logits_pred, mask_logits_gt.to(dtype=torch.float32), reduction="mean"
     )
     return mask_loss
 

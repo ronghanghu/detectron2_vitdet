@@ -1,8 +1,10 @@
+import numpy as np
 import torch
 from torch.nn import functional as F
 
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
+from maskrcnn_benchmark.utils.events import get_event_storage
 from maskrcnn_benchmark.utils.registry import Registry
 
 from ..backbone import resnet
@@ -95,6 +97,8 @@ class ROIHeads(torch.nn.Module):
         """
         proposals_with_gt = []
 
+        num_fg_samples = []
+        num_bg_samples = []
         with torch.no_grad():
             for proposals_per_image, targets_per_image in zip(proposals, targets):
                 match_quality_matrix = boxlist_iou(targets_per_image, proposals_per_image)
@@ -116,6 +120,10 @@ class ROIHeads(torch.nn.Module):
                 sampled_fg_inds, sampled_bg_inds = subsample_labels(
                     classes_gt, self.batch_size_per_image, self.positive_sample_fraction
                 )
+
+                num_fg_samples.append(sampled_fg_inds.numel())
+                num_bg_samples.append(sampled_bg_inds.numel())
+
                 sampled_inds = torch.cat([sampled_fg_inds, sampled_bg_inds], dim=0)
 
                 proposals_per_image = proposals_per_image[sampled_inds]
@@ -136,6 +144,11 @@ class ROIHeads(torch.nn.Module):
                     proposals_per_image.add_field("masks_gt", masks_gt)
 
                 proposals_with_gt.append(proposals_per_image)
+
+        # Log the number of fg/bg samples that are selected for training ROI heads
+        storage = get_event_storage()
+        storage.put_scalar("roi_head/num_fg_samples", np.mean(num_fg_samples))
+        storage.put_scalar("roi_head/num_bg_samples", np.mean(num_bg_samples))
 
         return proposals_with_gt
 

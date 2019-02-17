@@ -32,9 +32,9 @@ from maskrcnn_benchmark.detection import (
 from maskrcnn_benchmark.engine.launch import launch
 from maskrcnn_benchmark.utils.collect_env import collect_env_info
 from maskrcnn_benchmark.utils.comm import reduce_dict
+from maskrcnn_benchmark.utils.events import EventStorage, JSONWriter, get_event_storage
 from maskrcnn_benchmark.utils.logger import setup_logger
 from maskrcnn_benchmark.utils.misc import mkdir
-from maskrcnn_benchmark.utils.monitors import EventStorage, JSONWriter, get_event_storage
 
 
 class PeriodicCheckpointer(object):

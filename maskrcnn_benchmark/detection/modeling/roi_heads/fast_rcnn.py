@@ -6,6 +6,7 @@ from torch.nn import functional as F
 from maskrcnn_benchmark.layers import cat, smooth_l1_loss
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_nms, cat_boxlist
+from maskrcnn_benchmark.utils.events import get_event_storage
 
 
 """
@@ -220,11 +221,33 @@ class FastRCNNOutputs(object):
                 [box.get_field("classes_gt") for box in proposal_box_lists], dim=0
             )
 
+    def _log_accuracy(self):
+        """
+        Log the accuracy metrics to EventStorage.
+        """
+        num_instances = self.classes_gt.numel()
+        pred_classes = self.class_logits_pred.argmax(dim=1)
+
+        fg_inds = self.classes_gt > 0
+        num_fg = fg_inds.nonzero().numel()
+        fg_gt_classes = self.classes_gt[fg_inds]
+        fg_pred_classes = pred_classes[fg_inds]
+
+        num_false_negative = (fg_pred_classes == 0).nonzero().numel()
+        num_accurate = (pred_classes == self.classes_gt).nonzero().numel()
+        fg_num_accurate = (fg_pred_classes == fg_gt_classes).nonzero().numel()
+
+        storage = get_event_storage()
+        storage.put_scalar("fast_rcnn/cls_accuracy", num_accurate / num_instances)
+        storage.put_scalar("fast_rcnn/fg_cls_accuracy", fg_num_accurate / num_fg)
+        storage.put_scalar("fast_rcnn/false_negative", num_false_negative / num_fg)
+
     def losses(self):
         """
         Returns:
             A dict of losses (scalar tensors) containing keys "loss_cls" and "loss_box_reg".
         """
+        self._log_accuracy()
         proposal_deltas_gt = self.box2box_transform.get_deltas(self.proposals, self.boxes_gt)
         loss_cls, loss_box_reg = fast_rcnn_losses(
             self.classes_gt, proposal_deltas_gt, self.class_logits_pred, self.proposal_deltas_pred

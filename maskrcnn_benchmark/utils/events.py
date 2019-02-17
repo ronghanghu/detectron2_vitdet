@@ -230,7 +230,7 @@ class EventStorage:
         or a median of the given window_size,
         depend on whether the smoothing_hint is True.
 
-        This provides a default behavior that other monitors can use.
+        This provides a default behavior that other writers can use.
         """
         result = {}
         for k, v in self._latest_scalars.items():

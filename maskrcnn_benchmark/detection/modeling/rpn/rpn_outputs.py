@@ -10,6 +10,7 @@ from maskrcnn_benchmark.structures.boxlist_ops import (
     cat_boxlist,
     remove_small_boxes,
 )
+from maskrcnn_benchmark.utils.events import get_event_storage
 
 from ..matcher import Matcher
 from ..sampling import subsample_labels
@@ -344,6 +345,14 @@ class RPNOutputs(object):
         objectness_logits_gt = torch.stack(
             [resample(label) for label in objectness_logits_gt], dim=0
         )
+
+        # Log the number of positive/negative anchors per-image that's used in training
+        num_pos_anchors = (objectness_logits_gt == 1).nonzero().size(0)
+        num_neg_anchors = (objectness_logits_gt == 0).nonzero().size(0)
+        storage = get_event_storage()
+        storage.put_scalar("rpn/num_pos_anchors", num_pos_anchors / self.num_images)
+        storage.put_scalar("rpn/num_neg_anchors", num_neg_anchors / self.num_images)
+
         assert objectness_logits_gt.shape[1] == num_anchors_per_image
         # Split to tuple of L tensors, each with shape (N, num_anchors_per_map)
         objectness_logits_gt = torch.split(objectness_logits_gt, num_anchors_per_map, dim=1)
