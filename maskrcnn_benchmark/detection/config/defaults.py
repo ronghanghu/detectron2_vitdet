@@ -20,6 +20,7 @@ _C = CN()
 _C.MODEL = CN()
 _C.MODEL.RPN_ONLY = False
 _C.MODEL.MASK_ON = False
+_C.MODEL.KEYPOINT_ON = False
 _C.MODEL.DEVICE = "cuda"
 _C.MODEL.META_ARCHITECTURE = "GeneralizedRCNN"
 
@@ -182,6 +183,9 @@ _C.MODEL.ROI_HEADS.NMS = 0.5
 _C.MODEL.ROI_HEADS.DETECTIONS_PER_IMG = 100
 
 
+# ---------------------------------------------------------------------------- #
+# Box Head
+# ---------------------------------------------------------------------------- #
 _C.MODEL.ROI_BOX_HEAD = CN()
 # C4 don't use head name option
 # Options for non-C4 models: FastRCNN2MLPHead,
@@ -195,6 +199,9 @@ _C.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO = 0
 _C.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM = 1024
 
 
+# ---------------------------------------------------------------------------- #
+# Mask Head
+# ---------------------------------------------------------------------------- #
 _C.MODEL.ROI_MASK_HEAD = CN()
 # Options : MaskRCNN4ConvUpsampleHead,, MaskRCNNUpsampleHead
 _C.MODEL.ROI_MASK_HEAD.NAME = "MaskRCNNUpsampleHead"
@@ -202,6 +209,49 @@ _C.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION = 14
 _C.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO = 0
 _C.MODEL.ROI_MASK_HEAD.CONV_DIM = 256
 _C.MODEL.ROI_MASK_HEAD.RESOLUTION = 14
+
+
+# ---------------------------------------------------------------------------- #
+# Keypoint Head
+# ---------------------------------------------------------------------------- #
+_C.MODEL.ROI_KEYPOINT_HEAD = CN()
+_C.MODEL.ROI_KEYPOINT_HEAD.POOLER_RESOLUTION = 14
+_C.MODEL.ROI_KEYPOINT_HEAD.POOLER_SAMPLING_RATIO = 0
+_C.MODEL.ROI_KEYPOINT_HEAD.CONV_LAYERS = tuple(512 for _ in range(8))
+_C.MODEL.ROI_KEYPOINT_HEAD.RESOLUTION = 14
+_C.MODEL.ROI_KEYPOINT_HEAD.NUM_KEYPOINTS = 17
+_C.MODEL.ROI_KEYPOINT_HEAD.KEYPOINT_NAMES = (
+    "nose",
+    "left_eye",
+    "right_eye",
+    "left_ear",
+    "right_ear",
+    "left_shoulder",
+    "right_shoulder",
+    "left_elbow",
+    "right_elbow",
+    "left_wrist",
+    "right_wrist",
+    "left_hip",
+    "right_hip",
+    "left_knee",
+    "right_knee",
+    "left_ankle",
+    "right_ankle",
+)
+# Pairs of keypoints that should be exchanged under horizontal flipping
+_C.MODEL.ROI_KEYPOINT_HEAD.KEYPOINT_FLIP_MAP = (
+    ("left_eye", "right_eye"),
+    ("left_ear", "right_ear"),
+    ("left_shoulder", "right_shoulder"),
+    ("left_elbow", "right_elbow"),
+    ("left_wrist", "right_wrist"),
+    ("left_hip", "right_hip"),
+    ("left_knee", "right_knee"),
+    ("left_ankle", "right_ankle"),
+)
+_C.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE = 10
+
 
 # ---------------------------------------------------------------------------- #
 # ResNe[X]t options (ResNets = {ResNet, ResNeXt}

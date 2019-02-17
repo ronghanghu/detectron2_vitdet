@@ -38,6 +38,8 @@ class DetectionTransform:
         tfms.append(Normalize(mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD))
         self.tfms = ImageTransformers(tfms)
         self.is_train = is_train
+        self.keypoint_flip_indices = _create_flip_indices(cfg)
+        self.keypoint_on = cfg.MODEL.KEYPOINT_ON
 
     def __call__(self, dataset_dict):
         """
@@ -76,7 +78,7 @@ class DetectionTransform:
             return dataset_dict
 
         annos = [
-            self.map_instance(obj, tfm_params)
+            self.map_instance(obj, tfm_params, image.shape[:2])
             for obj in dataset_dict["annotations"]
             if obj.get("iscrowd", 0) == 0
         ]
@@ -84,7 +86,7 @@ class DetectionTransform:
         dataset_dict["annotations"] = annos
         return dataset_dict
 
-    def map_instance(self, annotation, tfm_params):
+    def map_instance(self, annotation, tfm_params, image_size):
         x, y, w, h = annotation["bbox"]
         coords = np.array([[x, y], [x + w, y], [x, y + h], [x + w, y + h]], dtype="float32")
         coords = self.tfms.transform_coords(coords, tfm_params)
@@ -97,4 +99,37 @@ class DetectionTransform:
             self.tfms.transform_coords(np.asarray(p).reshape(-1, 2), tfm_params).reshape(-1)
             for p in annotation["segmentation"]
         ]
+
+        if self.keypoint_on and "keypoints" in annotation:
+            _, image_width = image_size
+            keypoints = self._process_keypoints(annotation["keypoints"], tfm_params, image_width)
+            annotation["keypoints"] = keypoints
+
         return annotation
+
+    def _process_keypoints(self, keypoints, tfm_params, image_width):
+        # (N*3,) -> (N, 3)
+        keypoints = np.asarray(keypoints).reshape(-1, 3)
+        self.tfms.transform_coords(keypoints[:, :2], tfm_params)
+
+        # Check if the keypoints were horizontally flipped
+        # If so, swap each keypoint with its opposite-handed equivalent
+        probe = np.asarray([[0.0, 0.0], [image_width, 0.0]])
+        probe_aug = self.tfms.transform_coords(probe.copy(), tfm_params)
+
+        if np.sign(probe[1][0] - probe[0][0]) != np.sign(probe_aug[1][0] - probe_aug[0][0]):
+            keypoints = keypoints[self.keypoint_flip_indices, :]
+
+        # Maintain COCO convention that if visibility == 0, then x, y = 0
+        inds = keypoints[:, 2] == 0
+        keypoints[inds] = 0
+        return keypoints
+
+
+def _create_flip_indices(cfg):
+    names = cfg.MODEL.ROI_KEYPOINT_HEAD.KEYPOINT_NAMES
+    flip_map = dict(cfg.MODEL.ROI_KEYPOINT_HEAD.KEYPOINT_FLIP_MAP)
+    flip_map.update({v: k for k, v in flip_map.items()})
+    flipped_names = [i if i not in flip_map else flip_map[i] for i in names]
+    flip_indices = [names.index(i) for i in flipped_names]
+    return np.asarray(flip_indices)

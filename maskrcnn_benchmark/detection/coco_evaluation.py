@@ -47,6 +47,13 @@ def postprocess(result, original_width, original_height):
             rle["counts"] = rle["counts"].decode("utf-8")
         result.add_field("pasted_mask_rle", rles)
 
+    if result.has_field("pred_keypoints"):
+        keypoints = result.get_field("pred_keypoints")
+        keypoints = keypoints.resize(result.size)
+        result.add_field("pred_keypoints", keypoints)
+
+    return result
+
 
 def compute_on_dataset(model, data_loader, aggregate_across_ranks=True):
     """
@@ -142,6 +149,11 @@ def prepare_for_coco_evaluation(dataset_predictions):
 
         mapped_classes = [COCOMeta().contiguous_id_to_json_id[i] for i in classes]
 
+        has_keypoints = predictions.has_field("pred_keypoints")
+        if has_keypoints:
+            keypoints = predictions.get_field("pred_keypoints")
+            keypoints = keypoints.keypoints.flatten(1).tolist()
+
         for k in range(num_instance):
             result = {
                 "image_id": img_id,
@@ -151,6 +163,8 @@ def prepare_for_coco_evaluation(dataset_predictions):
             }
             if has_mask:
                 result["segmentation"] = rles[k]
+            if has_keypoints:
+                result["keypoints"] = keypoints[k]
             coco_results.append(result)
     return coco_results
 
@@ -291,11 +305,11 @@ class COCOResults(object):
             "ARm@1000",
             "ARl@1000",
         ],
-        "keypoint": ["AP", "AP50", "AP75", "APm", "APl"],
+        "keypoints": ["AP", "AP50", "AP75", "APm", "APl"],
     }
 
     def __init__(self, *iou_types):
-        allowed_types = ("box_proposal", "bbox", "segm")
+        allowed_types = ("box_proposal", "bbox", "segm", "keypoints")
         assert all(iou_type in allowed_types for iou_type in iou_types)
         results = OrderedDict()
         for iou_type in iou_types:
@@ -375,6 +389,8 @@ def coco_evaluation(cfg, model, coco_dataset, output_folder=None):
     iou_types = ("bbox",)
     if cfg.MODEL.MASK_ON:
         iou_types = iou_types + ("segm",)
+    if cfg.MODEL.KEYPOINT_ON:
+        iou_types = iou_types + ("keypoints",)
 
     results = COCOResults(*iou_types)
     if len(coco_results) == 0:
@@ -401,7 +417,7 @@ def print_copypaste_format(results):
     """
     assert isinstance(results, OrderedDict)  # unordered results cannot be properly printed
     logger = logging.getLogger(__name__)
-    for task in ["bbox", "segm"]:
+    for task in ["bbox", "segm", "keypoints"]:
         if task not in results:
             continue
         res = results[task]

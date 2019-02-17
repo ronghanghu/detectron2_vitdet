@@ -1,0 +1,3 @@
+_BASE_: "../e2e_keypoint_rcnn_R_50_FPN_1x.yaml"
+MODEL:
+  WEIGHT: "catalog://Caffe2Detectron/COCO/37697547/e2e_keypoint_rcnn_R-50-FPN_1x"

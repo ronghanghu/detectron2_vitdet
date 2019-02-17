@@ -4,6 +4,9 @@ import os
 import torch.utils.data as data
 
 
+logger = logging.getLogger(__name__)
+
+
 class COCOMeta:
     class_names = None
     contiguous_id_to_json_id = {}  # contiguous id starts from 1
@@ -22,7 +25,9 @@ class COCOMeta:
 
 
 class COCODetection(data.Dataset):
-    def __init__(self, ann_file, root, remove_images_without_annotations=False):
+    def __init__(
+        self, ann_file, root, remove_images_without_annotations=False, min_keypoints_per_image=0
+    ):
         """
         Args:
             ann_file (str): the annotation file. Path to a json
@@ -73,7 +78,6 @@ class COCODetection(data.Dataset):
 
         imgs_anns = list(zip(imgs, anns))
 
-        logger = logging.getLogger(__name__)
         logger.info("Loaded {} images from {}".format(len(imgs_anns), ann_file))
 
         self.dataset_dicts = []
@@ -89,7 +93,8 @@ class COCODetection(data.Dataset):
                 assert anno.get("ignore", 0) == 0
                 obj = {
                     field: copy.deepcopy(anno[field])
-                    for field in ["segmentation", "area", "iscrowd", "bbox"]
+                    for field in ["segmentation", "area", "iscrowd", "bbox", "keypoints"]
+                    if field in anno
                 }
                 obj["category_id"] = self.meta.json_id_to_contiguous_id[anno["category_id"]]
                 objs.append(obj)
@@ -97,6 +102,8 @@ class COCODetection(data.Dataset):
             self.dataset_dicts.append(record)
         if remove_images_without_annotations:
             self._remove_images_without_annotations()
+        if min_keypoints_per_image > 0:
+            self._remove_images_without_enough_keypoints(min_keypoints_per_image)
 
     def _remove_images_without_annotations(self):
         """
@@ -112,12 +119,29 @@ class COCODetection(data.Dataset):
             return False
 
         self.dataset_dicts = [x for x in self.dataset_dicts if valid(x["annotations"])]
-
         num_after = len(self.dataset_dicts)
-        logger = logging.getLogger(__name__)
         logger.info(
             "Removed {} images with no usable annotations. {} images left.".format(
                 num_before - num_after, num_after
+            )
+        )
+
+    def _remove_images_without_enough_keypoints(self, min_keypoints_per_image):
+        num_before = len(self.dataset_dicts)
+        self.dataset_dicts = [
+            x
+            for x in self.dataset_dicts
+            if sum(
+                sum(1 for v in ann["keypoints"][2::3] if v > 0)
+                for ann in x["annotations"]
+                if "keypoints" in ann
+            )
+            >= min_keypoints_per_image
+        ]
+        num_after = len(self.dataset_dicts)
+        logger.info(
+            "Removed {} images with fewer than {} keypoints.".format(
+                num_before - num_after, min_keypoints_per_image
             )
         )
 

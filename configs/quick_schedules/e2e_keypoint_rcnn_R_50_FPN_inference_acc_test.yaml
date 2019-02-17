@@ -1,0 +1,7 @@
+_BASE_: "../e2e_keypoint_rcnn_R_50_FPN_1x.yaml"
+MODEL:
+  WEIGHT: "catalog://Caffe2Detectron/COCO/37697547/e2e_keypoint_rcnn_R-50-FPN_1x"
+DATASETS:
+  TEST: ("keypoints_coco_2014_minival_100",)
+TEST:
+  EXPECTED_RESULTS: [["bbox", "AP", 52.86, 0.02], ["keypoints", "AP", 64.29, 0.02]]

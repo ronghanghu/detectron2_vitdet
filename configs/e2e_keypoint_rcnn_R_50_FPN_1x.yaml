@@ -1,0 +1,17 @@
+_BASE_: "Base-FPN.yaml"
+MODEL:
+  WEIGHT: "catalog://ImageNetPretrained/MSRA/R-50"
+  KEYPOINT_ON: True
+  RESNETS:
+    DEPTH: 50
+  ROI_HEADS:
+    NUM_CLASSES: 2
+  ROI_KEYPOINT_HEAD:
+    POOLER_RESOLUTION: 14
+    POOLER_SAMPLING_RATIO: 2
+    RESOLUTION: 56
+DATASETS:
+  TRAIN: ("keypoints_coco_2014_train", "keypoints_coco_2014_valminusminival",)
+  TEST: ("keypoints_coco_2014_minival",)
+INPUT:
+  MIN_SIZE_TRAIN: (640, 672, 704, 736, 768, 800)

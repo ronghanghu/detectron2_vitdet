@@ -7,6 +7,7 @@ from torch.utils.data.dataset import ConcatDataset
 from maskrcnn_benchmark.data import MapDataset, datasets as D, samplers
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.image_list import to_image_list
+from maskrcnn_benchmark.structures.keypoints import Keypoints
 from maskrcnn_benchmark.structures.segmentation_mask import SegmentationList
 from maskrcnn_benchmark.utils.comm import get_world_size
 
@@ -14,7 +15,7 @@ from ..config import paths_catalog
 from .transforms import DetectionTransform
 
 
-def build_dataset(dataset_name, is_train=True):
+def build_dataset(dataset_name, is_train=True, min_keypoints_per_image=0):
     """
     Args:
         dataset_name (str): The name of the dataset, handled by the DatasetCatalog,
@@ -31,6 +32,8 @@ def build_dataset(dataset_name, is_train=True):
     if data["factory"] == "COCODetection":
         # for COCODataset, we want to remove images without annotations during training
         args["remove_images_without_annotations"] = is_train
+        args["min_keypoints_per_image"] = min_keypoints_per_image
+
     # make dataset from factory
     dataset = factory(**args)
     return dataset
@@ -106,7 +109,11 @@ def build_detection_train_loader(cfg, start_iter=0):
             "example: using://git.io/fhSc4."
         )
 
-    datasets = [build_dataset(dataset_name, True) for dataset_name in cfg.DATASETS.TRAIN]
+    min_kp = 0
+    if cfg.MODEL.KEYPOINT_ON:
+        min_kp = cfg.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE
+
+    datasets = [build_dataset(dataset_name, True, min_kp) for dataset_name in cfg.DATASETS.TRAIN]
     dataset = ConcatDataset(datasets)
 
     # Bin edges for batching images with similar aspect ratios. If ASPECT_RATIO_GROUPING
@@ -208,6 +215,11 @@ class DetectionBatchCollator:
             masks = [obj["segmentation"] for obj in annos]
             masks = SegmentationList(masks, image_size)
             target.add_field("masks_gt", masks)
+
+            kpts = [obj.get("keypoints", []) for obj in annos]
+            kpts = Keypoints(kpts, image_size)
+            target.add_field("gt_keypoints", kpts)
+
             target = target.clip_to_image(remove_empty=True)
             targets.append(target)
         return images, targets, dataset_dicts

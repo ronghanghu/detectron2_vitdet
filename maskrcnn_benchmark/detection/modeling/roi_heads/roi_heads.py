@@ -15,6 +15,7 @@ from ..sampling import subsample_labels
 from .box_head import build_box_head
 from .fast_rcnn import FastRCNNOutputHead, FastRCNNOutputs, fast_rcnn_inference
 from .mask_head import build_mask_head, mask_rcnn_inference, mask_rcnn_loss
+from .keypoint_head import build_keypoint_head, keypoint_rcnn_inference, keypoint_rcnn_loss
 
 
 ROI_HEADS_REGISTRY = Registry("ROI_HEADS")
@@ -142,6 +143,11 @@ class ROIHeads(torch.nn.Module):
                         matched_idxs_clamped[sampled_inds]
                     ]
                     proposals_per_image.add_field("masks_gt", masks_gt)
+                if targets_per_image.has_field("gt_keypoints"):
+                    gt_keypoints = targets_per_image.get_field("gt_keypoints")[
+                        matched_idxs_clamped[sampled_inds]
+                    ]
+                    proposals_per_image.add_field("gt_keypoints", gt_keypoints)
 
                 proposals_with_gt.append(proposals_per_image)
 
@@ -269,16 +275,21 @@ class StandardROIHeads(ROIHeads):
         super(StandardROIHeads, self).__init__(cfg)
 
         # fmt: off
-        pooler_resolution        = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
-        pooler_scales            = tuple(1.0 / self.feature_strides[k] for k in self.in_features)
-        sampling_ratio           = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
-        num_classes              = cfg.MODEL.ROI_HEADS.NUM_CLASSES
-        bbox_reg_weights         = cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS
-        self.mask_on             = cfg.MODEL.MASK_ON
-        self.mask_side_len       = cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
-        mask_pooler_resolution   = cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION
-        mask_pooler_scales       = pooler_scales
-        mask_sampling_ratio      = cfg.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO
+        pooler_resolution          = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
+        pooler_scales              = tuple(1.0 / self.feature_strides[k] for k in self.in_features)
+        sampling_ratio             = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
+        num_classes                = cfg.MODEL.ROI_HEADS.NUM_CLASSES
+        bbox_reg_weights           = cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS
+        self.mask_on               = cfg.MODEL.MASK_ON
+        self.mask_side_len         = cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
+        mask_pooler_resolution     = cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION
+        mask_pooler_scales         = pooler_scales
+        mask_sampling_ratio        = cfg.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO
+        self.keypoint_on           = cfg.MODEL.KEYPOINT_ON
+        self.keypoint_side_len     = cfg.MODEL.ROI_KEYPOINT_HEAD.RESOLUTION
+        keypoint_pooler_resolution = cfg.MODEL.ROI_KEYPOINT_HEAD.POOLER_RESOLUTION
+        keypoint_pooler_scales     = pooler_scales
+        keypoint_sampling_ratio    = cfg.MODEL.ROI_KEYPOINT_HEAD.POOLER_SAMPLING_RATIO
         # fmt: on
 
         # If StandardROIHeads is applied on multiple feature maps (as in FPN),
@@ -304,6 +315,13 @@ class StandardROIHeads(ROIHeads):
                 sampling_ratio=mask_sampling_ratio,
             )
             self.mask_head = build_mask_head(cfg, in_channels)
+        if self.keypoint_on:
+            self.keypoint_pooler = ROIPooler(
+                output_size=keypoint_pooler_resolution,
+                scales=keypoint_pooler_scales,
+                sampling_ratio=keypoint_sampling_ratio,
+            )
+            self.keypoint_head = build_keypoint_head(cfg, in_channels)
 
     def forward(self, features, proposals, targets=None):
         """
@@ -324,13 +342,20 @@ class StandardROIHeads(ROIHeads):
 
         if self.training:
             losses = outputs.losses()
-            if self.mask_on:
-                # During training the same proposals used by the box head are used by
-                # the mask head. The loss is only defined on positive proposals.
+            if self.mask_on or self.keypoint_on:
                 proposals, _ = select_foreground_proposals(proposals)
+            # During training the same proposals used by the box head are used by
+            # the mask and keypoint heads. The loss is only defined on positive proposals.
+            if self.mask_on:
                 mask_features = self.mask_pooler(features, proposals)
                 mask_logits = self.mask_head(mask_features)
                 losses["loss_mask"] = mask_rcnn_loss(mask_logits, proposals, self.mask_side_len)
+            if self.keypoint_on:
+                keypoint_features = self.keypoint_pooler(features, proposals)
+                keypoint_logits = self.keypoint_head(keypoint_features)
+                losses["loss_keypoint"] = keypoint_rcnn_loss(
+                    keypoint_logits, proposals, self.keypoint_side_len
+                )
             return [], losses
         else:
             box_lists_pred = fast_rcnn_inference(
@@ -341,10 +366,14 @@ class StandardROIHeads(ROIHeads):
                 self.test_nms_thresh,
                 self.test_detections_per_img,
             )
+            # During inference cascaded prediction is used: the mask and keypoints heads are only
+            # applied to the top scoring box detections.
             if self.mask_on:
-                # During inference cascaded prediction is used: the mask head is only
-                # applied to the top scoring box detections.
                 mask_features = self.mask_pooler(features, box_lists_pred)
                 mask_logits = self.mask_head(mask_features)
                 mask_rcnn_inference(mask_logits, box_lists_pred)
+            if self.keypoint_on:
+                keypoint_features = self.keypoint_pooler(features, box_lists_pred)
+                keypoint_logits = self.keypoint_head(keypoint_features)
+                keypoint_rcnn_inference(keypoint_logits, box_lists_pred)
             return box_lists_pred, {}

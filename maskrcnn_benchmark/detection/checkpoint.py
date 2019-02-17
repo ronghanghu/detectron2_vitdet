@@ -92,6 +92,16 @@ def _convert_c2_detectron_names(weights):
     layer_keys = [k.replace("conv5.mask", "mask_head.deconv") for k in layer_keys]
 
     # --------------------------------------------------------------------------
+    # Keypoint R-CNN head
+    # --------------------------------------------------------------------------
+    # interestingly, the keypoint head convs have blob names that are simply "conv_fcnX"
+    layer_keys = [k.replace("conv.fcn", "roi_heads.keypoint_head.conv_fcn") for k in layer_keys]
+    layer_keys = [
+        k.replace("kps.score.lowres", "roi_heads.keypoint_head.score_lowres") for k in layer_keys
+    ]
+    layer_keys = [k.replace("kps.score.", "roi_heads.keypoint_head.score.") for k in layer_keys]
+
+    # --------------------------------------------------------------------------
     # Done with replacements
     # --------------------------------------------------------------------------
     assert len(set(layer_keys)) == len(layer_keys)

@@ -30,6 +30,19 @@ class DatasetCatalog(object):
             "cityscapes/images",
             "cityscapes/annotations/instancesonly_filtered_gtFine_test.json",
         ),
+        "keypoints_coco_2014_train": (
+            "coco/train2014",
+            "annotations/person_keypoints_train2017_train_mod.json",
+        ),
+        "keypoints_coco_2014_val": ("coco/val2014", "coco/annotations/instances_val2014.json"),
+        "keypoints_coco_2014_minival": (
+            "coco/val2014",
+            "annotations/person_keypoints_val2017_mod.json",
+        ),
+        "keypoints_coco_2014_valminusminival": (
+            "coco/val2014",
+            "annotations/person_keypoints_train2017_valminusminival_mod.json",
+        ),
     }
 
     @staticmethod
@@ -53,18 +66,22 @@ class ModelCatalog(object):
         "FAIR/20171220/X-101-32x8d": "ImageNetPretrained/20171220/X-101-32x8d.pkl",
     }
 
-    C2_DETECTRON_SUFFIX = (
-        "output/train/coco_2014_train%3Acoco_2014_valminusminival/generalized_rcnn/model_final.pkl"
-    )
+    C2_DETECTRON_PATH_FORMAT = "{prefix}/{model_id}/12_2017_baselines/{model_name}.yaml.{signature}/output/train/{dataset}/generalized_rcnn/model_final.pkl"  # noqa B950
+
+    C2_DATASET_COCO = "coco_2014_train%3Acoco_2014_valminusminival"
+    C2_DATASET_COCO_KEYPOINTS = "keypoints_coco_2014_train%3Akeypoints_coco_2014_valminusminival"
+
+    # format: {model_name} -> (signature, dataset)
     C2_DETECTRON_MODELS = {
-        "35857197/e2e_faster_rcnn_R-50-C4_1x": "01_33_49.iAX0mXvW",
-        "35857345/e2e_faster_rcnn_R-50-FPN_1x": "01_36_30.cUF7QR7I",
-        "35857890/e2e_faster_rcnn_R-101-FPN_1x": "01_38_50.sNxI7sX7",
-        "36761737/e2e_faster_rcnn_X-101-32x8d-FPN_1x": "06_31_39.5MIHi1fZ",
-        "35858791/e2e_mask_rcnn_R-50-C4_1x": "01_45_57.ZgkA7hPB",
-        "35858933/e2e_mask_rcnn_R-50-FPN_1x": "01_48_14.DzEQe4wC",
-        "35861795/e2e_mask_rcnn_R-101-FPN_1x": "02_31_37.KqyEK4tT",
-        "36761843/e2e_mask_rcnn_X-101-32x8d-FPN_1x": "06_35_59.RZotkLKI",
+        "35857197/e2e_faster_rcnn_R-50-C4_1x": ("01_33_49.iAX0mXvW", C2_DATASET_COCO),
+        "35857345/e2e_faster_rcnn_R-50-FPN_1x": ("01_36_30.cUF7QR7I", C2_DATASET_COCO),
+        "35857890/e2e_faster_rcnn_R-101-FPN_1x": ("01_38_50.sNxI7sX7", C2_DATASET_COCO),
+        "36761737/e2e_faster_rcnn_X-101-32x8d-FPN_1x": ("06_31_39.5MIHi1fZ", C2_DATASET_COCO),
+        "35858791/e2e_mask_rcnn_R-50-C4_1x": ("01_45_57.ZgkA7hPB", C2_DATASET_COCO),
+        "35858933/e2e_mask_rcnn_R-50-FPN_1x": ("01_48_14.DzEQe4wC", C2_DATASET_COCO),
+        "35861795/e2e_mask_rcnn_R-101-FPN_1x": ("02_31_37.KqyEK4tT", C2_DATASET_COCO),
+        "36761843/e2e_mask_rcnn_X-101-32x8d-FPN_1x": ("06_35_59.RZotkLKI", C2_DATASET_COCO),
+        "37697547/e2e_keypoint_rcnn_R-50-FPN_1x": ("08_42_54.kdzV35ao", C2_DATASET_COCO_KEYPOINTS),
     }
 
     @staticmethod
@@ -85,18 +102,18 @@ class ModelCatalog(object):
 
     @staticmethod
     def _get_c2_detectron_12_2017_baselines(name):
-        # Detectron C2 models are stored following the structure
-        # prefix/<model_id>/2012_2017_baselines/<model_name>.yaml.<signature>/suffix
-        # we use as identifiers in the catalog Caffe2Detectron/COCO/<model_id>/<model_name>
-        prefix = ModelCatalog.S3_C2_DETECTRON_URL
-        suffix = ModelCatalog.C2_DETECTRON_SUFFIX
+        # Detectron C2 models are stored in the structure defined in `C2_DETECTRON_PATH_FORMAT`.
         # remove identification prefix
         name = name[len("Caffe2Detectron/COCO/") :]
         # split in <model_id> and <model_name>
         model_id, model_name = name.split("/")
-        # parsing to make it match the url address from the Caffe2 models
-        model_name = "{}.yaml".format(model_name)
-        signature = ModelCatalog.C2_DETECTRON_MODELS[name]
-        unique_name = ".".join([model_name, signature])
-        url = "/".join([prefix, model_id, "12_2017_baselines", unique_name, suffix])
+        signature, dataset = ModelCatalog.C2_DETECTRON_MODELS[name]
+
+        url = ModelCatalog.C2_DETECTRON_PATH_FORMAT.format(
+            prefix=ModelCatalog.S3_C2_DETECTRON_URL,
+            model_id=model_id,
+            model_name=model_name,
+            signature=signature,
+            dataset=dataset,
+        )
         return url
