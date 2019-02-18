@@ -51,10 +51,12 @@ def _convert_c2_detectron_names(weights):
     # --------------------------------------------------------------------------
     # Fast R-CNN box head
     # --------------------------------------------------------------------------
-    layer_keys = [re.sub("^bbox.pred", "bbox_pred", k) for k in layer_keys]
-    layer_keys = [re.sub("^cls.score", "cls_score", k) for k in layer_keys]
-    layer_keys = [re.sub("^fc6.", "box_head.fc1.", k) for k in layer_keys]
-    layer_keys = [re.sub("^fc7.", "box_head.fc2.", k) for k in layer_keys]
+    layer_keys = [re.sub("^bbox\\.pred", "bbox_pred", k) for k in layer_keys]
+    layer_keys = [re.sub("^cls\\.score", "cls_score", k) for k in layer_keys]
+    layer_keys = [re.sub("^fc6\\.", "box_head.fc1.", k) for k in layer_keys]
+    layer_keys = [re.sub("^fc7\\.", "box_head.fc2.", k) for k in layer_keys]
+    # 4conv1fc head tensor names: head_conv1_w, head_conv1_gn_s
+    layer_keys = [re.sub("^head\\.conv", "box_head.conv", k) for k in layer_keys]
 
     # --------------------------------------------------------------------------
     # FPN lateral and output convolutions
@@ -70,14 +72,15 @@ def _convert_c2_detectron_names(weights):
            Meaning: These are FPN output convolutions
         """
         splits = name.split(".")
+        norm = ".norm" if "norm" in splits else ""
         if name.startswith("fpn.inner."):
             # splits example: ['fpn', 'inner', 'res2', '2', 'sum', 'lateral', 'weight']
             stage = int(splits[2][len("res") :])
-            return "fpn_lateral{}.{}".format(stage, splits[-1])
+            return "fpn_lateral{}{}.{}".format(stage, norm, splits[-1])
         elif name.startswith("fpn.res"):
             # splits example: ['fpn', 'res2', '2', 'sum', 'weight']
             stage = int(splits[1][len("res") :])
-            return "fpn_output{}.{}".format(stage, splits[-1])
+            return "fpn_output{}{}.{}".format(stage, norm, splits[-1])
         return name
 
     layer_keys = [fpn_map(k) for k in layer_keys]
@@ -87,6 +90,7 @@ def _convert_c2_detectron_names(weights):
     # --------------------------------------------------------------------------
     # roi_heads.StandardROIHeads case
     layer_keys = [k.replace(".[mask].fcn", "mask_head.mask_fcn") for k in layer_keys]
+    layer_keys = [re.sub("^\\.mask\\.fcn", "mask_head.mask_fcn", k) for k in layer_keys]
     layer_keys = [k.replace("mask.fcn.logits", "mask_head.predictor") for k in layer_keys]
     # roi_heads.Res5ROIHeads case
     layer_keys = [k.replace("conv5.mask", "mask_head.deconv") for k in layer_keys]

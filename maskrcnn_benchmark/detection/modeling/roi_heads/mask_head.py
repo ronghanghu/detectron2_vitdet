@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from maskrcnn_benchmark.layers import Conv2d, ConvTranspose2d, cat
+from maskrcnn_benchmark.layers import Conv2d, ConvTranspose2d, cat, weight_init
 from maskrcnn_benchmark.utils.events import get_event_storage
 
 
@@ -142,20 +142,24 @@ def mask_rcnn_inference(mask_logits_pred, box_lists_pred):
 
 
 class MaskRCNNConvUpsampleHead(nn.Module):
-    def __init__(self, num_convs, num_classes, input_channels, feature_channels):
+    def __init__(self, num_convs, num_classes, input_channels, feature_channels, norm):
         super(MaskRCNNConvUpsampleHead, self).__init__()
-        self.convs = []
+        self.conv_norm_relus = []
 
         for k in range(num_convs):
-            layer = Conv2d(
+            norm_module = nn.GroupNorm(32, feature_channels) if norm == "GN" else None
+            conv = Conv2d(
                 input_channels if k == 0 else feature_channels,
                 feature_channels,
                 kernel_size=3,
                 stride=1,
                 padding=1,
+                bias=not norm,
+                norm=norm_module,
+                activation=F.relu,
             )
-            self.add_module("mask_fcn{}".format(k + 1), layer)
-            self.convs.append(layer)
+            self.add_module("mask_fcn{}".format(k + 1), conv)
+            self.conv_norm_relus.append(conv)
 
         self.deconv = ConvTranspose2d(
             feature_channels if num_convs > 0 else input_channels,
@@ -166,17 +170,12 @@ class MaskRCNNConvUpsampleHead(nn.Module):
         )
         self.predictor = Conv2d(feature_channels, num_classes, kernel_size=1, stride=1, padding=0)
 
-        for name, param in self.named_parameters():
-            if "bias" in name:
-                nn.init.constant_(param, 0)
-            elif "weight" in name:
-                # Caffe2 implementation uses MSRAFill, which in fact
-                # corresponds to kaiming_normal_ in PyTorch
-                nn.init.kaiming_normal_(param, mode="fan_out", nonlinearity="relu")
+        for layer in self.conv_norm_relus + [self.deconv, self.predictor]:
+            weight_init.c2_msra_fill(layer)
 
     def forward(self, x):
-        for conv in self.convs:
-            x = F.relu(conv(x))
+        for layer in self.conv_norm_relus:
+            x = layer(x)
         x = F.relu(self.deconv(x))
         return self.predictor(x)
 
@@ -188,14 +187,15 @@ def build_mask_head(cfg, input_size):
     """
     head = cfg.MODEL.ROI_MASK_HEAD.NAME
     num_classes = cfg.MODEL.ROI_HEADS.NUM_CLASSES
+    norm = cfg.MODEL.ROI_MASK_HEAD.NORM
     if not isinstance(input_size, int):
         input_size = input_size[0]
     if head == "MaskRCNN4ConvUpsampleHead":
         return MaskRCNNConvUpsampleHead(
-            4, num_classes, input_size, cfg.MODEL.ROI_MASK_HEAD.CONV_DIM
+            4, num_classes, input_size, cfg.MODEL.ROI_MASK_HEAD.CONV_DIM, norm=norm
         )
     if head == "MaskRCNNUpsampleHead":
         return MaskRCNNConvUpsampleHead(
-            0, num_classes, input_size, cfg.MODEL.ROI_MASK_HEAD.CONV_DIM
+            0, num_classes, input_size, cfg.MODEL.ROI_MASK_HEAD.CONV_DIM, norm=norm
         )
     raise ValueError("Unknown head {}".format(head))

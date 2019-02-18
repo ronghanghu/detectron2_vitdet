@@ -95,6 +95,9 @@ _C.MODEL.FPN = CN()
 _C.MODEL.FPN.IN_FEATURES = []
 _C.MODEL.FPN.OUT_CHANNELS = 256
 
+# Options: "" (no norm), "GN"
+_C.MODEL.FPN.NORM = ""
+
 
 # ---------------------------------------------------------------------------- #
 # RPN options
@@ -188,15 +191,21 @@ _C.MODEL.ROI_HEADS.DETECTIONS_PER_IMG = 100
 # ---------------------------------------------------------------------------- #
 _C.MODEL.ROI_BOX_HEAD = CN()
 # C4 don't use head name option
-# Options for non-C4 models: FastRCNN2MLPHead,
+# Options for non-C4 models: FastRCNNConvFCHead,
 _C.MODEL.ROI_BOX_HEAD.NAME = ""
 # Default weights on (dx, dy, dw, dh) for normalizing bbox regression targets
 # These are empirically chosen to approximately lead to unit variance targets
 _C.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS = (10.0, 10.0, 5.0, 5.0)
 _C.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION = 14
 _C.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO = 0
-# Hidden layer dimension when using an MLP for the RoI box head
-_C.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM = 1024
+_C.MODEL.ROI_BOX_HEAD.NUM_FC = 0
+# Hidden layer dimension for FC layers in the RoI box head
+_C.MODEL.ROI_BOX_HEAD.FC_HEAD_DIM = 1024
+_C.MODEL.ROI_BOX_HEAD.NUM_CONV = 0
+# Channel dimension for Conv layers in the RoI box head
+_C.MODEL.ROI_BOX_HEAD.CONV_HEAD_DIM = 256
+# Normalization method for the convolution layers. Options: "" (no norm), "GN".
+_C.MODEL.ROI_BOX_HEAD.NORM = ""
 
 
 # ---------------------------------------------------------------------------- #
@@ -209,6 +218,8 @@ _C.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION = 14
 _C.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO = 0
 _C.MODEL.ROI_MASK_HEAD.CONV_DIM = 256
 _C.MODEL.ROI_MASK_HEAD.RESOLUTION = 14
+# Normalization method for the convolution layers. Options: "" (no norm), "GN".
+_C.MODEL.ROI_MASK_HEAD.NORM = ""
 
 
 # ---------------------------------------------------------------------------- #
@@ -265,6 +276,9 @@ _C.MODEL.RESNETS.OUT_FEATURES = ["res4"]  # res4 for C4 backbone, res2..5 for FP
 
 # Number of groups to use; 1 ==> ResNet; > 1 ==> ResNeXt
 _C.MODEL.RESNETS.NUM_GROUPS = 1
+
+# Options: FrozenBN, GN
+_C.MODEL.RESNETS.NORM = "FrozenBN"
 
 # Baseline width of each group
 _C.MODEL.RESNETS.WIDTH_PER_GROUP = 64

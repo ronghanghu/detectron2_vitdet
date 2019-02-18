@@ -14,8 +14,8 @@ from ..poolers import ROIPooler
 from ..sampling import subsample_labels
 from .box_head import build_box_head
 from .fast_rcnn import FastRCNNOutputHead, FastRCNNOutputs, fast_rcnn_inference
-from .mask_head import build_mask_head, mask_rcnn_inference, mask_rcnn_loss
 from .keypoint_head import build_keypoint_head, keypoint_rcnn_inference, keypoint_rcnn_loss
+from .mask_head import build_mask_head, mask_rcnn_inference, mask_rcnn_loss
 
 
 ROI_HEADS_REGISTRY = Registry("ROI_HEADS")

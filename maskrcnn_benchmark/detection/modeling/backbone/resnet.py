@@ -33,7 +33,8 @@ def build_resnet_head(cfg):
 @BACKBONE_REGISTRY.register()
 def build_resnet_backbone(cfg):
     # TODO registration of new blocks/stems
-    stem = BasicStem(out_channels=cfg.MODEL.RESNETS.STEM_OUT_CHANNELS, norm="FrozenBN")
+    norm = cfg.MODEL.RESNETS.NORM
+    stem = BasicStem(out_channels=cfg.MODEL.RESNETS.STEM_OUT_CHANNELS, norm=norm)
     freeze_at = cfg.MODEL.BACKBONE.FREEZE_AT
 
     if freeze_at >= 1:
@@ -72,7 +73,7 @@ def build_resnet_backbone(cfg):
             bottleneck_channels=bottleneck_channels,
             out_channels=out_channels,
             num_groups=num_groups,
-            norm="FrozenBN",
+            norm=norm,
             stride_in_1x1=stride_in_1x1,
             dilation=dilation,
         )

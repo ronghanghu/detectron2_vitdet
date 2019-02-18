@@ -2,7 +2,7 @@ import numpy as np
 from abc import ABCMeta, abstractmethod
 import torch.nn.functional as F
 from torch import nn
-from torch.nn import BatchNorm2d
+from torch.nn import BatchNorm2d, GroupNorm
 
 from . import Backbone, Conv2d, FrozenBatchNorm2d
 
@@ -18,7 +18,11 @@ def _get_norm(norm, out_channels):
         nn.Module: the normalization layer
     """
     if isinstance(norm, str):
-        norm = {"BN": BatchNorm2d, "FrozenBN": FrozenBatchNorm2d}[norm]
+        norm = {
+            "BN": BatchNorm2d,
+            "FrozenBN": FrozenBatchNorm2d,
+            "GN": lambda channels: GroupNorm(32, channels),
+        }[norm]
     return norm(out_channels)
 
 
@@ -71,12 +75,16 @@ class BottleneckBlock(ResNetBlockBase):
         super().__init__(in_channels, out_channels, stride)
 
         if in_channels != out_channels:
-            self.downsample = nn.Sequential(
-                Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False),
-                _get_norm(norm, out_channels),
+            self.shortcut = Conv2d(
+                in_channels,
+                out_channels,
+                kernel_size=1,
+                stride=stride,
+                bias=False,
+                norm=_get_norm(norm, out_channels),
             )
         else:
-            self.downsample = None
+            self.shortcut = None
 
         # The original MSRA ResNet models have stride in the first 1x1 conv
         # The subsequent fb.torch.resnet and Caffe2 ResNe[X]t implementations have
@@ -84,10 +92,13 @@ class BottleneckBlock(ResNetBlockBase):
         stride_1x1, stride_3x3 = (stride, 1) if stride_in_1x1 else (1, stride)
 
         self.conv1 = Conv2d(
-            in_channels, bottleneck_channels, kernel_size=1, stride=stride_1x1, bias=False
+            in_channels,
+            bottleneck_channels,
+            kernel_size=1,
+            stride=stride_1x1,
+            bias=False,
+            norm=_get_norm(norm, bottleneck_channels),
         )
-        # TODO maybe change name if using GN
-        self.bn1 = _get_norm(norm, bottleneck_channels)
 
         self.conv2 = Conv2d(
             bottleneck_channels,
@@ -98,32 +109,34 @@ class BottleneckBlock(ResNetBlockBase):
             bias=False,
             groups=num_groups,
             dilation=dilation,
+            norm=_get_norm(norm, bottleneck_channels),
         )
-        self.bn2 = _get_norm(norm, bottleneck_channels)
 
-        self.conv3 = Conv2d(bottleneck_channels, out_channels, kernel_size=1, bias=False)
-        self.bn3 = _get_norm(norm, out_channels)
+        self.conv3 = Conv2d(
+            bottleneck_channels,
+            out_channels,
+            kernel_size=1,
+            bias=False,
+            norm=_get_norm(norm, out_channels),
+        )
 
         # TODO initialization
 
     def forward(self, x):
         out = self.conv1(x)
-        out = self.bn1(out)
         out = F.relu_(out)
 
         out = self.conv2(out)
-        out = self.bn2(out)
         out = F.relu_(out)
 
         out = self.conv3(out)
-        out = self.bn3(out)
 
-        if self.downsample is not None:
-            residual = self.downsample(x)
+        if self.shortcut is not None:
+            shortcut = self.shortcut(x)
         else:
-            residual = x
+            shortcut = x
 
-        out += residual
+        out += shortcut
         out = F.relu_(out)
         return out
 
@@ -158,13 +171,17 @@ class BasicStem(nn.Module):
         """
         super().__init__()
         self.conv1 = Conv2d(
-            in_channels, out_channels, kernel_size=7, stride=2, padding=3, bias=False
+            in_channels,
+            out_channels,
+            kernel_size=7,
+            stride=2,
+            padding=3,
+            bias=False,
+            norm=_get_norm(norm, out_channels),
         )
-        self.bn1 = _get_norm(norm, out_channels)
 
     def forward(self, x):
         x = self.conv1(x)
-        x = self.bn1(x)
         x = F.relu_(x)
         x = F.max_pool2d(x, kernel_size=3, stride=2, padding=1)
         return x

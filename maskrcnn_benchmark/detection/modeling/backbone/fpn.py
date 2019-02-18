@@ -2,7 +2,7 @@ import math
 import torch.nn.functional as F
 from torch import nn
 
-from maskrcnn_benchmark.layers import Backbone, weight_init
+from maskrcnn_benchmark.layers import Backbone, Conv2d, weight_init
 
 from . import BACKBONE_REGISTRY, resnet
 
@@ -12,7 +12,7 @@ class FPN(Backbone):
     Module that adds FPN on top of a list of feature maps.
     """
 
-    def __init__(self, bottom_up, in_features, out_channels, top_block=True):
+    def __init__(self, bottom_up, in_features, out_channels, norm="", top_block=True):
         """
         Args:
             bottom_up (Backbone): module representing the bottom up subnetwork.
@@ -24,6 +24,7 @@ class FPN(Backbone):
                 backbone produces ["res2", "res3", "res4"], any *contiguous* sublist
                 of these may be used; order must be from high to low resolution.
             out_channels (int): number of channels in the output feature maps.
+            norm (str): either "" or "GN".
             top_block (bool, optional): if provided, an extra 2x2 max pooling
                 is added on the output of the last (lowest resolution)
                 FPN output, and the result will extend the result list
@@ -38,15 +39,31 @@ class FPN(Backbone):
         _assert_strides_are_log2_contiguous(in_strides)
         lateral_convs = []
         output_convs = []
-        # The code currently assumes that we start from stage 2
+
+        use_bias = norm == ""
+
         for idx, in_channels in enumerate(in_channels):
-            lateral_conv = nn.Conv2d(in_channels, out_channels, kernel_size=1)
-            output_conv = nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1)
+            lateral_norm = nn.GroupNorm(32, out_channels) if norm == "GN" else None
+            output_norm = nn.GroupNorm(32, out_channels) if norm == "GN" else None
+
+            lateral_conv = Conv2d(
+                in_channels, out_channels, kernel_size=1, bias=use_bias, norm=lateral_norm
+            )
+            output_conv = Conv2d(
+                out_channels,
+                out_channels,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                bias=use_bias,
+                norm=output_norm,
+            )
             weight_init.c2_xavier_fill(lateral_conv)
             weight_init.c2_xavier_fill(output_conv)
             stage = int(math.log2(in_strides[idx]))
             self.add_module("fpn_lateral{}".format(stage), lateral_conv)
             self.add_module("fpn_output{}".format(stage), output_conv)
+
             lateral_convs.append(lateral_conv)
             output_convs.append(output_conv)
         # Place convs into top-down order (from low to high resolution)
@@ -118,5 +135,10 @@ def build_resnet_fpn_backbone(cfg):
     bottom_up = resnet.build_resnet_backbone(cfg)
     in_features = cfg.MODEL.FPN.IN_FEATURES
     out_channels = cfg.MODEL.FPN.OUT_CHANNELS
-    backbone = FPN(bottom_up=bottom_up, in_features=in_features, out_channels=out_channels)
+    backbone = FPN(
+        bottom_up=bottom_up,
+        in_features=in_features,
+        out_channels=out_channels,
+        norm=cfg.MODEL.FPN.NORM,
+    )
     return backbone

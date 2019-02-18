@@ -36,19 +36,39 @@ class _NewEmptyTensorOp(torch.autograd.Function):
 
 
 class Conv2d(torch.nn.Conv2d):
-    def forward(self, x):
-        if x.numel() > 0:
-            return super(Conv2d, self).forward(x)
-        # get output shape
+    def __init__(self, *args, **kwargs):
+        """
+        Extra keyword arguments supported in addition to those in `torch.nn.Conv2d`:
 
-        output_shape = [
-            (i + 2 * p - (di * (k - 1) + 1)) // d + 1
-            for i, p, di, k, d in zip(
-                x.shape[-2:], self.padding, self.dilation, self.kernel_size, self.stride
-            )
-        ]
-        output_shape = [x.shape[0], self.weight.shape[0]] + output_shape
-        return _NewEmptyTensorOp.apply(x, output_shape)
+        norm (nn.Module, optional): a normalization layer
+        activation (callable(Tensor) -> Tensor): a callable activation function
+        """
+        norm = kwargs.pop("norm", None)
+        activation = kwargs.pop("activation", None)
+        super().__init__(*args, **kwargs)
+        self.norm = norm
+        self.activation = activation
+
+    def forward(self, x):
+        if x.numel() == 0:
+            # When input is empty, we want to return a empty tensor with "correct" shape,
+            # So that the following operations will not panic if they check for the shape of the tensor.
+            # This computes the height and width of the output tensor
+            output_shape = [
+                (i + 2 * p - (di * (k - 1) + 1)) // s + 1
+                for i, p, di, k, s in zip(
+                    x.shape[-2:], self.padding, self.dilation, self.kernel_size, self.stride
+                )
+            ]
+            output_shape = [x.shape[0], self.weight.shape[0]] + output_shape
+            return _NewEmptyTensorOp.apply(x, output_shape)
+
+        x = super().forward(x)
+        if self.norm is not None:
+            x = self.norm(x)
+        if self.activation is not None:
+            x = self.activation(x)
+        return x
 
 
 class ConvTranspose2d(torch.nn.ConvTranspose2d):

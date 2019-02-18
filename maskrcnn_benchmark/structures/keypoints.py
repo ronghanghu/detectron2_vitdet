@@ -1,6 +1,8 @@
 import numpy as np
 import cv2
 import torch
+
+
 # from PIL import Image
 
 
@@ -83,7 +85,6 @@ def keypoints_to_heatmap(keypoints, rois, heatmap_size):
     Returns: A tensor containing an integer spatial label in the range [0, heatmap_size**2 - 1] for
         each keypoint in the input. Shape is (N, M)
     """
-
 
     if rois.numel() == 0:
         return rois.new().long(), rois.new().long()

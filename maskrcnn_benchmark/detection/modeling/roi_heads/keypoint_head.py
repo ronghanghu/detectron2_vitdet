@@ -3,7 +3,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from maskrcnn_benchmark import layers
-from maskrcnn_benchmark.layers import cat, Conv2d
+from maskrcnn_benchmark.layers import Conv2d, cat
 from maskrcnn_benchmark.structures.keypoints import Keypoints, heatmaps_to_keypoints
 from maskrcnn_benchmark.utils.events import get_event_storage
 
@@ -52,7 +52,9 @@ def keypoint_rcnn_loss(keypoint_logits_pred, box_lists_pred, keypoint_side_len):
     N, K, H, W = keypoint_logits_pred.shape
     keypoint_logits_pred = keypoint_logits_pred.view(N * K, H * W)
 
-    keypoint_loss = F.cross_entropy(keypoint_logits_pred[valid], keypoint_targets[valid], reduction="mean")
+    keypoint_loss = F.cross_entropy(
+        keypoint_logits_pred[valid], keypoint_targets[valid], reduction="mean"
+    )
     return keypoint_loss
 
 

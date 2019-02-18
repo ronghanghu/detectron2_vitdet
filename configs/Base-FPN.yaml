@@ -18,7 +18,8 @@ MODEL:
     NAME: "StandardROIHeads"
     IN_FEATURES: ["p2", "p3", "p4", "p5"]
   ROI_BOX_HEAD:
-    NAME: "FastRCNN2MLPHead"
+    NAME: "FastRCNNConvFCHead"
+    NUM_FC: 2
     POOLER_RESOLUTION: 7
     POOLER_SAMPLING_RATIO: 2
   ROI_MASK_HEAD:

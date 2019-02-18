@@ -4,8 +4,14 @@ from torch import nn
 
 class FrozenBatchNorm2d(nn.Module):
     """
-    BatchNorm2d where the batch statistics and the affine parameters
-    are fixed
+    BatchNorm2d where the batch statistics and the affine parameters are fixed.
+
+    It contains non-trainable buffers called "weight" and "bias".
+    The two buffers are computed from the original four parameters of BN:
+    mean, variance, scale (gamma), offset (beta).
+    The affine transform `x * weight + bias` will perform the equivalent
+    computation of `(x - mean) / std * scale + offset`, but will be slightly cheaper.
+    The pre-trained backbone models from Caffe2 are already in such a frozen format.
     """
 
     def __init__(self, n):
