@@ -209,12 +209,12 @@ class COCODemo(object):
         height, width = original_image.shape[:-1]
         prediction = prediction.resize((width, height))
 
-        if prediction.has_field("mask"):
+        if prediction.has("pred_masks"):
             # if we have masks, paste the masks in the right position
             # in the image, as defined by the bounding boxes
-            masks = prediction.get_field("mask")
+            masks = prediction.pred_masks
             masks = paste_masks_in_image(masks, prediction, self.mask_threshold, self.padding)
-            prediction.add_field("mask", masks)
+            prediction.set("pred_masks", masks)
         return prediction
 
     def select_top_predictions(self, predictions):
@@ -231,10 +231,10 @@ class COCODemo(object):
                 of the detection properties can be found in the fields of
                 the Boxes via `prediction.fields()`
         """
-        scores = predictions.get_field("scores")
+        scores = predictions.scores
         keep = torch.nonzero(scores > self.confidence_threshold).squeeze(1)
         predictions = predictions[keep]
-        scores = predictions.get_field("scores")
+        scores = predictions.scores
         _, idx = scores.sort(0, descending=True)
         return predictions[idx]
 
@@ -255,7 +255,7 @@ class COCODemo(object):
             predictions (Boxes): the result of the computation by the model.
                 It should contain the field `labels`.
         """
-        labels = predictions.get_field("pred_classes")
+        labels = predictions.pred_classes
         boxes = predictions.bbox
 
         colors = self.compute_colors_for_labels(labels).tolist()
@@ -277,8 +277,8 @@ class COCODemo(object):
             predictions (Boxes): the result of the computation by the model.
                 It should contain the field `mask` and `labels`.
         """
-        masks = predictions.get_field("mask").numpy()
-        labels = predictions.get_field("pred_classes")
+        masks = predictions.pred_masks.numpy()
+        labels = predictions.pred_classes
 
         colors = self.compute_colors_for_labels(labels).tolist()
 
@@ -303,7 +303,7 @@ class COCODemo(object):
             predictions (Boxes): the result of the computation by the model.
                 It should contain the field `mask`.
         """
-        masks = predictions.get_field("mask")
+        masks = predictions.pred_masks
         masks_per_dim = self.masks_per_dim
         masks = L.interpolate(masks.float(), scale_factor=1 / masks_per_dim).byte()
         height, width = masks.shape[-2:]
@@ -335,8 +335,8 @@ class COCODemo(object):
             predictions (Boxes): the result of the computation by the model.
                 It should contain the field `scores` and `labels`.
         """
-        scores = predictions.get_field("scores").tolist()
-        labels = predictions.get_field("pred_classes").tolist()
+        scores = predictions.pred_scores.tolist()
+        labels = predictions.pred_classes.tolist()
         labels = [self.CATEGORIES[i] for i in labels]
         boxes = predictions.bbox
 

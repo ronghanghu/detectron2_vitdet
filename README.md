@@ -107,54 +107,6 @@ process will only use a single GPU.
 python /path_to_maskrcnn_benchmark/tools/train_net.py --num-gpus 8 --config-file "path/to/config/file.yaml"
 ```
 
-## Abstractions
-For more information on some of the main abstractions in our implementation, see [ABSTRACTIONS.md](ABSTRACTIONS.md).
-
-## Adding your own dataset
-
-This implementation adds support for COCO-style datasets.
-But adding support for training on a new dataset can be done as follows:
-```python
-from maskrcnn_benchmark.structures.bounding_box import BoxList
-
-class MyDataset(object):
-    def __init__(self, ...):
-        # as you would do normally
-
-    def __getitem__(self, idx):
-        # load the image as a PIL Image
-        image = ...
-
-        # load the bounding boxes as a list of list of boxes
-        # in this case, for illustrative purposes, we use
-        # x1, y1, x2, y2 order.
-        boxes = [[0, 0, 10, 10], [10, 20, 50, 50]]
-        # and labels
-        labels = torch.tensor([10, 20])
-
-        # create a BoxList from the boxes
-        boxlist = BoxList(boxes, image.size, mode="xyxy")
-        # add the labels to the boxlist
-        boxlist.add_field("labels", labels)
-
-        if self.transforms:
-            image, boxlist = self.transforms(image, boxlist)
-
-        # return the image, the boxlist and the idx in your dataset
-        return image, boxlist, idx
-
-    def get_img_info(self, idx):
-        # get img_height and img_width. This is used if
-        # we want to split the batches according to the aspect ratio
-        # of the image, as it can be more efficient than loading the
-        # image from disk
-        return {"height": img_height, "width": img_width}
-```
-That's it. You can also add extra fields to the boxlist, such as segmentation masks
-(using `structures.segmentation_mask.SegmentationList`), or even your own instance type.
-
-For a full example of how the `COCODataset` is implemented, check [`maskrcnn_benchmark/data/datasets/coco.py`](maskrcnn_benchmark/data/datasets/coco.py).
-
 ### Note:
 While the aforementioned example should work for training, we leverage the
 cocoApi for computing the accuracies during testing. Thus, test datasets

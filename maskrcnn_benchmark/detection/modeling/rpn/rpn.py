@@ -33,7 +33,7 @@ def add_ground_truth_to_proposals(gt_boxes, proposals):
     if len(proposals) == 0:
         return proposals
 
-    device = proposals[0].get_field("objectness_logits").device
+    device = proposals[0].objectness_logits.device
     # Concating gt_boxes with proposals requires them to have the same fields
     # Assign all ground-truth boxes an objectness logit corresponding to P(object) \approx 1.
     gt_logit_value = math.log((1.0 - 1e-10) / (1 - (1.0 - 1e-10)))
@@ -43,8 +43,8 @@ def add_ground_truth_to_proposals(gt_boxes, proposals):
         gt_logits_i = gt_logit_value * torch.ones(len(gt_boxes_i), device=device)
         gt_proposal = Instances(proposal.image_size)
 
-        gt_proposal["proposal_boxes"] = gt_boxes_i
-        gt_proposal["objectness_logits"] = gt_logits_i
+        gt_proposal.proposal_boxes = gt_boxes_i
+        gt_proposal.objectness_logits = gt_logits_i
         new_proposals.append(Instances.cat([proposal, gt_proposal]))
     return new_proposals
 
@@ -156,7 +156,7 @@ class RPN(nn.Module):
             gt_instances (list[Instances], optional): a length `N` list of `Instances`s. Each
                 `Instances` stores ground-truth instances for the corresponding image.
         """
-        gt_boxes = [x["gt_boxes"] for x in gt_instances] if gt_instances is not None else None
+        gt_boxes = [x.gt_boxes for x in gt_instances] if gt_instances is not None else None
         del gt_instances
         features = [features[f] for f in self.in_features]
         objectness_logits_pred, anchor_deltas_pred = self.head(features)
@@ -224,9 +224,7 @@ class RPN(nn.Module):
                 # and don't bother to sort them in decreasing score order. For RPN-only
                 # models, the proposals are the final output and we return them in
                 # high-to-low confidence order.
-                inds = [
-                    p.get_field("objectness_logits").sort(descending=True)[1] for p in proposals
-                ]
+                inds = [p.objectness_logits.sort(descending=True)[1] for p in proposals]
                 proposals = [p[ind] for p, ind in zip(proposals, inds)]
 
         return proposals, losses

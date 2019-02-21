@@ -207,22 +207,22 @@ class DetectionBatchCollator:
             boxes = [obj["bbox"] for obj in annos]
             boxes = torch.as_tensor(boxes).reshape(-1, 4)
             target = Instances(image_size)
-            boxes = target["gt_boxes"] = Boxes(boxes, mode="xywh").clone(mode="xyxy")
+            boxes = target.gt_boxes = Boxes(boxes, mode="xywh").clone(mode="xyxy")
             boxes.clip(image_size)
 
             classes = [obj["category_id"] for obj in annos]
             classes = torch.tensor(classes)
-            target["gt_classes"] = classes
+            target.gt_classes = classes
 
             masks = [obj["segmentation"] for obj in annos]
             masks = SegmentationList(
                 masks, image_size[::-1]
             )  # TODO(yuxinwu) seg still takes (w, h)
-            target["gt_masks"] = masks
+            target.gt_masks = masks
 
             kpts = [obj.get("keypoints", []) for obj in annos]
             kpts = Keypoints(kpts, image_size[::-1])  # TODO(yuxinwu) kpt still takes (w, h)
-            target["gt_keypoints"] = kpts
+            target.gt_keypoints = kpts
 
             target = target[boxes.nonempty()]
             targets.append(target)

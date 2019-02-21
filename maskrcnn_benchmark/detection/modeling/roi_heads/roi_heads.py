@@ -37,11 +37,11 @@ def select_foreground_proposals(proposals):
     """
     assert isinstance(proposals, (list, tuple))
     assert isinstance(proposals[0], Instances)
-    assert proposals[0].has_field("gt_classes")
+    assert proposals[0].has("gt_classes")
     fg_proposals = []
     fg_selection_masks = []
     for proposals_per_image in proposals:
-        gt_classes = proposals_per_image.get_field("gt_classes")
+        gt_classes = proposals_per_image.gt_classes
         fg_selection_mask = gt_classes > 0
         fg_inds = fg_selection_mask.nonzero().squeeze(1)
         fg_proposals.append(proposals_per_image[fg_inds])
@@ -97,7 +97,7 @@ class ROIHeads(torch.nn.Module):
         with torch.no_grad():
             for proposals_per_image, targets_per_image in zip(proposals, targets):
                 match_quality_matrix = boxlist_iou(
-                    targets_per_image["gt_boxes"], proposals_per_image["proposal_boxes"]
+                    targets_per_image.gt_boxes, proposals_per_image.proposal_boxes
                 )
                 matched_idxs = self.proposal_matcher(match_quality_matrix)
                 # Fast RCNN only need "gt_classes" field for selecting the targets
@@ -105,7 +105,7 @@ class ROIHeads(torch.nn.Module):
                 # Need to clamp the indices because matched_idxs can be < 0
                 matched_idxs_clamped = matched_idxs.clamp(min=0)
 
-                gt_classes = targets_per_image["gt_classes"][matched_idxs_clamped].to(
+                gt_classes = targets_per_image.gt_classes[matched_idxs_clamped].to(
                     dtype=torch.int64
                 )
 
@@ -124,24 +124,24 @@ class ROIHeads(torch.nn.Module):
                 sampled_inds = torch.cat([sampled_fg_inds, sampled_bg_inds], dim=0)
 
                 proposals_per_image = proposals_per_image[sampled_inds]
-                proposals_per_image.add_field("gt_classes", gt_classes[sampled_inds])
+                proposals_per_image.gt_classes = gt_classes[sampled_inds]
 
                 # Avoid indexing the Boxes targets_per_image directly, as in the
                 # commented-out row below. It is considerably slower.
                 # TODO: investigate and optimize this access pattern.
                 # gt_boxes = targets_per_image[matched_idxs_clamped[sampled_inds]].bbox  # slow!
-                gt_boxes = targets_per_image["gt_boxes"][matched_idxs_clamped[sampled_inds]]
-                proposals_per_image.add_field("gt_boxes", gt_boxes)
+                gt_boxes = targets_per_image.gt_boxes[matched_idxs_clamped[sampled_inds]]
+                proposals_per_image.gt_boxes = gt_boxes
 
-                if targets_per_image.has_field("gt_masks"):
+                if targets_per_image.has("gt_masks"):
                     # See note above about not indexing the targets_per_image directly
-                    gt_masks = targets_per_image["gt_masks"][matched_idxs_clamped[sampled_inds]]
-                    proposals_per_image.add_field("gt_masks", gt_masks)
-                if targets_per_image.has_field("gt_keypoints"):
-                    gt_keypoints = targets_per_image["gt_keypoints"][
+                    gt_masks = targets_per_image.gt_masks[matched_idxs_clamped[sampled_inds]]
+                    proposals_per_image.gt_masks = gt_masks
+                if targets_per_image.has("gt_keypoints"):
+                    gt_keypoints = targets_per_image.gt_keypoints[
                         matched_idxs_clamped[sampled_inds]
                     ]
-                    proposals_per_image.add_field("gt_keypoints", gt_keypoints)
+                    proposals_per_image.gt_keypoints = gt_keypoints
 
                 proposals_with_gt.append(proposals_per_image)
 
@@ -224,7 +224,7 @@ class Res5ROIHeads(ROIHeads):
             proposals = self.label_and_sample_proposals(proposals, targets)
         del targets
 
-        proposal_boxes = [x["proposal_boxes"] for x in proposals]
+        proposal_boxes = [x.proposal_boxes for x in proposals]
         box_features = self._shared_roi_transform(features, proposal_boxes)
         feature_pooled = F.avg_pool2d(box_features, 7)  # gap
         pred_class_logits, pred_proposal_deltas = self.box_predictor(feature_pooled)
@@ -258,7 +258,7 @@ class Res5ROIHeads(ROIHeads):
                 self.test_detections_per_img,
             )
             if self.mask_on:
-                x = self._shared_roi_transform(features, [x["pred_boxes"] for x in pred_instances])
+                x = self._shared_roi_transform(features, [x.pred_boxes for x in pred_instances])
                 mask_logits = self.mask_head(x)
                 mask_rcnn_inference(mask_logits, pred_instances)
             return pred_instances, {}
@@ -333,7 +333,7 @@ class StandardROIHeads(ROIHeads):
             proposals = self.label_and_sample_proposals(proposals, targets)
         del targets
 
-        box_features = self.box_pooler(features, [x["proposal_boxes"] for x in proposals])
+        box_features = self.box_pooler(features, [x.proposal_boxes for x in proposals])
         box_features = self.box_head(box_features)
         pred_class_logits, pred_proposal_deltas = self.box_predictor(box_features)
         del box_features
@@ -346,7 +346,7 @@ class StandardROIHeads(ROIHeads):
             losses = outputs.losses()
             if self.mask_on or self.keypoint_on:
                 proposals, _ = select_foreground_proposals(proposals)
-            proposal_boxes = [x["proposal_boxes"] for x in proposals]
+            proposal_boxes = [x.proposal_boxes for x in proposals]
             # During training the same proposals used by the box head are used by
             # the mask and keypoint heads. The loss is only defined on positive proposals.
             if self.mask_on:
@@ -371,7 +371,7 @@ class StandardROIHeads(ROIHeads):
             )
             # During inference cascaded prediction is used: the mask and keypoints heads are only
             # applied to the top scoring box detections.
-            pred_boxes = [x["pred_boxes"] for x in pred_instances]
+            pred_boxes = [x.pred_boxes for x in pred_instances]
             if self.mask_on:
                 # During inference cascaded prediction is used: the mask head is only
                 # applied to the top scoring box detections.

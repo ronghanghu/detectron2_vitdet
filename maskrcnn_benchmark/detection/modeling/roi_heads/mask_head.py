@@ -70,10 +70,10 @@ def mask_rcnn_loss(pred_mask_logits, instances, mask_side_len):
     gt_classes = []
     gt_mask_logits = []
     for instances_per_image in instances:
-        gt_classes_per_image = instances_per_image.get_field("gt_classes").to(dtype=torch.int64)
-        gt_masks = instances_per_image.get_field("gt_masks")
+        gt_classes_per_image = instances_per_image.gt_classes.to(dtype=torch.int64)
+        gt_masks = instances_per_image.gt_masks
         gt_mask_logits_per_image = get_mask_ground_truth(
-            gt_masks, instances_per_image["proposal_boxes"], mask_side_len
+            gt_masks, instances_per_image.proposal_boxes, mask_side_len
         )
         gt_classes.append(gt_classes_per_image)
         gt_mask_logits.append(gt_mask_logits_per_image)
@@ -129,7 +129,7 @@ def mask_rcnn_inference(pred_mask_logits, pred_instances):
 
     # Select masks coresponding to the predicted classes
     num_masks = pred_mask_logits.shape[0]
-    class_pred = torch.cat([i.get_field("pred_classes") for i in pred_instances])
+    class_pred = torch.cat([i.pred_classes for i in pred_instances])
     indices = torch.arange(num_masks, device=class_pred.device)
     mask_probs_pred = mask_probs_pred[indices, class_pred][:, None]
 
@@ -137,7 +137,7 @@ def mask_rcnn_inference(pred_mask_logits, pred_instances):
     mask_probs_pred = mask_probs_pred.split(num_boxes_per_image, dim=0)
 
     for prob, instances in zip(mask_probs_pred, pred_instances):
-        instances.add_field("pred_masks", prob)
+        instances.pred_masks = prob
 
 
 class MaskRCNNConvUpsampleHead(nn.Module):

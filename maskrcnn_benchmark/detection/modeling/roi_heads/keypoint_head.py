@@ -29,9 +29,9 @@ def keypoint_rcnn_loss(pred_keypoint_logits, instances, keypoint_side_len):
     valid = []
 
     for instances_per_image in instances:
-        keypoints = instances_per_image.get_field("gt_keypoints")
+        keypoints = instances_per_image.gt_keypoints
         heatmaps_per_image, valid_per_image = keypoints.to_heatmap(
-            instances_per_image["proposal_boxes"].tensor, keypoint_side_len
+            instances_per_image.proposal_boxes.tensor, keypoint_side_len
         )
         heatmaps.append(heatmaps_per_image.view(-1))
         valid.append(valid_per_image.view(-1))
@@ -70,10 +70,10 @@ def keypoint_rcnn_inference(pred_keypoint_logits, pred_instances):
         pred_instances (list[Instances]): A list of N Instances, where N is the batch size.
 
     Returns:
-        None. boxes will contain an extra "keypoints" field.
+        None. boxes will contain an extra "pred_keypoints" field.
     """
     # flatten all bboxes from all images together (list[Boxes] -> Nx4 tensor)
-    bboxes_flat = cat([b["pred_boxes"].tensor for b in pred_instances], dim=0)
+    bboxes_flat = cat([b.pred_boxes.tensor for b in pred_instances], dim=0)
 
     keypoint_results = heatmaps_to_keypoints(
         pred_keypoint_logits.detach().cpu().numpy(), bboxes_flat.cpu().numpy()
@@ -92,8 +92,8 @@ def keypoint_rcnn_inference(pred_keypoint_logits, pred_instances):
         )
         keypoint_xy = keypoint_results_per_image[:, :, :2]
         keypoint_xyv = cat((keypoint_xy, vis), dim=2)
-        instances_per_image.add_field(
-            "pred_keypoints", Keypoints(keypoint_xyv, instances_per_image.image_size[::-1])
+        instances_per_image.pred_keypoints = Keypoints(
+            keypoint_xyv, instances_per_image.image_size[::-1]
         )
 
 

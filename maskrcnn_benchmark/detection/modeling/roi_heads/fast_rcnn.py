@@ -159,9 +159,9 @@ def fast_rcnn_inference_single_image(
         classes_j = torch.full((num_labels,), j, dtype=torch.int64, device=device)
 
         result_j = Instances(image_shape)
-        result_j["pred_boxes"] = Boxes(boxes_j)
-        result_j["scores"] = scores_j[keep]
-        result_j["pred_classes"] = classes_j
+        result_j.pred_boxes = Boxes(boxes_j)
+        result_j.scores = scores_j[keep]
+        result_j.pred_classes = classes_j
         results.append(result_j)
 
     results = Instances.cat(results)
@@ -169,7 +169,7 @@ def fast_rcnn_inference_single_image(
 
     # Limit to max_per_image detections **over all classes**
     if number_of_detections > topk_per_image > 0:
-        cls_scores = results["scores"]
+        cls_scores = results.scores
         image_thresh, _ = torch.kthvalue(
             cls_scores.cpu(), number_of_detections - topk_per_image + 1
         )
@@ -204,15 +204,15 @@ class FastRCNNOutputs(object):
         self.pred_proposal_deltas = pred_proposal_deltas
 
         # cat(..., dim=0) concatenates over all images in the batch
-        self.proposals = Boxes.cat([p["proposal_boxes"] for p in proposals])
+        self.proposals = Boxes.cat([p.proposal_boxes for p in proposals])
         assert self.proposals.mode == "xyxy"
 
         # The following fields should exist only when training.
-        if proposals[0].has_field("gt_boxes"):
-            self.gt_boxes = Boxes.cat([p["gt_boxes"] for p in proposals])
+        if proposals[0].has("gt_boxes"):
+            self.gt_boxes = Boxes.cat([p.gt_boxes for p in proposals])
             assert self.gt_boxes.mode == "xyxy"
-        if proposals[0].has_field("gt_classes"):
-            self.gt_classes = cat([p["gt_classes"] for p in proposals], dim=0)
+            assert proposals[0].has("gt_classes")
+            self.gt_classes = cat([p.gt_classes for p in proposals], dim=0)
 
     def _log_accuracy(self):
         """

@@ -13,7 +13,7 @@ from pycocotools.cocoeval import COCOeval
 from tqdm import tqdm
 
 from maskrcnn_benchmark.data.datasets import COCOMeta
-from maskrcnn_benchmark.structures.bounding_box import Boxes
+from maskrcnn_benchmark.structures.bounding_box import Boxes, Instances
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 from maskrcnn_benchmark.utils.comm import all_gather, is_main_process, synchronize
 
@@ -38,16 +38,16 @@ def postprocess(result, original_width, original_height):
     scale = np.sqrt(
         result.image_size[1] * 1.0 / original_width * result.image_size[0] / original_height
     )
-    result.image_size = (original_height, original_width)
-    pred_boxes = result["pred_boxes"]
+    result = Instances((original_height, original_width), **result.get_fields())
+    pred_boxes = result.pred_boxes
     pred_boxes.tensor = pred_boxes.tensor / scale
     pred_boxes.clip(result.image_size)
     result = result[pred_boxes.nonempty()]
 
-    if result.has_field("pred_masks"):
+    if result.has("pred_masks"):
         pasted_masks = paste_masks_in_image(
-            result["pred_masks"],  # N, 1, M, M
-            result["pred_boxes"],
+            result.pred_masks,  # N, 1, M, M
+            result.pred_boxes,
             result.image_size,
             threshold=MASK_THRESHOLD,
             padding=1,
@@ -55,12 +55,12 @@ def postprocess(result, original_width, original_height):
         rles = [mask_util.encode(np.array(mask[:, :, None], order="F"))[0] for mask in pasted_masks]
         for rle in rles:
             rle["counts"] = rle["counts"].decode("utf-8")
-        result.add_field("pasted_mask_rle", rles)
+        result.pasted_mask_rle = rles
 
-    if result.has_field("pred_keypoints"):
-        keypoints = result.get_field("pred_keypoints")
+    if result.has("pred_keypoints"):
+        keypoints = result.pred_keypoints
         keypoints = keypoints.resize(result.image_size[::-1])  # TODO (w, h)
-        result.add_field("pred_keypoints", keypoints)
+        result.pred_keypoints = keypoints
 
     return result
 
@@ -151,20 +151,19 @@ def prepare_for_coco_evaluation(dataset_predictions):
         if num_instance == 0:
             continue
 
-        boxes = predictions["pred_boxes"].clone(mode="xywh").tensor.tolist()
-        scores = predictions.get_field("scores").tolist()
-        classes = predictions.get_field("pred_classes").tolist()
+        boxes = predictions.pred_boxes.clone(mode="xywh").tensor.tolist()
+        scores = predictions.scores.tolist()
+        classes = predictions.pred_classes.tolist()
 
-        has_mask = predictions.has_field("pred_masks")
+        has_mask = predictions.has("pred_masks")
         if has_mask:
-            rles = predictions.get_field("pasted_mask_rle")
+            rles = predictions.pasted_mask_rle
 
         mapped_classes = [COCOMeta().contiguous_id_to_json_id[i] for i in classes]
 
-        has_keypoints = predictions.has_field("pred_keypoints")
+        has_keypoints = predictions.has("pred_keypoints")
         if has_keypoints:
-            keypoints = predictions.get_field("pred_keypoints")
-            keypoints = keypoints.keypoints.flatten(1).tolist()
+            keypoints = predictions.pred_keypoints.keypoints.flatten(1).tolist()
 
         for k in range(num_instance):
             result = {
@@ -222,7 +221,7 @@ def evaluate_box_proposals(
 
         # sort predictions in descending order
         # TODO maybe remove this and make it explicit in the documentation
-        inds = predictions.get_field("objectness_logits").sort(descending=True)[1]
+        inds = predictions.objectness_logits.sort(descending=True)[1]
         predictions = predictions[inds]
 
         ann_ids = coco_dataset.coco_api.getAnnIds(imgIds=prediction_dict["image_id"])

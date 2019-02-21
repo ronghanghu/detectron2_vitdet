@@ -116,7 +116,7 @@ def find_top_rpn_proposals(
     # and not per batch, see: https://github.com/facebookresearch/Detectron/issues/459.
     if training:
         objectness_logits_pred = torch.cat(
-            [instances.get_field("objectness_logits") for instances in proposals], dim=0
+            [instances.objectness_logits for instances in proposals], dim=0
         )
         num_instances = [len(instances) for instances in proposals]
         topk = min(post_nms_topk, len(objectness_logits_pred))
@@ -128,7 +128,7 @@ def find_top_rpn_proposals(
             proposals[i] = proposals[i][inds_mask[i]]
     else:
         for i in range(num_images):
-            objectness_logits_pred = proposals[i].get_field("objectness_logits")
+            objectness_logits_pred = proposals[i].objectness_logits
             topk = min(post_nms_topk, len(objectness_logits_pred))
             _, inds_sorted = torch.topk(objectness_logits_pred, topk, dim=0, sorted=True)
             proposals[i] = proposals[i][inds_sorted]
@@ -155,7 +155,7 @@ def _find_top_rpn_proposals_single_feature_map(
 
     Returns:
         list[Instancess]: list of N Instances. Instances i stores post_nms_topk object
-            proposals for image i, with field "boxes" and "objectness_logits".
+            proposals for image i, with field "proposal_boxes" and "objectness_logits".
     """
     N, Hi_Wi_A = objectness_logits_pred.shape
     device = objectness_logits_pred.device
@@ -176,7 +176,7 @@ def _find_top_rpn_proposals_single_feature_map(
         objectness_logits_pred_i: top-k objectness_logits_pred_i of shape (topk, )
         image_size_i: image (height, width)
         """
-        boxes = Boxes(proposals_i, mode="xyxy")
+        boxes = Boxes(proposals_i)
 
         boxes.clip(image_size_i)
         keep = boxes.nonempty(
@@ -189,8 +189,8 @@ def _find_top_rpn_proposals_single_feature_map(
             keep = keep[:post_nms_topk]
 
         instances = Instances(image_size_i)
-        instances["proposal_boxes"] = boxes[keep]
-        instances["objectness_logits"] = scores[keep]
+        instances.proposal_boxes = boxes[keep]
+        instances.objectness_logits = scores[keep]
         result.append(instances)
     return result
 
