@@ -107,16 +107,17 @@ def compute_on_dataset(model, data_loader, aggregate_across_ranks=True):
                 prediction_dict["instances"] = output
                 dataset_predictions.append(prediction_dict)
 
-    # wait for all processes to complete before measuring the time
-    synchronize()
+    # Measure the time only for this worker (before the synchronization barrier)
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=total_time))
     # NOTE this format is parsed by grep
     logger.info(
         "Total inference time: {} ({} s / img per device, on {} devices)".format(
-            total_time_str, total_time * num_devices / len(data_loader), num_devices
+            total_time_str, total_time / len(data_loader), num_devices
         )
     )
+
+    synchronize()
 
     if aggregate_across_ranks:
         dataset_predictions = all_gather(dataset_predictions)
