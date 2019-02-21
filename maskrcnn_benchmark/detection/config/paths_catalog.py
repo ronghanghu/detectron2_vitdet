@@ -67,7 +67,9 @@ class ModelCatalog(object):
         "FAIR/20171220/X-101-32x8d": "ImageNetPretrained/20171220/X-101-32x8d.pkl",
     }
 
-    C2_DETECTRON_PATH_FORMAT = "{prefix}/{url}/output/train/{dataset}/generalized_rcnn/model_final.pkl"  # noqa B950
+    C2_DETECTRON_PATH_FORMAT = (
+        "{prefix}/{url}/output/train/{dataset}/generalized_rcnn/model_final.pkl"
+    )  # noqa B950
 
     C2_DATASET_COCO = "coco_2014_train%3Acoco_2014_valminusminival"
     C2_DATASET_COCO_KEYPOINTS = "keypoints_coco_2014_train%3Akeypoints_coco_2014_valminusminival"

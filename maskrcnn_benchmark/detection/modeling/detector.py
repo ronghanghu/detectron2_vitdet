@@ -42,7 +42,7 @@ class GeneralizedRCNN(nn.Module):
 
         For now, the data contains images, targets, and dataset_dict
         images: ImageList
-        targets: list[BoxList]
+        targets: list[Instances]
         dataset_dict: other information that's not useful in training
         """
 

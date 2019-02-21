@@ -13,7 +13,7 @@ def assign_boxes_to_levels(box_lists, min_level, max_level, canonical_box_size, 
     vector.
 
     Args:
-        box_lists (list[BoxList]): A list of N BoxLists, where N is the number of images
+        box_lists (list[Boxes]): A list of N Boxes, where N is the number of images
             in the batch.
         min_level (int): Smallest feature map level index. The input is considered index 0,
             the output of stage 1 is index 1, and so.
@@ -30,7 +30,7 @@ def assign_boxes_to_levels(box_lists, min_level, max_level, canonical_box_size, 
             `self.min_level + i`).
     """
     eps = sys.float_info.epsilon
-    box_sizes = torch.sqrt(cat([box_list.area() for box_list in box_lists]))
+    box_sizes = torch.sqrt(cat([boxes.area() for boxes in box_lists]))
     # Eqn.(1) in FPN paper
     level_assignments = torch.floor(
         canonical_level + torch.log2(box_sizes / canonical_box_size + eps)
@@ -45,7 +45,7 @@ def convert_boxes_to_pooler_format(box_lists):
     (see description under Returns).
 
     Args:
-        box_lists (list[BoxList]): A list of N BoxLists, where N is the number of images
+        box_lists (list[Boxes]): A list of N Boxes, where N is the number of images
             in the batch.
 
     Returns:
@@ -56,15 +56,14 @@ def convert_boxes_to_pooler_format(box_lists):
     """
     assert box_lists[0].mode == "xyxy", "The box_lists argument must be in xyxy format."
 
-    dtype = box_lists[0].bbox.dtype
-    device = box_lists[0].bbox.device
-
-    def fmt_box_list(box_list, batch_index):
-        repeated_index = torch.full((len(box_list), 1), batch_index, dtype=dtype, device=device)
-        return cat((repeated_index, box_list.bbox), dim=1)
+    def fmt_box_list(box_tensor, batch_index):
+        repeated_index = torch.full(
+            (len(box_tensor), 1), batch_index, dtype=box_tensor.dtype, device=box_tensor.device
+        )
+        return cat((repeated_index, box_tensor), dim=1)
 
     pooler_fmt_boxes = cat(
-        [fmt_box_list(box_list, i) for i, box_list in enumerate(box_lists)], dim=0
+        [fmt_box_list(box_list.tensor, i) for i, box_list in enumerate(box_lists)], dim=0
     )
 
     return pooler_fmt_boxes
@@ -127,7 +126,7 @@ class ROIPooler(nn.Module):
         Args:
             x (list[Tensor]): A list of feature maps with scales matching thosed used to
                 construct this module.
-            box_lists (list[BoxList]): A list of N BoxLists, where N is the number of images
+            box_lists (list[Boxes]): A list of N Boxes, where N is the number of images
                 in the batch.
 
         Returns:

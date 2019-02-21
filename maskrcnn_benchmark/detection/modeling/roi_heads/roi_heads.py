@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from torch.nn import functional as F
 
-from maskrcnn_benchmark.structures.bounding_box import BoxList
+from maskrcnn_benchmark.structures.bounding_box import Instances
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 from maskrcnn_benchmark.utils.events import get_event_storage
 from maskrcnn_benchmark.utils.registry import Registry
@@ -26,27 +26,27 @@ def build_roi_heads(cfg):
     return ROI_HEADS_REGISTRY.get(name)(cfg)
 
 
-def select_foreground_proposals(box_lists):
+def select_foreground_proposals(proposals):
     """
-    Given a list of N BoxLists (for N images), each containing a `classes_gt` field,
-    return a list of BoxLists that contain only boxes with `classes_gt > 0`.
+    Given a list of N Instances (for N images), each containing a `gt_classes` field,
+    return a list of Instances that contain only boxes with `gt_classes > 0`.
 
     Args:
-        box_lists (list[BoxList]): A list of N BoxLists, where N is the number of
+        proposals (list[Instances]): A list of N Instances, where N is the number of
             images in the batch.
     """
-    assert isinstance(box_lists, (list, tuple))
-    assert isinstance(box_lists[0], BoxList)
-    assert box_lists[0].has_field("classes_gt")
-    fg_box_lists = []
+    assert isinstance(proposals, (list, tuple))
+    assert isinstance(proposals[0], Instances)
+    assert proposals[0].has_field("gt_classes")
+    fg_proposals = []
     fg_selection_masks = []
-    for box_list_per_image in box_lists:
-        classes_gt = box_list_per_image.get_field("classes_gt")
-        fg_selection_mask = classes_gt > 0
+    for proposals_per_image in proposals:
+        gt_classes = proposals_per_image.get_field("gt_classes")
+        fg_selection_mask = gt_classes > 0
         fg_inds = fg_selection_mask.nonzero().squeeze(1)
-        fg_box_lists.append(box_list_per_image[fg_inds])
+        fg_proposals.append(proposals_per_image[fg_inds])
         fg_selection_masks.append(fg_selection_mask)
-    return fg_box_lists, fg_selection_masks
+    return fg_proposals, fg_selection_masks
 
 
 class ROIHeads(torch.nn.Module):
@@ -79,22 +79,16 @@ class ROIHeads(torch.nn.Module):
         larger than `self.positive_sample_fraction.
 
         Args:
-            proposals (list[BoxList]): length `N` (number of images) list of
-                `BoxList`s. The i-th `BoxList` contains object proposals for the
-                i-th input image
-            targets (list[BoxList]): length `N` (number of images) list of
-                `BoxList`s. The i-th `BoxList` contains the ground-truth boxes
-                for the i-th input image.
+            See :meth:`ROIHeads.forward`
 
         Returns:
-            list[BoxList]: length `N` list of `BoxList`s containing the proposals
-                sampled for training. Each `BoxList` has the following fields:
-                - classes_gt: labeling each box with a category ranging in [0, #class].
-                - boxes_gt: the ground-truth box that the proposal is assigned to
+            list[Instances]: length `N` list of `Instances`s containing the proposals
+                sampled for training. Each `Instances` has the following fields:
+                - proposal_boxes: the proposal boxes
+                - gt_boxes: the ground-truth box that the proposal is assigned to
                   (this is only meaningful if the proposal has a label > 0; if label = 0
                    then the ground-truth box is random)
-                - masks_gt: the ground-truth mask of the box that the proposal is
-                  assigned to.
+                Other fields such as "gt_classes", "gt_masks", that's included in `targets`.
         """
         proposals_with_gt = []
 
@@ -102,24 +96,26 @@ class ROIHeads(torch.nn.Module):
         num_bg_samples = []
         with torch.no_grad():
             for proposals_per_image, targets_per_image in zip(proposals, targets):
-                match_quality_matrix = boxlist_iou(targets_per_image, proposals_per_image)
+                match_quality_matrix = boxlist_iou(
+                    targets_per_image["gt_boxes"], proposals_per_image["proposal_boxes"]
+                )
                 matched_idxs = self.proposal_matcher(match_quality_matrix)
-                # Fast RCNN only need "classes_gt" field for selecting the targets
+                # Fast RCNN only need "gt_classes" field for selecting the targets
                 # Get the targets corresponding GT for each proposal
                 # Need to clamp the indices because matched_idxs can be < 0
                 matched_idxs_clamped = matched_idxs.clamp(min=0)
 
-                classes_gt = targets_per_image.get_field("classes_gt")[matched_idxs_clamped].to(
+                gt_classes = targets_per_image["gt_classes"][matched_idxs_clamped].to(
                     dtype=torch.int64
                 )
 
                 # Label background (below the low threshold)
-                classes_gt[matched_idxs == Matcher.BELOW_LOW_THRESHOLD] = 0
+                gt_classes[matched_idxs == Matcher.BELOW_LOW_THRESHOLD] = 0
                 # Label ignore proposals (between low and high thresholds)
-                classes_gt[matched_idxs == Matcher.BETWEEN_THRESHOLDS] = -1
+                gt_classes[matched_idxs == Matcher.BETWEEN_THRESHOLDS] = -1
 
                 sampled_fg_inds, sampled_bg_inds = subsample_labels(
-                    classes_gt, self.batch_size_per_image, self.positive_sample_fraction
+                    gt_classes, self.batch_size_per_image, self.positive_sample_fraction
                 )
 
                 num_fg_samples.append(sampled_fg_inds.numel())
@@ -128,23 +124,21 @@ class ROIHeads(torch.nn.Module):
                 sampled_inds = torch.cat([sampled_fg_inds, sampled_bg_inds], dim=0)
 
                 proposals_per_image = proposals_per_image[sampled_inds]
-                proposals_per_image.add_field("classes_gt", classes_gt[sampled_inds])
+                proposals_per_image.add_field("gt_classes", gt_classes[sampled_inds])
 
-                # Avoid indexing the BoxList targets_per_image directly, as in the
+                # Avoid indexing the Boxes targets_per_image directly, as in the
                 # commented-out row below. It is considerably slower.
                 # TODO: investigate and optimize this access pattern.
-                # boxes_gt = targets_per_image[matched_idxs_clamped[sampled_inds]].bbox  # slow!
-                boxes_gt = targets_per_image.bbox[matched_idxs_clamped[sampled_inds]]
-                proposals_per_image.add_field("boxes_gt", boxes_gt)
+                # gt_boxes = targets_per_image[matched_idxs_clamped[sampled_inds]].bbox  # slow!
+                gt_boxes = targets_per_image["gt_boxes"][matched_idxs_clamped[sampled_inds]]
+                proposals_per_image.add_field("gt_boxes", gt_boxes)
 
-                if targets_per_image.has_field("masks_gt"):
+                if targets_per_image.has_field("gt_masks"):
                     # See note above about not indexing the targets_per_image directly
-                    masks_gt = targets_per_image.get_field("masks_gt")[
-                        matched_idxs_clamped[sampled_inds]
-                    ]
-                    proposals_per_image.add_field("masks_gt", masks_gt)
+                    gt_masks = targets_per_image["gt_masks"][matched_idxs_clamped[sampled_inds]]
+                    proposals_per_image.add_field("gt_masks", gt_masks)
                 if targets_per_image.has_field("gt_keypoints"):
-                    gt_keypoints = targets_per_image.get_field("gt_keypoints")[
+                    gt_keypoints = targets_per_image["gt_keypoints"][
                         matched_idxs_clamped[sampled_inds]
                     ]
                     proposals_per_image.add_field("gt_keypoints", gt_keypoints)
@@ -165,15 +159,19 @@ class ROIHeads(torch.nn.Module):
                 map name to tensor. Axis 0 represents the number of images `N` in
                 the input data; axes 1-3 are channels, height, and width, which may
                 vary between feature maps (e.g., if a feature pyramid is used).
-            proposals (list[BoxList]): length `N` list of `BoxList`s. The i-th
-                `BoxList` contains object proposals for the i-th input image
-            targets (list[BoxList], optional): length `N` list of `BoxList`s. The i-th
-                `BoxList` contains the ground-truth boxes for the i-th input image.
-                Specify `targets` during training only.
+            proposals (list[Instances]): length `N` list of `Instances`s. The i-th
+                `Instances` contains object proposals for the i-th input image,
+                with fields "proposal_boxes" and "objectness_logits".
+            targets (list[Instances], optional): length `N` list of `Instances`s. The i-th
+                `Instances` contains the ground-truth per-instance annotations for the i-th input image.
+                Specify `targets` during training only. It may have the following fields:
+                - gt_boxes: the bounding box of each instance.
+                - gt_classes: the label for each instance with a category ranging in [0, #class].
+                - gt_masks: the ground-truth mask of the instance.
 
         Returns:
-            results (list[BoxList]): length `N` list of `BoxList`s containing the
-                detected objects. Returned during inference only; may be []
+            results (list[Instances]): length `N` list of `Instances`s containing the
+                detected instances. Returned during inference only; may be []
                 during training.
             losses (dict[str: Tensor]): mapping from a named loss to a tensor
                 storing the loss. Used during training only.
@@ -197,6 +195,7 @@ class Res5ROIHeads(ROIHeads):
         self.mask_side_len  = cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
         self.mask_on        = cfg.MODEL.MASK_ON
         # fmt: on
+        assert not cfg.MODEL.KEYPOINT_ON
 
         self.pooler = ROIPooler(
             output_size=pooler_resolution, scales=pooler_scales, sampling_ratio=sampling_ratio
@@ -212,8 +211,8 @@ class Res5ROIHeads(ROIHeads):
                 cfg, (out_channels, pooler_resolution, pooler_resolution)
             )
 
-    def _shared_roi_transform(self, features, proposals):
-        x = self.pooler(features, proposals)
+    def _shared_roi_transform(self, features, boxes):
+        x = self.pooler(features, boxes)
         return self.res5(x)
 
     def forward(self, features, proposals, targets=None):
@@ -223,14 +222,16 @@ class Res5ROIHeads(ROIHeads):
         features = [features[f] for f in self.in_features]
         if self.training:
             proposals = self.label_and_sample_proposals(proposals, targets)
+        del targets
 
-        box_features = self._shared_roi_transform(features, proposals)
+        proposal_boxes = [x["proposal_boxes"] for x in proposals]
+        box_features = self._shared_roi_transform(features, proposal_boxes)
         feature_pooled = F.avg_pool2d(box_features, 7)  # gap
-        class_logits_pred, proposal_deltas_pred = self.box_predictor(feature_pooled)
+        pred_class_logits, pred_proposal_deltas = self.box_predictor(feature_pooled)
         del feature_pooled
 
         outputs = FastRCNNOutputs(
-            self.box2box_transform, class_logits_pred, proposal_deltas_pred, proposals
+            self.box2box_transform, pred_class_logits, pred_proposal_deltas, proposals
         )
 
         if self.training:
@@ -248,19 +249,19 @@ class Res5ROIHeads(ROIHeads):
                 losses["loss_mask"] = mask_rcnn_loss(mask_logits, proposals, self.mask_side_len)
             return [], losses
         else:
-            box_lists_pred = fast_rcnn_inference(
+            pred_instances = fast_rcnn_inference(
                 outputs.predict_boxes(),
                 outputs.predict_probs(),
-                outputs.image_shapes,
+                [x.image_size for x in proposals],
                 self.test_score_thresh,
                 self.test_nms_thresh,
                 self.test_detections_per_img,
             )
             if self.mask_on:
-                x = self._shared_roi_transform(features, box_lists_pred)
+                x = self._shared_roi_transform(features, [x["pred_boxes"] for x in pred_instances])
                 mask_logits = self.mask_head(x)
-                mask_rcnn_inference(mask_logits, box_lists_pred)
-            return box_lists_pred, {}
+                mask_rcnn_inference(mask_logits, pred_instances)
+            return pred_instances, {}
 
 
 @ROI_HEADS_REGISTRY.register()
@@ -330,50 +331,55 @@ class StandardROIHeads(ROIHeads):
         features = [features[f] for f in self.in_features]
         if self.training:
             proposals = self.label_and_sample_proposals(proposals, targets)
+        del targets
 
-        box_features = self.box_pooler(features, proposals)
+        box_features = self.box_pooler(features, [x["proposal_boxes"] for x in proposals])
         box_features = self.box_head(box_features)
-        class_logits_pred, proposal_deltas_pred = self.box_predictor(box_features)
+        pred_class_logits, pred_proposal_deltas = self.box_predictor(box_features)
         del box_features
 
         outputs = FastRCNNOutputs(
-            self.box2box_transform, class_logits_pred, proposal_deltas_pred, proposals
+            self.box2box_transform, pred_class_logits, pred_proposal_deltas, proposals
         )
 
         if self.training:
             losses = outputs.losses()
             if self.mask_on or self.keypoint_on:
                 proposals, _ = select_foreground_proposals(proposals)
+            proposal_boxes = [x["proposal_boxes"] for x in proposals]
             # During training the same proposals used by the box head are used by
             # the mask and keypoint heads. The loss is only defined on positive proposals.
             if self.mask_on:
-                mask_features = self.mask_pooler(features, proposals)
+                mask_features = self.mask_pooler(features, proposal_boxes)
                 mask_logits = self.mask_head(mask_features)
                 losses["loss_mask"] = mask_rcnn_loss(mask_logits, proposals, self.mask_side_len)
             if self.keypoint_on:
-                keypoint_features = self.keypoint_pooler(features, proposals)
+                keypoint_features = self.keypoint_pooler(features, proposal_boxes)
                 keypoint_logits = self.keypoint_head(keypoint_features)
                 losses["loss_keypoint"] = keypoint_rcnn_loss(
                     keypoint_logits, proposals, self.keypoint_side_len
                 )
             return [], losses
         else:
-            box_lists_pred = fast_rcnn_inference(
+            pred_instances = fast_rcnn_inference(
                 outputs.predict_boxes(),
                 outputs.predict_probs(),
-                outputs.image_shapes,
+                [x.image_size for x in proposals],
                 self.test_score_thresh,
                 self.test_nms_thresh,
                 self.test_detections_per_img,
             )
             # During inference cascaded prediction is used: the mask and keypoints heads are only
             # applied to the top scoring box detections.
+            pred_boxes = [x["pred_boxes"] for x in pred_instances]
             if self.mask_on:
-                mask_features = self.mask_pooler(features, box_lists_pred)
+                # During inference cascaded prediction is used: the mask head is only
+                # applied to the top scoring box detections.
+                mask_features = self.mask_pooler(features, pred_boxes)
                 mask_logits = self.mask_head(mask_features)
-                mask_rcnn_inference(mask_logits, box_lists_pred)
+                mask_rcnn_inference(mask_logits, pred_instances)
             if self.keypoint_on:
-                keypoint_features = self.keypoint_pooler(features, box_lists_pred)
+                keypoint_features = self.keypoint_pooler(features, pred_boxes)
                 keypoint_logits = self.keypoint_head(keypoint_features)
-                keypoint_rcnn_inference(keypoint_logits, box_lists_pred)
-            return box_lists_pred, {}
+                keypoint_rcnn_inference(keypoint_logits, pred_instances)
+            return pred_instances, {}

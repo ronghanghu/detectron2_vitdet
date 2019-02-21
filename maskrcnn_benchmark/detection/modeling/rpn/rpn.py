@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from maskrcnn_benchmark.structures.boxlist_ops import cat_boxlist
+from maskrcnn_benchmark.structures.bounding_box import Instances
 
 from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher
@@ -13,39 +13,40 @@ from .rpn_outputs import RPNOutputs, find_top_rpn_proposals
 
 # In the future when we have more proposal mechanisms (including precomputed)
 # this function should move into a shared module.
-def add_ground_truth_to_proposals(gt_box_list, proposals):
+def add_ground_truth_to_proposals(gt_boxes, proposals):
     """
-    Augment `proposals` with ground-truth boxes from `gt_box_list`.
+    Augment `proposals` with ground-truth boxes from `gt_boxes`.
 
     Args:
-        gt_box_list (list[BoxList]): list of N elements. Element i is a BoxList
+        gt_boxes(list[Boxes]): list of N elements. Element i is a Boxes
             representing the gound-truth for image i.
-        proposals (list[BoxList]): list of N elements. Element i is a BoxList
-            representing the proposals for image i, as returned by :meth:`proposals`.
+        proposals (list[Instances]): list of N elements. Element i is a Instances
+            representing the proposals for image i.
 
     Returns:
-        list[BoxList]: list of N BoxLists.
+        list[Instances]: list of N Instances. Each is the proposals for the image,
+            with field "proposal_boxes" and "objectness_logits".
     """
-    if gt_box_list is None:
+    assert gt_boxes is not None
+
+    assert len(proposals) == len(gt_boxes)
+    if len(proposals) == 0:
         return proposals
 
-    assert len(proposals) == len(gt_box_list)
-    device = proposals[0].bbox.device
-    gt_box_list = [gt_box_list_i.view_with_fields([]) for gt_box_list_i in gt_box_list]
-    # Concating gt_box_list with proposals requires them to have the same fields
+    device = proposals[0].get_field("objectness_logits").device
+    # Concating gt_boxes with proposals requires them to have the same fields
     # Assign all ground-truth boxes an objectness logit corresponding to P(object) \approx 1.
-    gt_obj_logit = math.log((1.0 - 1e-10) / (1 - (1.0 - 1e-10)))
-    for gt_box_list_i in gt_box_list:
-        gt_box_list_i.add_field(
-            "objectness_logits", gt_obj_logit * torch.ones(len(gt_box_list_i), device=device)
-        )
+    gt_logit_value = math.log((1.0 - 1e-10) / (1 - (1.0 - 1e-10)))
 
-    proposals = [
-        cat_boxlist((proposals_i, gt_box_list_i))
-        for proposals_i, gt_box_list_i in zip(proposals, gt_box_list)
-    ]
+    new_proposals = []
+    for proposal, gt_boxes_i in zip(proposals, gt_boxes):
+        gt_logits_i = gt_logit_value * torch.ones(len(gt_boxes_i), device=device)
+        gt_proposal = Instances(proposal.image_size)
 
-    return proposals
+        gt_proposal["proposal_boxes"] = gt_boxes_i
+        gt_proposal["objectness_logits"] = gt_logits_i
+        new_proposals.append(Instances.cat([proposal, gt_proposal]))
+    return new_proposals
 
 
 class RPNHead(nn.Module):
@@ -114,6 +115,7 @@ class RPN(nn.Module):
             True: cfg.MODEL.RPN.POST_NMS_TOPK_TRAIN,
             False: cfg.MODEL.RPN.POST_NMS_TOPK_TEST,
         }
+        self.boundary_threshold = cfg.MODEL.RPN.BOUNDARY_THRESH
 
         self.anchor_generator = build_anchor_generator(cfg)
         self.box2box_transform = Box2BoxTransform(weights=(1.0, 1.0, 1.0, 1.0))
@@ -143,7 +145,7 @@ class RPN(nn.Module):
 
         return RPNHead(in_channels[0], num_cell_anchors[0])
 
-    def forward(self, images, features, gt_box_list=None):
+    def forward(self, images, features, gt_instances=None):
         """
         Args:
             images (ImageList): input images of length `N`
@@ -151,9 +153,11 @@ class RPN(nn.Module):
                 map name to tensor. Axis 0 represents the number of images `N` in
                 the input data; axes 1-3 are channels, height, and width, which may
                 vary between feature maps (e.g., if a feature pyramid is used).
-            gt_box_list (list[BoxList, optional): length `N` list of `BoxList`s. Each
-                `BoxList` stores ground-truth boxes for the corresponding image.
+            gt_instances (list[Instances], optional): a length `N` list of `Instances`s. Each
+                `Instances` stores ground-truth instances for the corresponding image.
         """
+        gt_boxes = [x["gt_boxes"] for x in gt_instances] if gt_instances is not None else None
+        del gt_instances
         features = [features[f] for f in self.in_features]
         objectness_logits_pred, anchor_deltas_pred = self.head(features)
         anchors = self.anchor_generator(images, features)
@@ -168,7 +172,8 @@ class RPN(nn.Module):
             objectness_logits_pred,
             anchor_deltas_pred,
             anchors,
-            gt_box_list,
+            self.boundary_threshold,
+            gt_boxes,
         )
 
         if self.training:
@@ -210,7 +215,7 @@ class RPN(nn.Module):
                 # examples from the start of training. This augmentation improves
                 # convergence and empirically improves box AP on COCO by about 0.5
                 # points (under one tested configuration).
-                proposals = add_ground_truth_to_proposals(gt_box_list, proposals)
+                proposals = add_ground_truth_to_proposals(gt_boxes, proposals)
 
             if self.rpn_only:
                 # We must be in testing mode (self.training and self.rpn_only returns early)
@@ -220,9 +225,9 @@ class RPN(nn.Module):
                 # models, the proposals are the final output and we return them in
                 # high-to-low confidence order.
                 inds = [
-                    box.get_field("objectness_logits").sort(descending=True)[1] for box in proposals
+                    p.get_field("objectness_logits").sort(descending=True)[1] for p in proposals
                 ]
-                proposals = [box[ind] for box, ind in zip(proposals, inds)]
+                proposals = [p[ind] for p, ind in zip(proposals, inds)]
 
         return proposals, losses
 

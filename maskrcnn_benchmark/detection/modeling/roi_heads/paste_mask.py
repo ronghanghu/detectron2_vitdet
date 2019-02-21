@@ -8,18 +8,19 @@ from PIL import Image
 _TO_REMOVE = 1  # See https://github.com/fairinternal/detectron2/issues/49
 
 
-def paste_masks_in_image(masks, box_list, threshold=0.5, padding=1):
+def paste_masks_in_image(masks, boxes, image_shape, threshold=0.5, padding=1):
     """
     Paste a set of masks that are of a fixed resolution (e.g., 28 x 28) into an image.
     The location, height, and width for pasting each mask is determined by their
-    corresponding bounding boxes in box_list.
+    corresponding bounding boxes in boxes.
 
     Args:
         masks (tensor): Tensor of shape (Bimg, 1, Hmask, Wmask), where Bimg is the number of
             detected object instances in the image and Hmask, Wmask are the mask width and mask
             height of the predicted mask (e.g., Hmask = Wmask = 28). Values are in [0, 1].
-        box_list (BoxList): A BoxList of length Bimg. box_list.bbox[i] and masks[i] correspond
+        boxes (Boxes): A Boxes of length Bimg. boxes.tensor[i] and masks[i] correspond
             to the same object instance.
+        image_shape (tuple): height, width
         threshold (float): A threshold in [0, 1] for converting the (soft) masks to
             binary masks.
         padding (int): Amount of padding to apply to the masks before pasting them. Padding
@@ -34,11 +35,11 @@ def paste_masks_in_image(masks, box_list, threshold=0.5, padding=1):
     """
     assert masks.shape[-1] == masks.shape[-2], "Only square mask predictions are supported"
 
-    box_list = box_list.convert("xyxy")
-    img_w, img_h = box_list.size
+    assert boxes.mode == "xyxy"
+    img_h, img_w = image_shape
 
     masks, scale = pad_masks(masks, padding)
-    scaled_boxes = scale_boxes(box_list.bbox, scale)
+    scaled_boxes = scale_boxes(boxes.tensor, scale)
 
     img_masks = [
         paste_mask_in_image(mask[0], box, img_h, img_w, threshold)

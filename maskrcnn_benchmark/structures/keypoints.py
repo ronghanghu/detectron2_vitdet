@@ -3,14 +3,14 @@ import cv2
 import torch
 
 
-# from PIL import Image
+# from PIL import Image  # TODO investigate how to avoid opencv dependency
 
 
 class Keypoints:
     """
     Stores the keypoints for all objects in one image. Instances have a `keypoints` property that
-        contains the x, y and visibility of each keypoint as a tensor of shape  (N, M, 3) where N
-        is the number of keypoints per RoI, and M is the number of RoIs.
+        contains the x, y and visibility of each keypoint as a tensor of shape  (N, M, 3) where
+        N is the number of instances, and M is the number of keypoints per instance.
 
     The visiblity of each keypoint may be one of three integers:
         0 - not visible
@@ -22,19 +22,17 @@ class Keypoints:
         """
         Arguments:
             keypoints: A Tensor, numpy array, or list of the x, y, and visibility of each keypoint.
-                The shape should be (N, M, 3) where N is the number of keypoints per roi, and M is
-                the number of rois.
+                The shape should be (N, M, 3) where N is the number of
+                instances, and M is the number of keypoints per instance.
             size: a 2-tuple of the width and height of the image these keypoints are from.
         """
-        # TODO device support
         device = keypoints.device if isinstance(keypoints, torch.Tensor) else torch.device("cpu")
         keypoints = torch.as_tensor(keypoints, dtype=torch.float32, device=device)
-        num_keypoints = keypoints.shape[0]
-        # TODO remove once support or zero in dim is in
-        if num_keypoints > 0:
-            keypoints = keypoints.view(num_keypoints, -1, 3)
         self.keypoints = keypoints
         self.size = size
+
+    def __len__(self):
+        return self.keypoints.size(0)
 
     def to(self, *args, **kwargs):
         return type(self)(self.keypoints.to(*args, **kwargs), self.size)
@@ -53,8 +51,15 @@ class Keypoints:
         resized_data[..., 1] *= ratio_h
         return type(self)(resized_data, target_size)
 
-    def to_heatmap(self, rois, heatmap_size):
-        return keypoints_to_heatmap(self.keypoints, rois.convert("xyxy").bbox, heatmap_size)
+    def to_heatmap(self, boxes, heatmap_size):
+        """
+        Args:
+            boxes: Nx4 tensor, the boxes to draw the keypoints to
+
+        Returns:
+            a N x heatmap_size x heatmap_size heatmap.
+        """
+        return keypoints_to_heatmap(self.keypoints, boxes, heatmap_size)
 
     def __getitem__(self, item):
         return type(self)(self.keypoints[item], self.size)

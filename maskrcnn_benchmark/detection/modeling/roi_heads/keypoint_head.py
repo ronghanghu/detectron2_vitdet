@@ -11,15 +11,15 @@ from maskrcnn_benchmark.utils.events import get_event_storage
 _TOTAL_SKIPPED = 0
 
 
-def keypoint_rcnn_loss(keypoint_logits_pred, box_lists_pred, keypoint_side_len):
+def keypoint_rcnn_loss(pred_keypoint_logits, instances, keypoint_side_len):
     """
     Arguments:
-        keypoint_logits_pred (Tensor): A tensor of shape (B, N, S, S) where B is the batch size,
+        pred_keypoint_logits (Tensor): A tensor of shape (B, N, S, S) where B is the batch size,
             N is the number of keypoints, and S is the side length of the keypoint heatmap. The
             values are spatial logits.
-        proposals (list[BoxList]): A list of N BoxLists, where N is the batch size. These boxes
-            are predictions from the model that are in 1:1 correspondence with keypoint_logits_pred.
-            Each BoxList should contain a `gt_keypoints` field containing a `structures.Keypoint`
+        instances (list[Instances]): A list of N Instances, where N is the batch size. These instances
+            are predictions from the model that are in 1:1 correspondence with pred_keypoint_logits.
+            Each Instances should contain a `gt_keypoints` field containing a `structures.Keypoint`
             instance.
         keypoint_side_len (int): Specifies the side length of the square keypoint heatmaps.
 
@@ -28,10 +28,10 @@ def keypoint_rcnn_loss(keypoint_logits_pred, box_lists_pred, keypoint_side_len):
     heatmaps = []
     valid = []
 
-    for proposals_per_image in box_lists_pred:
-        keypoints = proposals_per_image.get_field("gt_keypoints")
+    for instances_per_image in instances:
+        keypoints = instances_per_image.get_field("gt_keypoints")
         heatmaps_per_image, valid_per_image = keypoints.to_heatmap(
-            proposals_per_image, keypoint_side_len
+            instances_per_image["proposal_boxes"].tensor, keypoint_side_len
         )
         heatmaps.append(heatmaps_per_image.view(-1))
         valid.append(valid_per_image.view(-1))
@@ -47,47 +47,54 @@ def keypoint_rcnn_loss(keypoint_logits_pred, box_lists_pred, keypoint_side_len):
         _TOTAL_SKIPPED += 1
         storage = get_event_storage()
         storage.put_scalar("kpts_num_skipped_batches", _TOTAL_SKIPPED, smoothing_hint=False)
-        return keypoint_logits_pred.sum() * 0
+        return pred_keypoint_logits.sum() * 0
 
-    N, K, H, W = keypoint_logits_pred.shape
-    keypoint_logits_pred = keypoint_logits_pred.view(N * K, H * W)
+    N, K, H, W = pred_keypoint_logits.shape
+    pred_keypoint_logits = pred_keypoint_logits.view(N * K, H * W)
 
     keypoint_loss = F.cross_entropy(
-        keypoint_logits_pred[valid], keypoint_targets[valid], reduction="mean"
+        pred_keypoint_logits[valid], keypoint_targets[valid], reduction="mean"
     )
     return keypoint_loss
 
 
-def keypoint_rcnn_inference(keypoint_logits_pred, box_lists_pred):
+def keypoint_rcnn_inference(pred_keypoint_logits, pred_instances):
     """
-    Post process each predicted keypoint heatmap in `keypoint_logits_pred` into (x, y, score, prob)
-        and add it to the boxlist as a `pred_keypoints` field.
+    Post process each predicted keypoint heatmap in `pred_keypoint_logits` into (x, y, score, prob)
+        and add it to the `pred_instances` as a `pred_keypoints` field.
 
     Args:
-        keypoint_logits_pred (Tensor): A tensor of shape (B, N, S, S) where B is the batch size,
+        pred_keypoint_logits (Tensor): A tensor of shape (B, N, S, S) where B is the batch size,
             N is the number of keypoints, and S is the side length of the keypoint heatmap. The
             values are spatial logits.
-        box_lists_pred (list[BoxList]): A list of N BoxLists, where N is the batch size.
+        pred_instances (list[Instances]): A list of N Instances, where N is the batch size.
 
     Returns:
         None. boxes will contain an extra "keypoints" field.
     """
-    # flatten all bboxes from all images together (list[BoxList] -> Nx4 tensor)
-    bboxes_flat = cat([b.bbox for b in box_lists_pred], dim=0)
+    # flatten all bboxes from all images together (list[Boxes] -> Nx4 tensor)
+    bboxes_flat = cat([b["pred_boxes"].tensor for b in pred_instances], dim=0)
 
     keypoint_results = heatmaps_to_keypoints(
-        keypoint_logits_pred.detach().cpu().numpy(), bboxes_flat.cpu().numpy()
+        pred_keypoint_logits.detach().cpu().numpy(), bboxes_flat.cpu().numpy()
     )
-    keypoint_results = torch.from_numpy(keypoint_results).to(keypoint_logits_pred.device)
-    boxes_per_image = [len(box) for box in box_lists_pred]
-    keypoint_results = keypoint_results.split(boxes_per_image, dim=0)
+    keypoint_results = torch.from_numpy(keypoint_results).to(pred_keypoint_logits.device)
+    num_instances_per_image = [len(i) for i in pred_instances]
+    keypoint_results = keypoint_results.split(num_instances_per_image, dim=0)
 
-    for keypoint_result, box in zip(keypoint_results, box_lists_pred):
-        # keypoint_result is (num boxes)x(num keypoints)x(x, y, prob, score)
-        vis = torch.ones(len(box), keypoint_result.size(1), 1, device=keypoint_result.device)
-        keypoint_xy = keypoint_result[:, :, :2]
+    for keypoint_results_per_image, instances_per_image in zip(keypoint_results, pred_instances):
+        # keypoint_results_per_image is (num instances)x(num keypoints)x(x, y, prob, score)
+        vis = torch.ones(
+            len(instances_per_image),
+            keypoint_results_per_image.size(1),
+            1,
+            device=keypoint_results_per_image.device,
+        )
+        keypoint_xy = keypoint_results_per_image[:, :, :2]
         keypoint_xyv = cat((keypoint_xy, vis), dim=2)
-        box.add_field("pred_keypoints", Keypoints(keypoint_xyv, box.size))
+        instances_per_image.add_field(
+            "pred_keypoints", Keypoints(keypoint_xyv, instances_per_image.image_size[::-1])
+        )
 
 
 class KRCNNConvDeconvUpsampleHead(nn.Module):

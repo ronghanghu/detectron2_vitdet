@@ -16,7 +16,7 @@ class ImageList(object):
         """
         Arguments:
             tensors (tensor)
-            image_sizes (list[tuple[int, int]]): h, w. This is inconsistent with BoxList
+            image_sizes (list[tuple[int, int]]): Each tuple is (h, w).
         """
         self.tensors = tensors
         self.image_sizes = image_sizes

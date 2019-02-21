@@ -1,8 +1,9 @@
+import copy
 import numpy as np
 import torch
 from torch import nn
 
-from maskrcnn_benchmark.structures.bounding_box import BoxList
+from maskrcnn_benchmark.structures.bounding_box import Boxes
 
 
 class BufferList(nn.Module):
@@ -33,7 +34,7 @@ class AnchorGenerator(nn.Module):
     For a set of image sizes and feature maps, computes a set of anchors.
     """
 
-    def __init__(self, feature_strides, sizes, aspect_ratios, boundary_thresh=0):
+    def __init__(self, feature_strides, sizes, aspect_ratios):
         """
         Args:
             feature_strides (list[number]): list of feature map strides (with respect
@@ -47,9 +48,6 @@ class AnchorGenerator(nn.Module):
                 anchor aspect ratios to use for the i-th feature map. If
                 len(aspect_ratios) == 1, then the same list of anchor aspect ratios,
                 given by aspect_ratios[0], is used for all feature maps.
-            boundary_thresh (int): if >= 0, then anchors that extend beyond the image
-                boundary by more than boundary_thresh are not used. Set to a very large
-                number or < 0 to disable this behavior.
         """
         super(AnchorGenerator, self).__init__()
 
@@ -70,7 +68,6 @@ class AnchorGenerator(nn.Module):
         ]
         self.strides = feature_strides
         self.cell_anchors = BufferList(cell_anchors)
-        self.boundary_thresh = boundary_thresh
 
     @property
     def num_cell_anchors(self):
@@ -96,32 +93,21 @@ class AnchorGenerator(nn.Module):
 
         return anchors
 
-    def add_visibility_to(self, boxlist):
-        image_width, image_height = boxlist.size
-        anchors = boxlist.bbox
-        if self.boundary_thresh >= 0:
-            inds_inside = (
-                (anchors[..., 0] >= -self.boundary_thresh)
-                & (anchors[..., 1] >= -self.boundary_thresh)
-                & (anchors[..., 2] < image_width + self.boundary_thresh)
-                & (anchors[..., 3] < image_height + self.boundary_thresh)
-            )
-        else:
-            device = anchors.device
-            inds_inside = torch.ones(anchors.shape[0], dtype=torch.uint8, device=device)
-        boxlist.add_field("visibility", inds_inside)
-
     def forward(self, image_list, feature_maps):
+        """
+        Returns:
+            list[list[Boxes]]: a list of #image elements. Each is a list of #feature level Boxes.
+                The Boxes contains anchors of this image on the specific feature level.
+        """
         grid_sizes = [feature_map.shape[-2:] for feature_map in feature_maps]
         anchors_over_all_feature_maps = self.grid_anchors(grid_sizes)
-        anchors = []
-        for image_height, image_width in image_list.image_sizes:
-            anchors_in_image = []
-            for anchors_per_feature_map in anchors_over_all_feature_maps:
-                boxlist = BoxList(anchors_per_feature_map, (image_width, image_height), mode="xyxy")
-                self.add_visibility_to(boxlist)
-                anchors_in_image.append(boxlist)
-            anchors.append(anchors_in_image)
+
+        anchors_in_image = []
+        for anchors_per_feature_map in anchors_over_all_feature_maps:
+            boxes = Boxes(anchors_per_feature_map)
+            anchors_in_image.append(boxes)
+
+        anchors = [copy.deepcopy(anchors_in_image) for _ in range(len(image_list))]
         return anchors
 
 
@@ -130,8 +116,7 @@ def build_anchor_generator(cfg):
     aspect_ratios = cfg.MODEL.RPN.ANCHOR_ASPECT_RATIOS
     feature_strides = dict(cfg.MODEL.BACKBONE.OUT_FEATURE_STRIDES)
     feature_strides = [feature_strides[f] for f in cfg.MODEL.RPN.IN_FEATURES]
-    boundary_thresh = cfg.MODEL.RPN.BOUNDARY_THRESH
-    anchor_generator = AnchorGenerator(feature_strides, sizes, aspect_ratios, boundary_thresh)
+    anchor_generator = AnchorGenerator(feature_strides, sizes, aspect_ratios)
     return anchor_generator
 
 

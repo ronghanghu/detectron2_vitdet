@@ -1,74 +1,74 @@
 import torch
 
+from maskrcnn_benchmark.layers import cat
 
-class BoxList(object):
+
+# TODO(yuxinwu) reorganize the files
+
+
+class Boxes:
     """
-    This class represents a set of bounding boxes.
-    The bounding boxes are represented as a Nx4 Tensor.
-    In order to uniquely determine the bounding boxes with respect
-    to an image, we also store the corresponding image dimensions.
-    They can contain extra information that is specific to each bounding box, such as
-    labels.
+    This structure stores a list of boxes as a Nx4 torch.Tensor.
+    It supports some common methods about boxes
+    (`area`, `clip`, `nonempty`, etc),
+    and also behaves like a Tensor
+    (support indexing, `to(device)`, `.device`, and iteration over all boxes)
     """
 
-    def __init__(self, bbox, image_size, mode="xyxy"):
-        device = bbox.device if isinstance(bbox, torch.Tensor) else torch.device("cpu")
-        bbox = torch.as_tensor(bbox, dtype=torch.float32, device=device)
-        if bbox.ndimension() != 2:
-            raise ValueError("bbox should have 2 dimensions, got {}".format(bbox.ndimension()))
-        if bbox.size(-1) != 4:
-            raise ValueError(
-                "last dimenion of bbox should have a " "size of 4, got {}".format(bbox.size(-1))
-            )
-        if mode not in ("xyxy", "xywh"):
-            raise ValueError("mode should be 'xyxy' or 'xywh'")
+    def __init__(self, tensor, mode: str = "xyxy"):
+        """
+        Args:
+            tensor (Tensor[float]): a Nx4 matrix.
+                Each row is either (x1, y1, x2, y2), or (x1, y1, w, h) (see `mode`).
+            mode (str): either "xyxy" or "xywh". The meaning of each row in tensor.
+        """
+        device = tensor.device if isinstance(tensor, torch.Tensor) else torch.device("cpu")
+        tensor = torch.as_tensor(tensor, dtype=torch.float32, device=device)
+        assert tensor.dim() == 2 and tensor.size(-1) == 4, tensor.size()
+        assert mode in ("xyxy", "xywh"), "mode should be 'xyxy' or 'xywh'! Got {}".format(mode)
 
-        self.bbox = bbox
-        self.size = image_size  # (image_width, image_height)
+        self.tensor = tensor
         self.mode = mode
-        self.extra_fields = {}
 
-    def add_field(self, field, field_data):
-        self.extra_fields[field] = field_data
+    def clone(self, mode=None):
+        """
+        Clone the Boxes (and optionally convert to a different mode)
 
-    def get_field(self, field):
-        return self.extra_fields[field]
+        Args:
+            mode (str or None): either "xyxy" or "xywh". If not None, will convert the mode of the Boxes.
 
-    def has_field(self, field):
-        return field in self.extra_fields
-
-    def fields(self):
-        return list(self.extra_fields.keys())
-
-    def _copy_extra_fields(self, bbox):
-        for k, v in bbox.extra_fields.items():
-            self.extra_fields[k] = v
-
-    def convert(self, mode):
-        if mode not in ("xyxy", "xywh"):
-            raise ValueError("mode should be 'xyxy' or 'xywh'")
+        Returns:
+            Boxes
+        """
+        if mode is None:
+            mode = self.mode
+        assert mode in ("xyxy", "xywh"), "mode should be 'xyxy' or 'xywh'! Got {}".format(mode)
         if mode == self.mode:
-            return self
-        # we only have two modes, so don't need to check
-        # self.mode
+            return Boxes(self.tensor.clone(), self.mode)
+        # we only have two modes, so no need to check self.mode
         xmin, ymin, xmax, ymax = self._split_into_xyxy()
         if mode == "xyxy":
-            bbox = torch.cat((xmin, ymin, xmax, ymax), dim=-1)
-            bbox = BoxList(bbox, self.size, mode=mode)
+            tensor = torch.cat((xmin, ymin, xmax, ymax), dim=-1)
+            boxes = Boxes(tensor, mode=mode)
         else:
             TO_REMOVE = 1
-            bbox = torch.cat((xmin, ymin, xmax - xmin + TO_REMOVE, ymax - ymin + TO_REMOVE), dim=-1)
-            bbox = BoxList(bbox, self.size, mode=mode)
-        bbox._copy_extra_fields(self)
-        return bbox
+            tensor = torch.cat(
+                (xmin, ymin, xmax - xmin + TO_REMOVE, ymax - ymin + TO_REMOVE), dim=-1
+            )
+            boxes = Boxes(tensor, mode=mode)
+        return boxes
 
     def _split_into_xyxy(self):
+        """"
+        Returns:
+            4 vectors: x1, y1, x2, y2
+        """
         if self.mode == "xyxy":
-            xmin, ymin, xmax, ymax = self.bbox.split(1, dim=-1)
+            xmin, ymin, xmax, ymax = self.tensor.split(1, dim=-1)
             return xmin, ymin, xmax, ymax
         elif self.mode == "xywh":
             TO_REMOVE = 1
-            xmin, ymin, w, h = self.bbox.split(1, dim=-1)
+            xmin, ymin, w, h = self.tensor.split(1, dim=-1)
             return (
                 xmin,
                 ymin,
@@ -78,39 +78,17 @@ class BoxList(object):
         else:
             raise RuntimeError("Should not be here")
 
-    # Tensor-like methods
-
     def to(self, device):
-        bbox = BoxList(self.bbox.to(device), self.size, self.mode)
-        for k, v in self.extra_fields.items():
-            if hasattr(v, "to"):
-                v = v.to(device)
-            bbox.add_field(k, v)
-        return bbox
-
-    def __getitem__(self, item):
-        bbox = BoxList(self.bbox[item], self.size, self.mode)
-        for k, v in self.extra_fields.items():
-            bbox.add_field(k, v[item])
-        return bbox
-
-    def __len__(self):
-        return self.bbox.shape[0]
-
-    def clip_to_image(self, remove_empty=True):
-        TO_REMOVE = 1
-        self.bbox[:, 0].clamp_(min=0, max=self.size[0] - TO_REMOVE)
-        self.bbox[:, 1].clamp_(min=0, max=self.size[1] - TO_REMOVE)
-        self.bbox[:, 2].clamp_(min=0, max=self.size[0] - TO_REMOVE)
-        self.bbox[:, 3].clamp_(min=0, max=self.size[1] - TO_REMOVE)
-        if remove_empty:
-            box = self.bbox
-            keep = (box[:, 3] > box[:, 1]) & (box[:, 2] > box[:, 0])
-            return self[keep]
-        return self
+        return Boxes(self.tensor.to(device), self.mode)
 
     def area(self):
-        box = self.bbox
+        """
+        Computes the area of all the boxes.
+
+        Returns:
+            torch.Tensor: a vector with areas of each box.
+        """
+        box = self.tensor
         if self.mode == "xyxy":
             TO_REMOVE = 1
             area = (box[:, 2] - box[:, 0] + TO_REMOVE) * (box[:, 3] - box[:, 1] + TO_REMOVE)
@@ -118,32 +96,207 @@ class BoxList(object):
             area = box[:, 2] * box[:, 3]
         else:
             raise RuntimeError("Should not be here")
-
         return area
 
-    def view_with_fields(self, fields):
-        bbox = BoxList(self.bbox, self.size, self.mode)
-        if not isinstance(fields, (list, tuple)):
-            fields = [fields]
-        for field in fields:
-            bbox.add_field(field, self.get_field(field))
-        return bbox
+    def clip(self, image_size):
+        """
+        Clip (in place) the boxes to the shape of the image.
 
-    def __repr__(self):
+        Args:
+            image_size (h, w)
+        """
+        assert self.mode == "xyxy"
+        h, w = image_size
+        TO_REMOVE = 1
+        self.tensor[:, 0].clamp_(min=0, max=w - TO_REMOVE)
+        self.tensor[:, 1].clamp_(min=0, max=h - TO_REMOVE)
+        self.tensor[:, 2].clamp_(min=0, max=w - TO_REMOVE)
+        self.tensor[:, 3].clamp_(min=0, max=h - TO_REMOVE)
+
+    def nonempty(self, threshold=0):
+        """
+        Find boxes that are non-empty.
+        A box is considered empty, if either of its side is no larger than threshold.
+
+        Returns:
+            Tensor: a binary vector which represents whether each box is empty (False) or non-empty (True).
+        """
+        assert self.mode == "xyxy"
+        box = self.tensor
+        widths = box[:, 2] - box[:, 0]
+        heights = box[:, 3] - box[:, 1]
+        keep = (widths > threshold) & (heights > threshold)
+        return keep
+
+    def __getitem__(self, item):
+        """
+        Create a new Boxes by indexing on this Boxes.
+
+        It returns `Boxes(self.tensor[item], self.mode)`.
+
+        Note that the returned Boxes might share storage with this Boxes, subject to Pytorch's indexing semantics.
+        """
+        b = self.tensor[item]
+        if b.dim() == 1:
+            b = b.view(1, -1)
+        assert b.dim() == 2, "Indexing on Boxes with {} failed to return a matrix!".format(item)
+        return Boxes(b, self.mode)
+
+    def __len__(self):
+        return self.tensor.shape[0]
+
+    def inside_image(self, image_size, boundary_threshold=0):
+        """
+        Args:
+            image_size (h, w):
+            boundary_threshold (int): Boxes that extend beyond the image
+                boundary by more than boundary_threshold are considered "outside".
+                Can be set to negative value to determine more boxes to be "outside".
+                Setting it to a very large number will effectively disable this behavior.
+
+        Returns:
+            a binary vector, indicating whether each box is inside the image.
+        """
+        assert self.mode == "xyxy"
+        height, width = image_size
+        inds_inside = (
+            (self.tensor[..., 0] >= -boundary_threshold)
+            & (self.tensor[..., 1] >= -boundary_threshold)
+            & (self.tensor[..., 2] < width + boundary_threshold)
+            & (self.tensor[..., 3] < height + boundary_threshold)
+        )
+        return inds_inside
+
+    @staticmethod
+    def cat(boxes_list):
+        """
+        Concatenates a list of Boxes into a single Boxes
+
+        Arguments:
+            boxes_list (list[Boxes])
+
+        Returns:
+            Boxes: the concatenated Boxes
+        """
+        assert isinstance(boxes_list, (list, tuple))
+        assert all(isinstance(box, Boxes) for box in boxes_list)
+
+        mode = boxes_list[0].mode
+        assert all(b.mode == mode for b in boxes_list)
+
+        cat_boxes = Boxes(cat([b.tensor for b in boxes_list], dim=0), mode)
+        return cat_boxes
+
+    @property
+    def device(self):
+        return self.tensor.device
+
+    def __iter__(self):
+        """
+        Yield a box as a Tensor of shape (4,) at at time.
+        """
+        yield from self.tensor
+
+
+class Instances:
+    """
+    This class represents a list of instances in an image.
+    It stores the attributes of instances (e.g., boxes, masks, labels, scores) as "fields".
+    """
+
+    def __init__(self, image_size):
+        """
+        Args:
+            image_size (h, w): the spatial size of the image.
+        """
+        self.image_size = image_size  # (image_width, image_height)
+        self._fields = {}
+
+    def add_field(self, field, field_data):
+        data_len = len(field_data)
+        if len(self._fields):
+            assert (
+                len(self) == data_len
+            ), "Adding a field of length {} to a Instances of length {}".format(data_len, len(self))
+        self._fields[field] = field_data
+
+    def get_field(self, field):
+        return self._fields[field]
+
+    def has_field(self, field):
+        return field in self._fields
+
+    def get_field_names(self):
+        return list(self._fields.keys())
+
+    # Tensor-like methods
+    def to(self, device):
+        ret = Instances(self.image_size)
+        for k, v in self._fields.items():
+            if hasattr(v, "to"):
+                v = v.to(device)
+            ret.add_field(k, v)
+        return ret
+
+    def __setitem__(self, key, value):
+        assert isinstance(key, str), key
+        self.add_field(key, value)
+
+    def __getitem__(self, item):
+        """
+        Args:
+            item: If `item` is a string, this method behaves the same as `get_field`.
+                Otherwise, `item` is an index-like object and will be used to index all the fields.
+
+        Returns:
+            If `item` is a string, return the data in the corresponding field.
+            Otherwise, returns an `Instances` where all fields are indexed by `item`.
+        """
+        if isinstance(item, str):
+            return self._fields[item]
+        ret = Instances(self.image_size)
+        for k, v in self._fields.items():
+            ret.add_field(k, v[item])
+        return ret
+
+    def __len__(self):
+        for v in self._fields.values():
+            return len(v)
+        raise NotImplementedError("Empty Instances does not support __len__!")
+
+    @staticmethod
+    def cat(instance_lists):
+        """
+        Args:
+            instance_lists (list[Instances])
+
+        Returns:
+            Instances
+        """
+        assert all(isinstance(i, Instances) for i in instance_lists)
+        assert len(instance_lists) > 0
+        if len(instance_lists) == 1:
+            return instance_lists[0]
+
+        image_size = instance_lists[0].image_size
+        for i in instance_lists[1:]:
+            assert i.image_size == image_size
+        ret = Instances(image_size)
+        for k in instance_lists[0].get_field_names():
+            values = [i.get_field(k) for i in instance_lists]
+            if isinstance(values[0], torch.Tensor):
+                values = cat(values, dim=0)
+            elif isinstance(values[0], Boxes):
+                values = Boxes.cat(values)
+            else:
+                raise ValueError("Unsupported type {} for concatenation".format(type(values[0])))
+            ret[k] = values
+        return ret
+
+    def __str__(self):
         s = self.__class__.__name__ + "("
-        s += "num_boxes={}, ".format(len(self))
-        s += "image_width={}, ".format(self.size[0])
-        s += "image_height={}, ".format(self.size[1])
-        s += "mode={})".format(self.mode)
+        s += "num_instances={}, ".format(len(self))
+        s += "image_width={}, ".format(self.image_size[0])
+        s += "image_height={}, ".format(self.image_size[1])
+        s += "fields=[{}])".format(", ".join(self.get_field_names()))
         return s
-
-
-if __name__ == "__main__":
-    bbox = BoxList([[0, 0, 10, 10], [0, 0, 5, 5]], (10, 10))
-    s_bbox = bbox.resize((5, 5))
-    print(s_bbox)
-    print(s_bbox.bbox)
-
-    t_bbox = bbox.transpose(0)
-    print(t_bbox)
-    print(t_bbox.bbox)

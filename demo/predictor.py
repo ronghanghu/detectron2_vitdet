@@ -164,9 +164,9 @@ class COCODemo(object):
             image (np.ndarray): an image as returned by OpenCV
 
         Returns:
-            prediction (BoxList): the detected objects. Additional information
+            prediction (Boxes): the detected objects. Additional information
                 of the detection properties can be found in the fields of
-                the BoxList via `prediction.fields()`
+                the Boxes via `prediction.fields()`
         """
         predictions = self.compute_prediction(image)
         top_predictions = self.select_top_predictions(predictions)
@@ -187,9 +187,9 @@ class COCODemo(object):
             original_image (np.ndarray): an image as returned by OpenCV
 
         Returns:
-            prediction (BoxList): the detected objects. Additional information
+            prediction (Boxes): the detected objects. Additional information
                 of the detection properties can be found in the fields of
-                the BoxList via `prediction.fields()`
+                the Boxes via `prediction.fields()`
         """
         # apply pre-processing to image
         image = self.transforms(original_image)
@@ -205,7 +205,7 @@ class COCODemo(object):
         # always single image is passed at a time
         prediction = predictions[0]
 
-        # reshape prediction (a BoxList) into the original image size
+        # reshape prediction (a Boxes) into the original image size
         height, width = original_image.shape[:-1]
         prediction = prediction.resize((width, height))
 
@@ -223,13 +223,13 @@ class COCODemo(object):
         and returns the predictions in descending order of score
 
         Arguments:
-            predictions (BoxList): the result of the computation by the model.
+            predictions (Boxes): the result of the computation by the model.
                 It should contain the field `scores`.
 
         Returns:
-            prediction (BoxList): the detected objects. Additional information
+            prediction (Boxes): the detected objects. Additional information
                 of the detection properties can be found in the fields of
-                the BoxList via `prediction.fields()`
+                the Boxes via `prediction.fields()`
         """
         scores = predictions.get_field("scores")
         keep = torch.nonzero(scores > self.confidence_threshold).squeeze(1)
@@ -252,10 +252,10 @@ class COCODemo(object):
 
         Arguments:
             image (np.ndarray): an image as returned by OpenCV
-            predictions (BoxList): the result of the computation by the model.
+            predictions (Boxes): the result of the computation by the model.
                 It should contain the field `labels`.
         """
-        labels = predictions.get_field("classes_pred")
+        labels = predictions.get_field("pred_classes")
         boxes = predictions.bbox
 
         colors = self.compute_colors_for_labels(labels).tolist()
@@ -274,11 +274,11 @@ class COCODemo(object):
 
         Arguments:
             image (np.ndarray): an image as returned by OpenCV
-            predictions (BoxList): the result of the computation by the model.
+            predictions (Boxes): the result of the computation by the model.
                 It should contain the field `mask` and `labels`.
         """
         masks = predictions.get_field("mask").numpy()
-        labels = predictions.get_field("classes_pred")
+        labels = predictions.get_field("pred_classes")
 
         colors = self.compute_colors_for_labels(labels).tolist()
 
@@ -300,7 +300,7 @@ class COCODemo(object):
 
         Arguments:
             image (np.ndarray): an image as returned by OpenCV
-            predictions (BoxList): the result of the computation by the model.
+            predictions (Boxes): the result of the computation by the model.
                 It should contain the field `mask`.
         """
         masks = predictions.get_field("mask")
@@ -332,11 +332,11 @@ class COCODemo(object):
 
         Arguments:
             image (np.ndarray): an image as returned by OpenCV
-            predictions (BoxList): the result of the computation by the model.
+            predictions (Boxes): the result of the computation by the model.
                 It should contain the field `scores` and `labels`.
         """
         scores = predictions.get_field("scores").tolist()
-        labels = predictions.get_field("classes_pred").tolist()
+        labels = predictions.get_field("pred_classes").tolist()
         labels = [self.CATEGORIES[i] for i in labels]
         boxes = predictions.bbox
 

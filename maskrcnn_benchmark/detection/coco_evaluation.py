@@ -13,7 +13,7 @@ from pycocotools.cocoeval import COCOeval
 from tqdm import tqdm
 
 from maskrcnn_benchmark.data.datasets import COCOMeta
-from maskrcnn_benchmark.structures.bounding_box import BoxList
+from maskrcnn_benchmark.structures.bounding_box import Boxes
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 from maskrcnn_benchmark.utils.comm import all_gather, is_main_process, synchronize
 
@@ -28,20 +28,30 @@ def postprocess(result, original_width, original_height):
     and paste the mask to the original image.
 
     Args:
-        result (BoxList): the output from the model. will be modified.
+        result (Instances): the output from the model. might be modified.
+
+    Returns:
+        Instances: the postprocessed output from the model
     """
     MASK_THRESHOLD = 0.5
     # we assume we did the scaling without changing the aspect ratio
-    scale = np.sqrt(result.size[0] * 1.0 / original_width * result.size[1] / original_height)
-    result.size = (original_width, original_height)
-    result.bbox = result.bbox / scale
-    result.clip_to_image()
+    scale = np.sqrt(
+        result.image_size[1] * 1.0 / original_width * result.image_size[0] / original_height
+    )
+    result.image_size = (original_height, original_width)
+    pred_boxes = result["pred_boxes"]
+    pred_boxes.tensor = pred_boxes.tensor / scale
+    pred_boxes.clip(result.image_size)
+    result = result[pred_boxes.nonempty()]
 
-    if result.has_field("mask"):
-        masks = result.get_field("mask")  # N, 1, M, M
-        pasted_masks = [
-            x[0] for x in paste_masks_in_image(masks, result, threshold=MASK_THRESHOLD, padding=1)
-        ]
+    if result.has_field("pred_masks"):
+        pasted_masks = paste_masks_in_image(
+            result["pred_masks"],  # N, 1, M, M
+            result["pred_boxes"],
+            result.image_size,
+            threshold=MASK_THRESHOLD,
+            padding=1,
+        ).squeeze(1)
         rles = [mask_util.encode(np.array(mask[:, :, None], order="F"))[0] for mask in pasted_masks]
         for rle in rles:
             rle["counts"] = rle["counts"].decode("utf-8")
@@ -49,7 +59,7 @@ def postprocess(result, original_width, original_height):
 
     if result.has_field("pred_keypoints"):
         keypoints = result.get_field("pred_keypoints")
-        keypoints = keypoints.resize(result.size)
+        keypoints = keypoints.resize(result.image_size[::-1])  # TODO (w, h)
         result.add_field("pred_keypoints", keypoints)
 
     return result
@@ -68,8 +78,8 @@ def compute_on_dataset(model, data_loader, aggregate_across_ranks=True):
             If False, each rank will return only the results it computed on the given data_loader.
 
     Returns:
-        list[dict]. Each dict has: "image_id", "original_height", "original_width", "box_list".
-            "box_list" is a `BoxList` containing the post-processed outputs of the model.
+        list[dict]. Each dict has: "image_id", "original_height", "original_width", "instances".
+            "instances" is a `Boxes` containing the post-processed outputs of the model.
     """
     num_devices = torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
     logger = logging.getLogger(__name__)
@@ -87,12 +97,14 @@ def compute_on_dataset(model, data_loader, aggregate_across_ranks=True):
             outputs = model(batch)
             for dataset_dict, output in zip(dataset_dicts, outputs):
                 output = output.to(cpu_device)
-                postprocess(output, dataset_dict["original_width"], dataset_dict["original_height"])
+                output = postprocess(
+                    output, dataset_dict["original_width"], dataset_dict["original_height"]
+                )
 
                 prediction_dict = {
                     k: dataset_dict[k] for k in ["original_height", "original_width", "image_id"]
                 }
-                prediction_dict["box_list"] = output
+                prediction_dict["instances"] = output
                 dataset_predictions.append(prediction_dict)
 
     # wait for all processes to complete before measuring the time
@@ -133,17 +145,16 @@ def prepare_for_coco_evaluation(dataset_predictions):
             # https://git.io/fhScl
             continue
         processed_ids[img_id] = True
-        predictions = prediction_dict["box_list"]
+        predictions = prediction_dict["instances"]
         num_instance = len(predictions)
         if num_instance == 0:
             continue
 
-        predictions = predictions.convert("xywh")
-        boxes = predictions.bbox.tolist()
+        boxes = predictions["pred_boxes"].clone(mode="xywh").tensor.tolist()
         scores = predictions.get_field("scores").tolist()
-        classes = predictions.get_field("classes_pred").tolist()
+        classes = predictions.get_field("pred_classes").tolist()
 
-        has_mask = predictions.has_field("mask")
+        has_mask = predictions.has_field("pred_masks")
         if has_mask:
             rles = predictions.get_field("pasted_mask_rle")
 
@@ -170,6 +181,7 @@ def prepare_for_coco_evaluation(dataset_predictions):
 
 
 # inspired from Detectron
+# TODO make it work again
 def evaluate_box_proposals(
     dataset_predictions, coco_dataset, thresholds=None, area="all", limit=None
 ):
@@ -205,9 +217,7 @@ def evaluate_box_proposals(
     num_pos = 0
 
     for prediction_dict in dataset_predictions:
-        predictions = prediction_dict["box_list"]
-        image_width = prediction_dict["original_width"]
-        image_height = prediction_dict["original_height"]
+        predictions = prediction_dict["instances"]
 
         # sort predictions in descending order
         # TODO maybe remove this and make it explicit in the documentation
@@ -218,7 +228,7 @@ def evaluate_box_proposals(
         anno = coco_dataset.coco_api.loadAnns(ann_ids)
         gt_boxes = [obj["bbox"] for obj in anno if obj["iscrowd"] == 0]
         gt_boxes = torch.as_tensor(gt_boxes).reshape(-1, 4)  # guard against no boxes
-        gt_boxes = BoxList(gt_boxes, (image_width, image_height), mode="xywh").convert("xyxy")
+        gt_boxes = Boxes(gt_boxes, mode="xywh").clone(mode="xyxy")
         gt_areas = torch.as_tensor([obj["area"] for obj in anno if obj["iscrowd"] == 0])
 
         if len(gt_boxes) == 0:

@@ -12,7 +12,7 @@ class Polygons(object):
     polygons
     """
 
-    def __init__(self, polygons, size, mode):
+    def __init__(self, polygons, size):
         # assert isinstance(polygons, list), '{}'.format(polygons)
         if isinstance(polygons, list):
             polygons = [torch.as_tensor(p, dtype=torch.float32) for p in polygons]
@@ -21,7 +21,6 @@ class Polygons(object):
 
         self.polygons = polygons
         self.size = size
-        self.mode = mode
 
     def crop(self, box):
         w, h = box[2] - box[0], box[3] - box[1]
@@ -37,14 +36,14 @@ class Polygons(object):
             p[1::2] = p[1::2] - box[1]  # .clamp(min=0, max=h)
             cropped_polygons.append(p)
 
-        return Polygons(cropped_polygons, size=(w, h), mode=self.mode)
+        return Polygons(cropped_polygons, size=(w, h))
 
     def resize(self, size, *args, **kwargs):
         ratios = tuple(float(s) / float(s_orig) for s, s_orig in zip(size, self.size))
         if ratios[0] == ratios[1]:
             ratio = ratios[0]
             scaled_polys = [p * ratio for p in self.polygons]
-            return Polygons(scaled_polys, size, mode=self.mode)
+            return Polygons(scaled_polys, size)
 
         ratio_w, ratio_h = ratios
         scaled_polygons = []
@@ -54,24 +53,25 @@ class Polygons(object):
             p[1::2] *= ratio_h
             scaled_polygons.append(p)
 
-        return Polygons(scaled_polygons, size=size, mode=self.mode)
+        return Polygons(scaled_polygons, size=size)
 
-    def convert(self, mode):
+    def convert_to_mask(self):
+        """
+        Convert the polygons to a binary mask of the size of the image.
+        """
         width, height = self.size
-        if mode == "mask":
-            rles = mask_utils.frPyObjects([p.numpy() for p in self.polygons], height, width)
-            rle = mask_utils.merge(rles)
-            mask = mask_utils.decode(rle)
-            mask = torch.from_numpy(mask)
-            # TODO add squeeze?
-            return mask
+        rles = mask_utils.frPyObjects([p.numpy() for p in self.polygons], height, width)
+        rle = mask_utils.merge(rles)
+        mask = mask_utils.decode(rle)
+        mask = torch.from_numpy(mask)
+        # TODO add squeeze?
+        return mask
 
     def __repr__(self):
         s = self.__class__.__name__ + "("
         s += "num_polygons={}, ".format(len(self.polygons))
         s += "image_width={}, ".format(self.size[0])
-        s += "image_height={}, ".format(self.size[1])
-        s += "mode={})".format(self.mode)
+        s += "image_height={})".format(self.size[1])
         return s
 
 
@@ -80,7 +80,7 @@ class SegmentationList(object):
     This class stores the segmentations for all objects in one image.
     """
 
-    def __init__(self, polygons, size, mode=None):
+    def __init__(self, polygons, size):
         """
         Arguments:
             polygons: a list of lists of lists of numbers. The first
@@ -92,22 +92,21 @@ class SegmentationList(object):
         """
         assert isinstance(polygons, list)
 
-        self.polygons = [Polygons(p, size, mode) for p in polygons]
+        self.polygons = [Polygons(p, size) for p in polygons]
         self.size = size
-        self.mode = mode
 
     def crop(self, box):
         w, h = box[2] - box[0], box[3] - box[1]
         cropped = []
         for polygon in self.polygons:
             cropped.append(polygon.crop(box))
-        return SegmentationList(cropped, size=(w, h), mode=self.mode)
+        return SegmentationList(cropped, size=(w, h))
 
     def resize(self, size, *args, **kwargs):
         scaled = []
         for polygon in self.polygons:
             scaled.append(polygon.resize(size, *args, **kwargs))
-        return SegmentationList(scaled, size=size, mode=self.mode)
+        return SegmentationList(scaled, size=size)
 
     def to(self, *args, **kwargs):
         return self
@@ -124,7 +123,7 @@ class SegmentationList(object):
                 item = item.tolist()
             for i in item:
                 selected_polygons.append(self.polygons[i])
-        return SegmentationList(selected_polygons, size=self.size, mode=self.mode)
+        return SegmentationList(selected_polygons, size=self.size)
 
     def __iter__(self):
         return iter(self.polygons)
@@ -135,3 +134,6 @@ class SegmentationList(object):
         s += "image_width={}, ".format(self.size[0])
         s += "image_height={})".format(self.size[1])
         return s
+
+    def __len__(self):
+        return len(self.polygons)

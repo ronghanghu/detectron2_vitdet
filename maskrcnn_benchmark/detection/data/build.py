@@ -5,7 +5,7 @@ import torch.utils.data
 from torch.utils.data.dataset import ConcatDataset
 
 from maskrcnn_benchmark.data import MapDataset, datasets as D, samplers
-from maskrcnn_benchmark.structures.bounding_box import BoxList
+from maskrcnn_benchmark.structures.bounding_box import Boxes, Instances
 from maskrcnn_benchmark.structures.image_list import to_image_list
 from maskrcnn_benchmark.structures.keypoints import Keypoints
 from maskrcnn_benchmark.structures.segmentation_mask import SegmentationList
@@ -187,7 +187,7 @@ class DetectionBatchCollator:
 
         Returns:
             images: ImageList
-            targets: list[BoxList]. None when not training.
+            instances: list[Instances]. None when not training.
             dataset_dicts: the rest of the dataset_dicts
         """
         # important to remove the numpy images so that they will not go through
@@ -201,25 +201,29 @@ class DetectionBatchCollator:
 
         targets = []
         for dataset_dict in dataset_dicts:
-            image_size = (dataset_dict["transformed_width"], dataset_dict["transformed_height"])
+            image_size = (dataset_dict["transformed_height"], dataset_dict["transformed_width"])
 
             annos = dataset_dict.pop("annotations")
             boxes = [obj["bbox"] for obj in annos]
             boxes = torch.as_tensor(boxes).reshape(-1, 4)
-            target = BoxList(boxes, image_size, mode="xywh").convert("xyxy")
+            target = Instances(image_size)
+            boxes = target["gt_boxes"] = Boxes(boxes, mode="xywh").clone(mode="xyxy")
+            boxes.clip(image_size)
 
             classes = [obj["category_id"] for obj in annos]
             classes = torch.tensor(classes)
-            target.add_field("classes_gt", classes)
+            target["gt_classes"] = classes
 
             masks = [obj["segmentation"] for obj in annos]
-            masks = SegmentationList(masks, image_size)
-            target.add_field("masks_gt", masks)
+            masks = SegmentationList(
+                masks, image_size[::-1]
+            )  # TODO(yuxinwu) seg still takes (w, h)
+            target["gt_masks"] = masks
 
             kpts = [obj.get("keypoints", []) for obj in annos]
-            kpts = Keypoints(kpts, image_size)
-            target.add_field("gt_keypoints", kpts)
+            kpts = Keypoints(kpts, image_size[::-1])  # TODO(yuxinwu) kpt still takes (w, h)
+            target["gt_keypoints"] = kpts
 
-            target = target.clip_to_image(remove_empty=True)
+            target = target[boxes.nonempty()]
             targets.append(target)
         return images, targets, dataset_dicts
