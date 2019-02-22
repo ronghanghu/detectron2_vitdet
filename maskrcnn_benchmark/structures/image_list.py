@@ -12,46 +12,42 @@ class ImageList(object):
     and storing in a field the original sizes of each image
     """
 
-    def __init__(self, tensors, image_sizes):
+    def __init__(self, tensor, image_sizes):
         """
         Arguments:
-            tensors (tensor)
+            tensor (Tensor): of shape (N, C, H, W)
             image_sizes (list[tuple[int, int]]): Each tuple is (h, w).
         """
-        self.tensors = tensors
+        self.tensor = tensor
         self.image_sizes = image_sizes
 
     def __len__(self):
         return len(self.image_sizes)
 
     def to(self, *args, **kwargs):
-        cast_tensor = self.tensors.to(*args, **kwargs)
+        cast_tensor = self.tensor.to(*args, **kwargs)
         return ImageList(cast_tensor, self.image_sizes)
 
+    @staticmethod
+    def from_tensors(tensors, size_divisible=0):
+        """
+        Args:
+            tensors: a tuple or list of `torch.Tensors`, each of shape (C, Hi, Wi).
+                The Tensors will be padded with zeros so that they will have the same shape.
+            size_divisible (int): If `size_divisible > 0`, also adds padding to ensure
+                the common height and width is divisible by `size_divisible`
 
-def to_image_list(tensors, size_divisible=0):
-    """
-    tensors can be an ImageList, a torch.Tensor or
-    an iterable of Tensors. It can't be a numpy array.
-    When tensors is an iterable of Tensors, it pads
-    the Tensors with zeros so that they have the same
-    shape
-    """
-    if isinstance(tensors, torch.Tensor) and size_divisible > 0:
-        tensors = [tensors]
-
-    if isinstance(tensors, ImageList):
-        return tensors
-    elif isinstance(tensors, torch.Tensor):
-        # single tensor shape can be inferred
-        assert tensors.dim() == 4
-        image_sizes = [tensor.shape[-2:] for tensor in tensors]
-        return ImageList(tensors, image_sizes)
-    elif isinstance(tensors, (tuple, list)):
+        Returns:
+            an `ImageList`.
+        """
+        assert len(tensors) > 0
+        assert isinstance(tensors, (tuple, list))
+        for t in tensors:
+            assert isinstance(t, torch.Tensor), type(t)
+            assert t.dim() == 3 and t.shape[0] == tensors[0].shape[0], t.shape
         max_size = tuple(max(s) for s in zip(*[img.shape for img in tensors]))
 
-        # TODO Ideally, just remove this and let me model handle arbitrary
-        # input sizs
+        # TODO Ideally, just remove this and let the model handle arbitrary input sizes
         if size_divisible > 0:
             import math
 
@@ -69,5 +65,3 @@ def to_image_list(tensors, size_divisible=0):
         image_sizes = [im.shape[-2:] for im in tensors]
 
         return ImageList(batched_imgs, image_sizes)
-    else:
-        raise TypeError("Unsupported type for to_image_list: {}".format(type(tensors)))

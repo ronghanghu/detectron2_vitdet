@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from maskrcnn_benchmark.structures.bounding_box import Instances
+from maskrcnn_benchmark.structures.instances import Instances
 
 from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher

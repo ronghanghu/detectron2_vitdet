@@ -13,8 +13,8 @@ from pycocotools.cocoeval import COCOeval
 from tqdm import tqdm
 
 from maskrcnn_benchmark.data.datasets import COCOMeta
-from maskrcnn_benchmark.structures.bounding_box import Boxes, Instances
-from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
+from maskrcnn_benchmark.structures.boxes import Boxes, pairwise_iou
+from maskrcnn_benchmark.structures.instances import Instances
 from maskrcnn_benchmark.utils.comm import all_gather, is_main_process, synchronize
 
 from .data.build import build_detection_test_loader
@@ -248,7 +248,7 @@ def evaluate_box_proposals(
         if limit is not None and len(predictions) > limit:
             predictions = predictions[:limit]
 
-        overlaps = boxlist_iou(predictions, gt_boxes)
+        overlaps = pairwise_iou(predictions, gt_boxes)
 
         _gt_overlaps = torch.zeros(len(gt_boxes))
         for j in range(min(len(predictions), len(gt_boxes))):

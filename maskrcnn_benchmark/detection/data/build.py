@@ -5,8 +5,9 @@ import torch.utils.data
 from torch.utils.data.dataset import ConcatDataset
 
 from maskrcnn_benchmark.data import MapDataset, datasets as D, samplers
-from maskrcnn_benchmark.structures.bounding_box import Boxes, Instances
-from maskrcnn_benchmark.structures.image_list import to_image_list
+from maskrcnn_benchmark.structures.boxes import Boxes
+from maskrcnn_benchmark.structures.image_list import ImageList
+from maskrcnn_benchmark.structures.instances import Instances
 from maskrcnn_benchmark.structures.keypoints import Keypoints
 from maskrcnn_benchmark.structures.masks import PolygonMasks
 from maskrcnn_benchmark.utils.comm import get_world_size
@@ -194,7 +195,7 @@ class DetectionBatchCollator:
         # the dataloader and hurt performance
         numpy_images = [x.pop("image") for x in dataset_dicts]
         images = [torch.as_tensor(x.transpose(2, 0, 1).astype("float32")) for x in numpy_images]
-        images = to_image_list(images, self.size_divisible)
+        images = ImageList.from_tensors(images, self.size_divisible)
 
         if not self.is_train:
             return images, None, dataset_dicts

@@ -3,8 +3,8 @@ import torch
 import torch.nn.functional as F
 
 from maskrcnn_benchmark.layers import cat, nms, smooth_l1_loss
-from maskrcnn_benchmark.structures.bounding_box import Boxes, Instances
-from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
+from maskrcnn_benchmark.structures.boxes import Boxes, pairwise_iou
+from maskrcnn_benchmark.structures.instances import Instances
 from maskrcnn_benchmark.utils.events import get_event_storage
 
 from ..matcher import Matcher
@@ -293,7 +293,7 @@ class RPNOutputs(object):
             anchors_i: anchors for i-th image
             gt_boxes_i: ground-truth boxes for i-th image
             """
-            match_quality_matrix = boxlist_iou(gt_boxes_i, anchors_i)
+            match_quality_matrix = pairwise_iou(gt_boxes_i, anchors_i)
             matched_idxs = self.anchor_matcher(match_quality_matrix)
 
             objectness_logits_gt_i = (matched_idxs >= 0).to(dtype=torch.int32)

@@ -2,8 +2,8 @@ import numpy as np
 import torch
 from torch.nn import functional as F
 
-from maskrcnn_benchmark.structures.bounding_box import Instances
-from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
+from maskrcnn_benchmark.structures.boxes import pairwise_iou
+from maskrcnn_benchmark.structures.instances import Instances
 from maskrcnn_benchmark.utils.events import get_event_storage
 from maskrcnn_benchmark.utils.registry import Registry
 
@@ -96,7 +96,7 @@ class ROIHeads(torch.nn.Module):
         num_bg_samples = []
         with torch.no_grad():
             for proposals_per_image, targets_per_image in zip(proposals, targets):
-                match_quality_matrix = boxlist_iou(
+                match_quality_matrix = pairwise_iou(
                     targets_per_image.gt_boxes, proposals_per_image.proposal_boxes
                 )
                 matched_idxs = self.proposal_matcher(match_quality_matrix)

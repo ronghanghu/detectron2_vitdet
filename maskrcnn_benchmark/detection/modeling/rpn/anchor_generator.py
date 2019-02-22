@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from torch import nn
 
-from maskrcnn_benchmark.structures.bounding_box import Boxes
+from maskrcnn_benchmark.structures.boxes import Boxes
 
 
 class BufferList(nn.Module):

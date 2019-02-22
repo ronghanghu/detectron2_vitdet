@@ -51,7 +51,7 @@ class GeneralizedRCNN(nn.Module):
         if targets is not None:
             targets = [t.to(self.device) for t in targets]
 
-        features = self.backbone(images.tensors)
+        features = self.backbone(images.tensor)
         proposals, proposal_losses = self.rpn(images, features, targets)
         if self.roi_heads:
             result, detector_losses = self.roi_heads(features, proposals, targets)
