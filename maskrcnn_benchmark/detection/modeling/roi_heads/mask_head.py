@@ -3,6 +3,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from maskrcnn_benchmark.layers import Conv2d, ConvTranspose2d, cat, weight_init
+from maskrcnn_benchmark.structures.masks import rasterize_polygons_within_box
 from maskrcnn_benchmark.utils.events import get_event_storage
 
 
@@ -14,7 +15,7 @@ def get_mask_ground_truth(gt_masks, pred_boxes, mask_side_len):
     the desired size and then rasterizing it into a tensor.
 
     Args:
-        gt_masks (SegmentationList): A SegmentationList storing ground-truth masks for an image.
+        gt_masks (PolygonMasks): A `PolygonMasks` storing ground-truth masks for an image.
         pred_boxes (Boxes): A Boxes storing the predicted boxes for which ground-truth
             masks will be constructed.
         mask_side_len (int): The side length of the rasterized ground-truth masks.
@@ -29,21 +30,14 @@ def get_mask_ground_truth(gt_masks, pred_boxes, mask_side_len):
     # Put pred_boxes on the CPU, as the representation for masks is not efficient
     # GPU-wise (possibly several small tensors for representing a single instance mask)
     pred_boxes = pred_boxes.to(torch.device("cpu"))
-    mask_shape = (mask_side_len, mask_side_len)
 
     gt_mask_logits = []
     for gt_mask, pred_box in zip(gt_masks, pred_boxes):
         """
-        gt_mask: a :class:`Polygons` instance
+        gt_mask: list[list[float]], the polygons for one instance
         pred_box: a tensor of shape (4,)
         """
-        # Clip the ground-truth mask to the predicted box
-        clipped_gt_mask = gt_mask.crop(pred_box)
-        # Scale to the target mask shape
-        scaled_clipped_gt_mask = clipped_gt_mask.resize(mask_shape)
-        # Rasterize the scaled, clipped ground-truth mask
-        rasterized_gt_mask = scaled_clipped_gt_mask.convert_to_mask()
-        gt_mask_logits.append(rasterized_gt_mask)
+        gt_mask_logits.append(rasterize_polygons_within_box(gt_mask, pred_box, mask_side_len))
     if len(gt_mask_logits) == 0:
         return torch.empty(0, dtype=torch.uint8, device=device)
     return torch.stack(gt_mask_logits, dim=0).to(device=device)

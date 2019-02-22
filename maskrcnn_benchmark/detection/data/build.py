@@ -8,7 +8,7 @@ from maskrcnn_benchmark.data import MapDataset, datasets as D, samplers
 from maskrcnn_benchmark.structures.bounding_box import Boxes, Instances
 from maskrcnn_benchmark.structures.image_list import to_image_list
 from maskrcnn_benchmark.structures.keypoints import Keypoints
-from maskrcnn_benchmark.structures.segmentation_mask import SegmentationList
+from maskrcnn_benchmark.structures.masks import PolygonMasks
 from maskrcnn_benchmark.utils.comm import get_world_size
 
 from ..config import paths_catalog
@@ -215,9 +215,7 @@ class DetectionBatchCollator:
             target.gt_classes = classes
 
             masks = [obj["segmentation"] for obj in annos]
-            masks = SegmentationList(
-                masks, image_size[::-1]
-            )  # TODO(yuxinwu) seg still takes (w, h)
+            masks = PolygonMasks(masks)
             target.gt_masks = masks
 
             kpts = [obj.get("keypoints", []) for obj in annos]
