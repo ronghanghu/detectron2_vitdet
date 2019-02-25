@@ -13,56 +13,53 @@ from pycocotools.cocoeval import COCOeval
 from tqdm import tqdm
 
 from maskrcnn_benchmark.data.datasets import COCOMeta
-from maskrcnn_benchmark.structures.boxes import Boxes, pairwise_iou
-from maskrcnn_benchmark.structures.instances import Instances
+from maskrcnn_benchmark.structures import Boxes, Instances, pairwise_iou
 from maskrcnn_benchmark.utils.comm import all_gather, is_main_process, synchronize
 
 from .data.build import build_detection_test_loader
 from .modeling.roi_heads.paste_mask import paste_masks_in_image
 
 
-def postprocess(result, original_width, original_height):
+def postprocess(results, original_width, original_height):
     """
     Postprocess the output boxes.
     It will scale the boxes according to original image size,
     and paste the mask to the original image.
 
     Args:
-        result (Instances): the output from the model. might be modified.
+        results (Instances): the output from the model. might be modified.
 
     Returns:
         Instances: the postprocessed output from the model
     """
     MASK_THRESHOLD = 0.5
     # we assume we did the scaling without changing the aspect ratio
-    scale = np.sqrt(
-        result.image_size[1] * 1.0 / original_width * result.image_size[0] / original_height
-    )
-    result = Instances((original_height, original_width), **result.get_fields())
-    pred_boxes = result.pred_boxes
-    pred_boxes.tensor = pred_boxes.tensor / scale
-    pred_boxes.clip(result.image_size)
-    result = result[pred_boxes.nonempty()]
+    scale_x, scale_y = original_width / results.image_size[1], original_height / results.image_size[0]
+    results = Instances((original_height, original_width), **results.get_fields())
+    pred_boxes = results.pred_boxes
+    pred_boxes.tensor[:, 0::2] *= scale_x
+    pred_boxes.tensor[:, 1::2] *= scale_y
+    pred_boxes.clip(results.image_size)
+    results = results[pred_boxes.nonempty()]
 
-    if result.has("pred_masks"):
+    if results.has("pred_masks"):
         pasted_masks = paste_masks_in_image(
-            result.pred_masks,  # N, 1, M, M
-            result.pred_boxes,
-            result.image_size,
+            results.pred_masks,  # N, 1, M, M
+            results.pred_boxes,
+            results.image_size,
             threshold=MASK_THRESHOLD,
             padding=1,
         ).squeeze(1)
         rles = [mask_util.encode(np.array(mask[:, :, None], order="F"))[0] for mask in pasted_masks]
         for rle in rles:
             rle["counts"] = rle["counts"].decode("utf-8")
-        result.pasted_mask_rle = rles
+        results.pasted_mask_rle = rles
 
-    if result.has("pred_keypoints"):
-        keypoints = result.pred_keypoints
-        keypoints = keypoints.resize(result.image_size[::-1])  # TODO (w, h)
-        result.pred_keypoints = keypoints
+    if results.has("pred_keypoints"):
+        results.pred_keypoints.tensor[:, :, 0] *= scale_x
+        results.pred_keypoints.tensor[:, :, 1] *= scale_y
 
-    return result
+    return results
 
 
 def compute_on_dataset(model, data_loader, aggregate_across_ranks=True):
@@ -163,7 +160,7 @@ def prepare_for_coco_evaluation(dataset_predictions):
 
         has_keypoints = predictions.has("pred_keypoints")
         if has_keypoints:
-            keypoints = predictions.pred_keypoints.keypoints.flatten(1).tolist()
+            keypoints = predictions.pred_keypoints.tensor.flatten(1).tolist()
 
         for k in range(num_instance):
             result = {

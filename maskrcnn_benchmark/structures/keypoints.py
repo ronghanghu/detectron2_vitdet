@@ -18,38 +18,23 @@ class Keypoints:
         2 - occluded
     """
 
-    def __init__(self, keypoints, size):
+    def __init__(self, keypoints):
         """
         Arguments:
             keypoints: A Tensor, numpy array, or list of the x, y, and visibility of each keypoint.
                 The shape should be (N, M, 3) where N is the number of
                 instances, and M is the number of keypoints per instance.
-            size: a 2-tuple of the width and height of the image these keypoints are from.
         """
         device = keypoints.device if isinstance(keypoints, torch.Tensor) else torch.device("cpu")
         keypoints = torch.as_tensor(keypoints, dtype=torch.float32, device=device)
-        self.keypoints = keypoints
-        self.size = size
+        assert keypoints.dim() == 3 and keypoints.shape[2] == 3, keypoints.shape
+        self.tensor = keypoints
 
     def __len__(self):
-        return self.keypoints.size(0)
+        return self.tensor.size(0)
 
     def to(self, *args, **kwargs):
-        return type(self)(self.keypoints.to(*args, **kwargs), self.size)
-
-    def resize(self, target_size):
-        """
-        Scale keypoint locations by the ratio of the original image size (in the `size` field of
-        this instance) to `target_size`, a tuple of (W, H).
-
-        The returned Keypoints instance will have a size of `target_size`.
-        """
-        ratios = tuple(float(s) / float(s_orig) for s, s_orig in zip(target_size, self.size))
-        ratio_w, ratio_h = ratios
-        resized_data = self.keypoints.clone()
-        resized_data[..., 0] *= ratio_w
-        resized_data[..., 1] *= ratio_h
-        return type(self)(resized_data, target_size)
+        return type(self)(self.tensor.to(*args, **kwargs))
 
     def to_heatmap(self, boxes, heatmap_size):
         """
@@ -59,21 +44,33 @@ class Keypoints:
         Returns:
             a N x heatmap_size x heatmap_size heatmap.
         """
-        return keypoints_to_heatmap(self.keypoints, boxes, heatmap_size)
+        return _keypoints_to_heatmap(self.tensor, boxes, heatmap_size)
 
     def __getitem__(self, item):
-        return type(self)(self.keypoints[item], self.size)
+        """
+        Create a new `Keypoints` by indexing on this `Keypoints`.
+
+        The following usage are allowed:
+        1. `new_kpts = kpts[3]`: return a `Keypoints` which contains only one instance.
+        2. `new_kpts = kpts[2:10]`: return a slice of key points.
+        3. `new_kpts = kpts[vector]`, where vector is a torch.ByteTensor
+           with `length = len(kpts)`. Nonzero elements in the vector will be selected.
+
+        Note that the returned Keypoints might share storage with this Keypoints,
+        subject to Pytorch's indexing semantics.
+        """
+        if isinstance(item, int):
+            return Keypoints([self.tensor[item]])
+        return Keypoints(self.tensor[item])
 
     def __repr__(self):
         s = self.__class__.__name__ + "("
-        s += "num_instances={}, ".format(len(self.keypoints))
-        s += "image_width={}, ".format(self.size[0])
-        s += "image_height={})".format(self.size[1])
+        s += "num_instances={})".format(len(self.tensor))
         return s
 
 
 # TODO make this nicer, this is a direct translation from C2 (but removing the inner loop)
-def keypoints_to_heatmap(keypoints, rois, heatmap_size):
+def _keypoints_to_heatmap(keypoints, rois, heatmap_size):
     """
     Encode keypoint locations into a target heatmap for use in SoftmaxWithLoss across space.
 
@@ -131,7 +128,7 @@ def keypoints_to_heatmap(keypoints, rois, heatmap_size):
 def heatmaps_to_keypoints(maps, rois):
     """
     Extract predicted keypoint locations from heatmaps. Output has shape
-    (#rois, #keypoints, 4) with the 4 rows corresponding to (x, y, logit, prob)
+    (#rois, #keypoints, 4) with the last dimension corresponding to (x, y, logit, prob)
     for each keypoint.
 
     Converts a discrete image coordinate in an NxN image to a continuous keypoint coordinate. We

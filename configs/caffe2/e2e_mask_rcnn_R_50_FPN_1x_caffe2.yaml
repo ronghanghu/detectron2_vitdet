@@ -2,4 +2,4 @@ _BASE_: "../e2e_mask_rcnn_R_50_FPN_1x.yaml"
 MODEL:
   WEIGHT: "catalog://Caffe2Detectron/COCO/35858933/e2e_mask_rcnn_R-50-FPN_1x"
 TEST:
-  EXPECTED_RESULTS: [["bbox", "AP", 37.64, 0.05], ["segm", "AP", 33.815, 0.05]]
+  EXPECTED_RESULTS: [["bbox", "AP", 37.646, 0.03], ["segm", "AP", 33.818, 0.03]]

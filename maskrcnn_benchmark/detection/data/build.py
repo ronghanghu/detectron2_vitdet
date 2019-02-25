@@ -5,11 +5,7 @@ import torch.utils.data
 from torch.utils.data.dataset import ConcatDataset
 
 from maskrcnn_benchmark.data import MapDataset, datasets as D, samplers
-from maskrcnn_benchmark.structures.boxes import Boxes
-from maskrcnn_benchmark.structures.image_list import ImageList
-from maskrcnn_benchmark.structures.instances import Instances
-from maskrcnn_benchmark.structures.keypoints import Keypoints
-from maskrcnn_benchmark.structures.masks import PolygonMasks
+from maskrcnn_benchmark.structures import Boxes, ImageList, Instances, Keypoints, PolygonMasks
 from maskrcnn_benchmark.utils.comm import get_world_size
 
 from ..config import paths_catalog
@@ -219,9 +215,9 @@ class DetectionBatchCollator:
             masks = PolygonMasks(masks)
             target.gt_masks = masks
 
-            kpts = [obj.get("keypoints", []) for obj in annos]
-            kpts = Keypoints(kpts, image_size[::-1])  # TODO(yuxinwu) kpt still takes (w, h)
-            target.gt_keypoints = kpts
+            if len(annos) and "keypoints" in annos[0]:
+                kpts = [obj.get("keypoints", []) for obj in annos]
+                target.gt_keypoints = Keypoints(kpts)
 
             target = target[boxes.nonempty()]
             targets.append(target)

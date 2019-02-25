@@ -127,15 +127,21 @@ class Boxes:
 
     def __getitem__(self, item):
         """
-        Create a new Boxes by indexing on this Boxes.
+        Returns:
+            Boxes: Create a new :class:`Boxes` by indexing.
 
-        It returns `Boxes(self.tensor[item], self.mode)`.
+        The following usage are allowed:
+        1. `new_boxes = boxes[3]`: return a `Boxes` which contains only one box.
+        2. `new_boxes = boxes[2:10]`: return a slice of boxes.
+        3. `new_boxes = boxes[vector]`, where vector is a torch.ByteTensor
+           with `length = len(boxes)`. Nonzero elements in the vector will be selected.
 
-        Note that the returned Boxes might share storage with this Boxes, subject to Pytorch's indexing semantics.
+        Note that the returned Boxes might share storage with this Boxes,
+        subject to Pytorch's indexing semantics.
         """
+        if isinstance(item, int):
+            return Boxes(self.tensor[item].view(1, -1), self.mode)
         b = self.tensor[item]
-        if b.dim() == 1:
-            b = b.view(1, -1)
         assert b.dim() == 2, "Indexing on Boxes with {} failed to return a matrix!".format(item)
         return Boxes(b, self.mode)
 

@@ -4,8 +4,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from maskrcnn_benchmark.layers import cat, nms, smooth_l1_loss
-from maskrcnn_benchmark.structures.boxes import Boxes
-from maskrcnn_benchmark.structures.instances import Instances
+from maskrcnn_benchmark.structures import Boxes, Instances
 from maskrcnn_benchmark.utils.events import get_event_storage
 
 

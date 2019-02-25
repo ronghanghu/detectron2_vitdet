@@ -4,4 +4,4 @@ MODEL:
 DATASETS:
   TEST: ("keypoints_coco_2014_minival_100",)
 TEST:
-  EXPECTED_RESULTS: [["bbox", "AP", 52.86, 0.02], ["keypoints", "AP", 64.29, 0.02]]
+  EXPECTED_RESULTS: [["bbox", "AP", 52.84, 0.02], ["keypoints", "AP", 64.29, 0.02]]

@@ -4,7 +4,7 @@ from torch.nn import functional as F
 
 from maskrcnn_benchmark import layers
 from maskrcnn_benchmark.layers import Conv2d, cat
-from maskrcnn_benchmark.structures.keypoints import Keypoints, heatmaps_to_keypoints
+from maskrcnn_benchmark.structures import Keypoints, heatmaps_to_keypoints
 from maskrcnn_benchmark.utils.events import get_event_storage
 from maskrcnn_benchmark.utils.registry import Registry
 
@@ -91,7 +91,7 @@ def keypoint_rcnn_inference(pred_keypoint_logits, pred_instances):
     keypoint_results = keypoint_results.split(num_instances_per_image, dim=0)
 
     for keypoint_results_per_image, instances_per_image in zip(keypoint_results, pred_instances):
-        # keypoint_results_per_image is (num instances)x(num keypoints)x(x, y, prob, score)
+        # keypoint_results_per_image is (num instances)x(num keypoints)x(x, y, score, prob)
         vis = torch.ones(
             len(instances_per_image),
             keypoint_results_per_image.size(1),
@@ -100,9 +100,7 @@ def keypoint_rcnn_inference(pred_keypoint_logits, pred_instances):
         )
         keypoint_xy = keypoint_results_per_image[:, :, :2]
         keypoint_xyv = cat((keypoint_xy, vis), dim=2)
-        instances_per_image.pred_keypoints = Keypoints(
-            keypoint_xyv, instances_per_image.image_size[::-1]
-        )
+        instances_per_image.pred_keypoints = Keypoints(keypoint_xyv)
 
 
 @ROI_KEYPOINT_HEAD_REGISTRY.register()

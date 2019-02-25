@@ -3,7 +3,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from maskrcnn_benchmark.layers import Conv2d, ConvTranspose2d, cat, weight_init
-from maskrcnn_benchmark.structures.masks import rasterize_polygons_within_box
+from maskrcnn_benchmark.structures import rasterize_polygons_within_box
 from maskrcnn_benchmark.utils.events import get_event_storage
 
 

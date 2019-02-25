@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash -ev
 
 # Run this script at project root by "./infra/linter.sh" before you commit
 

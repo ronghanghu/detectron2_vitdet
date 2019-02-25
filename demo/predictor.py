@@ -5,7 +5,7 @@ from torchvision import transforms as T
 from maskrcnn_benchmark import layers as L
 from maskrcnn_benchmark.modeling.detector import build_detection_model
 from maskrcnn_benchmark.modeling.roi_heads.paste_mask import paste_masks_in_image
-from maskrcnn_benchmark.structures.image_list import to_image_list
+from maskrcnn_benchmark.structures import ImageList
 from maskrcnn_benchmark.utils.checkpoint import DetectronCheckpointer
 
 
@@ -195,7 +195,7 @@ class COCODemo(object):
         image = self.transforms(original_image)
         # convert to an ImageList, padded so that it is divisible by
         # cfg.DATALOADER.SIZE_DIVISIBILITY
-        image_list = to_image_list(image, self.cfg.DATALOADER.SIZE_DIVISIBILITY)
+        image_list = ImageList.from_tensors(image, self.cfg.DATALOADER.SIZE_DIVISIBILITY)
         image_list = image_list.to(self.device)
         # compute predictions
         with torch.no_grad():

@@ -2,8 +2,7 @@ import numpy as np
 import torch
 from torch.nn import functional as F
 
-from maskrcnn_benchmark.structures.boxes import pairwise_iou
-from maskrcnn_benchmark.structures.instances import Instances
+from maskrcnn_benchmark.structures import Instances, pairwise_iou
 from maskrcnn_benchmark.utils.events import get_event_storage
 from maskrcnn_benchmark.utils.registry import Registry
 

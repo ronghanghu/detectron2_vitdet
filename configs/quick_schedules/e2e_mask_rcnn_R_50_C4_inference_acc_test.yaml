@@ -4,4 +4,4 @@ MODEL:
 DATASETS:
   TEST: ("coco_2014_minival_100",)
 TEST:
-  EXPECTED_RESULTS: [["bbox", "AP", 43.1286, 0.02], ["segm", "AP", 38.7513, 0.02]]
+  EXPECTED_RESULTS: [["bbox", "AP", 43.158, 0.02], ["segm", "AP", 38.755, 0.02]]

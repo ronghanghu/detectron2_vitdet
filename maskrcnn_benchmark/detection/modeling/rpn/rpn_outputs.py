@@ -3,8 +3,7 @@ import torch
 import torch.nn.functional as F
 
 from maskrcnn_benchmark.layers import cat, nms, smooth_l1_loss
-from maskrcnn_benchmark.structures.boxes import Boxes, pairwise_iou
-from maskrcnn_benchmark.structures.instances import Instances
+from maskrcnn_benchmark.structures import Boxes, Instances, pairwise_iou
 from maskrcnn_benchmark.utils.events import get_event_storage
 
 from ..matcher import Matcher
