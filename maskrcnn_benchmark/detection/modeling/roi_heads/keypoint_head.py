@@ -6,9 +6,17 @@ from maskrcnn_benchmark import layers
 from maskrcnn_benchmark.layers import Conv2d, cat
 from maskrcnn_benchmark.structures.keypoints import Keypoints, heatmaps_to_keypoints
 from maskrcnn_benchmark.utils.events import get_event_storage
+from maskrcnn_benchmark.utils.registry import Registry
 
 
 _TOTAL_SKIPPED = 0
+
+ROI_KEYPOINT_HEAD_REGISTRY = Registry("ROI_KEYPOINT_HEAD")
+
+
+def build_keypoint_head(cfg):
+    name = cfg.MODEL.ROI_KEYPOINT_HEAD.NAME
+    return ROI_KEYPOINT_HEAD_REGISTRY.get(name)(cfg)
 
 
 def keypoint_rcnn_loss(pred_keypoint_logits, instances, keypoint_side_len):
@@ -97,17 +105,19 @@ def keypoint_rcnn_inference(pred_keypoint_logits, pred_instances):
         )
 
 
+@ROI_KEYPOINT_HEAD_REGISTRY.register()
 class KRCNNConvDeconvUpsampleHead(nn.Module):
     """
     A standard keypoint head containing a series of 3x3 convs, followed by
     a transpose convolution and bilinear interpolation for upsampling.
     """
 
-    def __init__(self, in_channels, conv_layers, num_keypoints, up_scale=2):
+    def __init__(self, cfg):
         """
-        Arguments:
+        Following arguments are read from config:
             in_channels: number of input channels to the first conv in this head
-            conv_layers: an iterable of output channel counts for each conv in the head
+            (inferred from number of feature channels)
+            conv_dims: an iterable of output channel counts for each conv in the head
                          e.g. (512, 512, 512) for three convs outputting 512 channels.
             num_keypoints: number of keypoint heatmaps to predicts, determines the number of
                            channels in the final output.
@@ -115,8 +125,23 @@ class KRCNNConvDeconvUpsampleHead(nn.Module):
                       the spatial size of the final output will be 2*up_scale*input_size
         """
         super(KRCNNConvDeconvUpsampleHead, self).__init__()
+
+        # default up_scale to 2 (this can eventually be moved to config)
+        up_scale = 2
+
+        # process configurations, maybe up_scale can be made part of cfg too ?
+        in_features = cfg.MODEL.ROI_HEADS.IN_FEATURES
+        feature_channels = dict(cfg.MODEL.BACKBONE.OUT_FEATURE_CHANNELS)
+        in_channels = [feature_channels[f] for f in in_features]
+        # Check all channel counts are equal
+        for c in in_channels:
+            assert c == in_channels[0]
+        in_channels = in_channels[0]
+        conv_dims = cfg.MODEL.ROI_KEYPOINT_HEAD.CONV_DIMS
+        num_keypoints = cfg.MODEL.ROI_KEYPOINT_HEAD.NUM_KEYPOINTS
+
         self.blocks = []
-        for idx, layer_channels in enumerate(conv_layers, 1):
+        for idx, layer_channels in enumerate(conv_dims, 1):
             module = Conv2d(in_channels, layer_channels, 3, stride=1, padding=1)
             self.add_module("conv_fcn{}".format(idx), module)
             self.blocks.append(module)
@@ -142,9 +167,3 @@ class KRCNNConvDeconvUpsampleHead(nn.Module):
         x = self.score_lowres(x)
         x = layers.interpolate(x, scale_factor=self.up_scale, mode="bilinear", align_corners=False)
         return x
-
-
-def build_keypoint_head(cfg, input_features):
-    conv_layers = cfg.MODEL.ROI_KEYPOINT_HEAD.CONV_LAYERS
-    num_keypoints = cfg.MODEL.ROI_KEYPOINT_HEAD.NUM_KEYPOINTS
-    return KRCNNConvDeconvUpsampleHead(input_features, conv_layers, num_keypoints)

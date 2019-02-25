@@ -322,7 +322,7 @@ class StandardROIHeads(ROIHeads):
                 scales=keypoint_pooler_scales,
                 sampling_ratio=keypoint_sampling_ratio,
             )
-            self.keypoint_head = build_keypoint_head(cfg, in_channels)
+            self.keypoint_head = build_keypoint_head(cfg)
 
     def forward(self, features, proposals, targets=None):
         """
