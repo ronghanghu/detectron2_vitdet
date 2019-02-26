@@ -140,5 +140,5 @@ class DetectionCheckpointer(Checkpointer):
         # load native detectron.pytorch checkpoint
         loaded = super()._load_file(f)
         if "model" not in loaded:
-            loaded = {"model": model}
+            loaded = {"model": loaded}
         return loaded
