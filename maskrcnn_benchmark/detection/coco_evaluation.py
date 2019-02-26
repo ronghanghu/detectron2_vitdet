@@ -12,10 +12,12 @@ import torch
 from pycocotools.cocoeval import COCOeval
 from tqdm import tqdm
 
+from maskrcnn_benchmark.data import DatasetFromList
 from maskrcnn_benchmark.data.datasets import COCOMeta
 from maskrcnn_benchmark.structures import Boxes, Instances, pairwise_iou
 from maskrcnn_benchmark.utils.comm import all_gather, is_main_process, synchronize
 
+from .config.paths_catalog import DatasetCatalog
 from .data.build import build_detection_test_loader
 from .modeling.roi_heads.paste_mask import paste_masks_in_image
 
@@ -34,7 +36,10 @@ def postprocess(results, original_width, original_height):
     """
     MASK_THRESHOLD = 0.5
     # we assume we did the scaling without changing the aspect ratio
-    scale_x, scale_y = original_width / results.image_size[1], original_height / results.image_size[0]
+    scale_x, scale_y = (
+        original_width / results.image_size[1],
+        original_height / results.image_size[0],
+    )
     results = Instances((original_height, original_width), **results.get_fields())
     pred_boxes = results.pred_boxes
     pred_boxes.tensor[:, 0::2] *= scale_x
@@ -179,9 +184,7 @@ def prepare_for_coco_evaluation(dataset_predictions):
 
 # inspired from Detectron
 # TODO make it work again
-def evaluate_box_proposals(
-    dataset_predictions, coco_dataset, thresholds=None, area="all", limit=None
-):
+def evaluate_box_proposals(dataset_predictions, coco_api, thresholds=None, area="all", limit=None):
     """Evaluate detection proposal recall metrics. This function is a much
     faster alternative to the official COCO API recall evaluation code. However,
     it produces slightly different results.
@@ -221,8 +224,8 @@ def evaluate_box_proposals(
         inds = predictions.objectness_logits.sort(descending=True)[1]
         predictions = predictions[inds]
 
-        ann_ids = coco_dataset.coco_api.getAnnIds(imgIds=prediction_dict["image_id"])
-        anno = coco_dataset.coco_api.loadAnns(ann_ids)
+        ann_ids = coco_api.getAnnIds(imgIds=prediction_dict["image_id"])
+        anno = coco_api.loadAnns(ann_ids)
         gt_boxes = [obj["bbox"] for obj in anno if obj["iscrowd"] == 0]
         gt_boxes = torch.as_tensor(gt_boxes).reshape(-1, 4)  # guard against no boxes
         gt_boxes = Boxes(gt_boxes, mode="xywh").clone(mode="xyxy")
@@ -342,21 +345,22 @@ class COCOResults(object):
         return repr(self.results)
 
 
-def coco_evaluation(cfg, model, coco_dataset, output_folder=None):
+def coco_evaluation(cfg, model, dataset_name, output_folder=None):
     """
     This function returns nothing on non-master processes (but still needs to be called).
     On master process, it returns the following:
 
     Args:
         model: the detection model
-        coco_dataset (COCODetection): the COCO detection dataset
+        dataset_name (str): a name of the dataset that's available in the DatasetCatalog
 
     Returns:
        dict of dict: results[task][metric] is a float.
        list[dict]: one for each image, contains the outputs from the model.
        list[dict]: one for each instance, in the COCO evaluation format.
     """
-    # TODO(yuxin) split the "computation" and "evaluation" to two functions
+    coco_dataset = DatasetFromList(DatasetCatalog.get(dataset_name))
+
     data_loader = build_detection_test_loader(cfg, coco_dataset)
     dataset_predictions = compute_on_dataset(model, data_loader, aggregate_across_ranks=True)
     if not is_main_process():
@@ -404,8 +408,14 @@ def coco_evaluation(cfg, model, coco_dataset, output_folder=None):
         return results.results, coco_results, dataset_predictions
 
     logger.info("Evaluating predictions")
+
+    from pycocotools.coco import COCO
+
+    json_file = DatasetCatalog.get_coco_path(dataset_name)["json_file"]
+    coco_api = COCO(json_file)
+
     for iou_type in iou_types:
-        res = evaluate_predictions_on_coco(coco_dataset.coco_api, coco_results, file_path, iou_type)
+        res = evaluate_predictions_on_coco(coco_api, coco_results, file_path, iou_type)
         results.update(res)
     results = results.results  # get the OrderedDict from COCOResults
     logger.info(results)

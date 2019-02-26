@@ -1,1 +1,1 @@
-from .common import MapDataset
+from .common import DatasetFromList, MapDataset

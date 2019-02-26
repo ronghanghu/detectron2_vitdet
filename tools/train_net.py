@@ -18,7 +18,6 @@ from torch.nn.parallel import DistributedDataParallel
 import maskrcnn_benchmark.utils.comm as comm
 from maskrcnn_benchmark.detection import (
     DetectionCheckpointer,
-    build_dataset,
     build_detection_model,
     build_detection_train_loader,
     build_lr_scheduler,
@@ -113,8 +112,7 @@ def do_test(cfg, model, is_final=True):
         else:
             output_folder = None
 
-        coco_dataset = build_dataset(dataset_name, False)
-        results_per_dataset = coco_evaluation(cfg, model, coco_dataset, output_folder=output_folder)
+        results_per_dataset = coco_evaluation(cfg, model, dataset_name, output_folder=output_folder)
         if comm.is_main_process():
             results.append(results_per_dataset[0])
             if is_final:
@@ -283,14 +281,6 @@ if __name__ == "__main__":
         nargs=argparse.REMAINDER,
     )
     args = parser.parse_args()
-    if "PATHS_CATALOG" in args.opts:
-        import sys
-
-        print(
-            "PATHS_CATALOG was removed! See infra/fb/README for updated instructions.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
 
     launch(
         main,

@@ -1,39 +1,81 @@
 import bisect
 import copy
+import itertools
 import logging
+import numpy as np
 import torch.utils.data
-from torch.utils.data.dataset import ConcatDataset
 
-from maskrcnn_benchmark.data import MapDataset, datasets as D, samplers
+from maskrcnn_benchmark.data import DatasetFromList, MapDataset, samplers
 from maskrcnn_benchmark.structures import Boxes, ImageList, Instances, Keypoints, PolygonMasks
 from maskrcnn_benchmark.utils.comm import get_world_size
 
-from ..config import paths_catalog
+from ..config.paths_catalog import DatasetCatalog
 from .transforms import DetectionTransform
 
 
-def build_dataset(dataset_name, is_train=True, min_keypoints_per_image=0):
+def filter_images_with_only_crowd_annotations(dataset_dicts):
     """
+    Filter out images with only crowd annotations
+    (i.e., images without non-crowd annotations).
+    A common training-time preprocessing on COCO dataset.
+
     Args:
-        dataset_name (str): The name of the dataset, handled by the DatasetCatalog,
-            e.g., coco_2014_train.
-        is_train (bool): whether to setup the dataset for training or testing
+        dataset_dicts (list[dict]): COCO-style annotations.
 
     Returns:
-        a COCODetection instance (to be made more general).
+        list[dict]: the same format, but filtered.
     """
-    data = paths_catalog.DatasetCatalog.get(dataset_name)
-    factory = getattr(D, data["factory"])  # TODO get rid of this
-    args = data["args"]
+    num_before = len(dataset_dicts)
 
-    if data["factory"] == "COCODetection":
-        # for COCODataset, we want to remove images without annotations during training
-        args["remove_images_without_annotations"] = is_train
-        args["min_keypoints_per_image"] = min_keypoints_per_image
+    def valid(anns):
+        for ann in anns:
+            if ann["iscrowd"] == 0:
+                return True
+        return False
 
-    # make dataset from factory
-    dataset = factory(**args)
-    return dataset
+    dataset_dicts = [x for x in dataset_dicts if valid(x["annotations"])]
+    num_after = len(dataset_dicts)
+    logger = logging.getLogger(__name__)
+    logger.info(
+        "Removed {} images with no usable annotations. {} images left.".format(
+            num_before - num_after, num_after
+        )
+    )
+    return dataset_dicts
+
+
+def filter_images_with_few_keypoints(dataset_dicts, min_keypoints_per_image):
+    """
+    Filter out images with too few number of keypoints.
+
+    Args:
+        dataset_dicts (list[dict]): COCO-style annotations.
+
+    Returns:
+        list[dict]: the same format, but filtered.
+    """
+    num_before = len(dataset_dicts)
+
+    def visible_keypoints_in_image(dic):
+        # Each keypoints field has the format [x1, y1, v1, ...], where v is visibility
+        annotations = dic["annotations"]
+        return sum(
+            (np.array(ann["keypoints"][2::3]) > 0).sum()
+            for ann in annotations
+            if "keypoints" in ann
+        )
+
+    dataset_dicts = [
+        x for x in dataset_dicts if visible_keypoints_in_image(x) >= min_keypoints_per_image
+    ]
+    num_after = len(dataset_dicts)
+    logger = logging.getLogger(__name__)
+    logger.info(
+        "Removed {} images with fewer than {} keypoints.".format(
+            num_before - num_after, min_keypoints_per_image
+        )
+    )
+    return dataset_dicts
 
 
 def _quantize(x, bin_edges):
@@ -106,12 +148,17 @@ def build_detection_train_loader(cfg, start_iter=0):
             "example: using://git.io/fhSc4."
         )
 
-    min_kp = 0
+    dataset_dicts = list(
+        itertools.chain.from_iterable(
+            DatasetCatalog.get(dataset_name) for dataset_name in cfg.DATASETS.TRAIN
+        )
+    )
+    dataset_dicts = filter_images_with_only_crowd_annotations(dataset_dicts)
     if cfg.MODEL.KEYPOINT_ON:
         min_kp = cfg.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE
-
-    datasets = [build_dataset(dataset_name, True, min_kp) for dataset_name in cfg.DATASETS.TRAIN]
-    dataset = ConcatDataset(datasets)
+        if min_kp > 0:
+            dataset_dicts = filter_images_with_few_keypoints(dataset_dicts, min_kp)
+    dataset = DatasetFromList(dataset_dicts)
 
     # Bin edges for batching images with similar aspect ratios. If ASPECT_RATIO_GROUPING
     # is enabled, we define two bins with an edge at height / width = 1.
