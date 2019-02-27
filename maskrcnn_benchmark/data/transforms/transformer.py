@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-# File: transformers.py
-
+# File: transformer.py
+import sys
 from PIL import Image
 
 from .base import ImageTransformer
@@ -87,15 +87,19 @@ class ResizeShortestEdge(ImageTransformer):
     while avoiding the longest edge to exceed max_size.
     """
 
-    def __init__(self, short_edge_length, max_size, sample_style, interp=Image.BILINEAR):
+    def __init__(
+        self, short_edge_length, max_size=sys.maxsize, sample_style="range", interp=Image.BILINEAR
+    ):
         """
         Args:
-            short_edge_length ([int, int]): a [min, max] interval from which to sample the
-                shortest edge length.
+            short_edge_length (list[int]): If ``sample_style=="range"``,
+                a [min, max] interval from which to sample the shortest edge length.
+                If ``sample_style=="choice"``, a list of shortest edge lengths to sample from.
             max_size (int): maximum allowed longest edge length.
-            sample_style (str): select short side from a range or choose from given values
+            sample_style (str): either "range" or "choice".
         """
         super(ResizeShortestEdge, self).__init__()
+        assert sample_style in ["range", "choice"], sample_style
 
         self.is_range = sample_style == "range"
         if isinstance(short_edge_length, int):

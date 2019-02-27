@@ -78,6 +78,12 @@ class Instances:
         """
         return name in self._fields
 
+    def remove(self, name):
+        """
+        Remove the field called `name`.
+        """
+        del self._fields[name]
+
     def get(self, name):
         """
         Returns the field called `name`.

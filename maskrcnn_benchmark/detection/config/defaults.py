@@ -50,7 +50,7 @@ _C.INPUT.MAX_SIZE_TEST = 1333
 _C.INPUT.PIXEL_MEAN = [102.9801, 115.9465, 122.7717]
 # Values to be used for image normalization
 _C.INPUT.PIXEL_STD = [1.0, 1.0, 1.0]
-# Convert image to BGR format instead of RGB
+# Whether the model needs BGR input or RGB
 _C.INPUT.BGR = True
 
 
