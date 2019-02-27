@@ -81,9 +81,9 @@ def build_box_head(cfg, input_size):
         return FastRCNNConvFCHead(
             input_size,
             cfg.MODEL.ROI_BOX_HEAD.NUM_CONV,
-            cfg.MODEL.ROI_BOX_HEAD.CONV_HEAD_DIM,
+            cfg.MODEL.ROI_BOX_HEAD.CONV_DIM,
             cfg.MODEL.ROI_BOX_HEAD.NUM_FC,
-            cfg.MODEL.ROI_BOX_HEAD.FC_HEAD_DIM,
+            cfg.MODEL.ROI_BOX_HEAD.FC_DIM,
             norm=cfg.MODEL.ROI_BOX_HEAD.NORM,
         )
     raise ValueError("Unknown head {}".format(head))

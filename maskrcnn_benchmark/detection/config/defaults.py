@@ -200,10 +200,10 @@ _C.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION = 14
 _C.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO = 0
 _C.MODEL.ROI_BOX_HEAD.NUM_FC = 0
 # Hidden layer dimension for FC layers in the RoI box head
-_C.MODEL.ROI_BOX_HEAD.FC_HEAD_DIM = 1024
+_C.MODEL.ROI_BOX_HEAD.FC_DIM = 1024
 _C.MODEL.ROI_BOX_HEAD.NUM_CONV = 0
 # Channel dimension for Conv layers in the RoI box head
-_C.MODEL.ROI_BOX_HEAD.CONV_HEAD_DIM = 256
+_C.MODEL.ROI_BOX_HEAD.CONV_DIM = 256
 # Normalization method for the convolution layers. Options: "" (no norm), "GN".
 _C.MODEL.ROI_BOX_HEAD.NORM = ""
 
