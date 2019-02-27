@@ -24,7 +24,7 @@ source activate detectron2
 # this installs the right pip and dependencies for the fresh python
 conda install ipython
 
-# maskrcnn_benchmark and coco api dependencies
+# detectron2 and coco api dependencies
 pip install ninja yacs cython matplotlib
 
 # Follow PyTorch installation in https://pytorch.org/get-started/locally/

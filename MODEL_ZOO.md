@@ -39,7 +39,7 @@ about different hardware applies here.
 
 The numbers here are in seconds / iteration. The lower, the better.
 
-type | Detectron (P100) | mmdetection (V100) | maskrcnn_benchmark (V100)
+type | Detectron (P100) | mmdetection (V100) | detectron2 (V100)
 -- | -- | -- | --
 Faster R-CNN R-50 C4 | 0.566 | - | 0.4036
 Faster R-CNN R-50 FPN | 0.544 | 0.554 | 0.3530
@@ -54,7 +54,7 @@ Mask R-CNN X-101-32x8d FPN | 0.961 | - | 0.7562
 
 The lower, the better
 
-type | Detectron (P100) | mmdetection (V100) | maskrcnn_benchmark (V100)
+type | Detectron (P100) | mmdetection (V100) | detectron2 (V100)
 -- | -- | -- | --
 Faster R-CNN R-50 C4 | 6.3 | - | 5.8
 Faster R-CNN R-50 FPN | 7.2 | 4.9 | 4.4
@@ -69,7 +69,7 @@ Mask R-CNN X-101-32x8d FPN | 7.7 | - | 7.8
 
 The higher, the better
 
-type | Detectron (P100) | mmdetection (V100) | maskrcnn_benchmark (V100)
+type | Detectron (P100) | mmdetection (V100) | detectron2 (V100)
 -- | -- | -- | --
 Faster R-CNN R-50 C4 | 34.8 | - | 34.8
 Faster R-CNN R-50 FPN | 36.7 | 36.7 | 36.8

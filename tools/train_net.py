@@ -5,7 +5,7 @@ TODO rename the file.
 
 # Set up custom environment before nearly anything else is imported
 # NOTE: this should be the first import (no not reorder)
-from maskrcnn_benchmark.utils.env import setup_environment  # noqa F401 isort:skip
+from detectron2.utils.env import setup_environment  # noqa F401 isort:skip
 
 import argparse
 import datetime
@@ -15,8 +15,8 @@ import time
 import torch
 from torch.nn.parallel import DistributedDataParallel
 
-import maskrcnn_benchmark.utils.comm as comm
-from maskrcnn_benchmark.detection import (
+import detectron2.utils.comm as comm
+from detectron2.detection import (
     DetectionCheckpointer,
     build_detection_model,
     build_detection_train_loader,
@@ -28,12 +28,12 @@ from maskrcnn_benchmark.detection import (
     set_global_cfg,
     verify_results,
 )
-from maskrcnn_benchmark.engine.launch import launch
-from maskrcnn_benchmark.utils.collect_env import collect_env_info
-from maskrcnn_benchmark.utils.comm import reduce_dict
-from maskrcnn_benchmark.utils.events import EventStorage, JSONWriter, get_event_storage
-from maskrcnn_benchmark.utils.logger import setup_logger
-from maskrcnn_benchmark.utils.misc import mkdir
+from detectron2.engine.launch import launch
+from detectron2.utils.collect_env import collect_env_info
+from detectron2.utils.comm import reduce_dict
+from detectron2.utils.events import EventStorage, JSONWriter, get_event_storage
+from detectron2.utils.logger import setup_logger
+from detectron2.utils.misc import mkdir
 
 
 class PeriodicCheckpointer(object):
@@ -57,7 +57,7 @@ class PeriodicCheckpointer(object):
 
 class MetricPrinter:
     def __init__(self, max_iter):
-        self.logger = logging.getLogger("maskrcnn_benchmark.trainer")
+        self.logger = logging.getLogger("detectron2.trainer")
         self._max_iter = max_iter
 
     def write(self):
@@ -137,7 +137,7 @@ def do_train(cfg, model):
 
     data_loader = build_detection_train_loader(cfg, start_iter=start_iter)
 
-    logger = logging.getLogger("maskrcnn_benchmark.trainer")
+    logger = logging.getLogger("detectron2.trainer")
     logger.info("Start training")
     max_iter = cfg.SOLVER.MAX_ITER
     model.train()
@@ -237,7 +237,7 @@ def setup(args):
 def main(args):
     cfg = setup(args)
     model = build_detection_model(cfg)
-    logger = logging.getLogger("maskrcnn_benchmark")
+    logger = logging.getLogger("detectron2")
     logger.info("Model:\n{}".format(model))
     output_dir = cfg.OUTPUT_DIR
 

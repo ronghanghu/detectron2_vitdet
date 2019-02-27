@@ -1,11 +1,11 @@
-from maskrcnn_benchmark.utils.env import setup_environment  # noqa F401  isort:skip
+from detectron2.utils.env import setup_environment  # noqa F401  isort:skip
 
 import argparse
 import os
 import time
 import cv2
 
-from maskrcnn_benchmark.detection import get_cfg, set_global_cfg
+from detectron2.detection import get_cfg, set_global_cfg
 
 from predictor import COCODemo
 

@@ -1,6 +1,6 @@
 ## Webcam and Jupyter notebook demo
 
-This folder contains a simple webcam demo that illustrates how you can use `maskrcnn_benchmark` for inference.
+This folder contains a simple webcam demo that illustrates how you can use `detectron2` for inference.
 
 You can start it by running it from this folder, using one of the following commands:
 ```bash

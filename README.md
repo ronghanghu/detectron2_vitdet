@@ -14,7 +14,7 @@ creating detection and segmentation models using PyTorch 1.0.
 
 ## Simple Demo
 
-We provide a simple demo that illustrates how you can use `maskrcnn_benchmark` for inference:
+We provide a simple webcam demo that illustrates how you can use `detectron2` for inference:
 ```bash
 cd demo
 # use input files:
@@ -38,7 +38,7 @@ Models will be downloaded to `$TORCH_MODEL_ZOO`, which defaults to `~/.torch/mod
 
 ## Perform training on COCO dataset
 
-For the following examples to work, you need to first install `maskrcnn_benchmark`.
+For the following examples to work, you need to first install `detectron2`.
 
 You will also need to download the COCO dataset.
 We recommend to symlink the path to the coco dataset to `datasets/` as follows
@@ -56,7 +56,7 @@ ln -s /path_to_coco_dataset/val2014 datasets/coco/val2014
 ```
 
 You can also configure your own paths to the datasets.
-For that, all you need to do is to modify `maskrcnn_benchmark/config/paths_catalog.py` to
+For that, all you need to do is to modify `detectron2/config/paths_catalog.py` to
 point to the location where your dataset is stored.
 You can also create a new `paths_catalog.py` file which implements the same two classes,
 and pass it as a config argument `PATHS_CATALOG` during training.
@@ -64,7 +64,7 @@ and pass it as a config argument `PATHS_CATALOG` during training.
 ### Single GPU training
 
 ```bash
-python /path_to_maskrcnn_benchmark/tools/train_net.py --config-file "/path/to/config/file.yaml"
+python /path_to_detectron2/tools/train_net.py --config-file "/path/to/config/file.yaml"
 ```
 
 ## Troubleshooting

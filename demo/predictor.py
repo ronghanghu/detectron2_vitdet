@@ -2,11 +2,11 @@ import cv2
 import pycocotools.mask as mask_util
 import torch
 
-from maskrcnn_benchmark.data.transforms import ImageTransformers, Normalize, ResizeShortestEdge
-from maskrcnn_benchmark.detection.checkpoint import DetectionCheckpointer
-from maskrcnn_benchmark.detection.coco_evaluation import postprocess
-from maskrcnn_benchmark.detection.modeling import build_detection_model
-from maskrcnn_benchmark.structures.image_list import ImageList
+from detectron2.data.transforms import ImageTransformers, Normalize, ResizeShortestEdge
+from detectron2.detection.checkpoint import DetectionCheckpointer
+from detectron2.detection.coco_evaluation import postprocess
+from detectron2.detection.modeling import build_detection_model
+from detectron2.structures.image_list import ImageList
 
 
 class COCODemo(object):

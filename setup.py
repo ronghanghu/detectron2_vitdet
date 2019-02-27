@@ -9,7 +9,7 @@ from torch.utils.cpp_extension import CUDA_HOME, CppExtension, CUDAExtension
 
 def get_extensions():
     this_dir = os.path.dirname(os.path.abspath(__file__))
-    extensions_dir = os.path.join(this_dir, "maskrcnn_benchmark", "layers", "csrc")
+    extensions_dir = os.path.join(this_dir, "detectron2", "layers", "csrc")
 
     main_source = os.path.join(extensions_dir, "vision.cpp")
     sources = glob.glob(os.path.join(extensions_dir, "**", "*.cpp"))
@@ -44,7 +44,7 @@ def get_extensions():
 
     ext_modules = [
         extension(
-            "maskrcnn_benchmark._C",
+            "detectron2._C",
             sources,
             include_dirs=include_dirs,
             define_macros=define_macros,
@@ -56,7 +56,7 @@ def get_extensions():
 
 
 setup(
-    name="maskrcnn_benchmark",
+    name="detectron2",
     version="0.1",
     author="fmassa",
     url="https://github.com/facebookresearch/maskrcnn-benchmark",

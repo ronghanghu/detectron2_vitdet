@@ -22,7 +22,7 @@ gcc --version
 If you are using CUDA 9.0 and gcc 6.4.0, then refer to https://github.com/facebookresearch/maskrcnn-benchmark/issues/25,
 which has a summary of the solution. Basically, CUDA 9.0 is not compatible with gcc 6.4.0.
 
-## ImportError: No module named maskrcnn_benchmark.config when running webcam.py
+## ImportError: No module named detectron2.config when running webcam.py
 
 This means that `maskrcnn-benchmark` has not been properly installed.
 Refer to https://github.com/facebookresearch/maskrcnn-benchmark/issues/22 for a few possible issues.

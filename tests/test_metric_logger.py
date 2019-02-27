@@ -1,7 +1,7 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 import unittest
 
-from maskrcnn_benchmark.utils.metric_logger import MetricLogger
+from detectron2.utils.metric_logger import MetricLogger
 
 
 class TestMetricLogger(unittest.TestCase):
