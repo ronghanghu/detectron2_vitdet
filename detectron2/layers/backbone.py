@@ -32,47 +32,32 @@ class Backbone(nn.Module, metaclass=ABCMeta):
         dimension in the "bottom up" and "top down" paths. Set to 0 if no specific
         input size divisibility is required.
         """
-        return self._size_divisibility
-
-    @property
-    def feature_strides(self):
-        """
-        Dict containing strides (values) of each named feature map (keys) produced
-        by the backbone. Example keys (depending on backbone type): "stem", "res2",
-        ..., "res5".
-        """
-        return self._feature_strides
-
-    @property
-    def feature_channels(self):
-        """
-        Dict containing the number of channels (values) in each named feature map
-        (keys) produced by the backbone. Example keys (depending on backbone type):
-        "stem", "res2", ..., "res5".
-        """
-        return self._feature_channels
+        return 0
 
     @property
     def out_features(self):
         """
-        List of output feature maps names that will be returned by :meth:`forward`.
+        Returns:
+            list[str]: List of output feature maps names that will be returned by :meth:`forward`.
         """
         return self._out_features
 
     @property
     def out_feature_strides(self):
         """
-        Dict containing strides (values) of each named feature map (keys) *returned*
-        by the backbone when :meth:`forward` is called. Example keys (depending on
-        backbone type): "stem", "res2", ..., "res5".
+        Returns:
+            dict[str->int]: Dict containing strides (values) of each named feature map (keys) *returned*
+                by the backbone when :meth:`forward` is called. Example keys (depending on
+                backbone type): "stem", "res2", ..., "res5".
         """
-        return {f: self._feature_strides[f] for f in self._out_features}
+        return {f: self._out_feature_strides[f] for f in self._out_features}
 
     @property
     def out_feature_channels(self):
         """
-        Dict containing the number of channels (values) in each named feature map
-        (keys) *returned* by the backbone when :meth:`forward` is called. Example
-        keys (depending on backbone type): "stem", "res2", ..., "res5".
+        Returns:
+            dict[str->int]: Dict containing the number of channels (values) in each named feature map
+                (keys) *returned* by the backbone when :meth:`forward` is called. Example
+                keys (depending on backbone type): "stem", "res2", ..., "res5".
         """
-        return {f: self._feature_channels[f] for f in self._out_features}
+        return {f: self._out_feature_channels[f] for f in self._out_features}

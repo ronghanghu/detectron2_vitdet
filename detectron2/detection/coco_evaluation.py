@@ -17,8 +17,7 @@ from detectron2.data.datasets import COCOMeta
 from detectron2.structures import Boxes, Instances, pairwise_iou
 from detectron2.utils.comm import all_gather, is_main_process, synchronize
 
-from .config.paths_catalog import DatasetCatalog
-from .data.build import build_detection_test_loader
+from .data import DatasetCatalog, build_detection_test_loader
 from .modeling.roi_heads.paste_mask import paste_masks_in_image
 
 

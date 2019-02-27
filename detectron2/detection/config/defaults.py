@@ -25,7 +25,7 @@ _C.MODEL.DEVICE = "cuda"
 _C.MODEL.META_ARCHITECTURE = "GeneralizedRCNN"
 
 # If the WEIGHT starts with a catalog://, like :R-50, the code will look for
-# the path in paths_catalog. Else, it will use it as the specified absolute
+# the path in ModelCatalog. Else, it will use it as the specified absolute
 # path
 _C.MODEL.WEIGHT = ""
 
@@ -58,9 +58,9 @@ _C.INPUT.BGR = True
 # Dataset
 # -----------------------------------------------------------------------------
 _C.DATASETS = CN()
-# List of the dataset names for training, as present in paths_catalog.py
+# List of the dataset names for training. Must be registered in DatasetCatalog
 _C.DATASETS.TRAIN = ()
-# List of the dataset names for testing, as present in paths_catalog.py
+# List of the dataset names for testing. Must be registered in DatasetCatalog
 _C.DATASETS.TEST = ()
 
 # -----------------------------------------------------------------------------

@@ -9,8 +9,11 @@ from detectron2.data import DatasetFromList, MapDataset, samplers
 from detectron2.structures import Boxes, ImageList, Instances, Keypoints, PolygonMasks
 from detectron2.utils.comm import get_world_size
 
-from ..config.paths_catalog import DatasetCatalog
+from .dataset_catalog import DatasetCatalog
 from .transforms import DetectionTransform
+
+
+__all__ = ["build_detection_train_loader", "build_detection_test_loader", "DetectionBatchCollator"]
 
 
 def filter_images_with_only_crowd_annotations(dataset_dicts):
@@ -148,6 +151,7 @@ def build_detection_train_loader(cfg, start_iter=0):
             "example: using://git.io/fhSc4."
         )
 
+    assert len(cfg.DATASETS.TRAIN)
     dataset_dicts = list(
         itertools.chain.from_iterable(
             DatasetCatalog.get(dataset_name) for dataset_name in cfg.DATASETS.TRAIN

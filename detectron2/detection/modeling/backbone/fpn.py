@@ -33,8 +33,8 @@ class FPN(Backbone):
         assert isinstance(bottom_up, Backbone)
 
         # Feature map strides and channels from the bottom up network (e.g. ResNet)
-        in_strides = [bottom_up.feature_strides[f] for f in in_features]
-        in_channels = [bottom_up.feature_channels[f] for f in in_features]
+        in_strides = [bottom_up.out_feature_strides[f] for f in in_features]
+        in_channels = [bottom_up.out_feature_channels[f] for f in in_features]
 
         _assert_strides_are_log2_contiguous(in_strides)
         lateral_convs = []
@@ -74,12 +74,16 @@ class FPN(Backbone):
         self.in_features = in_features
         self.bottom_up = bottom_up
         # Return feature names are "p<stage>", like ["p2", "p3", ..., "p6"]
-        self._feature_strides = {"p{}".format(int(math.log2(s))): s for s in in_strides}
+        self._out_feature_strides = {"p{}".format(int(math.log2(s))): s for s in in_strides}
         if self.top_block:
-            self._feature_strides["p{}".format(stage + 1)] = 2 ** (stage + 1)
-        self._out_features = list(self._feature_strides.keys())
-        self._feature_channels = {k: out_channels for k in self._out_features}
+            self._out_feature_strides["p{}".format(stage + 1)] = 2 ** (stage + 1)
+        self._out_features = list(self._out_feature_strides.keys())
+        self._out_feature_channels = {k: out_channels for k in self._out_features}
         self._size_divisibility = in_strides[-1]
+
+    @property
+    def size_divisibility(self):
+        return self._size_divisibility
 
     def forward(self, x):
         """

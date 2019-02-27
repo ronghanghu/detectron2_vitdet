@@ -56,10 +56,7 @@ ln -s /path_to_coco_dataset/val2014 datasets/coco/val2014
 ```
 
 You can also configure your own paths to the datasets.
-For that, all you need to do is to modify `detectron2/config/paths_catalog.py` to
-point to the location where your dataset is stored.
-You can also create a new `paths_catalog.py` file which implements the same two classes,
-and pass it as a config argument `PATHS_CATALOG` during training.
+See methods in "DatasetCatalog".
 
 ### Single GPU training
 

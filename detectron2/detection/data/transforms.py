@@ -3,6 +3,8 @@ from PIL import Image
 
 from detectron2.data.transforms import Flip, ImageTransformers, Normalize, ResizeShortestEdge
 
+__all__ = ["DetectionTransform"]
+
 
 # TODO this should be more accessible to users and be customizable
 class DetectionTransform:

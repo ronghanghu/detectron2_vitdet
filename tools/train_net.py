@@ -100,6 +100,7 @@ def do_test(cfg, model, is_final=True):
         list[result]: only on the main process, result for each DATASETS.TEST. Each result is a dict of
             dict. result[task][metric] is a float.
     """
+    assert len(cfg.DATASETS.TEST)
     if isinstance(model, DistributedDataParallel):
         model = model.module
     torch.cuda.empty_cache()  # TODO check if it helps

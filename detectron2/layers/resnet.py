@@ -212,11 +212,10 @@ class ResNet(Backbone):
         super(ResNet, self).__init__()
         self.stem = stem
         self.num_classes = num_classes
-        self._size_divisibility = 0
 
         current_stride = self.stem.stride
-        self._feature_strides = {"stem": current_stride}
-        self._feature_channels = {"stem": self.stem.out_channels}
+        self._out_feature_strides = {"stem": current_stride}
+        self._out_feature_channels = {"stem": self.stem.out_channels}
 
         self.stages_and_names = []
         for i, blocks in enumerate(stages):
@@ -227,10 +226,10 @@ class ResNet(Backbone):
             name = "res" + str(i + 2)
             self.add_module(name, stage)
             self.stages_and_names.append((stage, name))
-            self._feature_strides[name] = current_stride = int(
+            self._out_feature_strides[name] = current_stride = int(
                 current_stride * np.prod([k.stride for k in blocks])
             )
-            self._feature_channels[name] = blocks[-1].out_channels
+            self._out_feature_channels[name] = blocks[-1].out_channels
 
         if num_classes is not None:
             self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
