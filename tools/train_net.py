@@ -263,7 +263,12 @@ def main(args):
     do_test(cfg, model)
 
 
-if __name__ == "__main__":
+def parse_args(in_args=None):
+    """
+    Method optionally supports passing arguments. If not provided it is read in
+    from sys.argv. If providing it should be a list as per python documentation.
+    See https://docs.python.org/3/library/argparse.html#argparse.ArgumentParser.parse_args
+    """
     parser = argparse.ArgumentParser(description="PyTorch Object Detection Training")
     parser.add_argument("--config-file", default="", metavar="FILE", help="path to config file")
     parser.add_argument("--eval-only", action="store_true", help="perform evaluation only")
@@ -281,8 +286,11 @@ if __name__ == "__main__":
         default=None,
         nargs=argparse.REMAINDER,
     )
-    args = parser.parse_args()
+    return parser.parse_args(in_args)
 
+
+def detectron2_launch():
+    args = parse_args()
     launch(
         main,
         args.num_gpus,
@@ -291,3 +299,7 @@ if __name__ == "__main__":
         dist_url=args.dist_url,
         args=(args,),
     )
+
+
+if __name__ == "__main__":
+    detectron2_launch()
