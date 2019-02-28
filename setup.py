@@ -58,14 +58,14 @@ def get_extensions():
 setup(
     name="detectron2",
     version="0.1",
-    author="fmassa",
-    url="https://github.com/facebookresearch/maskrcnn-benchmark",
+    author="FAIR",
+    url="unknown",
     description="object detection in pytorch",
     packages=find_packages(exclude=("configs", "tests")),
     install_requires=[
         "termcolor>=1.1",
-        # torch
-        # is torchvision still needed?
+        "PIL",
+        "yacs",
     ],
     ext_modules=get_extensions(),
     cmdclass={"build_ext": torch.utils.cpp_extension.BuildExtension},
