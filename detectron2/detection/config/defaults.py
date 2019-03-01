@@ -148,6 +148,11 @@ _C.MODEL.RPN.NMS_THRESH = 0.7
 # (a the scale used during training or inference)
 _C.MODEL.RPN.MIN_SIZE = 0
 
+# ---------------------------------------------------------------------------- #
+# RPN HEAD options
+# ---------------------------------------------------------------------------- #
+_C.MODEL.RPN_HEAD = CN()
+_C.MODEL.RPN_HEAD.NAME = "StandardRPNHead"
 
 # ---------------------------------------------------------------------------- #
 # ROI HEADS options

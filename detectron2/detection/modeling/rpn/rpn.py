@@ -1,9 +1,11 @@
 import math
+
 import torch
 import torch.nn.functional as F
 from torch import nn
 
 from detectron2.structures import Instances
+from detectron2.utils.registry import Registry
 
 from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher
@@ -49,7 +51,52 @@ def add_ground_truth_to_proposals(gt_boxes, proposals):
     return new_proposals
 
 
-class RPNHead(nn.Module):
+RPN_HEAD_REGISTRY = Registry("RPN_HEAD")
+
+
+def build_rpn_head(cfg):
+    name = cfg.MODEL.RPN_HEAD.NAME
+    return RPN_HEAD_REGISTRY.get(name)(cfg)
+
+
+def shared_rpn_head_in_channels(cfg):
+    """
+    This function calculates the number of in channels of RPN Head and is
+    specific to the case in which the RPN head shares conv layers over all
+    feature map levels. That's why there's a check that all channel counts
+    are the same.
+    """
+    in_features = cfg.MODEL.RPN.IN_FEATURES
+    feature_channels = dict(cfg.MODEL.BACKBONE.OUT_FEATURE_CHANNELS)
+    in_feature_channels = [feature_channels[f] for f in in_features]
+    # Check all channel counts are equal
+    for c in in_feature_channels:
+        assert c == in_feature_channels[0]
+    return in_feature_channels[0]
+
+
+def shared_rpn_head_num_cell_anchors(cfg):
+    """
+    This function calculates the number of anchor cells. This is specific to
+    a RPN Head which shares conv layers over all feature map levels.
+    That's why the length of index [0] for anchor sizes and aspect ratios is
+    correct (even though it ignores the other indices).
+    """
+    anchor_sizes = cfg.MODEL.RPN.ANCHOR_SIZES
+    # Check that all levels use the same number of anchor sizes
+    if len(anchor_sizes) > 1:
+        for c in anchor_sizes:
+            assert len(c) == len(anchor_sizes[0])
+    anchor_aspect_ratios = cfg.MODEL.RPN.ANCHOR_ASPECT_RATIOS
+    # Check that all levels use the same number of aspect ratios
+    if len(anchor_aspect_ratios) > 1:
+        for c in anchor_aspect_ratios:
+            assert len(c) == len(anchor_aspect_ratios[0])
+    return len(anchor_sizes[0]) * len(anchor_aspect_ratios[0])
+
+
+@RPN_HEAD_REGISTRY.register()
+class StandardRPNHead(nn.Module):
     """
     RPN classification and regression heads. Uses a 3x3 conv to produce a shared
     hidden state from which one 1x1 conv predicts objectness logits for each anchor
@@ -57,13 +104,12 @@ class RPNHead(nn.Module):
     each anchor into an object proposal.
     """
 
-    def __init__(self, in_channels, num_cell_anchors):
-        """
-        Args:
-            in_channels (int): number of channels of the input feature map
-            num_cell_anchors (int): number of cell anchors
-        """
-        super(RPNHead, self).__init__()
+    def __init__(self, cfg):
+        super(StandardRPNHead, self).__init__()
+
+        in_channels = shared_rpn_head_in_channels(cfg)
+        num_cell_anchors = shared_rpn_head_num_cell_anchors(cfg)
+
         # 3x3 conv for the hidden representation
         self.conv = nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1)
         # 1x1 conv for predicting objectness logits
@@ -124,26 +170,7 @@ class RPN(nn.Module):
             cfg.MODEL.RPN.BG_IOU_THRESHOLD,
             allow_low_quality_matches=True,
         )
-        self.head = self._build_rpn_head(cfg)
-
-    def _build_rpn_head(self, cfg):
-        """
-        When RPN is applied on multiple feature maps (as in FPN), we share the
-        same RPNHead and therefore the channel counts and number of cell anchors
-        must be the same. Check that this is true and return the counts.
-        """
-        feature_channels = dict(cfg.MODEL.BACKBONE.OUT_FEATURE_CHANNELS)
-        in_channels = [feature_channels[f] for f in self.in_features]
-        # Check all channel counts are equal
-        for c in in_channels:
-            assert c == in_channels[0]
-
-        num_cell_anchors = self.anchor_generator.num_cell_anchors
-        # Check all cell anchor counts are equal
-        for c in num_cell_anchors:
-            assert c == num_cell_anchors[0]
-
-        return RPNHead(in_channels[0], num_cell_anchors[0])
+        self.head = build_rpn_head(cfg)
 
     def forward(self, images, features, gt_instances=None):
         """
