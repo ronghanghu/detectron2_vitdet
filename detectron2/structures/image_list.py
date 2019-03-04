@@ -29,13 +29,13 @@ class ImageList(object):
         return ImageList(cast_tensor, self.image_sizes)
 
     @staticmethod
-    def from_tensors(tensors, size_divisible=0):
+    def from_tensors(tensors, size_divisibility=0):
         """
         Args:
             tensors: a tuple or list of `torch.Tensors`, each of shape (C, Hi, Wi).
                 The Tensors will be padded with zeros so that they will have the same shape.
-            size_divisible (int): If `size_divisible > 0`, also adds padding to ensure
-                the common height and width is divisible by `size_divisible`
+            size_divisibility (int): If `size_divisibility > 0`, also adds padding to ensure
+                the common height and width is divisibility by `size_divisibility`
 
         Returns:
             an `ImageList`.
@@ -48,17 +48,17 @@ class ImageList(object):
         max_size = tuple(max(s) for s in zip(*[img.shape for img in tensors]))
 
         # TODO Ideally, just remove this and let the model handle arbitrary input sizes
-        if size_divisible > 0:
+        if size_divisibility > 0:
             import math
 
-            stride = size_divisible
+            stride = size_divisibility
             max_size = list(max_size)
             max_size[1] = int(math.ceil(max_size[1] / stride) * stride)
             max_size[2] = int(math.ceil(max_size[2] / stride) * stride)
             max_size = tuple(max_size)
 
         batch_shape = (len(tensors),) + max_size
-        batched_imgs = tensors[0].new(*batch_shape).zero_()
+        batched_imgs = tensors[0].new_zeros(batch_shape)
         for img, pad_img in zip(tensors, batched_imgs):
             pad_img[: img.shape[0], : img.shape[1], : img.shape[2]].copy_(img)
 

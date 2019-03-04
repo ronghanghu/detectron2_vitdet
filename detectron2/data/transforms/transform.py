@@ -5,7 +5,6 @@ import numpy as np
 from abc import ABCMeta, abstractmethod
 from PIL import Image
 
-
 __all__ = []
 
 

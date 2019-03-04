@@ -6,7 +6,6 @@ from torch.nn import BatchNorm2d, GroupNorm
 
 from . import Backbone, Conv2d, FrozenBatchNorm2d
 
-
 __all__ = ["ResNetBlockBase", "BottleneckBlock", "BasicStem", "ResNet", "make_stage"]
 
 

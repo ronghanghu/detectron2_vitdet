@@ -44,21 +44,13 @@ class DetectionTransform:
         The dataset_dict is modified in place.
 
         Args:
-            dataset_dict (dict): A dict with the following keys:
-                file_name: str with the path to the image for this dataset entry
-                annotations: list of dicts where each dict has the following keys:
-                    bbox: bounding box for an object given by x0, y0, width, height
-                    segmentation: polygon vertices in the COCO dataset format
-                    is_crowd (optional): bool indicating if the object is a crowd
-                        region or not
+            dataset_dict (dict): A COCO-format annotation dict of one image.
 
         Returns:
             dict: the in-place modified dataset_dict where the annotations are
                 replaced by transformed annotations (according to the configured
-                transformations) and the following keys are inserted:
+                transformations) and a new key is inserted:
                     image: the transformed image as a uint8 numpy array
-                    transformed_width: the width of the transformed image
-                    transformed_height: the height of the transformed image
         """
         image = Image.open(dataset_dict["file_name"]).convert("RGB")
         image = np.asarray(image, dtype="uint8")
@@ -67,8 +59,6 @@ class DetectionTransform:
 
         image, tfm_params = self.tfms.transform_image_get_params(image)
         dataset_dict["image"] = image
-        dataset_dict["transformed_width"] = image.shape[1]
-        dataset_dict["transformed_height"] = image.shape[0]
 
         if not self.is_train:
             del dataset_dict["annotations"]

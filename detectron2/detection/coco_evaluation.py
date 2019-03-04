@@ -14,56 +14,10 @@ from tqdm import tqdm
 
 from detectron2.data import DatasetFromList
 from detectron2.data.datasets import COCOMeta
-from detectron2.structures import Boxes, Instances, pairwise_iou
+from detectron2.structures import Boxes, pairwise_iou
 from detectron2.utils.comm import all_gather, is_main_process, synchronize
 
 from .data import DatasetCatalog, build_detection_test_loader
-from .modeling.roi_heads.paste_mask import paste_masks_in_image
-
-
-def postprocess(results, original_width, original_height):
-    """
-    Postprocess the output boxes.
-    It will scale the boxes according to original image size,
-    and paste the mask to the original image.
-
-    Args:
-        results (Instances): the output from the model. might be modified.
-
-    Returns:
-        Instances: the postprocessed output from the model
-    """
-    MASK_THRESHOLD = 0.5
-    # we assume we did the scaling without changing the aspect ratio
-    scale_x, scale_y = (
-        original_width / results.image_size[1],
-        original_height / results.image_size[0],
-    )
-    results = Instances((original_height, original_width), **results.get_fields())
-    pred_boxes = results.pred_boxes
-    pred_boxes.tensor[:, 0::2] *= scale_x
-    pred_boxes.tensor[:, 1::2] *= scale_y
-    pred_boxes.clip(results.image_size)
-    results = results[pred_boxes.nonempty()]
-
-    if results.has("pred_masks"):
-        pasted_masks = paste_masks_in_image(
-            results.pred_masks,  # N, 1, M, M
-            results.pred_boxes,
-            results.image_size,
-            threshold=MASK_THRESHOLD,
-            padding=1,
-        ).squeeze(1)
-        rles = [mask_util.encode(np.array(mask[:, :, None], order="F"))[0] for mask in pasted_masks]
-        for rle in rles:
-            rle["counts"] = rle["counts"].decode("utf-8")
-        results.pasted_mask_rle = rles
-
-    if results.has("pred_keypoints"):
-        results.pred_keypoints.tensor[:, :, 0] *= scale_x
-        results.pred_keypoints.tensor[:, :, 1] *= scale_y
-
-    return results
 
 
 def compute_on_dataset(model, data_loader, aggregate_across_ranks=True):
@@ -98,13 +52,24 @@ def compute_on_dataset(model, data_loader, aggregate_across_ranks=True):
             outputs = model(batch)
             for dataset_dict, output in zip(dataset_dicts, outputs):
                 output = output.to(cpu_device)
-                output = postprocess(
-                    output, dataset_dict["original_width"], dataset_dict["original_height"]
-                )
 
-                prediction_dict = {
-                    k: dataset_dict[k] for k in ["original_height", "original_width", "image_id"]
-                }
+                if output.has("pred_masks"):
+                    # use RLE to encode the masks, because they are too large and takes memory when
+                    # running over an entire dataset
+                    rles = [
+                        mask_util.encode(np.array(mask[:, :, None], order="F"))[0]
+                        for mask in output.pred_masks
+                    ]
+                    for rle in rles:
+                        # "counts" is an array encoded by mask_util as a byte-stream. Python3's
+                        # json writer which always produces strings cannot serialize a bytestream
+                        # unless you decode it. Thankfully, utf-8 works out (which is also what
+                        # the pycocotools/_mask.pyx does).
+                        rle["counts"] = rle["counts"].decode("utf-8")
+                    output.pred_masks_rle = rles
+                    output.remove("pred_masks")
+
+                prediction_dict = {k: dataset_dict[k] for k in ["height", "width", "image_id"]}
                 prediction_dict["instances"] = output
                 dataset_predictions.append(prediction_dict)
 
@@ -156,9 +121,9 @@ def prepare_for_coco_evaluation(dataset_predictions):
         scores = predictions.scores.tolist()
         classes = predictions.pred_classes.tolist()
 
-        has_mask = predictions.has("pred_masks")
+        has_mask = predictions.has("pred_masks_rle")
         if has_mask:
-            rles = predictions.pasted_mask_rle
+            rles = predictions.pred_masks_rle
 
         mapped_classes = [COCOMeta().contiguous_id_to_json_id[i] for i in classes]
 

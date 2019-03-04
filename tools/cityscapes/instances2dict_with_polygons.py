@@ -14,7 +14,6 @@ from PIL import Image
 from cityscapesscripts.evaluation.instance import Instance
 from cityscapesscripts.helpers.labels import id2label, labels
 
-
 sys.path.append(os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "helpers")))
 
 

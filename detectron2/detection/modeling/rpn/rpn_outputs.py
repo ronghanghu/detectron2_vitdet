@@ -9,7 +9,6 @@ from detectron2.utils.events import get_event_storage
 from ..matcher import Matcher
 from ..sampling import subsample_labels
 
-
 # TODO: comments for future refactoring of this module
 #
 # From @rbg:

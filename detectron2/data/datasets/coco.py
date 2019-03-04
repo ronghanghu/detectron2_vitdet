@@ -2,7 +2,6 @@ import copy
 import logging
 import os
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -34,7 +33,7 @@ def load_coco_json(json_file, image_root):
     Returns:
         list[dict]: a list of per-image annotations. Each dict contains:
             "file_name": the full path to the image file (`image_root` + file name in json)
-            "original_height", "original_width":
+            "height", "width":
             "image_id" (str):
             "annotations" (list[dict]): the per-instance annotations of every
                 instance in this image. Each annotation dict contains:
@@ -102,8 +101,8 @@ def load_coco_json(json_file, image_root):
     for (img_dict, anno_dict_list) in imgs_anns:
         record = {}
         record["file_name"] = os.path.join(image_root, img_dict["file_name"])
-        record["original_height"] = img_dict["height"]
-        record["original_width"] = img_dict["width"]
+        record["height"] = img_dict["height"]
+        record["width"] = img_dict["width"]
         record["image_id"] = img_dict["id"]
 
         objs = []

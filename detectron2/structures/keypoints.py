@@ -2,7 +2,6 @@ import numpy as np
 import cv2
 import torch
 
-
 # from PIL import Image  # TODO investigate how to avoid opencv dependency
 
 

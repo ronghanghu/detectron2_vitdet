@@ -7,7 +7,6 @@ import numpy as np
 import pprint
 from abc import ABCMeta, abstractmethod
 
-
 __all__ = ["ImageTransformer", "ImageTransformers"]
 
 

@@ -4,7 +4,6 @@ import os
 
 from detectron2.data.datasets import load_coco_json
 
-
 __all__ = ["DatasetCatalog"]
 
 

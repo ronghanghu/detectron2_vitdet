@@ -6,7 +6,6 @@ from PIL import Image
 from .base import ImageTransformer
 from .transform import ResizeTransform
 
-
 __all__ = ["Flip", "Resize", "ResizeShortestEdge", "Normalize"]
 
 

@@ -2,7 +2,6 @@ import copy
 import pycocotools.mask as mask_utils
 import torch
 
-
 # TODO TO_REMOVE maybe remove crop&resize and use roialign when we deal with masks with fewer quantizations
 
 

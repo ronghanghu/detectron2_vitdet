@@ -20,9 +20,9 @@ class Instances:
         print(instances.pred_masks)
         print('gt_masks' in instances)
 
-    2. `len(instance)` returns the number of instances
+    2. `len(instances)` returns the number of instances
 
-    3. Indexing: `instance[indices]` will apply the indexing on all the fields
+    3. Indexing: `instances[indices]` will apply the indexing on all the fields
        and returns a new `Instances`.
        Typically, `indices` is a binary vector of length num_instances,
        or a vector of integer indices.
@@ -31,10 +31,10 @@ class Instances:
     def __init__(self, image_size, **kwargs):
         """
         Args:
-            image_size (h, w): the spatial size of the image.
+            image_size (height, width): the spatial size of the image.
             kwargs: fields to add to this `Instances`.
         """
-        self._image_size = image_size  # (image_width, image_height)
+        self._image_size = image_size
         self._fields = {}
         for k, v in kwargs.items():
             self.set(k, v)

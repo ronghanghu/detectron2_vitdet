@@ -12,7 +12,6 @@ from detectron2.utils.comm import get_world_size
 from .dataset_catalog import DatasetCatalog
 from .transforms import DetectionTransform
 
-
 __all__ = ["build_detection_train_loader", "build_detection_test_loader", "DetectionBatchCollator"]
 
 
@@ -148,7 +147,7 @@ def build_detection_train_loader(cfg, start_iter=0):
             "sufficient memory. If this happens, you can reduce "
             "SOLVER.IMS_PER_BATCH. You must also adjust the learning rate and "
             "schedule length according to the linear scaling rule. See for "
-            "example: using://git.io/fhSc4."
+            "example: http://git.io/fhSc4"
         )
 
     assert len(cfg.DATASETS.TRAIN)
@@ -167,9 +166,7 @@ def build_detection_train_loader(cfg, start_iter=0):
     # Bin edges for batching images with similar aspect ratios. If ASPECT_RATIO_GROUPING
     # is enabled, we define two bins with an edge at height / width = 1.
     group_bin_edges = [1] if cfg.DATALOADER.ASPECT_RATIO_GROUPING else []
-    aspect_ratios = [
-        float(img["original_height"]) / float(img["original_width"]) for img in dataset
-    ]
+    aspect_ratios = [float(img["height"]) / float(img["width"]) for img in dataset]
 
     dataset = MapDataset(dataset, DetectionTransform(cfg, True))
 
@@ -238,8 +235,10 @@ class DetectionBatchCollator:
             instances: list[Instances]. None when not training.
             dataset_dicts: the rest of the dataset_dicts
         """
-        # important to remove the numpy images so that they will not go through
-        # the dataloader and hurt performance
+        # Pytorch's dataloader is efficient on torch.Tensor due to
+        # shared-memory, but not efficient on large generic data structures
+        # due to the use of pickle & mp.Queue.
+        # Therefore it's important to remove the numpy images and use torch.Tensor.
         numpy_images = [x.pop("image") for x in dataset_dicts]
         images = [torch.as_tensor(x.transpose(2, 0, 1).astype("float32")) for x in numpy_images]
         images = ImageList.from_tensors(images, self.size_divisible)
@@ -248,9 +247,7 @@ class DetectionBatchCollator:
             return images, None, dataset_dicts
 
         targets = []
-        for dataset_dict in dataset_dicts:
-            image_size = (dataset_dict["transformed_height"], dataset_dict["transformed_width"])
-
+        for dataset_dict, image_size in zip(dataset_dicts, images.image_sizes):
             annos = dataset_dict.pop("annotations")
             boxes = [obj["bbox"] for obj in annos]
             boxes = torch.as_tensor(boxes).reshape(-1, 4)

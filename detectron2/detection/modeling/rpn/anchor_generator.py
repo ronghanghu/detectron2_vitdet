@@ -71,6 +71,16 @@ class AnchorGenerator(nn.Module):
 
     @property
     def num_cell_anchors(self):
+        """
+        Returns:
+            list[int]: Each int is the number of anchors at every pixel
+                location, on that feature map.
+                For example, if at every pixel we use anchors of 3 aspect
+                ratios and 5 sizes, the number of anchors is 15.
+                (See also RPN.ANCHOR_SIZES and RPN.ANCHOR_ASPECT_RATIOS in config)
+
+                In standard RPN models, `num_cell_anchors` on every feature map is the same.
+        """
         return [len(cell_anchors) for cell_anchors in self.cell_anchors]
 
     def grid_anchors(self, grid_sizes):
@@ -173,9 +183,13 @@ def build_anchor_generator(cfg):
 
 
 def generate_anchors(stride=16, sizes=(32, 64, 128, 256, 512), aspect_ratios=(0.5, 1, 2)):
-    """Generates a matrix of anchor boxes in (x1, y1, x2, y2) format. Anchors
+    """
+    Generates anchor boxes in (x1, y1, x2, y2) format. Anchors
     are centered on stride / 2, have (approximate) sqrt areas of the specified
     sizes, and aspect ratios as given.
+
+    Returns:
+        Tensor of shape Nx4, where `N == len(sizes) * len(aspect_ratios)`.
     """
     return _generate_anchors(
         stride, np.array(sizes, dtype=np.float) / stride, np.array(aspect_ratios, dtype=np.float)
@@ -183,7 +197,8 @@ def generate_anchors(stride=16, sizes=(32, 64, 128, 256, 512), aspect_ratios=(0.
 
 
 def _generate_anchors(base_size, scales, aspect_ratios):
-    """Generate anchor (reference) windows by enumerating aspect ratios X
+    """
+    Generate anchor (reference) windows by enumerating aspect ratios X
     scales wrt a reference (0, 0, base_size - 1, base_size - 1) window.
     """
     anchor = np.array([1, 1, base_size, base_size], dtype=np.float) - 1

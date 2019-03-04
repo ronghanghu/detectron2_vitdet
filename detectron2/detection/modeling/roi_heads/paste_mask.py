@@ -2,7 +2,6 @@ import numpy as np
 import torch
 from PIL import Image
 
-
 # The infamous "+ 1" for box width and height dating back to the DPM days:
 # https://github.com/rbgirshick/voc-dpm/blob/master/data/pascal_data.m#L72
 _TO_REMOVE = 1  # See https://github.com/fairinternal/detectron2/issues/49

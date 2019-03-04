@@ -1,10 +1,8 @@
 import cv2
-import pycocotools.mask as mask_util
 import torch
 
 from detectron2.data.transforms import ImageTransformers, Normalize, ResizeShortestEdge
 from detectron2.detection.checkpoint import DetectionCheckpointer
-from detectron2.detection.coco_evaluation import postprocess
 from detectron2.detection.modeling import build_detection_model
 from detectron2.structures.image_list import ImageList
 
@@ -161,6 +159,7 @@ class COCODemo(object):
         # apply pre-processing to image
         if not self.cfg.INPUT.BGR:  # whether the model expects BGR inputs or RGB
             original_image = original_image[:, :, ::-1]
+        height, width = original_image.shape[:2]
         image = self.transforms.transform_image(original_image)
         image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
         # convert to an ImageList, padded so that it is divisible by cfg.DATALOADER.SIZE_DIVISIBILITY
@@ -168,19 +167,9 @@ class COCODemo(object):
         image_list = image_list.to(self.device)
         # compute predictions
         with torch.no_grad():
-            predictions = self.model((image_list, None, None))
+            predictions = self.model((image_list, None, [{"height": height, "width": width}]))
         # there is only a single image
         predictions = predictions[0].to(self.cpu_device)
-
-        # reshape prediction (a Boxes) into the original image size
-        height, width = original_image.shape[:2]
-        predictions = postprocess(predictions, width, height)
-
-        if predictions.has("pasted_mask_rle"):
-            predictions.pred_masks = torch.as_tensor(
-                [mask_util.decode(k) for k in predictions.pasted_mask_rle]
-            )
-            predictions.remove("pasted_mask_rle")
         return predictions
 
     def select_top_predictions(self, predictions):

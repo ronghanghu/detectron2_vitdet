@@ -2,7 +2,6 @@ import json
 from collections import defaultdict
 import torch
 
-
 _CURRENT_STORAGE = None
 
 
