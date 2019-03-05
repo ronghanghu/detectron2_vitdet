@@ -62,11 +62,7 @@ setup(
     url="unknown",
     description="object detection in pytorch",
     packages=find_packages(exclude=("configs", "tests")),
-    install_requires=[
-        "termcolor>=1.1",
-        "PIL",
-        "yacs",
-    ],
+    install_requires=["termcolor>=1.1", "Pillow", "yacs"],
     ext_modules=get_extensions(),
     cmdclass={"build_ext": torch.utils.cpp_extension.BuildExtension},
 )

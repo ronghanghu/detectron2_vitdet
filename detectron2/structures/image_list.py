@@ -35,7 +35,7 @@ class ImageList(object):
             tensors: a tuple or list of `torch.Tensors`, each of shape (C, Hi, Wi).
                 The Tensors will be padded with zeros so that they will have the same shape.
             size_divisibility (int): If `size_divisibility > 0`, also adds padding to ensure
-                the common height and width is divisibility by `size_divisibility`
+                the common height and width is divisible by `size_divisibility`
 
         Returns:
             an `ImageList`.

@@ -83,19 +83,22 @@ _PREDEFINED_DATASETS = {
         "cityscapes/images",
         "cityscapes/annotations/instancesonly_filtered_gtFine_test.json",
     ),
-    # TODO understand what is "mod"
     "keypoints_coco_2014_train": (
         "coco/train2014",
-        "annotations/person_keypoints_train2017_train_mod.json",
+        "coco/annotations/person_keypoints_train2014.json",
     ),
-    "keypoints_coco_2014_val": ("coco/val2014", "coco/annotations/instances_val2014.json"),
+    "keypoints_coco_2014_val": ("coco/val2014", "coco/annotations/person_keypoints_val2014.json"),
     "keypoints_coco_2014_minival": (
         "coco/val2014",
-        "annotations/person_keypoints_val2017_mod.json",
+        "coco/annotations/person_keypoints_minival2014.json",
     ),
     "keypoints_coco_2014_valminusminival": (
         "coco/val2014",
-        "annotations/person_keypoints_train2017_valminusminival_mod.json",
+        "coco/annotations/person_keypoints_valminusminival2014.json",
+    ),
+    "keypoints_coco_2014_minival_100": (
+        "coco/val2014",
+        "coco/annotations/person_keypoints_minival2014_100.json",
     ),
 }
 
