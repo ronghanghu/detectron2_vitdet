@@ -13,16 +13,11 @@ def build_backbone(cfg):
 
     assert isinstance(backbone, Backbone)
 
-    # TODO: find a better way then the defrost/mutate cfg/freeze pattern used here
-    cfg.defrost()
     # Convert dicts to immutable ((key1, val1), (key2, val2), ...) tuples
-    cfg.MODEL.BACKBONE.OUT_FEATURE_STRIDES = tuple(backbone.out_feature_strides.items())
-    cfg.MODEL.BACKBONE.OUT_FEATURE_CHANNELS = tuple(backbone.out_feature_channels.items())
-    # If > 0, this enforces that each collated batch should have a size divisible by SIZE_DIVISIBILITY
-    # Image shape has to be divisible up to the last feature map extracted from the backbone
-    # Otherwise FPN cannot add two featuremaps together.
-    # This value is typically 32.
-    cfg.DATALOADER.SIZE_DIVISIBILITY = backbone.size_divisibility
-    cfg.freeze()
+    cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_STRIDES = tuple(backbone.out_feature_strides.items())
+    cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_CHANNELS = tuple(backbone.out_feature_channels.items())
+
+    # TODO remove this from dataloader and apply it in the model instead (depend on #25)
+    cfg.DATALOADER.COMPUTED_SIZE_DIVISIBILITY = backbone.size_divisibility
 
     return backbone

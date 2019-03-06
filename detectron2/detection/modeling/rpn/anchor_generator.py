@@ -124,7 +124,7 @@ class AnchorGenerator(nn.Module):
 def build_anchor_generator(cfg):
     sizes = cfg.MODEL.RPN.ANCHOR_SIZES
     aspect_ratios = cfg.MODEL.RPN.ANCHOR_ASPECT_RATIOS
-    feature_strides = dict(cfg.MODEL.BACKBONE.OUT_FEATURE_STRIDES)
+    feature_strides = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_STRIDES)
     feature_strides = [feature_strides[f] for f in cfg.MODEL.RPN.IN_FEATURES]
     anchor_generator = AnchorGenerator(feature_strides, sizes, aspect_ratios)
     return anchor_generator

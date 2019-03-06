@@ -179,7 +179,7 @@ def build_detection_train_loader(cfg, start_iter=0):
         dataset,
         num_workers=cfg.DATALOADER.NUM_WORKERS,
         batch_sampler=batch_sampler,
-        collate_fn=DetectionBatchCollator(True, cfg.DATALOADER.SIZE_DIVISIBILITY),
+        collate_fn=DetectionBatchCollator(True, cfg.DATALOADER.COMPUTED_SIZE_DIVISIBILITY),
     )
     return data_loader
 
@@ -187,7 +187,7 @@ def build_detection_train_loader(cfg, start_iter=0):
 def build_detection_test_loader(cfg, dataset):
     """
     Args:
-        cfg: the yacs config
+        cfg: a detectron2 CfgNode
         dataset: a torch Dataset
 
     Returns:
@@ -205,7 +205,7 @@ def build_detection_test_loader(cfg, dataset):
         dataset,
         num_workers=cfg.DATALOADER.NUM_WORKERS,
         batch_sampler=batch_sampler,
-        collate_fn=DetectionBatchCollator(False, cfg.DATALOADER.SIZE_DIVISIBILITY),
+        collate_fn=DetectionBatchCollator(False, cfg.DATALOADER.COMPUTED_SIZE_DIVISIBILITY),
     )
     return data_loader
 

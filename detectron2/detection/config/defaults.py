@@ -1,4 +1,4 @@
-from yacs.config import CfgNode as CN
+from detectron2.utils.config import CfgNode as CN
 
 # -----------------------------------------------------------------------------
 # Convention about Training / Test specific parameters
@@ -73,6 +73,15 @@ _C.DATALOADER.NUM_WORKERS = 4
 # are not batched with portrait images.
 _C.DATALOADER.ASPECT_RATIO_GROUPING = True
 
+# If > 0, this enforces that each collated batch should have a size divisible by SIZE_DIVISIBILITY
+# Image shape has to be divisible up to the last feature map extracted from the backbone
+# Otherwise FPN cannot add two featuremaps together.
+# This value is typically 32 for FPN models.
+#
+# It is a computed attribute that is filled by the backbone
+# TODO remove this from dataloader and apply it in the model instead (depend on #25)
+# _C.DATALOADER.COMPUTED_SIZE_DIVISIBILITY = 0
+
 
 # ---------------------------------------------------------------------------- #
 # Backbone options
@@ -82,6 +91,10 @@ _C.MODEL.BACKBONE = CN()
 _C.MODEL.BACKBONE.NAME = "build_resnet_backbone"
 # Add StopGrad at a specified stage so the bottom layers are frozen
 _C.MODEL.BACKBONE.FREEZE_AT = 2
+
+# Computed attributes that will be filled during backbone construction
+# _C.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_STRIDES = (('res1', 4), ('res2', 8), ...)
+# _C.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_CHANNELS = (('res1', 64), ('res2', 128), ...)
 
 
 # ---------------------------------------------------------------------------- #

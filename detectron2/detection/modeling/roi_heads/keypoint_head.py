@@ -128,7 +128,7 @@ class KRCNNConvDeconvUpsampleHead(nn.Module):
 
         # process configurations, maybe up_scale can be made part of cfg too ?
         in_features = cfg.MODEL.ROI_HEADS.IN_FEATURES
-        feature_channels = dict(cfg.MODEL.BACKBONE.OUT_FEATURE_CHANNELS)
+        feature_channels = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_CHANNELS)
         in_channels = [feature_channels[f] for f in in_features]
         # Check all channel counts are equal
         for c in in_channels:

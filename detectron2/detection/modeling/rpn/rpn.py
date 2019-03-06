@@ -67,7 +67,7 @@ def shared_rpn_head_in_channels(cfg):
     are the same.
     """
     in_features = cfg.MODEL.RPN.IN_FEATURES
-    feature_channels = dict(cfg.MODEL.BACKBONE.OUT_FEATURE_CHANNELS)
+    feature_channels = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_CHANNELS)
     in_feature_channels = [feature_channels[f] for f in in_features]
     # Check all channel counts are equal
     for c in in_feature_channels:

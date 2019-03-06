@@ -162,8 +162,8 @@ class COCODemo(object):
         height, width = original_image.shape[:2]
         image = self.transforms.transform_image(original_image)
         image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
-        # convert to an ImageList, padded so that it is divisible by cfg.DATALOADER.SIZE_DIVISIBILITY
-        image_list = ImageList.from_tensors([image], self.cfg.DATALOADER.SIZE_DIVISIBILITY)
+        # convert to an ImageList, padded so that it is divisible by SIZE_DIVISIBILITY
+        image_list = ImageList.from_tensors([image], self.cfg.DATALOADER.COMPUTED_SIZE_DIVISIBILITY)
         image_list = image_list.to(self.device)
         # compute predictions
         with torch.no_grad():

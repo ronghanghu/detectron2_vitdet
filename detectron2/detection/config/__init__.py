@@ -11,9 +11,9 @@ def get_cfg():
     Get a copy of the default config.
 
     Returns:
-        a yacs CfgNode instance.
+        a detectron2 CfgNode instance.
     """
-    return CfgNode(_C.clone())
+    return _C.clone()
 
 
 def set_global_cfg(cfg):

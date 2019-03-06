@@ -131,7 +131,7 @@ def _assert_strides_are_log2_contiguous(strides):
 def build_resnet_fpn_backbone(cfg):
     """
     Args:
-        cfg (yacs.CfgNode)
+        cfg: a detectron2 CfgNode
 
     Returns:
         backbone (Backbone): backbone module, must be a subclass of :class:`Backbone`.
