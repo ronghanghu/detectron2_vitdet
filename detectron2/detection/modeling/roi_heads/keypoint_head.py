@@ -18,7 +18,7 @@ def build_keypoint_head(cfg):
     return ROI_KEYPOINT_HEAD_REGISTRY.get(name)(cfg)
 
 
-def keypoint_rcnn_loss(pred_keypoint_logits, instances, keypoint_side_len):
+def keypoint_rcnn_loss(pred_keypoint_logits, instances, normalizer):
     """
     Arguments:
         pred_keypoint_logits (Tensor): A tensor of shape (B, N, S, S) where B is the batch size,
@@ -28,13 +28,15 @@ def keypoint_rcnn_loss(pred_keypoint_logits, instances, keypoint_side_len):
             are predictions from the model that are in 1:1 correspondence with pred_keypoint_logits.
             Each Instances should contain a `gt_keypoints` field containing a `structures.Keypoint`
             instance.
-        keypoint_side_len (int): Specifies the side length of the square keypoint heatmaps.
+        normalizer (float): Normalize the loss by this amount. If not specified, we normalize by the
+            number of visible keypoints in the minibatch.
 
     Returns a scalar tensor containing the loss.
     """
     heatmaps = []
     valid = []
 
+    keypoint_side_len = pred_keypoint_logits.shape[2]
     for instances_per_image in instances:
         keypoints = instances_per_image.gt_keypoints
         heatmaps_per_image, valid_per_image = keypoints.to_heatmap(
@@ -60,8 +62,14 @@ def keypoint_rcnn_loss(pred_keypoint_logits, instances, keypoint_side_len):
     pred_keypoint_logits = pred_keypoint_logits.view(N * K, H * W)
 
     keypoint_loss = F.cross_entropy(
-        pred_keypoint_logits[valid], keypoint_targets[valid], reduction="mean"
+        pred_keypoint_logits[valid], keypoint_targets[valid], reduction="sum"
     )
+
+    # If a normalizer isn't specified, normalize by the number of visible keypoints in the minibatch
+    if normalizer is None:
+        normalizer = valid.numel()
+    keypoint_loss /= normalizer
+
     return keypoint_loss
 
 

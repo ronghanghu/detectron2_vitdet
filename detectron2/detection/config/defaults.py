@@ -183,8 +183,8 @@ _C.MODEL.ROI_HEADS.FG_IOU_THRESHOLD = 0.5
 _C.MODEL.ROI_HEADS.BG_IOU_THRESHOLD = 0.5
 # RoI minibatch size *per image* (number of regions of interest [ROIs])
 # Total number of RoIs per training minibatch =
-#   TRAIN.BATCH_SIZE_PER_IM * TRAIN.IMS_PER_BATCH * NUM_GPUS
-# E.g., a common configuration is: 512 * 2 * 8 = 8192
+#   ROI_HEADS.BATCH_SIZE_PER_IMAGE * SOLVER.IMS_PER_BATCH
+# E.g., a common configuration is: 512 * 16 = 8192
 _C.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 512
 # Target fraction of RoI minibatch that is labeled foreground (i.e. class > 0)
 _C.MODEL.ROI_HEADS.POSITIVE_FRACTION = 0.25
@@ -289,7 +289,26 @@ _C.MODEL.ROI_KEYPOINT_HEAD.KEYPOINT_FLIP_MAP = (
     ("left_ankle", "right_ankle"),
 )
 _C.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE = 10
-
+# Normalize by the total number of visible keypoints in the minibatch if True.
+# Otherwise, normalize by the total number of keypoints that could ever exist
+# in the minibatch.
+# The keypoint softmax loss is only calculated on visible keypoints.
+# Since the number of visible keypoints can vary significantly between
+# minibatches, this has the effect of up-weighting the importance of
+# minibatches with few visible keypoints. (Imagine the extreme case of
+# only one visible keypoint versus N: in the case of N, each one
+# contributes 1/N to the gradient compared to the single keypoint
+# determining the gradient direction). Instead, we can normalize the
+# loss by the total number of keypoints, if it were the case that all
+# keypoints were visible in a full minibatch. (Returning to the example,
+# this means that the one visible keypoint contributes as much as each
+# of the N keypoints.)
+_C.MODEL.ROI_KEYPOINT_HEAD.NORMALIZE_LOSS_BY_VISIBLE_KEYPOINTS = True
+# Multi-task loss weight to use for keypoints
+# Recommended values:
+#   - use 1.0 if NORMALIZE_LOSS_BY_VISIBLE_KEYPOINTS is True
+#   - use 4.0 if NORMALIZE_LOSS_BY_VISIBLE_KEYPOINTS is False
+_C.MODEL.ROI_KEYPOINT_HEAD.LOSS_WEIGHT = 1.0
 
 # ---------------------------------------------------------------------------- #
 # ResNe[X]t options (ResNets = {ResNet, ResNeXt}
