@@ -111,31 +111,22 @@ class KRCNNConvDeconvUpsampleHead(nn.Module):
 
     def __init__(self, cfg):
         """
-        Following arguments are read from config:
-            in_channels: number of input channels to the first conv in this head
-            (inferred from number of feature channels)
+        The following attributes are parsed from config:
+            in_channels: from ROI_KEYPOINT_HEAD.COMPUTED_INPUT_SIZE
             conv_dims: an iterable of output channel counts for each conv in the head
                          e.g. (512, 512, 512) for three convs outputting 512 channels.
             num_keypoints: number of keypoint heatmaps to predicts, determines the number of
                            channels in the final output.
-            up_scale: scale factor for final bilinear interpolation
-                      the spatial size of the final output will be 2*up_scale*input_size
         """
         super(KRCNNConvDeconvUpsampleHead, self).__init__()
 
+        # fmt: off
         # default up_scale to 2 (this can eventually be moved to config)
-        up_scale = 2
-
-        # process configurations, maybe up_scale can be made part of cfg too ?
-        in_features = cfg.MODEL.ROI_HEADS.IN_FEATURES
-        feature_channels = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_CHANNELS)
-        in_channels = [feature_channels[f] for f in in_features]
-        # Check all channel counts are equal
-        for c in in_channels:
-            assert c == in_channels[0]
-        in_channels = in_channels[0]
-        conv_dims = cfg.MODEL.ROI_KEYPOINT_HEAD.CONV_DIMS
+        up_scale      = 2
+        conv_dims     = cfg.MODEL.ROI_KEYPOINT_HEAD.CONV_DIMS
         num_keypoints = cfg.MODEL.ROI_KEYPOINT_HEAD.NUM_KEYPOINTS
+        in_channels   = cfg.MODEL.ROI_KEYPOINT_HEAD.COMPUTED_INPUT_SIZE[0]
+        # fmt: on
 
         self.blocks = []
         for idx, layer_channels in enumerate(conv_dims, 1):

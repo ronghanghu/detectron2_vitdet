@@ -3,27 +3,38 @@ from torch import nn
 from torch.nn import functional as F
 
 from detectron2.layers import Conv2d, weight_init
+from detectron2.utils.registry import Registry
+
+ROI_BOX_HEAD_REGISTRY = Registry("ROI_BOX_HEAD")
 
 
+@ROI_BOX_HEAD_REGISTRY.register()
 class FastRCNNConvFCHead(nn.Module):
     """
     A head with several 3x3 conv layers (each followed by norm & relu) and
     several fc layers (each followed by relu).
     """
 
-    def __init__(self, input_size, num_conv, conv_dim, num_fc, fc_dim, norm=""):
+    def __init__(self, cfg):
         """
-        Args:
-            input_size: channels, height, width
-            num_conv: int
-            conv_dim: int
-            num_fc: int
-            fc_dim: int
-            norm (str): normalization for the conv layers
+        The following attributes are parsed from config:
+            input size from ROI_BOX_HEAD.COMPUTED_INPUT_SIZE
+            num_conv, num_fc: the number of conv/fc layers
+            conv_dim/fc_dim: the dimension of the conv/fc layers
+            norm: normalization for the conv layers
         """
         super(FastRCNNConvFCHead, self).__init__()
-        assert isinstance(input_size, (list, tuple))
-        assert len(input_size) == 3
+
+        # fmt: off
+        input_size = cfg.MODEL.ROI_BOX_HEAD.COMPUTED_INPUT_SIZE
+        num_conv   = cfg.MODEL.ROI_BOX_HEAD.NUM_CONV
+        conv_dim   = cfg.MODEL.ROI_BOX_HEAD.CONV_DIM
+        num_fc     = cfg.MODEL.ROI_BOX_HEAD.NUM_FC
+        fc_dim     = cfg.MODEL.ROI_BOX_HEAD.FC_DIM
+        norm       = cfg.MODEL.ROI_BOX_HEAD.NORM
+        # fmt: on
+        assert len(input_size) == 3, input_size
+
         assert num_conv + num_fc > 0
 
         self._output_size = input_size
@@ -70,20 +81,6 @@ class FastRCNNConvFCHead(nn.Module):
         return self._output_size
 
 
-# TODO: use registration
-def build_box_head(cfg, input_size):
-    """
-    Args:
-        input_size: channels, or (channels, height, width)
-    """
-    head = cfg.MODEL.ROI_BOX_HEAD.NAME
-    if head == "FastRCNNConvFCHead":
-        return FastRCNNConvFCHead(
-            input_size,
-            cfg.MODEL.ROI_BOX_HEAD.NUM_CONV,
-            cfg.MODEL.ROI_BOX_HEAD.CONV_DIM,
-            cfg.MODEL.ROI_BOX_HEAD.NUM_FC,
-            cfg.MODEL.ROI_BOX_HEAD.FC_DIM,
-            norm=cfg.MODEL.ROI_BOX_HEAD.NORM,
-        )
-    raise ValueError("Unknown head {}".format(head))
+def build_box_head(cfg):
+    name = cfg.MODEL.ROI_BOX_HEAD.NAME
+    return ROI_BOX_HEAD_REGISTRY.get(name)(cfg)

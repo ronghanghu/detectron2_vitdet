@@ -223,20 +223,26 @@ _C.MODEL.ROI_BOX_HEAD.NUM_CONV = 0
 _C.MODEL.ROI_BOX_HEAD.CONV_DIM = 256
 # Normalization method for the convolution layers. Options: "" (no norm), "GN".
 _C.MODEL.ROI_BOX_HEAD.NORM = ""
+# The caller of box head is responsible to fill this computed attribute
+# about the input size of the box head.
+# _C.MODEL.ROI_BOX_HEAD.COMPUTED_INPUT_SIZE = (channel, height, width)
 
 
 # ---------------------------------------------------------------------------- #
 # Mask Head
 # ---------------------------------------------------------------------------- #
 _C.MODEL.ROI_MASK_HEAD = CN()
-# Options : MaskRCNN4ConvUpsampleHead,, MaskRCNNUpsampleHead
-_C.MODEL.ROI_MASK_HEAD.NAME = "MaskRCNNUpsampleHead"
+_C.MODEL.ROI_MASK_HEAD.NAME = "MaskRCNNConvUpsampleHead"
 _C.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION = 14
 _C.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO = 0
+_C.MODEL.ROI_MASK_HEAD.NUM_CONV = 0  # The number of convs in the mask head
 _C.MODEL.ROI_MASK_HEAD.CONV_DIM = 256
 _C.MODEL.ROI_MASK_HEAD.RESOLUTION = 14
 # Normalization method for the convolution layers. Options: "" (no norm), "GN".
 _C.MODEL.ROI_MASK_HEAD.NORM = ""
+# The caller of mask head is responsible to fill this computed attribute
+# about the input size of the mask head.
+# _C.MODEL.ROI_MASK_HEAD.COMPUTED_INPUT_SIZE = (channel, height, width)
 
 
 # ---------------------------------------------------------------------------- #
@@ -249,6 +255,9 @@ _C.MODEL.ROI_KEYPOINT_HEAD.POOLER_SAMPLING_RATIO = 0
 _C.MODEL.ROI_KEYPOINT_HEAD.CONV_DIMS = tuple(512 for _ in range(8))
 _C.MODEL.ROI_KEYPOINT_HEAD.RESOLUTION = 14
 _C.MODEL.ROI_KEYPOINT_HEAD.NUM_KEYPOINTS = 17
+# The caller of keypoint head is responsible to fill this computed attribute
+# about the input size of the keypoint head.
+# _C.MODEL.ROI_KEYPOINT_HEAD.COMPUTED_INPUT_SIZE = (channel, height, width)
 _C.MODEL.ROI_KEYPOINT_HEAD.KEYPOINT_NAMES = (
     "nose",
     "left_eye",

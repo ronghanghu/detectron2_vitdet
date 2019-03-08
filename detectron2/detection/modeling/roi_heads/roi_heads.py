@@ -205,9 +205,13 @@ class Res5ROIHeads(ROIHeads):
         self.box2box_transform = Box2BoxTransform(weights=bbox_reg_weights)
 
         if self.mask_on:
-            self.mask_head = build_mask_head(
-                cfg, (out_channels, pooler_resolution, pooler_resolution)
+            cfg = cfg.clone()
+            cfg.MODEL.ROI_MASK_HEAD.COMPUTED_INPUT_SIZE = (
+                out_channels,
+                pooler_resolution,
+                pooler_resolution,
             )
+            self.mask_head = build_mask_head(cfg)
 
     def _shared_roi_transform(self, features, boxes):
         x = self.pooler(features, boxes)
@@ -295,14 +299,19 @@ class StandardROIHeads(ROIHeads):
         # then we share the same predictors and therefore the channel counts must be the same
         in_channels = [self.feature_channels[f] for f in self.in_features]
         # Check all channel counts are equal
-        for c in in_channels:
-            assert c == in_channels[0]
+        assert len(set(in_channels)) == 1, in_channels
         in_channels = in_channels[0]
 
+        cfg = cfg.clone()
         self.box_pooler = ROIPooler(
             output_size=pooler_resolution, scales=pooler_scales, sampling_ratio=sampling_ratio
         )
-        self.box_head = build_box_head(cfg, (in_channels, pooler_resolution, pooler_resolution))
+        cfg.MODEL.ROI_BOX_HEAD.COMPUTED_INPUT_SIZE = (
+            in_channels,
+            pooler_resolution,
+            pooler_resolution,
+        )
+        self.box_head = build_box_head(cfg)
 
         self.box_predictor = FastRCNNOutputHead(self.box_head.output_size, num_classes)
         self.box2box_transform = Box2BoxTransform(weights=bbox_reg_weights)
@@ -313,12 +322,23 @@ class StandardROIHeads(ROIHeads):
                 scales=mask_pooler_scales,
                 sampling_ratio=mask_sampling_ratio,
             )
-            self.mask_head = build_mask_head(cfg, in_channels)
+            cfg.MODEL.ROI_MASK_HEAD.COMPUTED_INPUT_SIZE = (
+                in_channels,
+                mask_pooler_resolution,
+                mask_pooler_resolution,
+            )
+            self.mask_head = build_mask_head(cfg)
+
         if self.keypoint_on:
             self.keypoint_pooler = ROIPooler(
                 output_size=keypoint_pooler_resolution,
                 scales=keypoint_pooler_scales,
                 sampling_ratio=keypoint_sampling_ratio,
+            )
+            cfg.MODEL.ROI_KEYPOINT_HEAD.COMPUTED_INPUT_SIZE = (
+                in_channels,
+                keypoint_pooler_resolution,
+                keypoint_pooler_resolution,
             )
             self.keypoint_head = build_keypoint_head(cfg)
 

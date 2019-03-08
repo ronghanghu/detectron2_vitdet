@@ -5,6 +5,9 @@ from torch.nn import functional as F
 from detectron2.layers import Conv2d, ConvTranspose2d, cat, weight_init
 from detectron2.structures import rasterize_polygons_within_box
 from detectron2.utils.events import get_event_storage
+from detectron2.utils.registry import Registry
+
+ROI_MASK_HEAD_REGISTRY = Registry("ROI_MASK_HEAD")
 
 
 def get_mask_ground_truth(gt_masks, pred_boxes, mask_side_len):
@@ -134,16 +137,37 @@ def mask_rcnn_inference(pred_mask_logits, pred_instances):
         instances.pred_masks = prob
 
 
+@ROI_MASK_HEAD_REGISTRY.register()
 class MaskRCNNConvUpsampleHead(nn.Module):
-    def __init__(self, num_convs, num_classes, input_channels, feature_channels, norm):
+    """
+    A mask head with several conv layers, plus an upsample layer (with `ConvTranspose2d`).
+    """
+
+    def __init__(self, cfg):
+        """
+        The following attributes are parsed from config:
+            input channels from ROI_MASK_HEAD.COMPUTED_INPUT_SIZE
+            num_conv: the number of conv layers
+            conv_dim: the dimension of the conv layers
+            norm: normalization for the conv layers
+        """
         super(MaskRCNNConvUpsampleHead, self).__init__()
+
+        # fmt: off
+        num_classes      = cfg.MODEL.ROI_HEADS.NUM_CLASSES
+        conv_dims        = cfg.MODEL.ROI_MASK_HEAD.CONV_DIM
+        norm             = cfg.MODEL.ROI_MASK_HEAD.NORM
+        num_conv         = cfg.MODEL.ROI_MASK_HEAD.NUM_CONV
+        input_channels   = cfg.MODEL.ROI_MASK_HEAD.COMPUTED_INPUT_SIZE[0]
+        # fmt: on
+
         self.conv_norm_relus = []
 
-        for k in range(num_convs):
-            norm_module = nn.GroupNorm(32, feature_channels) if norm == "GN" else None
+        for k in range(num_conv):
+            norm_module = nn.GroupNorm(32, conv_dims) if norm == "GN" else None
             conv = Conv2d(
-                input_channels if k == 0 else feature_channels,
-                feature_channels,
+                input_channels if k == 0 else conv_dims,
+                conv_dims,
                 kernel_size=3,
                 stride=1,
                 padding=1,
@@ -155,13 +179,13 @@ class MaskRCNNConvUpsampleHead(nn.Module):
             self.conv_norm_relus.append(conv)
 
         self.deconv = ConvTranspose2d(
-            feature_channels if num_convs > 0 else input_channels,
-            feature_channels,
+            conv_dims if num_conv > 0 else input_channels,
+            conv_dims,
             kernel_size=2,
             stride=2,
             padding=0,
         )
-        self.predictor = Conv2d(feature_channels, num_classes, kernel_size=1, stride=1, padding=0)
+        self.predictor = Conv2d(conv_dims, num_classes, kernel_size=1, stride=1, padding=0)
 
         for layer in self.conv_norm_relus + [self.deconv, self.predictor]:
             weight_init.c2_msra_fill(layer)
@@ -173,22 +197,6 @@ class MaskRCNNConvUpsampleHead(nn.Module):
         return self.predictor(x)
 
 
-# TODO: use registration
-def build_mask_head(cfg, input_size):
-    """
-    input_size: int (channels) or tuple (channels, height, width)
-    """
-    head = cfg.MODEL.ROI_MASK_HEAD.NAME
-    num_classes = cfg.MODEL.ROI_HEADS.NUM_CLASSES
-    norm = cfg.MODEL.ROI_MASK_HEAD.NORM
-    if not isinstance(input_size, int):
-        input_size = input_size[0]
-    if head == "MaskRCNN4ConvUpsampleHead":
-        return MaskRCNNConvUpsampleHead(
-            4, num_classes, input_size, cfg.MODEL.ROI_MASK_HEAD.CONV_DIM, norm=norm
-        )
-    if head == "MaskRCNNUpsampleHead":
-        return MaskRCNNConvUpsampleHead(
-            0, num_classes, input_size, cfg.MODEL.ROI_MASK_HEAD.CONV_DIM, norm=norm
-        )
-    raise ValueError("Unknown head {}".format(head))
+def build_mask_head(cfg):
+    name = cfg.MODEL.ROI_MASK_HEAD.NAME
+    return ROI_MASK_HEAD_REGISTRY.get(name)(cfg)
