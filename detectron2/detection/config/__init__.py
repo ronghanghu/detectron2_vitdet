@@ -2,7 +2,6 @@ from detectron2.utils.config import CfgNode
 
 from .defaults import _C
 
-
 global_cfg = CfgNode()
 
 

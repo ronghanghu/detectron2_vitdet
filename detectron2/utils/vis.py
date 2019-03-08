@@ -1,13 +1,13 @@
 import copy
 import numpy as np
 
+from detectron2.structures import Boxes
+
 try:
     import cv2  # noqa
 except ImportError:
     # If opencv is not available, everything else should still run
     pass
-
-from detectron2.structures import Boxes
 
 
 """
