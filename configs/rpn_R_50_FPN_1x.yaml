@@ -1,0 +1,15 @@
+_BASE_: "Base-FPN.yaml"
+MODEL:
+  WEIGHT: "catalog://ImageNetPretrained/MSRA/R-50"
+  MASK_ON: False
+  RESNETS:
+    DEPTH: 50
+  RPN_ONLY: True
+  RPN:
+      POST_NMS_TOPK_TEST: 2000
+SOLVER:
+  BASE_LR: 0.02
+  WEIGHT_DECAY: 0.0001
+  STEPS: (60000, 80000)
+  MAX_ITER: 90000
+  IMS_PER_BATCH: 16

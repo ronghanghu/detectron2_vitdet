@@ -224,7 +224,9 @@ def pairwise_iou(boxes1, boxes2):
     lt = torch.max(boxes1[:, None, :2], boxes2[:, :2])  # [N,M,2]
     rb = torch.min(boxes1[:, None, 2:], boxes2[:, 2:])  # [N,M,2]
 
-    wh = (rb - lt).clamp(min=0)  # [N,M,2]
+    TO_REMOVE = 1
+
+    wh = (rb - lt + TO_REMOVE).clamp(min=0)  # [N,M,2]
     inter = wh[:, :, 0] * wh[:, :, 1]  # [N,M]
 
     iou = inter / (area1[:, None] + area2 - inter)

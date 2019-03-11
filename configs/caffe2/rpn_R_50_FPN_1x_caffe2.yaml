@@ -1,0 +1,5 @@
+_BASE_: "../rpn_R_50_FPN_1x.yaml"
+MODEL:
+  WEIGHT: "catalog://Caffe2Detectron/COCO/35998814/rpn_R-50-FPN_1x"
+TEST:
+  EXPECTED_RESULTS: [["box_proposal", "AR@1000", 57.27, 0.02]]

@@ -147,7 +147,6 @@ def prepare_for_coco_evaluation(dataset_predictions):
 
 
 # inspired from Detectron
-# TODO make it work again
 def evaluate_box_proposals(dataset_predictions, coco_api, thresholds=None, area="all", limit=None):
     """Evaluate detection proposal recall metrics. This function is a much
     faster alternative to the official COCO API recall evaluation code. However,
@@ -212,7 +211,7 @@ def evaluate_box_proposals(dataset_predictions, coco_api, thresholds=None, area=
         if limit is not None and len(predictions) > limit:
             predictions = predictions[:limit]
 
-        overlaps = pairwise_iou(predictions, gt_boxes)
+        overlaps = pairwise_iou(predictions.proposal_boxes, gt_boxes)
 
         _gt_overlaps = torch.zeros(len(gt_boxes))
         for j in range(min(len(predictions), len(gt_boxes))):
@@ -334,22 +333,30 @@ def coco_evaluation(cfg, model, dataset_name, output_folder=None):
         torch.save(dataset_predictions, os.path.join(output_folder, "predictions.pth"))
 
     logger = logging.getLogger(__name__)
-    # TODO(yuxin) test this codepath
+
+    from pycocotools.coco import COCO
+
+    json_file = DatasetCatalog.get_coco_path(dataset_name)["json_file"]
+    coco_api = COCO(json_file)
+
     if cfg.MODEL.RPN_ONLY:
         logger.info("Evaluating bbox proposals")
         areas = {"all": "", "small": "s", "medium": "m", "large": "l"}
-        res = COCOResults("box_proposal")
+        results = COCOResults("box_proposal")
         for limit in [100, 1000]:
             for area, suffix in areas.items():
                 stats = evaluate_box_proposals(
-                    dataset_predictions, coco_dataset, area=area, limit=limit
+                    dataset_predictions, coco_api, area=area, limit=limit
                 )
                 key = "AR{}@{:d}".format(suffix, limit)
-                res.results["box_proposal"][key] = stats["ar"].item()
-        logger.info(res)
+                results.results["box_proposal"][key] = stats["ar"].item()
+        logger.info(results)
         if output_folder:
-            torch.save(res, os.path.join(output_folder, "box_proposals.pth"))
-        return
+            torch.save(results, os.path.join(output_folder, "box_proposals.pth"))
+        recalls = results.results["box_proposal"]
+        for key in recalls:
+            recalls[key] = recalls[key] * 100
+        return (results.results,)
 
     logger.info("Preparing results for COCO format")
     coco_results = prepare_for_coco_evaluation(dataset_predictions)
@@ -373,11 +380,6 @@ def coco_evaluation(cfg, model, dataset_name, output_folder=None):
 
     logger.info("Evaluating predictions")
 
-    from pycocotools.coco import COCO
-
-    json_file = DatasetCatalog.get_coco_path(dataset_name)["json_file"]
-    coco_api = COCO(json_file)
-
     for iou_type in iou_types:
         res = evaluate_predictions_on_coco(coco_api, coco_results, file_path, iou_type)
         results.update(res)
@@ -398,7 +400,7 @@ def print_copypaste_format(results):
     """
     assert isinstance(results, OrderedDict)  # unordered results cannot be properly printed
     logger = logging.getLogger(__name__)
-    for task in ["bbox", "segm", "keypoints"]:
+    for task in ["bbox", "segm", "keypoints", "box_proposal"]:
         if task not in results:
             continue
         res = results[task]

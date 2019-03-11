@@ -33,7 +33,10 @@ class GeneralizedRCNN(nn.Module):
 
         self.backbone = build_backbone(cfg)
         self.rpn = build_rpn(cfg)
-        self.roi_heads = build_roi_heads(cfg)
+        if cfg.MODEL.RPN_ONLY:
+            self.roi_heads = None
+        else:
+            self.roi_heads = build_roi_heads(cfg)
 
         self.to(self.device)
 
@@ -104,11 +107,17 @@ class GeneralizedRCNN(nn.Module):
             output_height / results.image_size[0],
         )
         results = Instances((output_height, output_width), **copy.deepcopy(results.get_fields()))
-        pred_boxes = results.pred_boxes
-        pred_boxes.tensor[:, 0::2] *= scale_x
-        pred_boxes.tensor[:, 1::2] *= scale_y
-        pred_boxes.clip(results.image_size)
-        results = results[pred_boxes.nonempty()]
+
+        if results.has("pred_boxes"):
+            output_boxes = results.pred_boxes
+        elif results.has("proposal_boxes"):
+            output_boxes = results.proposal_boxes
+
+        output_boxes.tensor[:, 0::2] *= scale_x
+        output_boxes.tensor[:, 1::2] *= scale_y
+        output_boxes.clip(results.image_size)
+
+        results = results[output_boxes.nonempty()]
 
         if results.has("pred_masks"):
             MASK_THRESHOLD = 0.5
