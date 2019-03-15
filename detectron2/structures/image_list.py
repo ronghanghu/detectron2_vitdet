@@ -24,6 +24,16 @@ class ImageList(object):
     def __len__(self):
         return len(self.image_sizes)
 
+    def __getitem__(self, idx):
+        """
+        Access the individual image in its original size.
+
+        Returns:
+            Tensor: an image of shape (C, H, W).
+        """
+        size = self.image_sizes[idx]
+        return self.tensor[idx, :, : size[0], : size[1]]
+
     def to(self, *args, **kwargs):
         cast_tensor = self.tensor.to(*args, **kwargs)
         return ImageList(cast_tensor, self.image_sizes)
