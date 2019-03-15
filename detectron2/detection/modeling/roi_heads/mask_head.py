@@ -29,7 +29,6 @@ def get_mask_ground_truth(gt_masks, pred_boxes, mask_side_len):
             ground-truth for the predicted mask logits for the i-th predicted box.
     """
     device = pred_boxes.device
-    assert pred_boxes.mode == "xyxy"
     # Put pred_boxes on the CPU, as the representation for masks is not efficient
     # GPU-wise (possibly several small tensors for representing a single instance mask)
     pred_boxes = pred_boxes.to(torch.device("cpu"))

@@ -6,7 +6,7 @@ import numpy as np
 import torch.utils.data
 
 from detectron2.data import DatasetFromList, MapDataset, samplers
-from detectron2.structures import Boxes, ImageList, Instances, Keypoints, PolygonMasks
+from detectron2.structures import Boxes, BoxMode, ImageList, Instances, Keypoints, PolygonMasks
 from detectron2.utils.comm import get_world_size
 
 from .dataset_catalog import DatasetCatalog
@@ -249,10 +249,11 @@ class DetectionBatchCollator:
         targets = []
         for dataset_dict, image_size in zip(dataset_dicts, images.image_sizes):
             annos = dataset_dict.pop("annotations")
-            boxes = [obj["bbox"] for obj in annos]
-            boxes = torch.as_tensor(boxes).reshape(-1, 4)
+            boxes = [
+                BoxMode.convert(obj["bbox"], obj["bbox_mode"], BoxMode.XYXY_ABS) for obj in annos
+            ]
             target = Instances(image_size)
-            boxes = target.gt_boxes = Boxes(boxes, mode="xywh").clone(mode="xyxy")
+            boxes = target.gt_boxes = Boxes(boxes)
             boxes.clip(image_size)
 
             classes = [obj["category_id"] for obj in annos]

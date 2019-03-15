@@ -34,7 +34,6 @@ def paste_masks_in_image(masks, boxes, image_shape, threshold=0.5, padding=1):
     """
     assert masks.shape[-1] == masks.shape[-2], "Only square mask predictions are supported"
 
-    assert boxes.mode == "xyxy"
     img_h, img_w = image_shape
 
     masks, scale = pad_masks(masks, padding)

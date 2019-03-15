@@ -2,6 +2,8 @@ import copy
 import logging
 import os
 
+from detectron2.structures import BoxMode
+
 from .metadata import MetadataCatalog
 
 logger = logging.getLogger(__name__)
@@ -9,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 def load_coco_json(json_file, image_root, dataset_name=None):
     """
-    Load a json file in COCO annotation format.
+    Load a json file with COCO's annotation format.
     Currently only supports instance segmentation annotations.
 
     Args:
@@ -20,25 +22,14 @@ def load_coco_json(json_file, image_root, dataset_name=None):
             the metadata associated with this dataset.
 
     Returns:
-        list[dict]: a list of per-image annotations. Each dict contains:
-            "file_name": the full path to the image file (`image_root` + file name in json)
-            "height", "width":
-            "image_id" (str):
-            "annotations" (list[dict]): the per-instance annotations of every
-                instance in this image. Each annotation dict contains:
-                "iscrowd": 0 or 1. Whether this instance is labeled as COCO's "crowd region".
-                "bbox" (list[float]): list of 4 numbers (x, y, w, h)
-                "category_id" (int): a __positive__ integer in the range [1, num_categories].
-                    If `dataset_name=='coco'`, this function will translate COCO's
-                    incontiguous category ids.
-                "segmentation" (list[list[float]] or dict, optional):
-                    For `list[list[float]]`, it represents the polygons of
-                    each object part. Each `list[float]` is one polygon in the
-                    format of [x1, y1, ..., xn, yn].
-                    For `dict`, it represents the segmentation in COCO's RLE format.
-                "keypoints" (list[float]): in the format of [x1, y1, v1,..., xn, yn, vn].
-                    v[i] means the visibility of this keypoint.
-                    `n` must be equal to the number of keypoint categories.
+        list[dict]: a list of dicts in "Detectron2 Dataset" format. (See DATASETS.md)
+
+    Notes:
+        1. This function does not read the image files.
+           The results do not have the "image" field.
+        2. When `dataset_name=='coco'`,
+           this function will translate COCO's
+           incontiguous category ids to contiguous ids in [1, 80].
     """
     from pycocotools.coco import COCO
 
@@ -116,6 +107,7 @@ def load_coco_json(json_file, image_root, dataset_name=None):
                 for field in ["segmentation", "iscrowd", "bbox", "keypoints", "category_id"]
                 if field in anno
             }
+            obj["bbox_mode"] = BoxMode.XYWH_ABS
             if id_map:
                 obj["category_id"] = id_map[obj["category_id"]]
             objs.append(obj)

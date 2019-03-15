@@ -13,7 +13,7 @@ from pycocotools.cocoeval import COCOeval
 from tqdm import tqdm
 
 from detectron2.data import DatasetFromList
-from detectron2.structures import Boxes, pairwise_iou
+from detectron2.structures import Boxes, BoxMode, pairwise_iou
 from detectron2.utils.comm import all_gather, is_main_process, synchronize
 
 from .data import DatasetCatalog, build_detection_test_loader
@@ -116,7 +116,9 @@ def prepare_for_coco_evaluation(dataset_predictions):
         if num_instance == 0:
             continue
 
-        boxes = predictions.pred_boxes.clone(mode="xywh").tensor.tolist()
+        boxes = predictions.pred_boxes.tensor.numpy()
+        boxes = BoxMode.convert(boxes, BoxMode.XYXY_ABS, BoxMode.XYWH_ABS)
+        boxes = boxes.tolist()
         scores = predictions.scores.tolist()
         classes = predictions.pred_classes.tolist()
 

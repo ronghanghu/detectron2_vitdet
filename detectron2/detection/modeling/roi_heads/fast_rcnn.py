@@ -205,12 +205,10 @@ class FastRCNNOutputs(object):
 
         # cat(..., dim=0) concatenates over all images in the batch
         self.proposals = Boxes.cat([p.proposal_boxes for p in proposals])
-        assert self.proposals.mode == "xyxy"
 
         # The following fields should exist only when training.
         if proposals[0].has("gt_boxes"):
             self.gt_boxes = Boxes.cat([p.gt_boxes for p in proposals])
-            assert self.gt_boxes.mode == "xyxy"
             assert proposals[0].has("gt_classes")
             self.gt_classes = cat([p.gt_classes for p in proposals], dim=0)
 

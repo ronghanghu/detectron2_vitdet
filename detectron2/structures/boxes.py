@@ -1,6 +1,58 @@
+import numpy as np
+from enum import Enum, unique
 import torch
 
 from detectron2.layers import cat
+
+
+@unique
+class BoxMode(Enum):
+    """
+    Enum of different ways to represent a box.
+
+    XYXY_ABS: (x0, y0, x1, y1) in absolute floating points coordinates.
+        The coordinates in range [0, width or height].
+    XYWH_ABS: (x0, y0, w, h) in absolute floating points coordinates.
+    XYXY_REL: (x0, y0, x1, y1) in range [0, 1]. They are relative to the size of the image.
+    XYWH_REL: (x0, y0, w, h) in range [0, 1]. They are relative to the size of the image.
+    """
+
+    XYXY_ABS = 0
+    XYWH_ABS = 1
+    XYXY_REL = 2
+    XYWH_REL = 3
+
+    @staticmethod
+    def convert(box, from_mode, to_mode, image_shape=None):
+        """
+        Args:
+            box: can be a 4-tuple, 4-list or a Nx4 array.
+            from_mode, to_mode (BoxMode)
+            image_shape (tuple): h, w shape. Not used if relative modes are not involved in the conversion.
+
+        Returns:
+            The converted box of the same type.
+        """
+        if from_mode == to_mode:
+            return box
+
+        assert to_mode.value < 2 and from_mode.value < 2, "Relative mode not yet supported!"
+
+        # This should be considered dataset-specific and should be handled at dataset level.
+        # Need to rerun jobs to see the impact of removing this.
+        TO_REMOVE = 1
+        arr = np.array(box).reshape(-1, 4)
+        if to_mode == BoxMode.XYXY_ABS and from_mode == BoxMode.XYWH_ABS:
+            arr[:, 2] += arr[:, 0] - TO_REMOVE
+            arr[:, 3] += arr[:, 1] - TO_REMOVE
+        elif from_mode == BoxMode.XYXY_ABS and to_mode == BoxMode.XYWH_ABS:
+            arr[:, 2] -= arr[:, 0] - TO_REMOVE
+            arr[:, 3] -= arr[:, 1] - TO_REMOVE
+        else:
+            raise RuntimeError("Cannot be here!")
+        if not isinstance(box, np.ndarray):
+            return type(box)(arr.flatten())
+        return arr
 
 
 class Boxes:
@@ -12,71 +64,28 @@ class Boxes:
     (support indexing, `to(device)`, `.device`, and iteration over all boxes)
     """
 
-    def __init__(self, tensor, mode: str = "xyxy"):
+    def __init__(self, tensor):
         """
         Args:
-            tensor (Tensor[float]): a Nx4 matrix.
-                Each row is either (x1, y1, x2, y2), or (x1, y1, w, h) (see `mode`).
-            mode (str): either "xyxy" or "xywh". The meaning of each row in tensor.
+            tensor (Tensor[float]): a Nx4 matrix.  Each row is (x1, y1, x2, y2).
         """
         device = tensor.device if isinstance(tensor, torch.Tensor) else torch.device("cpu")
         tensor = torch.as_tensor(tensor, dtype=torch.float32, device=device)
         assert tensor.dim() == 2 and tensor.size(-1) == 4, tensor.size()
-        assert mode in ("xyxy", "xywh"), "mode should be 'xyxy' or 'xywh'! Got {}".format(mode)
 
         self.tensor = tensor
-        self.mode = mode
 
-    def clone(self, mode=None):
+    def clone(self):
         """
-        Clone the Boxes (and optionally convert to a different mode)
-
-        Args:
-            mode (str or None): either "xyxy" or "xywh". If not None, will convert the mode of the Boxes.
+        Clone the Boxes.
 
         Returns:
             Boxes
         """
-        if mode is None:
-            mode = self.mode
-        assert mode in ("xyxy", "xywh"), "mode should be 'xyxy' or 'xywh'! Got {}".format(mode)
-        if mode == self.mode:
-            return Boxes(self.tensor.clone(), self.mode)
-        # we only have two modes, so no need to check self.mode
-        xmin, ymin, xmax, ymax = self._split_into_xyxy()
-        if mode == "xyxy":
-            tensor = torch.cat((xmin, ymin, xmax, ymax), dim=-1)
-            boxes = Boxes(tensor, mode=mode)
-        else:
-            TO_REMOVE = 1
-            tensor = torch.cat(
-                (xmin, ymin, xmax - xmin + TO_REMOVE, ymax - ymin + TO_REMOVE), dim=-1
-            )
-            boxes = Boxes(tensor, mode=mode)
-        return boxes
-
-    def _split_into_xyxy(self):
-        """"
-        Returns:
-            4 vectors: x1, y1, x2, y2
-        """
-        if self.mode == "xyxy":
-            xmin, ymin, xmax, ymax = self.tensor.split(1, dim=-1)
-            return xmin, ymin, xmax, ymax
-        elif self.mode == "xywh":
-            TO_REMOVE = 1
-            xmin, ymin, w, h = self.tensor.split(1, dim=-1)
-            return (
-                xmin,
-                ymin,
-                xmin + (w - TO_REMOVE).clamp(min=0),
-                ymin + (h - TO_REMOVE).clamp(min=0),
-            )
-        else:
-            raise RuntimeError("Should not be here")
+        return Boxes(self.tensor.clone())
 
     def to(self, device):
-        return Boxes(self.tensor.to(device), self.mode)
+        return Boxes(self.tensor.to(device))
 
     def area(self):
         """
@@ -86,13 +95,9 @@ class Boxes:
             torch.Tensor: a vector with areas of each box.
         """
         box = self.tensor
-        if self.mode == "xyxy":
-            TO_REMOVE = 1
-            area = (box[:, 2] - box[:, 0] + TO_REMOVE) * (box[:, 3] - box[:, 1] + TO_REMOVE)
-        elif self.mode == "xywh":
-            area = box[:, 2] * box[:, 3]
-        else:
-            raise RuntimeError("Should not be here")
+
+        TO_REMOVE = 1
+        area = (box[:, 2] - box[:, 0] + TO_REMOVE) * (box[:, 3] - box[:, 1] + TO_REMOVE)
         return area
 
     def clip(self, image_size):
@@ -102,7 +107,6 @@ class Boxes:
         Args:
             image_size (h, w)
         """
-        assert self.mode == "xyxy"
         h, w = image_size
         TO_REMOVE = 1
         self.tensor[:, 0].clamp_(min=0, max=w - TO_REMOVE)
@@ -118,7 +122,6 @@ class Boxes:
         Returns:
             Tensor: a binary vector which represents whether each box is empty (False) or non-empty (True).
         """
-        assert self.mode == "xyxy"
         box = self.tensor
         widths = box[:, 2] - box[:, 0]
         heights = box[:, 3] - box[:, 1]
@@ -140,10 +143,10 @@ class Boxes:
         subject to Pytorch's indexing semantics.
         """
         if isinstance(item, int):
-            return Boxes(self.tensor[item].view(1, -1), self.mode)
+            return Boxes(self.tensor[item].view(1, -1))
         b = self.tensor[item]
         assert b.dim() == 2, "Indexing on Boxes with {} failed to return a matrix!".format(item)
-        return Boxes(b, self.mode)
+        return Boxes(b)
 
     def __len__(self):
         return self.tensor.shape[0]
@@ -160,7 +163,6 @@ class Boxes:
         Returns:
             a binary vector, indicating whether each box is inside the image.
         """
-        assert self.mode == "xyxy"
         height, width = image_size
         inds_inside = (
             (self.tensor[..., 0] >= -boundary_threshold)
@@ -184,10 +186,7 @@ class Boxes:
         assert isinstance(boxes_list, (list, tuple))
         assert all(isinstance(box, Boxes) for box in boxes_list)
 
-        mode = boxes_list[0].mode
-        assert all(b.mode == mode for b in boxes_list)
-
-        cat_boxes = Boxes(cat([b.tensor for b in boxes_list], dim=0), mode)
+        cat_boxes = Boxes(cat([b.tensor for b in boxes_list], dim=0))
         return cat_boxes
 
     @property

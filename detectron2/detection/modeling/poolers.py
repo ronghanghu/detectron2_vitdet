@@ -54,7 +54,6 @@ def convert_boxes_to_pooler_format(box_lists):
             is the index in [0, N) indentifying which batch image the box with corners at
             (x0, y0, x1, y1) comes from.
     """
-    assert box_lists[0].mode == "xyxy", "The box_lists argument must be in xyxy format."
 
     def fmt_box_list(box_tensor, batch_index):
         repeated_index = torch.full(

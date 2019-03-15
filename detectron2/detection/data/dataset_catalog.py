@@ -16,7 +16,7 @@ class DatasetCatalog(object):
     to:
 
     1. A function which parses the dataset and returns the samples in the
-       format of `list[dict]` in COCO format.
+       format of `list[dict]` in Detectron2 Dataset format (See DATASETS.md for details).
     2. The name of the dataset the returned samples belong to, e.g. "coco".
 
     The purpose of having this catalog is to make it easy to choose
@@ -33,7 +33,7 @@ class DatasetCatalog(object):
         Args:
             key (str): the key that identifies a split of a dataset, e.g. "coco_2014_train".
             dataset_name (str): the name of the dataset, e.g., "coco".
-            func (callable): a callable which takes no arguments and returns a list of dicts in COCO's format.
+            func (callable): a callable which takes no arguments and returns a list of dicts.
         """
         DatasetCatalog._REGISTERED_SPLITS[key] = func
         DatasetCatalog._REGISTERED_METADATA[key] = MetadataCatalog.get(dataset_name)
@@ -58,7 +58,7 @@ class DatasetCatalog(object):
     def get_coco_path(key):
         """
         Returns path information for COCO's json format.
-        Only useful for COCO's json format.
+        Only useful for json annotations in COCO's annotation format.
         Should not be called if `key` was not registered by `register_coco_format`.
 
         Args:
@@ -77,7 +77,7 @@ class DatasetCatalog(object):
             key (str): the key that identifies a split of a dataset, e.g. "coco_2014_train".
 
         Returns:
-            list[dict]: dataset annotations in COCO format
+            list[dict]: dataset annotations in Detectron2 format.
         """
         return DatasetCatalog._REGISTERED_SPLITS[key]()
 
