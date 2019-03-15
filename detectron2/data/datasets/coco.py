@@ -2,33 +2,22 @@ import copy
 import logging
 import os
 
+from .metadata import MetadataCatalog
+
 logger = logging.getLogger(__name__)
 
 
-class COCOMeta:
-    class_names = None
-    contiguous_id_to_json_id = {}  # contiguous id starts from 1
-    json_id_to_contiguous_id = {}
-
-    _instance = None
-
-    def __new__(cls):
-        if not isinstance(cls._instance, cls):
-            cls._instance = object.__new__(cls)
-        return cls._instance
-
-    @property
-    def num_classes(self):
-        return len(self.class_names)
-
-
-def load_coco_json(json_file, image_root):
+def load_coco_json(json_file, image_root, dataset_name=None):
     """
     Load a json file in COCO annotation format.
+    Currently only supports instance segmentation annotations.
 
     Args:
-        json_file (str): the json file in COCO annotation format.
+        json_file (str): full path to the json file in COCO annotation format.
         image_root (str): the directory where the images in this json file exists.
+        dataset_name (str): the name of the dataset (e.g., "coco", "cityscapes").
+            If provided, this function will also put "class_names" into
+            the metadata associated with this dataset.
 
     Returns:
         list[dict]: a list of per-image annotations. Each dict contains:
@@ -40,8 +29,8 @@ def load_coco_json(json_file, image_root):
                 "iscrowd": 0 or 1. Whether this instance is labeled as COCO's "crowd region".
                 "bbox" (list[float]): list of 4 numbers (x, y, w, h)
                 "category_id" (int): a __positive__ integer in the range [1, num_categories].
-                    This is the "continuous id" which may be different from
-                    the original id in the annotation file.
+                    If `dataset_name=='coco'`, this function will translate COCO's
+                    incontiguous category ids.
                 "segmentation" (list[list[float]] or dict, optional):
                     For `list[list[float]]`, it represents the polygons of
                     each object part. Each `list[float]` is one polygon in the
@@ -55,15 +44,29 @@ def load_coco_json(json_file, image_root):
 
     coco_api = COCO(json_file)
 
-    meta = COCOMeta()
+    id_map = None
+    if dataset_name is not None:
+        meta = MetadataCatalog.get(dataset_name)
+        cat_ids = coco_api.getCatIds()
+        class_names = [c["name"] for c in coco_api.loadCats(cat_ids)]
+        meta.class_names = class_names
 
-    # initialize the metadata
-    cat_ids = coco_api.getCatIds()
-    meta.class_names = [c["name"] for c in coco_api.loadCats(cat_ids)]
-
-    # The values are shifted by + 1 to reserve category 0 for background
-    meta.json_id_to_contiguous_id = id_map = {v: i + 1 for i, v in enumerate(cat_ids)}
-    meta.contiguous_id_to_json_id = {v: k for k, v in id_map.items()}
+        # A user can provide a dataset where some category ids have no samples -- that's a valid thing to do.
+        # However, in COCO, certain category ids are artificially removed,
+        # and by convention they are always ignored.
+        #
+        # This is a hack to deal with COCO's id issue and translate the category ids.
+        # We apply this hack for COCO only. If the ids are incontiuguos for datasets other than COCO,
+        # we'll just assume that it is intended (you'll just train/test with 0 samples for certain classes).
+        #
+        # If for some reason this hack is needed for other datasets,
+        # we can parse the json and use a different predicate in this if statement.
+        if dataset_name == "coco":
+            id_map = {v: i + 1 for i, v in enumerate(cat_ids)}
+            meta.json_id_to_contiguous_id = id_map
+        else:
+            if not (min(cat_ids) == 1 and max(cat_ids) == len(cat_ids)):
+                logger.warning("Category ids in annotations are not contiguous!")
 
     # sort indices for reproducible results
     img_ids = sorted(list(coco_api.imgs.keys()))
@@ -110,10 +113,11 @@ def load_coco_json(json_file, image_root):
             assert anno.get("ignore", 0) == 0
             obj = {
                 field: copy.deepcopy(anno[field])
-                for field in ["segmentation", "iscrowd", "bbox", "keypoints"]
+                for field in ["segmentation", "iscrowd", "bbox", "keypoints", "category_id"]
                 if field in anno
             }
-            obj["category_id"] = meta.json_id_to_contiguous_id[anno["category_id"]]
+            if id_map:
+                obj["category_id"] = id_map[obj["category_id"]]
             objs.append(obj)
         record["annotations"] = objs
         dataset_dicts.append(record)

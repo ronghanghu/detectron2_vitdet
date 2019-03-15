@@ -13,7 +13,6 @@ from pycocotools.cocoeval import COCOeval
 from tqdm import tqdm
 
 from detectron2.data import DatasetFromList
-from detectron2.data.datasets import COCOMeta
 from detectron2.structures import Boxes, pairwise_iou
 from detectron2.utils.comm import all_gather, is_main_process, synchronize
 
@@ -125,8 +124,6 @@ def prepare_for_coco_evaluation(dataset_predictions):
         if has_mask:
             rles = predictions.pred_masks_rle
 
-        mapped_classes = [COCOMeta().contiguous_id_to_json_id[i] for i in classes]
-
         has_keypoints = predictions.has("pred_keypoints")
         if has_keypoints:
             keypoints = predictions.pred_keypoints.tensor.flatten(1).tolist()
@@ -134,7 +131,7 @@ def prepare_for_coco_evaluation(dataset_predictions):
         for k in range(num_instance):
             result = {
                 "image_id": img_id,
-                "category_id": mapped_classes[k],
+                "category_id": classes[k],
                 "bbox": boxes[k],
                 "score": scores[k],
             }
@@ -360,6 +357,13 @@ def coco_evaluation(cfg, model, dataset_name, output_folder=None):
 
     logger.info("Preparing results for COCO format")
     coco_results = prepare_for_coco_evaluation(dataset_predictions)
+
+    # unmap the category ids for COCO
+    dataset_meta = DatasetCatalog.get_metadata(dataset_name)
+    if hasattr(dataset_meta, "json_id_to_contiguous_id"):
+        reverse_id_mapping = {v: k for k, v in dataset_meta.json_id_to_contiguous_id.items()}
+        for result in coco_results:
+            result["category_id"] = reverse_id_mapping[result["category_id"]]
 
     with tempfile.NamedTemporaryFile() as f:
         file_path = f.name

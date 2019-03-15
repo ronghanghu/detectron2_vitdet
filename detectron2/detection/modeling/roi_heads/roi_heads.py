@@ -281,7 +281,7 @@ class StandardROIHeads(ROIHeads):
 
         # fmt: off
         pooler_resolution                        = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
-        pooler_scales                            = tuple(1.0 / self.feature_strides[k] for k in self.in_features)
+        pooler_scales                            = tuple(1.0 / self.feature_strides[k] for k in self.in_features)  # noqa
         sampling_ratio                           = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
         num_classes                              = cfg.MODEL.ROI_HEADS.NUM_CLASSES
         bbox_reg_weights                         = cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS
@@ -294,7 +294,7 @@ class StandardROIHeads(ROIHeads):
         keypoint_pooler_resolution               = cfg.MODEL.ROI_KEYPOINT_HEAD.POOLER_RESOLUTION
         keypoint_pooler_scales                   = pooler_scales
         keypoint_sampling_ratio                  = cfg.MODEL.ROI_KEYPOINT_HEAD.POOLER_SAMPLING_RATIO
-        self.normalize_loss_by_visible_keypoints = cfg.MODEL.ROI_KEYPOINT_HEAD.NORMALIZE_LOSS_BY_VISIBLE_KEYPOINTS
+        self.normalize_loss_by_visible_keypoints = cfg.MODEL.ROI_KEYPOINT_HEAD.NORMALIZE_LOSS_BY_VISIBLE_KEYPOINTS  # noqa
         self.keypoint_loss_weight                = cfg.MODEL.ROI_KEYPOINT_HEAD.LOSS_WEIGHT
         # fmt: on
 
