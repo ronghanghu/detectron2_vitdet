@@ -371,7 +371,8 @@ _C.SOLVER.IMS_PER_BATCH = 16
 # Specific test options
 # ---------------------------------------------------------------------------- #
 _C.TEST = CN()
-# For end-to-end tests to verify the expected accuracy. Each item is [task, metric, value, tolerance]
+# For end-to-end tests to verify the expected accuracy.
+# Each item is [task, metric, value, tolerance]
 # e.g.: [['bbox', 'AP', 38.5, 0.2]]
 _C.TEST.EXPECTED_RESULTS = []
 # The period (in terms of steps) to evaluate the model during training.

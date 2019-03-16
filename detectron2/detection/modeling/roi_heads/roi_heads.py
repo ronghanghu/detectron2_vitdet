@@ -161,8 +161,9 @@ class ROIHeads(torch.nn.Module):
                 `Instances` contains object proposals for the i-th input image,
                 with fields "proposal_boxes" and "objectness_logits".
             targets (list[Instances], optional): length `N` list of `Instances`s. The i-th
-                `Instances` contains the ground-truth per-instance annotations for the i-th input image.
-                Specify `targets` during training only. It may have the following fields:
+                `Instances` contains the ground-truth per-instance annotations
+                for the i-th input image.  Specify `targets` during training only.
+                It may have the following fields:
                 - gt_boxes: the bounding box of each instance.
                 - gt_classes: the label for each instance with a category ranging in [0, #class].
                 - gt_masks: the ground-truth mask of the instance.

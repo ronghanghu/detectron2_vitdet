@@ -246,8 +246,9 @@ class RPNOutputs(object):
             batch_size_per_image (int): number of proposals to sample when training
             positive_fraction (float): target fraction of sampled proposals that should be positive
             images (ImageList): :class:`ImageList` instance representing N input images
-            objectness_logits_pred (list[Tensor]): A list of L elements. Element i is a tensor of shape
-                (N, A, Hi, Wi) representing the predicted objectness logits for anchors.
+            objectness_logits_pred (list[Tensor]): A list of L elements.
+                Element i is a tensor of shape (N, A, Hi, Wi) representing
+                the predicted objectness logits for anchors.
             anchor_deltas_pred (list[Tensor]): A list of L elements. Element i is a tensor of shape
                 (N, A*4, Hi, Wi) representing the predicted "deltas" used to transform anchors
                 to proposals.

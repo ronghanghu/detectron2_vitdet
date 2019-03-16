@@ -162,7 +162,8 @@ def heatmaps_to_keypoints(maps, rois):
         # Resample the roi map to its size in the original image
         """
         PIL version, much slower
-        roi_map = np.empty((int(roi_map_height), int(roi_map_width), num_keypoints), dtype=np.float32)
+        roi_map = np.empty((int(roi_map_height), int(roi_map_width),
+                           num_keypoints), dtype=np.float32)
         for j in range(maps[i].shape[2]):
             map_image = Image.fromarray(maps[i, ..., j])
             map_image = map_image.resize((roi_map_width, roi_map_height), resample=Image.BICUBIC)

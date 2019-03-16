@@ -52,7 +52,8 @@ class Conv2d(torch.nn.Conv2d):
     def forward(self, x):
         if x.numel() == 0:
             # When input is empty, we want to return a empty tensor with "correct" shape,
-            # So that the following operations will not panic if they check for the shape of the tensor.
+            # So that the following operations will not panic
+            # if they check for the shape of the tensor.
             # This computes the height and width of the output tensor
             output_shape = [
                 (i + 2 * p - (di * (k - 1) + 1)) // s + 1

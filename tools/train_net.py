@@ -97,8 +97,8 @@ def do_test(cfg, model, is_final=True):
             format and will run verification.
 
     Returns:
-        list[result]: only on the main process, result for each DATASETS.TEST. Each result is a dict of
-            dict. result[task][metric] is a float.
+        list[result]: only on the main process, result for each DATASETS.TEST.
+            Each result is a dict of dict. result[task][metric] is a float.
     """
     assert len(cfg.DATASETS.TEST)
     if isinstance(model, DistributedDataParallel):

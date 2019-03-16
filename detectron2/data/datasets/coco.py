@@ -42,13 +42,17 @@ def load_coco_json(json_file, image_root, dataset_name=None):
         class_names = [c["name"] for c in coco_api.loadCats(cat_ids)]
         meta.class_names = class_names
 
-        # A user can provide a dataset where some category ids have no samples -- that's a valid thing to do.
+        # A user can provide a dataset where some category ids have no
+        # samples -- that's a valid thing to do.
         # However, in COCO, certain category ids are artificially removed,
         # and by convention they are always ignored.
         #
-        # This is a hack to deal with COCO's id issue and translate the category ids.
-        # We apply this hack for COCO only. If the ids are incontiuguos for datasets other than COCO,
-        # we'll just assume that it is intended (you'll just train/test with 0 samples for certain classes).
+        # This is a hack to deal with COCO's id issue and translate
+        # the category ids to contiguous ids in [1, 80].
+        # We apply this hack for COCO only.
+        # If the ids are incontiuguos for datasets other than COCO,
+        # we'll just assume that it is intended
+        # (you'll just train/test with 0 samples for certain classes).
         #
         # If for some reason this hack is needed for other datasets,
         # we can parse the json and use a different predicate in this if statement.

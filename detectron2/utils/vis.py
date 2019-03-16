@@ -56,7 +56,8 @@ def draw_boxes(img, boxes, thickness=1):
     Draw boxes on an image.
 
     Args:
-        boxes (Boxes or ndarray): either a :class:`Boxes` instances, or a Nx4 numpy array of xyxy format.
+        boxes (Boxes or ndarray): either a :class:`Boxes` instances,
+            or a Nx4 numpy array of xyxy format.
         thickness (int): the thickness of the edges
     """
     img = img.astype(np.uint8)
@@ -88,11 +89,12 @@ def draw_mask(img, mask, color, alpha=0.4, draw_contours=True):
     Draw (overlay) a mask on an image.
 
     Args:
-        mask (ndarray): an (H, W) array of the same spatial size as the image. Nonzero positions in the array
-            are considered part of the mask.
+        mask (ndarray): an (H, W) array of the same spatial size as the image.
+            Nonzero positions in the array are considered part of the mask.
         color: a BGR color
         alpha (float): blending efficient. Smaller values lead to more transparent masks.
-        draw_contours (bool): whether to also draw the contours of every connected component (object part) in the mask.
+        draw_contours (bool): whether to also draw the contours of every
+            connected component (object part) in the mask.
     """
     img = img.astype(np.float32)
     idx = np.nonzero(mask)
@@ -123,7 +125,8 @@ def draw_coco_dict(dataset_dict, class_names=None):
     boxes = np.asarray([k["bbox"] for k in annos])
 
     # TODO assumes xywh for now.
-    # TODO We need to normalize everything to xyxy and limit xywh to be used inside dataset-specific code only
+    # TODO We need to normalize everything to xyxy and limit xywh
+    # to be used inside dataset-specific code only
     # Fix it after D14417286 lands
 
     # Display in largest to smallest order to reduce occlusion
@@ -143,7 +146,7 @@ def draw_coco_dict(dataset_dict, class_names=None):
         clsid = anno["category_id"]
         text = class_names[clsid] if class_names is not None else str(clsid)
         if iscrowd:
-            text = text + '_crowd'
+            text = text + "_crowd"
         img = draw_text(img, (bbox[0], bbox[1] - 2), text)
 
         segs = anno.get("segmentation", None)

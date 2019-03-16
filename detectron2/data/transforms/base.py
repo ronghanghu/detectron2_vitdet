@@ -119,8 +119,8 @@ class ImageTransformer(metaclass=ABCMeta):
         Transform the coordinates given the param.
 
         By default, a transformer keeps coordinates unchanged.
-        If a subclass of :class:`ImageTransformer` changes coordinates but couldn't implement this method,
-        it should ``raise NotImplementedError()``.
+        If a subclass of :class:`ImageTransformer` changes coordinates
+        but couldn't implement this method, it should ``raise NotImplementedError()``.
 
         Args:
             coords: Nx2 floating point numpy array where each row is (x, y)
@@ -197,7 +197,8 @@ class ImageTransformers(ImageTransformer):
     def _get_transform_params(self, img):
         # the next transformer requires the previous one to finish
         raise RuntimeError(
-            "Cannot simply get all parameters of a ImageTransformers without running the transformation!"
+            "Cannot simply get all parameters of a ImageTransformers "
+            "without running the transformation!"
         )
 
     def _transform_image_get_params(self, img):

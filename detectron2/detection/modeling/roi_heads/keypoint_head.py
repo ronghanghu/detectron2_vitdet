@@ -24,12 +24,13 @@ def keypoint_rcnn_loss(pred_keypoint_logits, instances, normalizer):
         pred_keypoint_logits (Tensor): A tensor of shape (B, N, S, S) where B is the batch size,
             N is the number of keypoints, and S is the side length of the keypoint heatmap. The
             values are spatial logits.
-        instances (list[Instances]): A list of N Instances, where N is the batch size. These instances
-            are predictions from the model that are in 1:1 correspondence with pred_keypoint_logits.
+        instances (list[Instances]): A list of N Instances, where N is the batch size.
+            These instances are predictions from the model
+            that are in 1:1 correspondence with pred_keypoint_logits.
             Each Instances should contain a `gt_keypoints` field containing a `structures.Keypoint`
             instance.
-        normalizer (float): Normalize the loss by this amount. If not specified, we normalize by the
-            number of visible keypoints in the minibatch.
+        normalizer (float): Normalize the loss by this amount.
+            If not specified, we normalize by the number of visible keypoints in the minibatch.
 
     Returns a scalar tensor containing the loss.
     """

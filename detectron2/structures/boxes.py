@@ -28,7 +28,8 @@ class BoxMode(Enum):
         Args:
             box: can be a 4-tuple, 4-list or a Nx4 array.
             from_mode, to_mode (BoxMode)
-            image_shape (tuple): h, w shape. Not used if relative modes are not involved in the conversion.
+            image_shape (tuple): h, w shape. Not used if relative modes
+                are not involved in the conversion.
 
         Returns:
             The converted box of the same type.
@@ -120,7 +121,8 @@ class Boxes:
         A box is considered empty, if either of its side is no larger than threshold.
 
         Returns:
-            Tensor: a binary vector which represents whether each box is empty (False) or non-empty (True).
+            Tensor: a binary vector which represents
+                whether each box is empty (False) or non-empty (True).
         """
         box = self.tensor
         widths = box[:, 2] - box[:, 0]
