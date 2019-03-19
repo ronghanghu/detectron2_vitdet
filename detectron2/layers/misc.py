@@ -93,6 +93,15 @@ class ConvTranspose2d(torch.nn.ConvTranspose2d):
         return _NewEmptyTensorOp.apply(x, output_shape)
 
 
+class BatchNorm2d(torch.nn.BatchNorm2d):
+    def forward(self, x):
+        if x.numel() > 0:
+            return super(BatchNorm2d, self).forward(x)
+        # get output shape
+        output_shape = x.shape
+        return _NewEmptyTensorOp.apply(x, output_shape)
+
+
 def interpolate(input, size=None, scale_factor=None, mode="nearest", align_corners=None):
     if input.numel() > 0:
         return torch.nn.functional.interpolate(input, size, scale_factor, mode, align_corners)

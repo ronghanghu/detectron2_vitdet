@@ -1,6 +1,6 @@
 from .backbone import Backbone
 from .batch_norm import FrozenBatchNorm2d
-from .misc import Conv2d, ConvTranspose2d, cat, interpolate
+from .misc import BatchNorm2d, Conv2d, ConvTranspose2d, cat, interpolate
 from .nms import nms
 from .resnet import *
 from .roi_align import ROIAlign, roi_align
@@ -14,6 +14,7 @@ __all__ = [
     "roi_pool",
     "ROIPool",
     "smooth_l1_loss",
+    "BatchNorm2d",
     "Conv2d",
     "ConvTranspose2d",
     "interpolate",

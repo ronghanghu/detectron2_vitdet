@@ -2,9 +2,9 @@ import numpy as np
 from abc import ABCMeta, abstractmethod
 import torch.nn.functional as F
 from torch import nn
-from torch.nn import BatchNorm2d, GroupNorm
+from torch.nn import GroupNorm
 
-from . import Backbone, Conv2d, FrozenBatchNorm2d
+from . import Backbone, BatchNorm2d, Conv2d, FrozenBatchNorm2d
 
 __all__ = ["ResNetBlockBase", "BottleneckBlock", "BasicStem", "ResNet", "make_stage"]
 
