@@ -1,4 +1,5 @@
 import numpy as np
+import copy
 from PIL import Image
 
 from detectron2.data.transforms import Flip, ImageTransformers, Normalize, ResizeShortestEdge
@@ -52,6 +53,7 @@ class DetectionTransform:
                 transformations) and a new key is inserted:
                     image: the transformed image as a uint8 numpy array
         """
+        dataset_dict = copy.deepcopy(dataset_dict)  # it will be modified by code below
         image = Image.open(dataset_dict["file_name"]).convert("RGB")
         image = np.asarray(image, dtype="uint8")
         if self.to_bgr:

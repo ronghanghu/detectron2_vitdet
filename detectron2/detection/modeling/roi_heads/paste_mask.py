@@ -92,7 +92,7 @@ def paste_mask_in_image(mask, box, img_h, img_w, threshold):
     y_1 = min(box[3] + 1, img_h)
 
     im_mask[y_0:y_1, x_0:x_1] = mask[
-        (y_0 - box[1]):(y_1 - box[1]), (x_0 - box[0]):(x_1 - box[0])
+        (y_0 - box[1]) : (y_1 - box[1]), (x_0 - box[0]) : (x_1 - box[0])
     ]
     return im_mask
 

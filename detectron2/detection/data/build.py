@@ -161,7 +161,7 @@ def build_detection_train_loader(cfg, start_iter=0):
         min_kp = cfg.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE
         if min_kp > 0:
             dataset_dicts = filter_images_with_few_keypoints(dataset_dicts, min_kp)
-    dataset = DatasetFromList(dataset_dicts)
+    dataset = DatasetFromList(dataset_dicts, copy=False)
 
     # Bin edges for batching images with similar aspect ratios. If ASPECT_RATIO_GROUPING
     # is enabled, we define two bins with an edge at height / width = 1.

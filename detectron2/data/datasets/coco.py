@@ -1,4 +1,3 @@
-import copy
 import logging
 import os
 
@@ -107,7 +106,7 @@ def load_coco_json(json_file, image_root, dataset_name=None):
         for anno in anno_dict_list:
             assert anno.get("ignore", 0) == 0
             obj = {
-                field: copy.deepcopy(anno[field])
+                field: anno[field]
                 for field in ["segmentation", "iscrowd", "bbox", "keypoints", "category_id"]
                 if field in anno
             }
