@@ -199,9 +199,14 @@ def evaluate_box_proposals(dataset_predictions, coco_api, thresholds=None, area=
 
         ann_ids = coco_api.getAnnIds(imgIds=prediction_dict["image_id"])
         anno = coco_api.loadAnns(ann_ids)
-        gt_boxes = [obj["bbox"] for obj in anno if obj["iscrowd"] == 0]
+        gt_boxes = [
+            BoxMode.convert(obj["bbox"], BoxMode.XYWH_ABS, BoxMode.XYXY_ABS)
+            for obj in anno
+            if obj["iscrowd"] == 0
+        ]
         gt_boxes = torch.as_tensor(gt_boxes).reshape(-1, 4)  # guard against no boxes
-        gt_boxes = Boxes(gt_boxes, mode="xywh").clone(mode="xyxy")
+        gt_boxes = Boxes(gt_boxes)
+
         gt_areas = torch.as_tensor([obj["area"] for obj in anno if obj["iscrowd"] == 0])
 
         if len(gt_boxes) == 0:
