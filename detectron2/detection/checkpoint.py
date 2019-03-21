@@ -152,7 +152,7 @@ class ModelCatalog(object):
     }
 
     C2_DETECTRON_PATH_FORMAT = (
-        "{prefix}/{url}/output/train/{dataset}/generalized_rcnn/model_final.pkl"
+        "{prefix}/{url}/output/train/{dataset}/{type}/model_final.pkl"
     )  # noqa B950
 
     C2_DATASET_COCO = "coco_2014_train%3Acoco_2014_valminusminival"
@@ -199,8 +199,13 @@ class ModelCatalog(object):
         else:
             dataset = ModelCatalog.C2_DATASET_COCO
 
+        if "/rpn" in name:
+            type = "rpn"
+        else:
+            type = "generalized_rcnn"
+
         # Detectron C2 models are stored in the structure defined in `C2_DETECTRON_PATH_FORMAT`.
         url = ModelCatalog.C2_DETECTRON_PATH_FORMAT.format(
-            prefix=ModelCatalog.S3_C2_DETECTRON_URL, url=url, dataset=dataset
+            prefix=ModelCatalog.S3_C2_DETECTRON_URL, url=url, type=type, dataset=dataset
         )
         return url

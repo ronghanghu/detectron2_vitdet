@@ -8,11 +8,11 @@ import numpy as np
 import os
 import sys
 import cv2
-from PIL import Image
 
 # Cityscapes imports
 from cityscapesscripts.evaluation.instance import Instance
 from cityscapesscripts.helpers.labels import id2label, labels
+from PIL import Image
 
 sys.path.append(os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "helpers")))
 

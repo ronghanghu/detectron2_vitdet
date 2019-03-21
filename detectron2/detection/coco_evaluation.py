@@ -10,7 +10,6 @@ from collections import OrderedDict
 import pycocotools.mask as mask_util
 import torch
 from pycocotools.cocoeval import COCOeval
-from tqdm import tqdm
 
 from detectron2.data import DatasetFromList
 from detectron2.structures import Boxes, BoxMode, pairwise_iou
@@ -19,13 +18,14 @@ from detectron2.utils.comm import all_gather, is_main_process, synchronize
 from .data import DatasetCatalog, build_detection_test_loader
 
 
-def compute_on_dataset(model, data_loader, aggregate_across_ranks=True):
+def inference_on_dataset(model, data_loader, aggregate_across_ranks=True):
     """
-    Run model on the dataloader and returns all outputs.
+    Run model on the data_loader and returns all outputs.
 
     Args:
-        model: a callable that takes an object from data_loader and returns some outputs
-        data_loader: an iterable with a length
+        model: a callable which takes an object from `data_loader` and returns some outputs
+        data_loader: an iterable object with a length.
+            The elements it generates will be the inputs to the model.
         aggregate_across_ranks (bool): if True, the results will be
             concatenated across all ranks. This is useful when all ranks each
             run on a disjoint subset of a large dataset.
@@ -33,11 +33,11 @@ def compute_on_dataset(model, data_loader, aggregate_across_ranks=True):
 
     Returns:
         list[dict]. Each dict has: "image_id", "original_height", "original_width", "instances".
-            "instances" is a `Boxes` containing the post-processed outputs of the model.
+            "instances" is a `Boxes` containing the outputs of the model.
     """
     num_devices = torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
     logger = logging.getLogger(__name__)
-    logger.info("Start evaluation on {} images".format(len(data_loader)))
+    logger.info("Start inference on {} images".format(len(data_loader)))
     start_time = time.time()
 
     old_training_mode = model.training
@@ -45,7 +45,8 @@ def compute_on_dataset(model, data_loader, aggregate_across_ranks=True):
 
     dataset_predictions = []
     cpu_device = torch.device("cpu")
-    for batch in tqdm(data_loader):
+    total = len(data_loader)  # inference data loader must have a fixed length
+    for idx, batch in enumerate(data_loader):
         _, __, dataset_dicts = batch
         with torch.no_grad():
             outputs = model(batch)
@@ -71,13 +72,23 @@ def compute_on_dataset(model, data_loader, aggregate_across_ranks=True):
                 prediction_dict = {k: dataset_dict[k] for k in ["height", "width", "image_id"]}
                 prediction_dict["instances"] = output
                 dataset_predictions.append(prediction_dict)
+        if (idx + 1) % 50 == 0:
+            duration = time.time() - start_time
+            logger.info(
+                "Inference done {}/{}. {:.4f} s / img. ETA={}".format(
+                    idx + 1,
+                    total,
+                    duration / (idx + 1),
+                    str(datetime.timedelta(seconds=int(duration / (idx + 1) * total - duration))),
+                )
+            )
 
     # Measure the time only for this worker (before the synchronization barrier)
-    total_time = time.time() - start_time
+    total_time = int(time.time() - start_time)
     total_time_str = str(datetime.timedelta(seconds=total_time))
     # NOTE this format is parsed by grep
     logger.info(
-        "Total inference time: {} ({} s / img per device, on {} devices)".format(
+        "Total inference time: {} ({:.6f} s / img per device, on {} devices)".format(
             total_time_str, total_time / len(data_loader), num_devices
         )
     )
@@ -95,7 +106,7 @@ def compute_on_dataset(model, data_loader, aggregate_across_ranks=True):
 def prepare_for_coco_evaluation(dataset_predictions):
     """
     Args:
-        dataset_predictions (list[dict]): the same format as returned by `compute_on_dataset`.
+        dataset_predictions (list[dict]): the same format as returned by `inference_on_dataset`.
 
     Returns:
         list[dict]: the format used by COCO evaluation.
@@ -103,7 +114,7 @@ def prepare_for_coco_evaluation(dataset_predictions):
 
     coco_results = []
     processed_ids = {}
-    for prediction_dict in tqdm(dataset_predictions):
+    for prediction_dict in dataset_predictions:
         img_id = prediction_dict["image_id"]
         if img_id in processed_ids:
             # The same image may be processed multiple times due to the underlying
@@ -324,7 +335,7 @@ def coco_evaluation(cfg, model, dataset_name, output_folder=None):
     coco_dataset = DatasetFromList(DatasetCatalog.get(dataset_name))
 
     data_loader = build_detection_test_loader(cfg, coco_dataset)
-    dataset_predictions = compute_on_dataset(model, data_loader, aggregate_across_ranks=True)
+    dataset_predictions = inference_on_dataset(model, data_loader, aggregate_across_ranks=True)
     if not is_main_process():
         return
 
