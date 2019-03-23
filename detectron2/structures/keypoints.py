@@ -41,7 +41,10 @@ class Keypoints:
             boxes: Nx4 tensor, the boxes to draw the keypoints to
 
         Returns:
-            a N x heatmap_size x heatmap_size heatmap.
+            heatmaps: A tensor of shape (N, M) containing an integer spatial label
+                in the range [0, heatmap_size**2 - 1] for each keypoint in the input.
+            valid: A tensor of shape (N, M) containing whether each keypoint is in
+                the roi or not.
         """
         return _keypoints_to_heatmap(self.tensor, boxes, heatmap_size)
 
@@ -83,8 +86,11 @@ def _keypoints_to_heatmap(keypoints, rois, heatmap_size):
         rois: Nx4 tensor of rois in xyxy format
         heatmap_size: integer side length of square heatmap.
 
-    Returns: A tensor containing an integer spatial label in the range [0, heatmap_size**2 - 1] for
-        each keypoint in the input. Shape is (N, M)
+    Returns:
+        heatmaps: A tensor of shape (N, M) containing an integer spatial label
+            in the range [0, heatmap_size**2 - 1] for each keypoint in the input.
+        valid: A tensor of shape (N, M) containing whether each keypoint is in
+            the roi or not.
     """
 
     if rois.numel() == 0:

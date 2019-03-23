@@ -206,7 +206,6 @@ def evaluate_box_proposals(dataset_predictions, coco_api, thresholds=None, area=
         ]
         gt_boxes = torch.as_tensor(gt_boxes).reshape(-1, 4)  # guard against no boxes
         gt_boxes = Boxes(gt_boxes)
-
         gt_areas = torch.as_tensor([obj["area"] for obj in anno if obj["iscrowd"] == 0])
 
         if len(gt_boxes) == 0:
