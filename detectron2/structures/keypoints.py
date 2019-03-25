@@ -151,9 +151,9 @@ def heatmaps_to_keypoints(maps, rois):
     heights_ceil = np.ceil(heights)
 
     # NCHW to NHWC for use with OpenCV
+    num_keypoints = maps.shape[1]
     maps = np.transpose(maps, [0, 2, 3, 1])
     min_size = 0  # cfg.KRCNN.INFERENCE_MIN_SIZE
-    num_keypoints = 17
     xy_preds = np.zeros((len(rois), 4, num_keypoints), dtype=np.float32)
     for i in range(len(rois)):
         if min_size > 0:
