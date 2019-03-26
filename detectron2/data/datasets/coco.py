@@ -95,6 +95,9 @@ def load_coco_json(json_file, image_root, dataset_name=None):
     logger.info("Loaded {} images from {}".format(len(imgs_anns), json_file))
 
     dataset_dicts = []
+
+    num_instances_without_valid_segmentation = 0
+
     for (img_dict, anno_dict_list) in imgs_anns:
         record = {}
         record["file_name"] = os.path.join(image_root, img_dict["file_name"])
@@ -105,15 +108,35 @@ def load_coco_json(json_file, image_root, dataset_name=None):
         objs = []
         for anno in anno_dict_list:
             assert anno.get("ignore", 0) == 0
+
             obj = {
                 field: anno[field]
-                for field in ["segmentation", "iscrowd", "bbox", "keypoints", "category_id"]
+                for field in ["iscrowd", "bbox", "keypoints", "category_id"]
                 if field in anno
             }
+
+            segm = anno.get("segmentation", None)
+            if segm:  # either list[list[float]] or dict(RLE)
+                if not isinstance(segm, dict):
+                    # filter out invalid polygons (< 3 points)
+                    segm = [poly for poly in segm if len(poly) % 2 == 0 and len(poly) >= 6]
+                    if len(segm) == 0:
+                        num_instances_without_valid_segmentation += 1
+                        continue  # ignore this instance
+                obj["segmentation"] = segm
+
             obj["bbox_mode"] = BoxMode.XYWH_ABS
             if id_map:
                 obj["category_id"] = id_map[obj["category_id"]]
             objs.append(obj)
         record["annotations"] = objs
         dataset_dicts.append(record)
+
+    if num_instances_without_valid_segmentation > 0:
+        logger.warn(
+            "Filtered out {} instances without valid segmentation. "
+            "There might be issues in your dataset generation process.".format(
+                num_instances_without_valid_segmentation
+            )
+        )
     return dataset_dicts

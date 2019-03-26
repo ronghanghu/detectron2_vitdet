@@ -2,7 +2,7 @@ import copy
 import numpy as np
 import pycocotools.mask as mask_util
 
-from detectron2.structures import Boxes
+from detectron2.structures import Boxes, BoxMode
 
 from .colormap import colormap
 
@@ -42,12 +42,16 @@ def draw_text(img, pos, text, font_scale=0.35):
     font = cv2.FONT_HERSHEY_SIMPLEX
     ((text_w, text_h), _) = cv2.getTextSize(text, font, font_scale, 1)
     # Place text background.
-    back_tl = x0, y0 - int(1.3 * text_h)
-    back_br = x0 + text_w, y0
-    cv2.rectangle(img, back_tl, back_br, _GREEN, -1)
+    if x0 + text_w > img.shape[1]:
+        x0 = img.shape[1] - text_w
+    if y0 - int(1.2 * text_h) < 0:
+        y0 = int(1.2 * text_h)
+    back_topleft = x0, y0 - int(1.3 * text_h)
+    back_bottomright = x0 + text_w, y0
+    cv2.rectangle(img, back_topleft, back_bottomright, _GREEN, -1)
     # Show text.
-    text_tl = x0, y0 - int(0.3 * text_h)
-    cv2.putText(img, text, text_tl, font, font_scale, _GRAY, lineType=cv2.LINE_AA)
+    text_bottomleft = x0, y0 - int(0.2 * text_h)
+    cv2.putText(img, text, text_bottomleft, font, font_scale, _GRAY, lineType=cv2.LINE_AA)
     return img
 
 
@@ -57,7 +61,7 @@ def draw_boxes(img, boxes, thickness=1):
 
     Args:
         boxes (Boxes or ndarray): either a :class:`Boxes` instances,
-            or a Nx4 numpy array of xyxy format.
+            or a Nx4 numpy array of XYXY_ABS format.
         thickness (int): the thickness of the edges
     """
     img = img.astype(np.uint8)
@@ -111,30 +115,29 @@ def draw_mask(img, mask, color, alpha=0.4, draw_contours=True):
 
 def draw_coco_dict(dataset_dict, class_names=None):
     """
-    Draw a COCO-style instance annotations for an image.
+    Draw the instance annotations for an image.
 
     Args:
-        dataset_dict (dict): a COCO-style dict, with "file_name" and "annotations".
+        dataset_dict (dict): a dict in Detectron2 Dataset format. See DATASETS.md
         class_names (list[str] or None): `class_names[cateogory_id]` is the
             name for this category. If not provided, the visualization will
             not contain class names.
-            Note that the category ids in COCO format are 1-based.
+            Note that the category ids in Detectron2 Dataset format are 1-based.
+            So this list may need a dummy first element.
     """
-    img = cv2.imread(dataset_dict["file_name"])
+    img = dataset_dict.get("image", None)
+    if img is None:
+        img = cv2.imread(dataset_dict["file_name"])
     annos = dataset_dict["annotations"]
-    boxes = np.asarray([k["bbox"] for k in annos])
-
-    # TODO assumes xywh for now.
-    # TODO We need to normalize everything to xyxy and limit xywh
-    # to be used inside dataset-specific code only
-    # Fix it after D14417286 lands
+    boxes = np.asarray(
+        [BoxMode.convert(k["bbox"], k["bbox_mode"], BoxMode.XYXY_ABS) for k in annos]
+    )
 
     # Display in largest to smallest order to reduce occlusion
-    areas = boxes[:, 2] * boxes[:, 3]
+    areas = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
     sorted_inds = np.argsort(-areas)
     sorted_boxes = copy.deepcopy(boxes[sorted_inds])
 
-    sorted_boxes[:, 2:4] += sorted_boxes[:, 0:2]
     img = draw_boxes(img, sorted_boxes)
 
     cmap = colormap()

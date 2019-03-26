@@ -81,6 +81,13 @@ def _add_predefined_metadata():
     meta.class_names = ["person"]
     # TODO add COCO keypoint names, or are they needed at all?
 
+    # cityscapes:
+    meta = MetadataCatalog.get("cityscapes")
+    # We choose this order because it is consistent with our old json annotation files
+    # TODO Perhaps switch to an order that's consistent with Cityscapes'
+    # original label, when we don't need the legacy jsons any more.
+    meta.class_names = ["bicycle", "car", "person", "train", "truck", "motorcycle", "bus", "rider"]
+
 
 # We hard-coded some metadata. This will enable:
 # 1. Consistency check when loading the datasets

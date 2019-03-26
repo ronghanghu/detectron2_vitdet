@@ -22,7 +22,7 @@ def filter_images_with_only_crowd_annotations(dataset_dicts):
     A common training-time preprocessing on COCO dataset.
 
     Args:
-        dataset_dicts (list[dict]): COCO-style annotations.
+        dataset_dicts (list[dict]): annotations in Detectron2 Dataset format.
 
     Returns:
         list[dict]: the same format, but filtered.
@@ -51,7 +51,7 @@ def filter_images_with_few_keypoints(dataset_dicts, min_keypoints_per_image):
     Filter out images with too few number of keypoints.
 
     Args:
-        dataset_dicts (list[dict]): COCO-style annotations.
+        dataset_dicts (list[dict]): annotations in Detectron2 Dataset format.
 
     Returns:
         list[dict]: the same format, but filtered.

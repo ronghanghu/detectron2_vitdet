@@ -33,6 +33,9 @@ conda install pytorch-nightly -c pytorch
 # install pycocotools
 pip install --user 'git+https://github.com/cocodataset/cocoapi.git#subdirectory=PythonAPI'
 
+# optionally, install cityscapescripts
+pip install --user cityscapescripts
+
 # Clone this repo, and run:
 python setup.py build develop
 # This will install the lib with

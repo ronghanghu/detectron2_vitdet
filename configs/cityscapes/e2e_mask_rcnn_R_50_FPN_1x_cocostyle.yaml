@@ -1,31 +1,11 @@
+_BASE_: "../Base-FPN.yaml"
 MODEL:
-  META_ARCHITECTURE: "GeneralizedRCNN"
-  WEIGHT: "catalog://ImageNetPretrained/MSRA/R-50"
-  BACKBONE:
-    USE_FPN: True
-  RESNETS:
-    OUT_FEATURES: ["res2", "res3", "res4", "res5"]
-  RPN:
-    ANCHOR_STRIDE: (4, 8, 16, 32, 64)
-    PRE_NMS_TOPK_TRAIN: 2000
-    PRE_NMS_TOPK_TEST: 1000
-    POST_NMS_TOPK_TRAIN: 2000
-    POST_NMS_TOPK_TEST: 1000
-  ROI_HEADS:
-    NAME: "StandardROIHeads"
-  ROI_BOX_HEAD:
-    NAME: "FastRCNN2MLPHead"
-    POOLER_RESOLUTION: 7
-    POOLER_SCALES: (0.25, 0.125, 0.0625, 0.03125)
-    POOLER_SAMPLING_RATIO: 2
-  ROI_MASK_HEAD:
-    NAME: "MaskRCNNConvUpsampleHead"
-    NUM_CONV: 4
-    POOLER_SCALES: (0.25, 0.125, 0.0625, 0.03125)
-    POOLER_RESOLUTION: 14
-    POOLER_SAMPLING_RATIO: 2
-    RESOLUTION: 28
+  #WEIGHT: "catalog://ImageNetPretrained/MSRA/R-50"
+  # better and stable performance if initialized from COCO
+  WEIGHT: "catalog://Caffe2Detectron/COCO/35858933/e2e_mask_rcnn_R-50-FPN_1x"
   MASK_ON: True
+  ROI_HEADS:
+    NUM_CLASSES: 9
 INPUT:
   MIN_SIZE_TRAIN: (800, 832, 864, 896, 928, 960, 992, 1024)
   MIN_SIZE_TRAIN_SAMPLING: "choice"
@@ -35,8 +15,6 @@ INPUT:
 DATASETS:
   TRAIN: ("cityscapes_fine_instanceonly_seg_train_cocostyle",)
   TEST: ("cityscapes_fine_instanceonly_seg_val_cocostyle",)
-DATALOADER:
-  SIZE_DIVISIBILITY: 32
 SOLVER:
   BASE_LR: 0.01
   WEIGHT_DECAY: 0.0001

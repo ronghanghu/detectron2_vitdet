@@ -47,11 +47,17 @@ def align_and_update_state_dicts(model_state_dict, loaded_state_dict):
         shape_in_model = model_state_dict[key].shape
 
         if shape_in_model != loaded_value.shape:
-            raise ValueError(
-                "Shape of {} in checkpoint is {}, while shape of {} in model is {}".format(
+            logger.warning(
+                "Shape of {} in checkpoint is {}, while shape of {} in model is {}.".format(
                     key_old, loaded_value.shape, key, shape_in_model
                 )
             )
+            logger.warning(
+                "{} will not be loaded. Please double check and see if this is desired.".format(
+                    key_old
+                )
+            )
+            continue
 
         model_state_dict[key] = loaded_value
         matched_model_keys.add(key)

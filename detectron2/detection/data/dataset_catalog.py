@@ -93,6 +93,7 @@ class DatasetCatalog(object):
         return DatasetCatalog._REGISTERED_METADATA[key]
 
 
+# Some predefined datasets in COCO format
 _PREDEFINED_SPLITS = {}
 _PREDEFINED_SPLITS["coco"] = {
     "coco_2014_train": ("coco/train2014", "coco/annotations/instances_train2014.json"),
@@ -111,7 +112,7 @@ _PREDEFINED_SPLITS["cityscapes"] = {
     # TODO understand what is "filtered"
     "cityscapes_fine_instanceonly_seg_train_cocostyle": (
         "cityscapes/images",
-        "cityscapes/annotations/instancesonly_filtered_gtFine_train.json",
+        "cityscapes/annotations/instancesonly_gtFine_train.json",
     ),
     "cityscapes_fine_instanceonly_seg_val_cocostyle": (
         "cityscapes/images",
@@ -119,7 +120,7 @@ _PREDEFINED_SPLITS["cityscapes"] = {
     ),
     "cityscapes_fine_instanceonly_seg_test_cocostyle": (
         "cityscapes/images",
-        "cityscapes/annotations/instancesonly_filtered_gtFine_test.json",
+        "cityscapes/annotations/instancesonly_gtFine_test.json",
     ),
 }
 

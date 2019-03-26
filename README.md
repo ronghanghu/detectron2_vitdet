@@ -9,12 +9,12 @@ creating detection and segmentation models using PyTorch 1.0.
 - **Memory efficient:** uses roughly 500MB less GPU memory than mmdetection during training
 - **Multi-GPU training and inference**
 - **Batched inference:** can perform inference using multiple images per batch per GPU
-- **CPU support for inference:** runs on CPU in inference time. See our [webcam demo](blob/master/demo) for an example
+- **CPU support for inference:** runs on CPU in inference time. See our [webcam demo](demo) for an example
 - Provides pre-trained models for almost all reference Mask R-CNN and Faster R-CNN configurations with 1x schedule.
 
 ## Simple Demo
 
-We provide a simple webcam demo that illustrates how you can use `detectron2` for inference:
+We provide a simple demo that illustrates how you can use `detectron2` for inference:
 ```bash
 cd demo
 # use input files:

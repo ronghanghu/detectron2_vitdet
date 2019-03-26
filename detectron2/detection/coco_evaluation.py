@@ -324,12 +324,15 @@ class COCOResults(object):
 
 def coco_evaluation(cfg, model, dataset_name, output_folder=None):
     """
-    This function returns nothing on non-master processes (but still needs to be called).
-    On master process, it returns the following:
+    Evaluate a model on the given dataset.
 
     Args:
         model: the detection model
-        dataset_name (str): a name of the dataset that's available in the DatasetCatalog
+        dataset_name (str): a name of a dataset split that's available in the DatasetCatalog
+            The dataset must match a json annotation file in COCO's format.
+
+    This function returns nothing on non-master processes (but still needs to be called).
+    On master process, it returns the following:
 
     Returns:
        dict of dict: results[task][metric] is a float.
