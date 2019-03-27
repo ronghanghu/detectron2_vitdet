@@ -9,7 +9,6 @@ MODEL:
   ROI_KEYPOINT_HEAD:
     POOLER_RESOLUTION: 14
     POOLER_SAMPLING_RATIO: 2
-    RESOLUTION: 56
 DATASETS:
   TRAIN: ("keypoints_coco_2014_train", "keypoints_coco_2014_valminusminival",)
   TEST: ("keypoints_coco_2014_minival",)

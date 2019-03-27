@@ -253,7 +253,6 @@ _C.MODEL.ROI_KEYPOINT_HEAD.NAME = "KRCNNConvDeconvUpsampleHead"
 _C.MODEL.ROI_KEYPOINT_HEAD.POOLER_RESOLUTION = 14
 _C.MODEL.ROI_KEYPOINT_HEAD.POOLER_SAMPLING_RATIO = 0
 _C.MODEL.ROI_KEYPOINT_HEAD.CONV_DIMS = tuple(512 for _ in range(8))
-_C.MODEL.ROI_KEYPOINT_HEAD.RESOLUTION = 14
 _C.MODEL.ROI_KEYPOINT_HEAD.NUM_KEYPOINTS = 17
 # The caller of keypoint head is responsible to fill this computed attribute
 # about the input size of the keypoint head.
