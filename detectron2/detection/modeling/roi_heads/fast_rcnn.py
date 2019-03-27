@@ -112,7 +112,7 @@ def fast_rcnn_inference(boxes, scores, image_shapes, score_thresh, nms_thresh, t
             all detections.
 
     Returns:
-        list[Boxes]: A list of N box lists, one for each image in the batch, that stores the
+        list[Instances]: A list of N box lists, one for each image in the batch, that stores the
             topk most confidence detections.
     """
     return [
@@ -205,6 +205,7 @@ class FastRCNNOutputs(object):
 
         # cat(..., dim=0) concatenates over all images in the batch
         self.proposals = Boxes.cat([p.proposal_boxes for p in proposals])
+        self.image_shapes = [x.image_size for x in proposals]
 
         # The following fields should exist only when training.
         if proposals[0].has("gt_boxes"):
@@ -268,6 +269,23 @@ class FastRCNNOutputs(object):
         """
         probs = F.softmax(self.pred_class_logits, dim=-1)
         return probs.split(self.num_preds_per_image, dim=0)
+
+    def inference(self, score_thresh, nms_thresh, topk_per_image):
+        """
+        Args:
+            score_thresh (float): same as fast_rcnn_inference.
+            nms_thresh (float): same as fast_rcnn_inference.
+            topk_per_image (int): same as fast_rcnn_inference.
+        Returns:
+            list[Instances]: same as fast_rcnn_inference.
+        """
+        boxes = self.predict_boxes()
+        scores = self.predict_probs()
+        image_shapes = self.image_shapes
+
+        return fast_rcnn_inference(
+            boxes, scores, image_shapes, score_thresh, nms_thresh, topk_per_image
+        )
 
 
 # TODO a better name?

@@ -12,7 +12,7 @@ from ..matcher import Matcher
 from ..poolers import ROIPooler
 from ..sampling import subsample_labels
 from .box_head import build_box_head
-from .fast_rcnn import FastRCNNOutputHead, FastRCNNOutputs, fast_rcnn_inference
+from .fast_rcnn import FastRCNNOutputHead, FastRCNNOutputs
 from .keypoint_head import build_keypoint_head, keypoint_rcnn_inference, keypoint_rcnn_loss
 from .mask_head import build_mask_head, mask_rcnn_inference, mask_rcnn_loss
 
@@ -254,10 +254,7 @@ class Res5ROIHeads(ROIHeads):
                 losses["loss_mask"] = mask_rcnn_loss(mask_logits, proposals, self.mask_side_len)
             return [], losses
         else:
-            pred_instances = fast_rcnn_inference(
-                outputs.predict_boxes(),
-                outputs.predict_probs(),
-                [x.image_size for x in proposals],
+            pred_instances = outputs.inference(
                 self.test_score_thresh,
                 self.test_nms_thresh,
                 self.test_detections_per_img,
@@ -396,10 +393,7 @@ class StandardROIHeads(ROIHeads):
                 losses["loss_keypoint"] *= self.keypoint_loss_weight
             return [], losses
         else:
-            pred_instances = fast_rcnn_inference(
-                outputs.predict_boxes(),
-                outputs.predict_probs(),
-                [x.image_size for x in proposals],
+            pred_instances = outputs.inference(
                 self.test_score_thresh,
                 self.test_nms_thresh,
                 self.test_detections_per_img,
