@@ -4,7 +4,6 @@ from detectron2.data.datasets import MetadataCatalog
 from detectron2.data.transforms import ImageTransformers, Normalize, ResizeShortestEdge
 from detectron2.detection.checkpoint import DetectionCheckpointer
 from detectron2.detection.modeling import build_detection_model
-from detectron2.structures.image_list import ImageList
 from detectron2.utils.vis import draw_instance_predictions
 
 
@@ -68,12 +67,11 @@ class COCODemo(object):
         height, width = original_image.shape[:2]
         image = self.transforms.transform_image(original_image)
         image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
-        # convert to an ImageList, padded so that it is divisible by SIZE_DIVISIBILITY
-        image_list = ImageList.from_tensors([image], self.cfg.DATALOADER.COMPUTED_SIZE_DIVISIBILITY)
-        image_list = image_list.to(self.device)
+
+        inputs = {"image": image, "height": height, "width": width}
         # compute predictions
         with torch.no_grad():
-            predictions = self.model((image_list, None, [{"height": height, "width": width}]))
+            predictions = self.model([inputs])
         # there is only a single image
         predictions = predictions[0].to(self.cpu_device)
         return predictions

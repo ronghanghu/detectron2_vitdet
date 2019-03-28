@@ -1,10 +1,44 @@
 import copy
 import numpy as np
+import torch
 from PIL import Image
 
 from detectron2.data.transforms import Flip, ImageTransformers, Normalize, ResizeShortestEdge
+from detectron2.structures import Boxes, BoxMode, Instances, Keypoints, PolygonMasks
 
 __all__ = ["DetectionTransform"]
+
+
+def annotations_to_instances(annos, image_size):
+    """
+    Create an :class:`Instances` object used by the models, from annotations in the dataset dict.
+
+    Args:
+        annos (list[dict]): a list of annotations, one per instance.
+        image_size (tuple): height, width
+
+    Returns:
+        Instances:
+    """
+    boxes = [BoxMode.convert(obj["bbox"], obj["bbox_mode"], BoxMode.XYXY_ABS) for obj in annos]
+    target = Instances(image_size)
+    boxes = target.gt_boxes = Boxes(boxes)
+    boxes.clip(image_size)
+
+    classes = [obj["category_id"] for obj in annos]
+    classes = torch.tensor(classes)
+    target.gt_classes = classes
+
+    masks = [obj["segmentation"] for obj in annos]
+    masks = PolygonMasks(masks)
+    target.gt_masks = masks
+
+    if len(annos) and "keypoints" in annos[0]:
+        kpts = [obj.get("keypoints", []) for obj in annos]
+        target.gt_keypoints = Keypoints(kpts)
+
+    target = target[boxes.nonempty()]
+    return target
 
 
 # TODO this should be more accessible to users and be customizable
@@ -42,24 +76,32 @@ class DetectionTransform:
     def __call__(self, dataset_dict):
         """
         Transform the dataset_dict according to the configured transformations.
-        The dataset_dict is modified in place.
 
         Args:
-            dataset_dict (dict): A COCO-format annotation dict of one image.
+            dataset_dict (dict): Metadata of one image, in Detectron2 Dataset format.
 
         Returns:
-            dict: the in-place modified dataset_dict where the annotations are
-                replaced by transformed annotations (according to the configured
-                transformations) and a new key is inserted:
-                    image: the transformed image as a uint8 numpy array
+            dict: a new dict that's going to be processed by the model.
+                It currently does the following:
+                1. Read the image from "file_name"
+                2. Transform the image and annotations
+                3. Prepare the annotations to :class:`Instances`
         """
         dataset_dict = copy.deepcopy(dataset_dict)  # it will be modified by code below
-        image = Image.open(dataset_dict["file_name"]).convert("RGB")
+        image = Image.open(dataset_dict.pop("file_name")).convert("RGB")
         image = np.asarray(image, dtype="uint8")
         if self.to_bgr:
             image = image[:, :, ::-1]
 
         image, tfm_params = self.tfms.transform_image_get_params(image)
+
+        image_shape = image.shape[:2]  # h, w
+
+        # Pytorch's dataloader is efficient on torch.Tensor due to shared-memory,
+        # but not efficient on large generic data structures due to the use of pickle & mp.Queue.
+        # Therefore it's important to use torch.Tensor.
+        image = torch.as_tensor(image.transpose(2, 0, 1).astype("float32"))
+        # Can use uint8 if it turns out to be slow some day
         dataset_dict["image"] = image
 
         if not self.is_train:
@@ -67,15 +109,16 @@ class DetectionTransform:
             return dataset_dict
 
         annos = [
-            self.map_instance(obj, tfm_params, image.shape[:2])
-            for obj in dataset_dict["annotations"]
+            self.transform_annotations(obj, tfm_params, image_shape)
+            for obj in dataset_dict.pop("annotations")
             if obj.get("iscrowd", 0) == 0
         ]
+        targets = annotations_to_instances(annos, image_shape)
         # should not be empty during training
-        dataset_dict["annotations"] = annos
+        dataset_dict["targets"] = targets
         return dataset_dict
 
-    def map_instance(self, annotation, tfm_params, image_size):
+    def transform_annotations(self, annotation, tfm_params, image_size):
         x, y, w, h = annotation["bbox"]
         coords = np.array([[x, y], [x + w, y], [x, y + h], [x + w, y + h]], dtype="float32")
         coords = self.tfms.transform_coords(coords, tfm_params)

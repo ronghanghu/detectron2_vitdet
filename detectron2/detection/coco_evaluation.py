@@ -47,10 +47,9 @@ def inference_on_dataset(model, data_loader, aggregate_across_ranks=True):
     cpu_device = torch.device("cpu")
     total = len(data_loader)  # inference data loader must have a fixed length
     for idx, batch in enumerate(data_loader):
-        _, __, dataset_dicts = batch
         with torch.no_grad():
             outputs = model(batch)
-            for dataset_dict, output in zip(dataset_dicts, outputs):
+            for dataset_dict, output in zip(batch, outputs):
                 output = output.to(cpu_device)
 
                 if output.has("pred_masks"):

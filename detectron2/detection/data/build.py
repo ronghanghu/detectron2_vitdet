@@ -6,13 +6,12 @@ import numpy as np
 import torch.utils.data
 
 from detectron2.data import DatasetFromList, MapDataset, samplers
-from detectron2.structures import Boxes, BoxMode, ImageList, Instances, Keypoints, PolygonMasks
 from detectron2.utils.comm import get_world_size
 
 from .dataset_catalog import DatasetCatalog
 from .transforms import DetectionTransform
 
-__all__ = ["build_detection_train_loader", "build_detection_test_loader", "DetectionBatchCollator"]
+__all__ = ["build_detection_train_loader", "build_detection_test_loader"]
 
 
 def filter_images_with_only_crowd_annotations(dataset_dicts):
@@ -179,7 +178,7 @@ def build_detection_train_loader(cfg, start_iter=0):
         dataset,
         num_workers=cfg.DATALOADER.NUM_WORKERS,
         batch_sampler=batch_sampler,
-        collate_fn=DetectionBatchCollator(True),
+        collate_fn=trivial_batch_collator,
     )
     return data_loader
 
@@ -205,68 +204,13 @@ def build_detection_test_loader(cfg, dataset):
         dataset,
         num_workers=cfg.DATALOADER.NUM_WORKERS,
         batch_sampler=batch_sampler,
-        collate_fn=DetectionBatchCollator(False),
+        collate_fn=trivial_batch_collator,
     )
     return data_loader
 
 
-class DetectionBatchCollator:
+def trivial_batch_collator(batch):
     """
-    Batch collator will run inside the dataloader processes.
-    This batch collator batch the detection images and labels into torch.Tensor.
-
-    Note that it's best to do this step in the dataloader process, instead of in
-    the main process, because Pytorch's dataloader is less efficient when handling
-    large numpy arrays rather than torch.Tensor.
+    A batch collator that does nothing.
     """
-
-    def __init__(self, is_train):
-        self.is_train = is_train
-
-    def __call__(self, dataset_dicts):
-        """
-        Args:
-            dataset_dicts (list[dict]): each dict contains keys "image" and
-                "annotations", produced by :class:`DetectionTransform`.
-
-        Returns:
-            images: list[Tensor], list of images
-            instances: list[Instances]. None when not training.
-            dataset_dicts: the rest of the dataset_dicts
-        """
-        # Pytorch's dataloader is efficient on torch.Tensor due to
-        # shared-memory, but not efficient on large generic data structures
-        # due to the use of pickle & mp.Queue.
-        # Therefore it's important to remove the numpy images and use torch.Tensor.
-        numpy_images = [x.pop("image") for x in dataset_dicts]
-        image_sizes = [x.shape[:2] for x in numpy_images]
-        images = [torch.as_tensor(x.transpose(2, 0, 1).astype("float32")) for x in numpy_images]
-
-        if not self.is_train:
-            return images, None, dataset_dicts
-
-        targets = []
-        for dataset_dict, image_size in zip(dataset_dicts, image_sizes):
-            annos = dataset_dict.pop("annotations")
-            boxes = [
-                BoxMode.convert(obj["bbox"], obj["bbox_mode"], BoxMode.XYXY_ABS) for obj in annos
-            ]
-            target = Instances(image_size)
-            boxes = target.gt_boxes = Boxes(boxes)
-            boxes.clip(image_size)
-
-            classes = [obj["category_id"] for obj in annos]
-            classes = torch.tensor(classes)
-            target.gt_classes = classes
-
-            masks = [obj["segmentation"] for obj in annos]
-            masks = PolygonMasks(masks)
-            target.gt_masks = masks
-
-            if len(annos) and "keypoints" in annos[0]:
-                kpts = [obj.get("keypoints", []) for obj in annos]
-                target.gt_keypoints = Keypoints(kpts)
-
-            target = target[boxes.nonempty()]
-            targets.append(target)
-        return images, targets, dataset_dicts
+    return batch
