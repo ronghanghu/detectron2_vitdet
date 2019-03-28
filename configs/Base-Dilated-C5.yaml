@@ -20,7 +20,6 @@ MODEL:
     NUM_CONV: 4
     POOLER_RESOLUTION: 14
     POOLER_SAMPLING_RATIO: 2
-    RESOLUTION: 28
 DATASETS:
   TRAIN: ("coco_2014_train", "coco_2014_valminusminival")
   TEST: ("coco_2014_minival",)

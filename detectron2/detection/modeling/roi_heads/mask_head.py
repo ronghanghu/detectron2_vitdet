@@ -45,7 +45,7 @@ def get_mask_ground_truth(gt_masks, pred_boxes, mask_side_len):
     return torch.stack(gt_mask_logits, dim=0).to(device=device)
 
 
-def mask_rcnn_loss(pred_mask_logits, instances, mask_side_len):
+def mask_rcnn_loss(pred_mask_logits, instances):
     """
     Compute the mask prediction loss defined in the Mask R-CNN paper.
 
@@ -58,13 +58,14 @@ def mask_rcnn_loss(pred_mask_logits, instances, mask_side_len):
             in the batch. These instances are in 1:1
             correspondence with the pred_mask_logits. The ground-truth labels (class, box, mask,
             ...) associated with each instance are stored in fields.
-        mask_side_len (int): The side length of the rasterized ground-truth masks.
 
     Returns:
         mask_loss (Tensor): A scalar tensor containing the loss.
     """
     gt_classes = []
     gt_mask_logits = []
+    mask_side_len = pred_mask_logits.size(2)
+    assert pred_mask_logits.size(2) == pred_mask_logits.size(3), "Mask prediction must be square!"
     for instances_per_image in instances:
         gt_classes_per_image = instances_per_image.gt_classes.to(dtype=torch.int64)
         gt_masks = instances_per_image.gt_masks

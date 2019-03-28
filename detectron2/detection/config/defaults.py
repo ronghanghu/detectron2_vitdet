@@ -237,7 +237,6 @@ _C.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION = 14
 _C.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO = 0
 _C.MODEL.ROI_MASK_HEAD.NUM_CONV = 0  # The number of convs in the mask head
 _C.MODEL.ROI_MASK_HEAD.CONV_DIM = 256
-_C.MODEL.ROI_MASK_HEAD.RESOLUTION = 14
 # Normalization method for the convolution layers. Options: "" (no norm), "GN".
 _C.MODEL.ROI_MASK_HEAD.NORM = ""
 # The caller of mask head is responsible to fill this computed attribute

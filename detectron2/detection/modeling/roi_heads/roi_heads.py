@@ -191,7 +191,6 @@ class Res5ROIHeads(ROIHeads):
         sampling_ratio      = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
         num_classes         = cfg.MODEL.ROI_HEADS.NUM_CLASSES
         bbox_reg_weights    = cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS
-        self.mask_side_len  = cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
         self.mask_on        = cfg.MODEL.MASK_ON
         # fmt: on
         assert not cfg.MODEL.KEYPOINT_ON
@@ -251,13 +250,11 @@ class Res5ROIHeads(ROIHeads):
                 mask_features = box_features[torch.cat(fg_selection_masks, dim=0)]
                 del box_features
                 mask_logits = self.mask_head(mask_features)
-                losses["loss_mask"] = mask_rcnn_loss(mask_logits, proposals, self.mask_side_len)
+                losses["loss_mask"] = mask_rcnn_loss(mask_logits, proposals)
             return [], losses
         else:
             pred_instances = outputs.inference(
-                self.test_score_thresh,
-                self.test_nms_thresh,
-                self.test_detections_per_img,
+                self.test_score_thresh, self.test_nms_thresh, self.test_detections_per_img
             )
             if self.mask_on:
                 x = self._shared_roi_transform(features, [x.pred_boxes for x in pred_instances])
@@ -284,7 +281,6 @@ class StandardROIHeads(ROIHeads):
         num_classes                              = cfg.MODEL.ROI_HEADS.NUM_CLASSES
         bbox_reg_weights                         = cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS
         self.mask_on                             = cfg.MODEL.MASK_ON
-        self.mask_side_len                       = cfg.MODEL.ROI_MASK_HEAD.RESOLUTION
         mask_pooler_resolution                   = cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION
         mask_pooler_scales                       = pooler_scales
         mask_sampling_ratio                      = cfg.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO
@@ -374,7 +370,7 @@ class StandardROIHeads(ROIHeads):
             if self.mask_on:
                 mask_features = self.mask_pooler(features, proposal_boxes)
                 mask_logits = self.mask_head(mask_features)
-                losses["loss_mask"] = mask_rcnn_loss(mask_logits, proposals, self.mask_side_len)
+                losses["loss_mask"] = mask_rcnn_loss(mask_logits, proposals)
             if self.keypoint_on:
                 keypoint_features = self.keypoint_pooler(features, proposal_boxes)
                 keypoint_logits = self.keypoint_head(keypoint_features)
@@ -394,9 +390,7 @@ class StandardROIHeads(ROIHeads):
             return [], losses
         else:
             pred_instances = outputs.inference(
-                self.test_score_thresh,
-                self.test_nms_thresh,
-                self.test_detections_per_img,
+                self.test_score_thresh, self.test_nms_thresh, self.test_detections_per_img
             )
             # During inference cascaded prediction is used: the mask and keypoints heads are only
             # applied to the top scoring box detections.
