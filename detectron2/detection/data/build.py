@@ -179,7 +179,7 @@ def build_detection_train_loader(cfg, start_iter=0):
         dataset,
         num_workers=cfg.DATALOADER.NUM_WORKERS,
         batch_sampler=batch_sampler,
-        collate_fn=DetectionBatchCollator(True, cfg.DATALOADER.COMPUTED_SIZE_DIVISIBILITY),
+        collate_fn=DetectionBatchCollator(True),
     )
     return data_loader
 
@@ -205,7 +205,7 @@ def build_detection_test_loader(cfg, dataset):
         dataset,
         num_workers=cfg.DATALOADER.NUM_WORKERS,
         batch_sampler=batch_sampler,
-        collate_fn=DetectionBatchCollator(False, cfg.DATALOADER.COMPUTED_SIZE_DIVISIBILITY),
+        collate_fn=DetectionBatchCollator(False),
     )
     return data_loader
 
@@ -220,8 +220,7 @@ class DetectionBatchCollator:
     large numpy arrays rather than torch.Tensor.
     """
 
-    def __init__(self, is_train, size_divisible):
-        self.size_divisible = size_divisible
+    def __init__(self, is_train):
         self.is_train = is_train
 
     def __call__(self, dataset_dicts):
@@ -231,7 +230,7 @@ class DetectionBatchCollator:
                 "annotations", produced by :class:`DetectionTransform`.
 
         Returns:
-            images: ImageList
+            images: list[Tensor], list of images
             instances: list[Instances]. None when not training.
             dataset_dicts: the rest of the dataset_dicts
         """
@@ -240,14 +239,14 @@ class DetectionBatchCollator:
         # due to the use of pickle & mp.Queue.
         # Therefore it's important to remove the numpy images and use torch.Tensor.
         numpy_images = [x.pop("image") for x in dataset_dicts]
+        image_sizes = [x.shape[:2] for x in numpy_images]
         images = [torch.as_tensor(x.transpose(2, 0, 1).astype("float32")) for x in numpy_images]
-        images = ImageList.from_tensors(images, self.size_divisible)
 
         if not self.is_train:
             return images, None, dataset_dicts
 
         targets = []
-        for dataset_dict, image_size in zip(dataset_dicts, images.image_sizes):
+        for dataset_dict, image_size in zip(dataset_dicts, image_sizes):
             annos = dataset_dict.pop("annotations")
             boxes = [
                 BoxMode.convert(obj["bbox"], obj["bbox_mode"], BoxMode.XYXY_ABS) for obj in annos

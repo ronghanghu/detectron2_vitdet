@@ -2,7 +2,7 @@ import copy
 import torch
 from torch import nn
 
-from detectron2.structures import Instances
+from detectron2.structures import ImageList, Instances
 from detectron2.utils.registry import Registry
 
 from .backbone import build_backbone
@@ -46,7 +46,7 @@ class GeneralizedRCNN(nn.Module):
             data: a tuple, produced by :class:`DetectionBatchCollator`.
 
         For now, the data contains images, targets, and images_metadata
-        images: ImageList
+        images: list[Tensor], list of images in (C, H, W) format.
         targets: list[Instances]
         image_metadata: list[dict], metadata for each image that may be useful.
             Currently, it only needs:
@@ -55,6 +55,7 @@ class GeneralizedRCNN(nn.Module):
         """
 
         images, targets, image_metadata = data
+        images = ImageList.from_tensors(images, self.backbone.size_divisibility)
         images = images.to(self.device)
         if targets is not None:
             targets = [t.to(self.device) for t in targets]

@@ -73,15 +73,6 @@ _C.DATALOADER.NUM_WORKERS = 4
 # are not batched with portrait images.
 _C.DATALOADER.ASPECT_RATIO_GROUPING = True
 
-# If > 0, this enforces that each collated batch should have a size divisible by SIZE_DIVISIBILITY
-# Image shape has to be divisible up to the last feature map extracted from the backbone
-# Otherwise FPN cannot add two featuremaps together.
-# This value is typically 32 for FPN models.
-#
-# It is a computed attribute that is filled by the backbone
-# TODO remove this from dataloader and apply it in the model instead (depend on #25)
-# _C.DATALOADER.COMPUTED_SIZE_DIVISIBILITY = 0
-
 
 # ---------------------------------------------------------------------------- #
 # Backbone options

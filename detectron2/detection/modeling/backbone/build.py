@@ -17,7 +17,4 @@ def build_backbone(cfg):
     cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_STRIDES = tuple(backbone.out_feature_strides.items())
     cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_CHANNELS = tuple(backbone.out_feature_channels.items())
 
-    # TODO remove this from dataloader and apply it in the model instead (depend on #25)
-    cfg.DATALOADER.COMPUTED_SIZE_DIVISIBILITY = backbone.size_divisibility
-
     return backbone

@@ -1,5 +1,5 @@
-import numpy as np
 import copy
+import numpy as np
 from PIL import Image
 
 from detectron2.data.transforms import Flip, ImageTransformers, Normalize, ResizeShortestEdge
