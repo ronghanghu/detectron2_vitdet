@@ -29,9 +29,10 @@ def annotations_to_instances(annos, image_size):
     classes = torch.tensor(classes)
     target.gt_classes = classes
 
-    masks = [obj["segmentation"] for obj in annos]
-    masks = PolygonMasks(masks)
-    target.gt_masks = masks
+    if len(annos) and "segmentation" in annos[0]:
+        masks = [obj["segmentation"] for obj in annos]
+        masks = PolygonMasks(masks)
+        target.gt_masks = masks
 
     if len(annos) and "keypoints" in annos[0]:
         kpts = [obj.get("keypoints", []) for obj in annos]
@@ -71,6 +72,7 @@ class DetectionTransform:
         self.tfms = ImageTransformers(tfms)
         self.is_train = is_train
         self.keypoint_flip_indices = _create_flip_indices(cfg)
+        self.mask_on = cfg.MODEL.MASK_ON
         self.keypoint_on = cfg.MODEL.KEYPOINT_ON
 
     def __call__(self, dataset_dict):
@@ -127,10 +129,11 @@ class DetectionTransform:
         annotation["bbox"] = (minxy[0], minxy[1], wh[0], wh[1])
 
         # each instance contains 1 or more polygons
-        annotation["segmentation"] = [
-            self.tfms.transform_coords(np.asarray(p).reshape(-1, 2), tfm_params).reshape(-1)
-            for p in annotation["segmentation"]
-        ]
+        if self.mask_on and "segmentation" in annotation:
+            annotation["segmentation"] = [
+                self.tfms.transform_coords(np.asarray(p).reshape(-1, 2), tfm_params).reshape(-1)
+                for p in annotation["segmentation"]
+            ]
 
         if self.keypoint_on and "keypoints" in annotation:
             _, image_width = image_size
