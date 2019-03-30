@@ -119,8 +119,9 @@ def build_batch_data_sampler(
         batch_sampler = samplers.GroupedBatchSampler(sampler, group_ids, images_per_batch)
     else:
         batch_sampler = torch.utils.data.sampler.BatchSampler(
-            sampler, images_per_batch, drop_last=False
-        )
+            sampler, images_per_batch, drop_last=True
+        )  # drop last so the batch always have the same size
+        # NOTE when we add batch inference support, make sure not to use this.
     return batch_sampler
 
 
