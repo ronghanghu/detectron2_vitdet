@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch import nn
 from torch.nn import GroupNorm
 
-from . import Backbone, BatchNorm2d, Conv2d, FrozenBatchNorm2d
+from . import Backbone, BatchNorm2d, Conv2d, FrozenBatchNorm2d, weight_init
 
 __all__ = ["ResNetBlockBase", "BottleneckBlock", "BasicStem", "ResNet", "make_stage"]
 
@@ -67,7 +67,7 @@ class BottleneckBlock(ResNetBlockBase):
         Args:
             norm (str or callable): a callable that takes the number of
                 channels and return a `nn.Module`, or a pre-defined string
-                (one of {"FrozenBN", "BN"}).
+                (one of {"FrozenBN", "BN", "GN"}).
             stride_in_1x1 (bool): when stride==2, whether to put stride in the
                 first 1x1 convolution or the bottleneck 3x3 convolution.
         """
@@ -119,7 +119,21 @@ class BottleneckBlock(ResNetBlockBase):
             norm=_get_norm(norm, out_channels),
         )
 
-        # TODO initialization
+        for layer in [self.conv1, self.conv2, self.conv3, self.shortcut]:
+            if layer is not None:  # shortcut can be None
+                weight_init.c2_msra_fill(layer)
+
+        # Zero-initialize the last normalization in each residual branch,
+        # so that at the beginning, the residual branch starts with zeros,
+        # and each residual block behaves like an identity.
+        # See Sec 5.1 in "Accurate, Large Minibatch SGD: Training ImageNet in 1 Hour":
+        # "For BN layers, the learnable scaling coefficient γ is initialized
+        # to be 1, except for each residual block's last BN
+        # where γ is initialized to be 0."
+
+        # nn.init.constant_(self.conv3.norm.weight, 0)
+        # TODO this somehow hurts performance when training GN models from scratch.
+        # Add it as an option when we need to use this code to train a backbone.
 
     def forward(self, x):
         out = self.conv1(x)
@@ -166,7 +180,7 @@ class BasicStem(nn.Module):
         Args:
             norm (str or callable): a callable that takes the number of
                 channels and return a `nn.Module`, or a pre-defined string
-                (one of {"FrozenBN", "BN"}).
+                (one of {"FrozenBN", "BN", "GN"}).
         """
         super().__init__()
         self.conv1 = Conv2d(
@@ -178,6 +192,7 @@ class BasicStem(nn.Module):
             bias=False,
             norm=_get_norm(norm, out_channels),
         )
+        weight_init.c2_msra_fill(self.conv1)
 
     def forward(self, x):
         x = self.conv1(x)
@@ -233,6 +248,10 @@ class ResNet(Backbone):
         if num_classes is not None:
             self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
             self.linear = nn.Linear(curr_channels, num_classes)
+
+            # Sec 5.1 in "Accurate, Large Minibatch SGD: Training ImageNet in 1 Hour":
+            # "The 1000-way fully-connected layer is initialized by
+            # drawing weights from a zero-mean Gaussian with standard deviation of 0.01."
             nn.init.normal_(self.linear.weight, stddev=0.01)
             name = "linear"
 

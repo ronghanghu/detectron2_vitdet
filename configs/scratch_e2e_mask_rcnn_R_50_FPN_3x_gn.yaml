@@ -1,0 +1,28 @@
+_BASE_: "Base-FPN.yaml"
+# INPUT:
+  # It makes sense to divide by STD when training from scratch
+  # But it seems to make no difference on the results and C2's models did't do this.
+  # So we keep things consistent with C2.
+  # PIXEL_STD: [57.375, 57.12, 58.395]
+MODEL:
+  WEIGHT: ""
+  MASK_ON: True
+  BACKBONE:
+    FREEZE_AT: 0
+  RESNETS:
+    DEPTH: 50
+    NORM: "GN"
+    STRIDE_IN_1X1: False
+  FPN:
+    NORM: "GN"
+  ROI_BOX_HEAD:
+    NAME: "FastRCNNConvFCHead"
+    NUM_CONV: 4
+    NUM_FC: 1
+    NORM: "GN"
+  ROI_MASK_HEAD:
+    NORM: "GN"
+SOLVER:
+  # 3x schedule
+  STEPS: (210000, 250000)
+  MAX_ITER: 270000

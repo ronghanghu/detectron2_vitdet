@@ -45,10 +45,17 @@ _C.INPUT.MAX_SIZE_TRAIN = 1333
 _C.INPUT.MIN_SIZE_TEST = 800
 # Maximum size of the side of the image during testing
 _C.INPUT.MAX_SIZE_TEST = 1333
-# Values to be used for image normalization
+
+# Values to be used for image normalization (BGR order)
+# We use the same pixel mean for all networks even though it's not exactly
+# what they were trained with (which is [103.53, 116.28, 123.675] for ImageNet)
+# "Fun" fact: the history of where these values comes from is lost
 _C.INPUT.PIXEL_MEAN = [102.9801, 115.9465, 122.7717]
-# Values to be used for image normalization
+# When using the C2 pre-trained models, std has been abosbed into its conv1 weights,
+# so the std needs to be set 1.
+# Otherwise, you can use [57.375, 57.12, 58.395] (ImageNet std)
 _C.INPUT.PIXEL_STD = [1.0, 1.0, 1.0]
+
 # Whether the model needs BGR input or RGB
 _C.INPUT.BGR = True
 
@@ -341,6 +348,9 @@ _C.SOLVER.MOMENTUM = 0.9
 
 _C.SOLVER.WEIGHT_DECAY = 0.0005
 _C.SOLVER.WEIGHT_DECAY_BIAS = 0
+# The weight decay that's applied to parameters of normalization layers
+# (typically the affine transformation)
+_C.SOLVER.WEIGHT_DECAY_NORM = 0
 
 _C.SOLVER.GAMMA = 0.1
 _C.SOLVER.STEPS = (30000,)
