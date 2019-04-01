@@ -1,21 +1,21 @@
-import numpy as np
-from PIL import Image
-import os
-import glob
-import multiprocessing as mp
 import functools
-
-import pycocotools.mask as mask_util
+import glob
 import logging
+import multiprocessing as mp
+import numpy as np
+import os
+import pycocotools.mask as mask_util
+from PIL import Image
+
+from detectron2.structures import BoxMode
+
+from .metadata import MetadataCatalog
 
 try:
     import cv2  # noqa
 except ImportError:
     # OpenCV is an optional dependency at the moment
     pass
-
-from detectron2.structures import BoxMode
-from .metadata import MetadataCatalog
 
 
 def load_cityscapes_instances(data_dir, gt_dir, use_polygons=False):

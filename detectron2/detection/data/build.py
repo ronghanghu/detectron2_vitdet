@@ -184,16 +184,17 @@ def build_detection_train_loader(cfg, start_iter=0):
     return data_loader
 
 
-def build_detection_test_loader(cfg, dataset):
+def build_detection_test_loader(cfg, dataset_name):
     """
     Args:
         cfg: a detectron2 CfgNode
-        dataset: a torch Dataset
+        dataset_name (str): a name of the dataset that's available in the DatasetCatalog
 
     Returns:
         DataLoader: a torch DataLoader, that loads the given detection
             dataset, with test-time transformation and batching.
     """
+    dataset = DatasetFromList(DatasetCatalog.get(dataset_name))
     dataset = MapDataset(dataset, DetectionTransform(cfg, False))
 
     sampler = samplers.InferenceSampler(len(dataset))

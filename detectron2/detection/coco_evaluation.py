@@ -1,105 +1,168 @@
-import datetime
 import itertools
 import json
 import logging
 import numpy as np
 import os
 import tempfile
-import time
 from collections import OrderedDict
 import pycocotools.mask as mask_util
 import torch
+from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 
-from detectron2.data import DatasetFromList
 from detectron2.structures import Boxes, BoxMode, pairwise_iou
 from detectron2.utils.comm import all_gather, is_main_process, synchronize
+from detectron2.utils.inference import DatasetEvaluator
 
-from .data import DatasetCatalog, build_detection_test_loader
+from .data import DatasetCatalog
 
 
-def inference_on_dataset(model, data_loader, aggregate_across_ranks=True):
+class COCOEvaluator(DatasetEvaluator):
     """
-    Run model on the data_loader and returns all outputs.
-
-    Args:
-        model: a callable which takes an object from `data_loader` and returns some outputs
-        data_loader: an iterable object with a length.
-            The elements it generates will be the inputs to the model.
-        aggregate_across_ranks (bool): if True, the results will be
-            concatenated across all ranks. This is useful when all ranks each
-            run on a disjoint subset of a large dataset.
-            If False, each rank will return only the results it computed on the given data_loader.
-
-    Returns:
-        list[dict]. Each dict has: "image_id", "original_height", "original_width", "instances".
-            "instances" is a `Boxes` containing the outputs of the model.
+    Evaluate object proposal, instance detection/segmentation, keypoint detection
+    outputs using COCO's metrics and APIs.
     """
-    num_devices = torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
-    logger = logging.getLogger(__name__)
-    logger.info("Start inference on {} images".format(len(data_loader)))
-    start_time = time.time()
 
-    old_training_mode = model.training
-    model.eval()
+    def __init__(self, dataset_name, tasks, distributed, output_dir=None):
+        """
+        Args:
+            dataset_name (str): name of a dataset split that's registered
+                in DatasetCatalog as COCO format.
+            tasks: (tuple[str]): allowed options are: "box_proposals", "bbox", "segm", "keypoints"
+            distributed (True): if True, will collect results from all ranks for evaluation.
+                Otherwise, will evaluate the results in the current process.
+            output_dir (str): an output directory to dump results.
+        """
+        self._dataset_name = dataset_name
+        self._tasks = tasks
+        self._distributed = distributed
+        self._output_dir = output_dir
 
-    dataset_predictions = []
-    cpu_device = torch.device("cpu")
-    total = len(data_loader)  # inference data loader must have a fixed length
-    for idx, batch in enumerate(data_loader):
-        with torch.no_grad():
-            outputs = model(batch)
-            for dataset_dict, output in zip(batch, outputs):
-                output = output.to(cpu_device)
+        self._cpu_device = torch.device("cpu")
+        self._logger = logging.getLogger(__name__)
 
-                if output.has("pred_masks"):
-                    # use RLE to encode the masks, because they are too large and takes memory when
-                    # running over an entire dataset
-                    rles = [
-                        mask_util.encode(np.array(mask[:, :, None], order="F"))[0]
-                        for mask in output.pred_masks
-                    ]
-                    for rle in rles:
-                        # "counts" is an array encoded by mask_util as a byte-stream. Python3's
-                        # json writer which always produces strings cannot serialize a bytestream
-                        # unless you decode it. Thankfully, utf-8 works out (which is also what
-                        # the pycocotools/_mask.pyx does).
-                        rle["counts"] = rle["counts"].decode("utf-8")
-                    output.pred_masks_rle = rles
-                    output.remove("pred_masks")
+        json_file = DatasetCatalog.get_coco_path(dataset_name)["json_file"]
 
-                prediction_dict = {k: dataset_dict[k] for k in ["height", "width", "image_id"]}
-                prediction_dict["instances"] = output
-                dataset_predictions.append(prediction_dict)
-        if (idx + 1) % 50 == 0:
-            duration = time.time() - start_time
-            logger.info(
-                "Inference done {}/{}. {:.4f} s / img. ETA={}".format(
-                    idx + 1,
-                    total,
-                    duration / (idx + 1),
-                    str(datetime.timedelta(seconds=int(duration / (idx + 1) * total - duration))),
+        self._coco_api = COCO(json_file)
+
+    def reset(self):
+        self._predictions = []
+
+    @staticmethod
+    def tasks_from_config(cfg):
+        """
+        Returns:
+            tuple[str]: tasks that can be evaluated under the given configuration.
+        """
+        if cfg.MODEL.RPN_ONLY:
+            tasks = ("box_proposals",)
+        else:
+            tasks = ("bbox",)
+            if cfg.MODEL.MASK_ON:
+                tasks = tasks + ("segm",)
+            if cfg.MODEL.KEYPOINT_ON:
+                tasks = tasks + ("keypoints",)
+        return tasks
+
+    def process(self, inputs, outputs):
+        """
+        Args:
+            inputs: the inputs to a COCO model (e.g., GeneralizedRCNN).
+                It is a list of dict. Each dict corresponds to an image and
+                contains keys like "height", "width", "file_name", "image_id".
+            outputs: the outputs of a COCO model. It is a list of :class:`Instances`.
+        """
+        for input, output in zip(inputs, outputs):
+            output = output.to(self._cpu_device)
+            if output.has("pred_masks"):
+                # use RLE to encode the masks, because they are too large and takes memory
+                # since this evaluator stores outputs of the entire dataset
+                rles = [
+                    mask_util.encode(np.array(mask[:, :, None], order="F"))[0]
+                    for mask in output.pred_masks
+                ]
+                for rle in rles:
+                    # "counts" is an array encoded by mask_util as a byte-stream. Python3's
+                    # json writer which always produces strings cannot serialize a bytestream
+                    # unless you decode it. Thankfully, utf-8 works out (which is also what
+                    # the pycocotools/_mask.pyx does).
+                    rle["counts"] = rle["counts"].decode("utf-8")
+                output.pred_masks_rle = rles
+                output.remove("pred_masks")
+
+            prediction = {"image_id": input["image_id"], "instances": output}
+            self._predictions.append(prediction)
+
+    def evaluate(self):
+        if self._distributed:
+            synchronize()
+            self._predictions = all_gather(self._predictions)
+            self._predictions = list(itertools.chain(*self._predictions))
+
+            if not is_main_process():
+                return
+
+        if self._output_dir:
+            torch.save(self._predictions, os.path.join(self._output_dir, "predictions.pth"))
+
+        tasks = set(self._tasks)
+        self._results = OrderedDict()
+        if "box_proposals" in tasks:
+            self._eval_box_proposals()
+            tasks.remove("box_proposals")
+
+        if len(tasks) != 0:
+            self._eval_predictions(tasks)
+
+        self._logger.info(self._results)
+        return self._results
+
+    def _eval_predictions(self, tasks):
+        """
+        Evaluate self._predictions on the given tasks.
+        Fill self._results with the metrics of the tasks.
+        """
+        self._logger.info("Preparing results for COCO format")
+        coco_results = prepare_for_coco_evaluation(self._predictions)
+
+        # unmap the category ids for COCO
+        dataset_meta = DatasetCatalog.get_metadata(self._dataset_name)
+        if hasattr(dataset_meta, "json_id_to_contiguous_id"):
+            reverse_id_mapping = {v: k for k, v in dataset_meta.json_id_to_contiguous_id.items()}
+            for result in coco_results:
+                result["category_id"] = reverse_id_mapping[result["category_id"]]
+
+        if self._output_dir:
+            file_path = os.path.join(self._output_dir, "coco_results.json")
+            f = open(file_path, "w")
+        else:
+            f = tempfile.NamedTemporaryFile(suffix=".json")
+            file_path = f.name
+        with f:
+            json.dump(coco_results, f)
+            f.flush()
+
+            self._logger.info("Evaluating predictions")
+            for task in tasks:
+                res = evaluate_predictions_on_coco(self._coco_api, coco_results, file_path, task)
+                self._results[task] = res
+
+    def _eval_box_proposals(self):
+        """
+        Evaluate the box proposals in self._predictions.
+        Fill self._results with the metrics for "box_proposals" task.
+        """
+        self._logger.info("Evaluating bbox proposals")
+        res = {}
+        areas = {"all": "", "small": "s", "medium": "m", "large": "l"}
+        for limit in [100, 1000]:
+            for area, suffix in areas.items():
+                stats = evaluate_box_proposals(
+                    self._predictions, self._coco_api, area=area, limit=limit
                 )
-            )
-
-    # Measure the time only for this worker (before the synchronization barrier)
-    total_time = int(time.time() - start_time)
-    total_time_str = str(datetime.timedelta(seconds=total_time))
-    # NOTE this format is parsed by grep
-    logger.info(
-        "Total inference time: {} ({:.6f} s / img per device, on {} devices)".format(
-            total_time_str, total_time / len(data_loader), num_devices
-        )
-    )
-
-    synchronize()
-
-    if aggregate_across_ranks:
-        dataset_predictions = all_gather(dataset_predictions)
-        dataset_predictions = list(itertools.chain(*dataset_predictions))
-    model.train(old_training_mode)
-
-    return dataset_predictions
+                key = "AR{}@{:d}".format(suffix, limit)
+                res[key] = stats["ar"].item() * 100
+        self._results["box_proposals"] = res
 
 
 def prepare_for_coco_evaluation(dataset_predictions):
@@ -268,150 +331,23 @@ def evaluate_box_proposals(dataset_predictions, coco_api, thresholds=None, area=
 
 
 def evaluate_predictions_on_coco(coco_gt, coco_results, json_result_file, iou_type="bbox"):
+    metrics = {
+        "bbox": ["AP", "AP50", "AP75", "APs", "APm", "APl"],
+        "segm": ["AP", "AP50", "AP75", "APs", "APm", "APl"],
+        "keypoints": ["AP", "AP50", "AP75", "APm", "APl"],
+    }[iou_type]
+
+    if len(coco_results) == 0:  # cocoapi does not handle empty results very well
+        return {metric: -1 for metric in metrics}
+
     coco_dt = coco_gt.loadRes(str(json_result_file))
     # coco_dt = coco_gt.loadRes(coco_results)
     coco_eval = COCOeval(coco_gt, coco_dt, iou_type)
     coco_eval.evaluate()
     coco_eval.accumulate()
     coco_eval.summarize()
-    return coco_eval
 
-
-class COCOResults(object):
-    METRICS = {
-        "bbox": ["AP", "AP50", "AP75", "APs", "APm", "APl"],
-        "segm": ["AP", "AP50", "AP75", "APs", "APm", "APl"],
-        "box_proposal": [
-            "AR@100",
-            "ARs@100",
-            "ARm@100",
-            "ARl@100",
-            "AR@1000",
-            "ARs@1000",
-            "ARm@1000",
-            "ARl@1000",
-        ],
-        "keypoints": ["AP", "AP50", "AP75", "APm", "APl"],
-    }
-
-    def __init__(self, *iou_types):
-        allowed_types = ("box_proposal", "bbox", "segm", "keypoints")
-        assert all(iou_type in allowed_types for iou_type in iou_types)
-        results = OrderedDict()
-        for iou_type in iou_types:
-            results[iou_type] = OrderedDict(
-                [(metric, -1) for metric in COCOResults.METRICS[iou_type]]
-            )
-        self.results = results
-
-    def update(self, coco_eval):
-        if coco_eval is None:
-            return
-
-        assert isinstance(coco_eval, COCOeval)
-        s = coco_eval.stats
-        iou_type = coco_eval.params.iouType
-        res = self.results[iou_type]
-        metrics = COCOResults.METRICS[iou_type]
-        for idx, metric in enumerate(metrics):
-            res[metric] = s[idx] * 100  # x100 makes numbers more readable
-
-    def __repr__(self):
-        # TODO make it pretty
-        return repr(self.results)
-
-
-def coco_evaluation(cfg, model, dataset_name, output_folder=None):
-    """
-    Evaluate a model on the given dataset.
-
-    Args:
-        model: the detection model
-        dataset_name (str): a name of a dataset split that's available in the DatasetCatalog
-            The dataset must match a json annotation file in COCO's format.
-
-    This function returns nothing on non-master processes (but still needs to be called).
-    On master process, it returns the following:
-
-    Returns:
-       dict of dict: results[task][metric] is a float.
-       list[dict]: one for each image, contains the outputs from the model.
-       list[dict]: one for each instance, in the COCO evaluation format.
-    """
-    coco_dataset = DatasetFromList(DatasetCatalog.get(dataset_name))
-
-    data_loader = build_detection_test_loader(cfg, coco_dataset)
-    dataset_predictions = inference_on_dataset(model, data_loader, aggregate_across_ranks=True)
-    if not is_main_process():
-        return
-
-    if output_folder:
-        torch.save(dataset_predictions, os.path.join(output_folder, "predictions.pth"))
-
-    logger = logging.getLogger(__name__)
-
-    from pycocotools.coco import COCO
-
-    json_file = DatasetCatalog.get_coco_path(dataset_name)["json_file"]
-    coco_api = COCO(json_file)
-
-    if cfg.MODEL.RPN_ONLY:
-        logger.info("Evaluating bbox proposals")
-        areas = {"all": "", "small": "s", "medium": "m", "large": "l"}
-        results = COCOResults("box_proposal")
-        for limit in [100, 1000]:
-            for area, suffix in areas.items():
-                stats = evaluate_box_proposals(
-                    dataset_predictions, coco_api, area=area, limit=limit
-                )
-                key = "AR{}@{:d}".format(suffix, limit)
-                results.results["box_proposal"][key] = stats["ar"].item()
-        logger.info(results)
-        if output_folder:
-            torch.save(results, os.path.join(output_folder, "box_proposals.pth"))
-        recalls = results.results["box_proposal"]
-        for key in recalls:
-            recalls[key] = recalls[key] * 100
-        return (results.results,)
-
-    logger.info("Preparing results for COCO format")
-    coco_results = prepare_for_coco_evaluation(dataset_predictions)
-
-    # unmap the category ids for COCO
-    dataset_meta = DatasetCatalog.get_metadata(dataset_name)
-    if hasattr(dataset_meta, "json_id_to_contiguous_id"):
-        reverse_id_mapping = {v: k for k, v in dataset_meta.json_id_to_contiguous_id.items()}
-        for result in coco_results:
-            result["category_id"] = reverse_id_mapping[result["category_id"]]
-
-    with tempfile.NamedTemporaryFile() as f:
-        file_path = f.name
-        if output_folder:
-            file_path = os.path.join(output_folder, "coco_results.json")
-        with open(file_path, "w") as f:
-            json.dump(coco_results, f)
-
-    iou_types = ("bbox",)
-    if cfg.MODEL.MASK_ON:
-        iou_types = iou_types + ("segm",)
-    if cfg.MODEL.KEYPOINT_ON:
-        iou_types = iou_types + ("keypoints",)
-
-    results = COCOResults(*iou_types)
-    if len(coco_results) == 0:
-        return results.results, coco_results, dataset_predictions
-
-    logger.info("Evaluating predictions")
-
-    for iou_type in iou_types:
-        res = evaluate_predictions_on_coco(coco_api, coco_results, file_path, iou_type)
-        results.update(res)
-    results = results.results  # get the OrderedDict from COCOResults
-    logger.info(results)
-    if output_folder:
-        torch.save(results, os.path.join(output_folder, "coco_results.pth"))
-
-    return results, coco_results, dataset_predictions
+    return {metric: coco_eval.stats[idx] * 100 for idx, metric in enumerate(metrics)}
 
 
 def print_copypaste_format(results):
@@ -423,7 +359,7 @@ def print_copypaste_format(results):
     """
     assert isinstance(results, OrderedDict)  # unordered results cannot be properly printed
     logger = logging.getLogger(__name__)
-    for task in ["bbox", "segm", "keypoints", "box_proposal"]:
+    for task in ["bbox", "segm", "keypoints", "box_proposals"]:
         if task not in results:
             continue
         res = results[task]

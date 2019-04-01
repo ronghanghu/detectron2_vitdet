@@ -4,4 +4,4 @@ MODEL:
 DATASETS:
   TEST: ("coco_2014_minival_100",)
 TEST:
-  EXPECTED_RESULTS: [["box_proposal", "AR@1000", 58.23, 0.02]]
+  EXPECTED_RESULTS: [["box_proposals", "AR@1000", 58.23, 0.02]]

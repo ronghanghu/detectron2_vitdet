@@ -19,19 +19,21 @@ import detectron2.utils.comm as comm
 from detectron2.detection import (
     DetectionCheckpointer,
     build_detection_model,
+    build_detection_test_loader,
     build_detection_train_loader,
     build_lr_scheduler,
     build_optimizer,
-    coco_evaluation,
     get_cfg,
     print_copypaste_format,
     set_global_cfg,
     verify_results,
 )
+from detectron2.detection.coco_evaluation import COCOEvaluator
 from detectron2.engine.launch import launch
 from detectron2.utils.collect_env import collect_env_info
 from detectron2.utils.comm import reduce_dict
 from detectron2.utils.events import EventStorage, JSONWriter, get_event_storage
+from detectron2.utils.inference import inference_context, inference_on_dataset
 from detectron2.utils.logger import setup_logger
 from detectron2.utils.misc import mkdir
 
@@ -105,20 +107,25 @@ def do_test(cfg, model, is_final=True):
         model = model.module
     torch.cuda.empty_cache()  # TODO check if it helps
 
-    results = []
-    for dataset_name in cfg.DATASETS.TEST:
-        if cfg.OUTPUT_DIR:
-            output_folder = os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
-            mkdir(output_folder)
-        else:
-            output_folder = None
+    with inference_context(model):
+        results = []
+        for dataset_name in cfg.DATASETS.TEST:
+            if cfg.OUTPUT_DIR:
+                output_folder = os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
+                mkdir(output_folder)
+            else:
+                output_folder = None
 
-        results_per_dataset = coco_evaluation(cfg, model, dataset_name, output_folder=output_folder)
-        if comm.is_main_process():
-            results.append(results_per_dataset[0])
-            if is_final:
-                print_copypaste_format(results_per_dataset[0])
-        comm.synchronize()
+            evaluator = COCOEvaluator(
+                dataset_name, COCOEvaluator.tasks_from_config(cfg), True, output_folder
+            )
+            data_loader = build_detection_test_loader(cfg, dataset_name)
+            results_per_dataset = inference_on_dataset(model, data_loader, evaluator)
+            if comm.is_main_process():
+                results.append(results_per_dataset)
+                if is_final:
+                    print_copypaste_format(results_per_dataset)
+            comm.synchronize()
 
     if is_final and cfg.TEST.EXPECTED_RESULTS and comm.is_main_process():
         assert len(results) == 1, "Results verification only supports one dataset!"
