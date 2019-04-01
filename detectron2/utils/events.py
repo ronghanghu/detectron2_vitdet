@@ -1,6 +1,7 @@
 import json
 from collections import defaultdict
-import torch
+
+from borc.common.history_buffer import HistoryBuffer
 
 _CURRENT_STORAGE = None
 
@@ -10,53 +11,6 @@ def get_event_storage():
         _CURRENT_STORAGE is not None
     ), "get_event_storage() has to be called inside a 'with EventStorage(...)' context!"
     return _CURRENT_STORAGE
-
-
-class HistoryBuffer:
-    """
-    Track a series of scalar values and provide access to smoothed values over a
-    window or the global average of the series.
-    """
-
-    def __init__(self):
-        self._data = []
-        self._count = 0
-        self._global_avg = 0
-
-    def update(self, value, iteration):
-        """
-        Add a new scalar value produced at certain iteration.
-
-        NOTE: The (value, iteration) pair is appended to a list and stored forever.
-        Be careful not to abuse it.
-
-        If this turns out to be a memory/perf issue, we can set a limit.
-        """
-        self._data.append((value, iteration))
-
-        self._count += 1
-        self._global_avg += (value - self._global_avg) / self._count
-
-    def latest(self):
-        return self._data[-1][0]
-
-    def median(self, window_size):
-        d = torch.tensor([x[0] for x in self._data[-window_size:]])
-        return d.median().item()
-
-    def avg(self, window_size):
-        d = torch.tensor([x[0] for x in self._data[-window_size:]])
-        return d.mean().item()
-
-    def global_avg(self):
-        return self._global_avg
-
-    def values(self):
-        """
-        Returns:
-            list[(number, iteration)]: all history
-        """
-        return self._data
 
 
 class JSONWriter:

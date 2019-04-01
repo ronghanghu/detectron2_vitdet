@@ -173,7 +173,7 @@ def do_train(cfg, model):
                 raise FloatingPointError("Losses become NaN at iteration={}!".format(iteration))
 
             # reduce losses over all GPUs for logging purposes
-            loss_dict_reduced = reduce_dict(loss_dict)
+            loss_dict_reduced = {k: v.item() for k, v in reduce_dict(loss_dict).items()}
             losses_reduced = sum(loss for loss in loss_dict_reduced.values())
             storage.put_scalars(loss=losses_reduced, **loss_dict_reduced)
 
