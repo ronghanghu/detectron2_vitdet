@@ -11,6 +11,14 @@ def setup_environment():
     custom setup work that may be necessary to their computing environment.
     """
     custom_module_path = os.environ.get("DETECTRON2_ENV_MODULE")
+
+    # TODO remove this after a while
+    if custom_module_path == "infra.fb.env":
+        custom_module_path = "detectron2.fb.env"
+        print("---------------------- NOTE ---------------------------------")
+        print("Please use `DETECTORN2_ENV_MODULE=detectron2.fb.env` instead!")
+        print("-------------------------------------------------------------")
+
     if custom_module_path:
         setup_custom_environment(custom_module_path)
     else:
