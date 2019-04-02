@@ -3,7 +3,7 @@ import os
 
 from detectron2.structures import BoxMode
 
-from .metadata import MetadataCatalog
+from ..metadata import MetadataCatalog
 
 logger = logging.getLogger(__name__)
 

@@ -1,6 +1,6 @@
 import torch
 
-from detectron2.data.datasets import MetadataCatalog
+from detectron2.data import MetadataCatalog
 from detectron2.data.transforms import ImageTransformers, Normalize, ResizeShortestEdge
 from detectron2.detection.checkpoint import DetectionCheckpointer
 from detectron2.detection.modeling import build_detection_model

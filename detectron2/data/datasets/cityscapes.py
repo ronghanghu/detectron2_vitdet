@@ -9,7 +9,7 @@ from PIL import Image
 
 from detectron2.structures import BoxMode
 
-from .metadata import MetadataCatalog
+from ..metadata import MetadataCatalog
 
 try:
     import cv2  # noqa

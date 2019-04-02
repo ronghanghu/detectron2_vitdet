@@ -10,11 +10,10 @@ import torch
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 
+from detectron2.data import MetadataCatalog
 from detectron2.structures import Boxes, BoxMode, pairwise_iou
 from detectron2.utils.comm import all_gather, is_main_process, synchronize
 from detectron2.utils.inference import DatasetEvaluator
-
-from .data import DatasetCatalog
 
 
 class COCOEvaluator(DatasetEvaluator):
@@ -23,17 +22,18 @@ class COCOEvaluator(DatasetEvaluator):
     outputs using COCO's metrics and APIs.
     """
 
-    def __init__(self, dataset_name, tasks, distributed, output_dir=None):
+    def __init__(self, dataset_split, tasks, distributed, output_dir=None):
         """
         Args:
-            dataset_name (str): name of a dataset split that's registered
-                in DatasetCatalog as COCO format.
+            dataset_split (str): name of a dataset split to be evaluated.
+                It must has the following corresponding metadata:
+                    "json_file": the path to the COCO format annotation
+                    "dataset_name": the name of the dataset it belongs to.
             tasks: (tuple[str]): allowed options are: "box_proposals", "bbox", "segm", "keypoints"
             distributed (True): if True, will collect results from all ranks for evaluation.
                 Otherwise, will evaluate the results in the current process.
             output_dir (str): an output directory to dump results.
         """
-        self._dataset_name = dataset_name
         self._tasks = tasks
         self._distributed = distributed
         self._output_dir = output_dir
@@ -41,9 +41,9 @@ class COCOEvaluator(DatasetEvaluator):
         self._cpu_device = torch.device("cpu")
         self._logger = logging.getLogger(__name__)
 
-        json_file = DatasetCatalog.get_coco_path(dataset_name)["json_file"]
-
-        self._coco_api = COCO(json_file)
+        split_meta = MetadataCatalog.get(dataset_split)
+        self._coco_api = COCO(split_meta.json_file)
+        self._dataset_meta = MetadataCatalog.get(split_meta.dataset_name)
 
     def reset(self):
         self._predictions = []
@@ -126,9 +126,10 @@ class COCOEvaluator(DatasetEvaluator):
         coco_results = prepare_for_coco_evaluation(self._predictions)
 
         # unmap the category ids for COCO
-        dataset_meta = DatasetCatalog.get_metadata(self._dataset_name)
-        if hasattr(dataset_meta, "json_id_to_contiguous_id"):
-            reverse_id_mapping = {v: k for k, v in dataset_meta.json_id_to_contiguous_id.items()}
+        if hasattr(self._dataset_meta, "json_id_to_contiguous_id"):
+            reverse_id_mapping = {
+                v: k for k, v in self._dataset_meta.json_id_to_contiguous_id.items()
+            }
             for result in coco_results:
                 result["category_id"] = reverse_id_mapping[result["category_id"]]
 
