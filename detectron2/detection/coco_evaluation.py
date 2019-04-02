@@ -144,7 +144,7 @@ class COCOEvaluator(DatasetEvaluator):
             f.flush()
 
             self._logger.info("Evaluating predictions")
-            for task in tasks:
+            for task in sorted(tasks):
                 res = evaluate_predictions_on_coco(self._coco_api, coco_results, file_path, task)
                 self._results[task] = res
 

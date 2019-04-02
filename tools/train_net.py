@@ -125,7 +125,6 @@ def do_test(cfg, model, is_final=True):
                 results.append(results_per_dataset)
                 if is_final:
                     print_copypaste_format(results_per_dataset)
-            comm.synchronize()
 
     if is_final and cfg.TEST.EXPECTED_RESULTS and comm.is_main_process():
         assert len(results) == 1, "Results verification only supports one dataset!"
@@ -191,6 +190,9 @@ def do_train(cfg, model):
 
             if cfg.TEST.EVAL_PERIOD > 0 and iteration % cfg.TEST.EVAL_PERIOD == 0:
                 do_test(cfg, model, is_final=False)
+                # Evaluation may take different time among workers.
+                # A barrier make them start the next iteration together.
+                comm.synchronize()
 
             if iteration - start_iter > 5 and (iteration % 20 == 0 or iteration == max_iter):
                 for writer in writers:
