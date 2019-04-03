@@ -126,7 +126,7 @@ def mask_rcnn_inference(pred_mask_logits, pred_instances):
 
     # Select masks coresponding to the predicted classes
     num_masks = pred_mask_logits.shape[0]
-    class_pred = torch.cat([i.pred_classes for i in pred_instances])
+    class_pred = cat([i.pred_classes for i in pred_instances])
     indices = torch.arange(num_masks, device=class_pred.device)
     mask_probs_pred = mask_probs_pred[indices, class_pred][:, None]
 
