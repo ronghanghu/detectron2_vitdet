@@ -105,10 +105,18 @@ def load_coco_json(json_file, image_root, dataset_name=None):
         record["file_name"] = os.path.join(image_root, img_dict["file_name"])
         record["height"] = img_dict["height"]
         record["width"] = img_dict["width"]
-        record["image_id"] = img_dict["id"]
+        image_id = record["image_id"] = img_dict["id"]
 
         objs = []
         for anno in anno_dict_list:
+            # Check that the image_id in this annotation is the same as
+            # the image_id we're looking at.
+            # This fails only when the data parsing logic or the annotation file is buggy.
+
+            # The original COCO valminusminival2014 & minival2014 annotation files
+            # actually contains bugs that, together with certain ways of using COCO API,
+            # can trigger this assertion.
+            assert anno["image_id"] == image_id
             assert anno.get("ignore", 0) == 0
 
             obj = {
