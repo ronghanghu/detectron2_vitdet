@@ -129,6 +129,8 @@ def draw_coco_dict(dataset_dict, class_names=None):
     if img is None:
         img = cv2.imread(dataset_dict["file_name"])
     annos = dataset_dict["annotations"]
+    if not len(annos):
+        return img
     boxes = np.asarray(
         [BoxMode.convert(k["bbox"], k["bbox_mode"], BoxMode.XYXY_ABS) for k in annos]
     )

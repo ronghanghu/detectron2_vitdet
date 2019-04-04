@@ -121,12 +121,20 @@ class DetectionTransform:
         return dataset_dict
 
     def transform_annotations(self, annotation, tfm_params, image_size):
-        x, y, w, h = annotation["bbox"]
-        coords = np.array([[x, y], [x + w, y], [x, y + h], [x + w, y + h]], dtype="float32")
+        """
+        Apply image transformations to the annotations.
+
+        After this method, the box mode will be set to XYXY_ABS.
+        """
+        bbox = BoxMode.convert(annotation["bbox"], annotation["bbox_mode"], BoxMode.XYXY_ABS)
+        annotation["bbox_mode"] = BoxMode.XYXY_ABS
+
+        x0, y0, x1, y1 = bbox
+        coords = np.array([[x0, y0], [x1, y0], [x0, y1], [x1, y1]], dtype="float32")
         coords = self.tfms.transform_coords(coords, tfm_params)
         minxy = coords.min(axis=0)
-        wh = coords.max(axis=0) - minxy
-        annotation["bbox"] = (minxy[0], minxy[1], wh[0], wh[1])
+        maxxy = coords.max(axis=0)
+        annotation["bbox"] = (minxy[0], minxy[1], maxxy[0], maxxy[1])
 
         # each instance contains 1 or more polygons
         if self.mask_on and "segmentation" in annotation:

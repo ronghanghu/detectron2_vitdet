@@ -37,8 +37,10 @@ def load_coco_json(json_file, image_root, dataset_name=None):
     id_map = None
     if dataset_name is not None:
         meta = MetadataCatalog.get(dataset_name)
-        cat_ids = coco_api.getCatIds()
-        class_names = [c["name"] for c in coco_api.loadCats(cat_ids)]
+        cat_ids = sorted(coco_api.getCatIds())
+        cats = coco_api.loadCats(cat_ids)
+        # The categories in a custom json file may not be sorted.
+        class_names = [c["name"] for c in sorted(cats, key=lambda x: x["id"])]
         meta.class_names = class_names
 
         # A user can provide a dataset where some category ids have no
@@ -140,3 +142,28 @@ def load_coco_json(json_file, image_root, dataset_name=None):
             )
         )
     return dataset_dicts
+
+
+if __name__ == "__main__":
+    """
+    Test the COCO json dataset loader.
+
+    Usage:
+        python -m detectron2.data.datasets.coco \
+            path/to/json path/to/image_root dataset_name
+    """
+    from detectron2.utils.logger import setup_logger
+    from detectron2.utils.vis import draw_coco_dict
+    import cv2
+    import sys
+
+    logger = setup_logger(name=__name__)
+    meta = MetadataCatalog.get(sys.argv[3])
+
+    dicts = load_coco_json(sys.argv[1], sys.argv[2], sys.argv[3])
+    logger.info("Done loading {} samples.".format(len(dicts)))
+
+    for d in dicts:
+        vis = draw_coco_dict(d, ["0"] + meta.class_names)
+        fpath = os.path.join("coco-data-vis", os.path.basename(d["file_name"]))
+        cv2.imwrite(fpath, vis)

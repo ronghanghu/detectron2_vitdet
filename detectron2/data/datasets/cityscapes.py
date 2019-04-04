@@ -8,6 +8,7 @@ import pycocotools.mask as mask_util
 from PIL import Image
 
 from detectron2.structures import BoxMode
+from detectron2.utils.comm import get_world_size
 
 from ..metadata import MetadataCatalog
 
@@ -18,10 +19,10 @@ except ImportError:
     pass
 
 
-def load_cityscapes_instances(data_dir, gt_dir, use_polygons=False):
+def load_cityscapes_instances(image_dir, gt_dir, use_polygons=False):
     """
     Args:
-        data_dir (str): path to the raw dataset. e.g., "~/cityscapes/leftImg8bit/train".
+        image_dir (str): path to the raw dataset. e.g., "~/cityscapes/leftImg8bit/train".
         gt_dir (str): path to the raw annotations. e.g., "~/cityscapes/gtFine/train".
         use_polygons (bool): whether to represent the segmentation as masks
             (cityscapes's format) or polygons (COCO's format).
@@ -30,10 +31,10 @@ def load_cityscapes_instances(data_dir, gt_dir, use_polygons=False):
         list[dict]: a list of dicts in "Detectron2 Dataset" format. (See DATASETS.md)
     """
     files = []
-    for image_file in glob.glob(os.path.join(data_dir, "**/*.png")):
+    for image_file in glob.glob(os.path.join(image_dir, "**/*.png")):
         suffix = "leftImg8bit.png"
         assert image_file.endswith(suffix)
-        prefix = data_dir
+        prefix = image_dir
         instance_file = gt_dir + image_file[len(prefix) : -len(suffix)] + "gtFine_instanceIds.png"
         assert os.path.isfile(instance_file), instance_file
 
@@ -43,10 +44,12 @@ def load_cityscapes_instances(data_dir, gt_dir, use_polygons=False):
 
     logger = logging.getLogger(__name__)
     logger.info("Preprocessing cityscapes annotations ...")
-    pool = mp.Pool(processes=min(8, mp.cpu_count()))
+    # This is still not fast: all workers will execute duplicate works and will
+    # take up to 10m on a 8GPU server.
+    pool = mp.Pool(processes=mp.cpu_count() // get_world_size() // 2)
 
     ret = pool.map(functools.partial(cityscapes_files_to_dict, use_polygons=use_polygons), files)
-    logger.info("Loaded {} images from {}".format(len(ret), data_dir))
+    logger.info("Loaded {} images from {}".format(len(ret), image_dir))
     return ret
 
 
@@ -80,6 +83,7 @@ def cityscapes_files_to_dict(files, use_polygons=False):
         "width": inst_image.shape[1],
     }
     annos = []
+
     for instance_id in flattened_ids:
         # For non-crowd annotations, instance_id // 1000 is the label_id
         # Crowd annotations have <1000 instance ids
@@ -97,13 +101,18 @@ def cityscapes_files_to_dict(files, use_polygons=False):
         inds = np.nonzero(mask)
         ymin, ymax = inds[0].min(), inds[0].max()
         xmin, xmax = inds[1].min(), inds[1].max()
-        # TODO Maybe need an offset (xmax + 1 ?). Revisit this when we train the models.
+        # TODO Maybe need an offset (xmax + 1 or 0.5 ?). Revisit this when we train the models.
         anno["bbox"] = (xmin, ymin, xmax, ymax)
+        if xmax <= xmin or ymax <= ymin:
+            continue
         anno["bbox_mode"] = BoxMode.XYXY_ABS
         if use_polygons:
             # This conversion comes from D4809743 and D5171122, when Mask-RCNN was first developed.
             contours = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[-2]
-            polygons = [c.reshape(-1).tolist() for c in contours]
+            polygons = [c.reshape(-1).tolist() for c in contours if len(c) >= 3]
+            # opencv's can produce invalid polygons
+            if len(polygons) == 0:
+                continue
             anno["segmentation"] = polygons
         else:
             anno["segmentation"] = mask_util.encode(mask[:, :, None])[0]
@@ -132,5 +141,8 @@ if __name__ == "__main__":
 
     for d in dicts:
         vis = draw_coco_dict(d, ["0"] + meta.class_names)
-        cv2.imshow("", vis)
-        cv2.waitKey()
+        fpath = os.path.join("cityscapes-data-vis", os.path.basename(d["file_name"]))
+        cv2.imwrite(fpath, vis)
+
+        # cv2.imshow("", vis)
+        # cv2.waitKey()

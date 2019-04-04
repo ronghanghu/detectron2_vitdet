@@ -93,7 +93,7 @@ def _add_predefined_metadata():
     # We choose this order because it is consistent with our old json annotation files
     # TODO Perhaps switch to an order that's consistent with Cityscapes'
     # original label, when we don't need the legacy jsons any more.
-    meta.class_names = ["bicycle", "car", "person", "train", "truck", "motorcycle", "bus", "rider"]
+    meta.class_names = ["bicycle", "motorcycle", "rider", "train", "car", "person", "truck", "bus"]
 
 
 # We hard-coded some metadata for common datasets. This will enable:

@@ -4,9 +4,12 @@ import itertools
 import logging
 import numpy as np
 import torch.utils.data
+from termcolor import colored
 
-from detectron2.data import DatasetFromList, MapDataset, samplers
+from detectron2.data import DatasetFromList, MapDataset, MetadataCatalog, samplers
 from detectron2.utils.comm import get_world_size
+
+from tabulate import tabulate
 
 from .dataset_catalog import DatasetCatalog
 from .transforms import DetectionTransform
@@ -86,6 +89,28 @@ def _quantize(x, bin_edges):
     return quantized
 
 
+def print_instances_class_histogram(dataset_dicts, class_names):
+    """
+    Args:
+        dataset_dicts (list[dict]): list of dataset dicts.
+        class_names (list[str]): list of class names (zero-indexed).
+    """
+    num_classes = len(class_names)
+    hist_bins = np.arange(num_classes + 1)
+    histogram = np.zeros((num_classes,), dtype=np.int)
+    for entry in dataset_dicts:
+        annos = entry["annotations"]
+        classes = [x["category_id"] - 1 for x in annos if not x["iscrowd"]]
+        histogram += np.histogram(classes, bins=hist_bins)[0]
+    data = [[class_names[i], v] for i, v in enumerate(histogram)]
+    data.append(["total ({} categories)".format(num_classes), sum(x[1] for x in data)])
+    table = tabulate(data, headers=["category", "#instances"], tablefmt="pipe")
+    logger = logging.getLogger(__name__)
+    logger.info(
+        "Distribution of categories among all training instances:\n" + colored(table, "cyan")
+    )
+
+
 def build_batch_data_sampler(
     sampler, images_per_batch, group_bin_edges=None, grouping_features=None
 ):
@@ -152,15 +177,22 @@ def build_detection_train_loader(cfg, start_iter=0):
 
     assert len(cfg.DATASETS.TRAIN)
     dataset_dicts = list(
-        itertools.chain.from_iterable(
-            DatasetCatalog.get(dataset_name) for dataset_name in cfg.DATASETS.TRAIN
-        )
+        itertools.chain.from_iterable(DatasetCatalog.get(split) for split in cfg.DATASETS.TRAIN)
     )
+
     dataset_dicts = filter_images_with_only_crowd_annotations(dataset_dicts)
     if cfg.MODEL.KEYPOINT_ON:
         min_kp = cfg.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE
         if min_kp > 0:
             dataset_dicts = filter_images_with_few_keypoints(dataset_dicts, min_kp)
+
+    try:
+        dataset_name = MetadataCatalog.get(cfg.DATASETS.TRAIN[0]).dataset_name
+        class_names = MetadataCatalog.get(dataset_name).class_names
+        print_instances_class_histogram(dataset_dicts, class_names)
+    except AttributeError:  # class names are not available for this dataset
+        pass
+
     dataset = DatasetFromList(dataset_dicts, copy=False)
 
     # Bin edges for batching images with similar aspect ratios. If ASPECT_RATIO_GROUPING

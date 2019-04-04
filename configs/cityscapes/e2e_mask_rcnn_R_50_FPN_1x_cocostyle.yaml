@@ -13,6 +13,7 @@ INPUT:
   MAX_SIZE_TRAIN: 2048
   MAX_SIZE_TEST: 2048
 DATASETS:
+  # TRAIN: ("cityscapes_fine_instanceonly_seg_train",)  # use raw annotations
   TRAIN: ("cityscapes_fine_instanceonly_seg_train_cocostyle",)
   TEST: ("cityscapes_fine_instanceonly_seg_val_cocostyle",)
 SOLVER:
