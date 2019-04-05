@@ -180,19 +180,19 @@ def build_detection_train_loader(cfg, start_iter=0):
         itertools.chain.from_iterable(DatasetCatalog.get(split) for split in cfg.DATASETS.TRAIN)
     )
 
-    dataset_dicts = filter_images_with_only_crowd_annotations(dataset_dicts)
-    if cfg.MODEL.KEYPOINT_ON:
-        min_kp = cfg.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE
-        if min_kp > 0:
-            dataset_dicts = filter_images_with_few_keypoints(dataset_dicts, min_kp)
+    if "annotations" in dataset_dicts[0]:
+        dataset_dicts = filter_images_with_only_crowd_annotations(dataset_dicts)
+        if cfg.MODEL.KEYPOINT_ON:
+            min_kp = cfg.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE
+            if min_kp > 0:
+                dataset_dicts = filter_images_with_few_keypoints(dataset_dicts, min_kp)
 
-    try:
-        dataset_name = MetadataCatalog.get(cfg.DATASETS.TRAIN[0]).dataset_name
-        class_names = MetadataCatalog.get(dataset_name).class_names
-        print_instances_class_histogram(dataset_dicts, class_names)
-    except AttributeError:  # class names are not available for this dataset
-        pass
-
+        try:
+            dataset_name = MetadataCatalog.get(cfg.DATASETS.TRAIN[0]).dataset_name
+            class_names = MetadataCatalog.get(dataset_name).class_names
+            print_instances_class_histogram(dataset_dicts, class_names)
+        except AttributeError:  # class names are not available for this dataset
+            pass
     dataset = DatasetFromList(dataset_dicts, copy=False)
 
     # Bin edges for batching images with similar aspect ratios. If ASPECT_RATIO_GROUPING

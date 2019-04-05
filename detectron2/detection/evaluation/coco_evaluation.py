@@ -349,21 +349,3 @@ def evaluate_predictions_on_coco(coco_gt, coco_results, json_result_file, iou_ty
     coco_eval.summarize()
 
     return {metric: coco_eval.stats[idx] * 100 for idx, metric in enumerate(metrics)}
-
-
-def print_copypaste_format(results):
-    """
-    Print results in a format that's easy to copypaste to excel.
-
-    Args:
-        results: OrderedDict
-    """
-    assert isinstance(results, OrderedDict)  # unordered results cannot be properly printed
-    logger = logging.getLogger(__name__)
-    for task in ["bbox", "segm", "keypoints", "box_proposals"]:
-        if task not in results:
-            continue
-        res = results[task]
-        logger.info("copypaste: Task: {}".format(task))
-        logger.info("copypaste: " + ",".join([n for n in res.keys()]))
-        logger.info("copypaste: " + ",".join(["{0:.4f}".format(v) for v in res.values()]))

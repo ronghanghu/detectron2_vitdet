@@ -1,8 +1,8 @@
 
-## The Detectron2 Dataset format for instance-level annotations
+## The Detectron2 Dataset format for annotations
 
-For instance-level tasks
-(instance detection, segmentation, keypoint detection),
+For tasks
+(instance detection, instance/semantic/panoptic segmentation, keypoint detection),
 we use a data structure similar to COCO's json annotation
 as the basic format to represent a dataset.
 
@@ -13,7 +13,10 @@ infer certain fields from others if needed, e.g., the data loader
 can read from "file_name" if "image" is not available.
 
 + file_name: the full path to the image file.
++ sem_seg_file_name: the full path to the ground truth semantic segmentation file.
 + image: the image in a numpy array.
++ sem_seg: semantic segmentation ground truth in a 2D numpy array. Values in the array represent
+ 		semantic labels.
 + height, width: integer. The size of image.
 + image_id (str): a string to identify this image.
 		Each dataset may use it for different purposes.
@@ -37,5 +40,3 @@ can read from "file_name" if "image" is not available.
 				`n` must be equal to the number of keypoint categories.
 				The Xs and Ys are either relative coordinates in [0, 1], or absolute coordinates,
 				depend on whether "bbox_mode" is relative.
-
-Maybe we will extend this format to semantic segmentation later.

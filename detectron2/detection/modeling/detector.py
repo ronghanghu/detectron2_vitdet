@@ -3,19 +3,12 @@ import torch
 from torch import nn
 
 from detectron2.structures import ImageList, Instances
-from detectron2.utils.registry import Registry
 
 from .backbone import build_backbone
+from .model_builder import META_ARCH_REGISTRY
 from .roi_heads.paste_mask import paste_masks_in_image
 from .roi_heads.roi_heads import build_roi_heads
 from .rpn.rpn import build_rpn
-
-META_ARCH_REGISTRY = Registry("META_ARCH")
-
-
-def build_detection_model(cfg):
-    meta_arch = cfg.MODEL.META_ARCHITECTURE
-    return META_ARCH_REGISTRY.get(meta_arch)(cfg)
 
 
 @META_ARCH_REGISTRY.register()

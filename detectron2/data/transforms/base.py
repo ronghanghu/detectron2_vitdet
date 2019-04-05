@@ -137,6 +137,30 @@ class ImageTransformer(metaclass=ABCMeta):
         """
         return coords
 
+    def transform_segmentation(self, segmentation, param):
+        """
+        Transform the segmentation given the param.
+
+        By default, a transformer keeps segmentation unchanged.
+        If a subclass of :class:`ImageTransformer` changes segmentation
+        but couldn't implement this method, it should ``raise NotImplementedError()``.
+
+        Args:
+            segmentation: 2D numpy array
+            param: transformation params returned by :meth:`transform_return_params`
+
+        Returns:
+            new segmentation
+        """
+        return self._transform_segmentation(segmentation, param)
+
+    def _transform_segmentation(self, segmentation, param):
+        """
+        Should be overwritten by subclasses if the transformer changes segmentation not in the same
+        way as the input image is transformed.
+        """
+        return self._transform_image(segmentation, param)
+
     def _rand_range(self, low=1.0, high=None, size=None):
         """
         Uniform float random number between low and high.
@@ -222,6 +246,11 @@ class ImageTransformers(ImageTransformer):
         for tfm, prm in zip(self.transformers, param):
             coords = tfm._transform_coords(coords, prm)
         return coords
+
+    def _transform_segmentation(self, segmentation, param):
+        for tfm, prm in zip(self.transformers, param):
+            segmentation = tfm._transform_segmentation(segmentation, prm)
+        return segmentation
 
     def reset_state(self):
         """ Will reset state of each transformer """

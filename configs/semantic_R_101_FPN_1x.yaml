@@ -1,0 +1,11 @@
+_BASE_: "Base-FPN.yaml"
+MODEL:
+  META_ARCHITECTURE: "SemanticSegmentator"
+  WEIGHT: "catalog://ImageNetPretrained/MSRA/R-101"
+  RESNETS:
+    DEPTH: 101
+DATASETS:
+  TRAIN: ("coco_panoptic_stuff_2017_train",)
+  TEST: ("coco_panoptic_stuff_2017_val",)
+INPUT:
+  MIN_SIZE_TRAIN: (640, 672, 704, 736, 768, 800)

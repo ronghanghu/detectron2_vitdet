@@ -16,7 +16,7 @@ def setup_environment():
     if custom_module_path == "infra.fb.env":
         custom_module_path = "detectron2.fb.env"
         print("---------------------- NOTE ---------------------------------")
-        print("Please use `DETECTORN2_ENV_MODULE=detectron2.fb.env` instead!")
+        print("Please use `DETECTRON2_ENV_MODULE=detectron2.fb.env` instead!")
         print("-------------------------------------------------------------")
 
     if custom_module_path:

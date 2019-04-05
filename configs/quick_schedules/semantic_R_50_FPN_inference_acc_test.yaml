@@ -1,0 +1,10 @@
+_BASE_: "../Base-FPN.yaml"
+MODEL:
+  META_ARCHITECTURE: "SemanticSegmentator"
+  WEIGHT: "/mnt/vol/gfsai-bistro-east/ai-group/bistro/gpu/akirillov/20190402/semseg_R_50_FPN_coco_1x_configs/semantic_R_50_FPN_1x.yaml.13_50_38.WAg3jWxC/output/model_final.pth"
+  RESNETS:
+    DEPTH: 50
+DATASETS:
+  TEST: ("coco_panoptic_stuff_2017_val_100",)
+TEST:
+  EXPECTED_RESULTS: [["sem_seg", "mIoU", 37.66, 0.02], ["sem_seg", "mACC", 49.32, 0.02]]

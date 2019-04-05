@@ -1,0 +1,16 @@
+_BASE_: "../Base-FPN.yaml"
+MODEL:
+  META_ARCHITECTURE: "SemanticSegmentator"
+  WEIGHT: "catalog://ImageNetPretrained/MSRA/R-50"
+  RESNETS:
+    DEPTH: 50
+DATASETS:
+  TRAIN: ("coco_panoptic_stuff_2017_val",)
+  TEST: ("coco_panoptic_stuff_2017_val",)
+SOLVER:
+  WARMUP_FACTOR: 0.001
+  WARMUP_ITERS: 300
+  STEPS: (5500, 5800)
+  MAX_ITER: 6000
+TEST:
+  EXPECTED_RESULTS: [["sem_seg", "mIoU", 63.1, 0.7], ["sem_seg", "mACC", 71.1, 0.7]]

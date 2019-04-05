@@ -18,22 +18,21 @@ from torch.nn.parallel import DistributedDataParallel
 import detectron2.utils.comm as comm
 from detectron2.detection import (
     DetectionCheckpointer,
-    build_detection_model,
     build_detection_test_loader,
     build_detection_train_loader,
     build_lr_scheduler,
+    build_model,
     build_optimizer,
     get_cfg,
-    print_copypaste_format,
     set_global_cfg,
     verify_results,
 )
-from detectron2.detection.coco_evaluation import COCOEvaluator
+from detectron2.detection.evaluation import COCOEvaluator, SemSegEvaluator
 from detectron2.engine.launch import launch
 from detectron2.utils.collect_env import collect_env_info
 from detectron2.utils.comm import reduce_dict
 from detectron2.utils.events import EventStorage, JSONWriter, get_event_storage
-from detectron2.utils.inference import inference_context, inference_on_dataset
+from detectron2.utils.inference import inference_context, inference_on_dataset, print_csv_format
 from detectron2.utils.logger import setup_logger
 from detectron2.utils.misc import mkdir
 
@@ -116,15 +115,24 @@ def do_test(cfg, model, is_final=True):
             else:
                 output_folder = None
 
-            evaluator = COCOEvaluator(
-                dataset_name, COCOEvaluator.tasks_from_config(cfg), True, output_folder
-            )
+            if cfg.MODEL.META_ARCHITECTURE == "SemanticSegmentator":
+                evaluator = SemSegEvaluator(
+                    dataset_name,
+                    distributed=True,
+                    num_classes=cfg.MODEL.SEM_SEG_HEAD.NUM_CLASSES,
+                    ignore_label=cfg.MODEL.SEM_SEG_HEAD.IGNORE_VALUE,
+                    output_dir=output_folder,
+                )
+            else:
+                evaluator = COCOEvaluator(
+                    dataset_name, COCOEvaluator.tasks_from_config(cfg), True, output_folder
+                )
             data_loader = build_detection_test_loader(cfg, dataset_name)
             results_per_dataset = inference_on_dataset(model, data_loader, evaluator)
             if comm.is_main_process():
                 results.append(results_per_dataset)
                 if is_final:
-                    print_copypaste_format(results_per_dataset)
+                    print_csv_format(results_per_dataset)
 
     if is_final and cfg.TEST.EXPECTED_RESULTS and comm.is_main_process():
         assert len(results) == 1, "Results verification only supports one dataset!"
@@ -246,7 +254,7 @@ def setup(args):
 
 def main(args):
     cfg = setup(args)
-    model = build_detection_model(cfg)
+    model = build_model(cfg)
     logger = logging.getLogger("detectron2")
     logger.info("Model:\n{}".format(model))
     output_dir = cfg.OUTPUT_DIR

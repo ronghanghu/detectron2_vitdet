@@ -107,17 +107,25 @@ class DetectionTransform:
         dataset_dict["image"] = image
 
         if not self.is_train:
-            del dataset_dict["annotations"]
+            dataset_dict.pop("annotations", None)
+            dataset_dict.pop("sem_seg_file_name", None)
             return dataset_dict
 
-        annos = [
-            self.transform_annotations(obj, tfm_params, image_shape)
-            for obj in dataset_dict.pop("annotations")
-            if obj.get("iscrowd", 0) == 0
-        ]
-        targets = annotations_to_instances(annos, image_shape)
-        # should not be empty during training
-        dataset_dict["targets"] = targets
+        if "annotations" in dataset_dict:
+            annos = [
+                self.transform_annotations(obj, tfm_params, image_shape)
+                for obj in dataset_dict.pop("annotations")
+                if obj.get("iscrowd", 0) == 0
+            ]
+            targets = annotations_to_instances(annos, image_shape)
+            # should not be empty during training
+            dataset_dict["targets"] = targets
+        if "sem_seg_file_name" in dataset_dict:
+            sem_seg_gt = Image.open(dataset_dict.pop("sem_seg_file_name"))
+            sem_seg_gt = np.asarray(sem_seg_gt, dtype="uint8")
+            sem_seg_gt = self.tfms.transform_segmentation(sem_seg_gt, tfm_params)
+            sem_seg_gt = torch.as_tensor(sem_seg_gt.astype("long"))
+            dataset_dict["sem_seg_gt"] = sem_seg_gt
         return dataset_dict
 
     def transform_annotations(self, annotation, tfm_params, image_size):

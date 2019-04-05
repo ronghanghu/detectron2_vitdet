@@ -1,2 +1,2 @@
 from .cityscapes import load_cityscapes_instances
-from .coco import load_coco_json
+from .coco import load_coco_json, load_sem_seg

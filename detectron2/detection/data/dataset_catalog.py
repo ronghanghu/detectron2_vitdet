@@ -3,7 +3,7 @@
 import os
 
 from detectron2.data import MetadataCatalog
-from detectron2.data.datasets import load_coco_json
+from detectron2.data.datasets import load_coco_json, load_sem_seg
 
 __all__ = ["DatasetCatalog"]
 
@@ -69,6 +69,22 @@ class DatasetCatalog(object):
             dataset_name=dataset_name, json_file=json_file, image_root=image_root
         )
 
+    @staticmethod
+    def register_sem_seg_format(key, dataset_name, gt_root, image_root):
+        """
+        Register a dataset in semantic segmentation format.
+
+        Args:
+            key (str): the key that identifies a split of a dataset, e.g. "coco_stuff_2017_train".
+            dataset_name (str): the name of the dataset, e.g. "coco"
+            gt_root (str): directory which contains all the ground truth images
+            image_root (str): directory which contains all the images
+        """
+        DatasetCatalog.register(key, lambda: load_sem_seg(gt_root, image_root))
+        MetadataCatalog.get(key).set(
+            dataset_name=dataset_name, gt_root=gt_root, image_root=image_root
+        )
+
 
 # ======================= Predefined datasets and splits ======================
 
@@ -94,6 +110,14 @@ def _add_predefined_metadata():
     # TODO Perhaps switch to an order that's consistent with Cityscapes'
     # original label, when we don't need the legacy jsons any more.
     meta.class_names = ["bicycle", "motorcycle", "rider", "train", "car", "person", "truck", "bus"]
+
+    # coco panoptic stuff:
+    # fmt: off
+    meta = MetadataCatalog.get("coco_panoptic_stuff")
+    meta.train_id_to_dataset_id = {0: 255, 1: 92, 2: 93, 3: 95, 4: 100, 5: 107, 6: 109, 7: 112, 8: 118, 9: 119, 10: 122, 11: 125, 12: 128, 13: 130, 14: 133, 15: 138, 16: 141, 17: 144, 18: 145, 19: 147, 20: 148, 21: 149, 22: 151, 23: 154, 24: 155, 25: 156, 26: 159, 27: 161, 28: 166, 29: 168, 30: 171, 31: 175, 32: 176, 33: 177, 34: 178, 35: 180, 36: 181, 37: 184, 38: 185, 39: 186, 40: 187, 41: 188, 42: 189, 43: 190, 44: 191, 45: 192, 46: 193, 47: 194, 48: 195, 49: 196, 50: 197, 51: 198, 52: 199, 53: 200}  # noqa
+    # 54 names for COCO panoptic stuff categories
+    meta.class_names = [ "things", "banner", "blanket", "bridge", "cardboard", "counter", "curtain", "door-stuff", "floor-wood", "flower", "fruit", "gravel", "house", "light", "mirror-stuff", "net", "pillow", "platform", "playingfield", "railroad", "river", "road", "roof", "sand", "sea", "shelf", "snow", "stairs", "tent", "towel", "wall-brick", "wall-stone", "wall-tile", "wall-wood", "water-other", "window-blind", "window-other", "tree-merged", "fence-merged", "ceiling-merged", "sky-other-merged", "cabinet-merged", "table-merged", "floor-other-merged", "pavement-merged", "mountain-merged", "grass-merged", "dirt-merged", "paper-merged", "food-other-merged", "building-other-merged", "rock-merged", "wall-other-merged", "rug-merged"]  # noqa
+    # fmt: on
 
 
 # We hard-coded some metadata for common datasets. This will enable:

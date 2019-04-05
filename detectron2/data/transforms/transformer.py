@@ -79,6 +79,9 @@ class Resize(ImageTransformer):
     def _transform_coords(self, coords, t):
         return t.apply_coords(coords)
 
+    def _transform_segmentation(self, segmentation, t):
+        return t.apply_segmentation(segmentation)
+
 
 class ResizeShortestEdge(ImageTransformer):
     """
@@ -132,6 +135,9 @@ class ResizeShortestEdge(ImageTransformer):
     def _transform_coords(self, coords, t):
         return t.apply_coords(coords)
 
+    def _transform_segmentation(self, segmentation, t):
+        return t.apply_segmentation(segmentation)
+
 
 class Normalize(ImageTransformer):
     def __init__(self, mean, std):
@@ -141,3 +147,6 @@ class Normalize(ImageTransformer):
     def _transform_image(self, img, _):
         img = (img - self.mean).astype("float32") / self.std
         return img
+
+    def _transform_segmentation(self, segmentation, _):
+        return segmentation
