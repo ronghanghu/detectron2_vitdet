@@ -39,6 +39,12 @@ class ImageList(object):
         return ImageList(cast_tensor, self.image_sizes)
 
     @staticmethod
+    def from_list_of_dicts_by_image_key(dicts, image_key, size_divisibility=0, pad_value=0):
+        images = [x[image_key] for x in dicts]
+        images = ImageList.from_tensors(images, size_divisibility, pad_value)
+        return images
+
+    @staticmethod
     def from_tensors(tensors, size_divisibility=0, pad_value=0.0):
         """
         Args:

@@ -5,6 +5,6 @@ MODEL:
   RESNETS:
     DEPTH: 50
 DATASETS:
-  TEST: ("coco_panoptic_stuff_2017_val_100",)
+  TEST: ("coco_2017_val_100_panoptic_stuffonly",)
 TEST:
   EXPECTED_RESULTS: [["sem_seg", "mIoU", 37.66, 0.02], ["sem_seg", "mACC", 49.32, 0.02]]

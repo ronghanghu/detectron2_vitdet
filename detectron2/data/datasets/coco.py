@@ -96,7 +96,7 @@ def load_coco_json(json_file, image_root, dataset_name=None):
 
     imgs_anns = list(zip(imgs, anns))
 
-    logger.info("Loaded {} images from {}".format(len(imgs_anns), json_file))
+    logger.info("Loaded {} images in COCO format from {}".format(len(imgs_anns), json_file))
 
     dataset_dicts = []
 
@@ -182,6 +182,7 @@ def load_sem_seg(gt_root, image_root, gt_ext="png", image_ext="jpg"):
     # extensions) starting from 'image_root' and 'gt_root' respectively. COCO API works with integer
     # IDs, hence, we try to convert these paths to int if possible.
     def file2id(folder_path, file_path):
+        # TODO id is not used.
         # extract realtive path starting from `folder_path`
         image_id = os.path.normpath(os.path.relpath(file_path, start=folder_path))
         # remove file extension
@@ -201,7 +202,9 @@ def load_sem_seg(gt_root, image_root, gt_ext="png", image_ext="jpg"):
         key=lambda file_path: file2id(gt_root, file_path),
     )
 
-    logger.info("Loaded {} images from {}".format(len(input_files), image_root))
+    logger.info(
+        "Loaded {} images with semantic segmentation from {}".format(len(input_files), image_root)
+    )
 
     dataset_dicts = []
     for (img_path, gt_path) in zip(input_files, gt_files):

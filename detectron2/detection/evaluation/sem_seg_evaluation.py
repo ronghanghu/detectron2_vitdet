@@ -50,25 +50,29 @@ class SemSegEvaluator(DatasetEvaluator):
         self._dataset_name = split_meta.dataset_name
         # Dict that maps contiguous training ids to COCO category ids
         try:
-            self._train_id_to_dataset_id = MetadataCatalog.get(
+            self._contiguous_id_to_dataset_id = MetadataCatalog.get(
                 self._dataset_name
-            ).train_id_to_dataset_id
+            ).stuff_contiguous_id_to_dataset_id
         except AttributeError:
-            self._train_id_to_dataset_id = None
+            self._contiguous_id_to_dataset_id = None
 
     def reset(self):
-        self._conf_matrix = np.zeros((self._N, self._N), dtype=np.int)
+        self._conf_matrix = np.zeros((self._N, self._N), dtype=np.int64)
         self._predictions = []
 
     def process(self, inputs, outputs):
         """
         Args:
             inputs: the inputs to a model.
-                It is a list of dict. Each dict corresponds to an image and
+                It is a list of dicts. Each dict corresponds to an image and
                 contains keys like "height", "width", "file_name", "image_id".
-            outputs: a list of outputs of a model that contain semantic segmenation predictions.
+            outputs: the outputs of a model. It is either list of semantic segmentation predictions
+                (Tensor [H, W]) or list of dicts with key "sem_seg" that contains semantic
+                segmentation prediction in the same format.
         """
         for input, output in zip(inputs, outputs):
+            if isinstance(output, dict):
+                output = output["sem_seg"]
             pred = np.array(output.to(self._cpu_device), dtype=np.int)
             gt = np.array(Image.open(self.image_id_to_gt_file[input["image_id"]]), dtype=np.int)
 
@@ -96,7 +100,7 @@ class SemSegEvaluator(DatasetEvaluator):
             if not is_main_process():
                 return
 
-            self._conf_matrix[:] = 0
+            self._conf_matrix = np.zeros_like(self._conf_matrix)
             for conf_matrix in conf_matrix_list:
                 self._conf_matrix += conf_matrix
 
@@ -139,17 +143,17 @@ class SemSegEvaluator(DatasetEvaluator):
         """
         json_list = []
         for label in np.unique(sem_seg):
-            if self._train_id_to_dataset_id is not None:
+            if self._contiguous_id_to_dataset_id is not None:
                 assert (
-                    label in self._train_id_to_dataset_id
+                    label in self._contiguous_id_to_dataset_id
                 ), "Label {} is not in the meta info for {}".format(label, self._dataset_name)
-                coco_id = self._train_id_to_dataset_id[label]
+                dataset_id = self._contiguous_id_to_dataset_id[label]
             else:
-                coco_id = label
+                dataset_id = int(label)
             mask = (sem_seg == label).astype(np.uint8)
             mask_rle = mask_util.encode(np.array(mask[:, :, None], order="F"))[0]
             mask_rle["counts"] = mask_rle["counts"].decode("utf-8")
             json_list.append(
-                {"image_id": image_id, "category_id": coco_id, "segmentation": mask_rle}
+                {"image_id": image_id, "category_id": dataset_id, "segmentation": mask_rle}
             )
         return json_list

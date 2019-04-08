@@ -3,14 +3,14 @@ import torch
 from detectron2.data import MetadataCatalog
 from detectron2.data.transforms import ImageTransformers, Normalize, ResizeShortestEdge
 from detectron2.detection.checkpoint import DetectionCheckpointer
-from detectron2.detection.modeling import build_detection_model
+from detectron2.detection.modeling import build_model
 from detectron2.utils.vis import draw_instance_predictions
 
 
 class COCODemo(object):
     def __init__(self, cfg, confidence_threshold=0.7):
         self.cfg = cfg.clone()
-        self.model = build_detection_model(self.cfg)  # cfg can be modified by model
+        self.model = build_model(self.cfg)  # cfg can be modified by model
         self.model.eval()
         self.device = torch.device(cfg.MODEL.DEVICE)
         self.model.to(self.device)

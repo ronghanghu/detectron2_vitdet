@@ -16,6 +16,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel
 
 import detectron2.utils.comm as comm
+from detectron2.data import MetadataCatalog
 from detectron2.detection import (
     DetectionCheckpointer,
     build_detection_test_loader,
@@ -32,7 +33,12 @@ from detectron2.engine.launch import launch
 from detectron2.utils.collect_env import collect_env_info
 from detectron2.utils.comm import reduce_dict
 from detectron2.utils.events import EventStorage, JSONWriter, get_event_storage
-from detectron2.utils.inference import inference_context, inference_on_dataset, print_csv_format
+from detectron2.utils.inference import (
+    DatasetEvaluators,
+    inference_context,
+    inference_on_dataset,
+    print_csv_format,
+)
 from detectron2.utils.logger import setup_logger
 from detectron2.utils.misc import mkdir
 
@@ -91,6 +97,32 @@ lr: {lr:.6f}  max mem: {memory:.0f}M \
         )
 
 
+def get_evaluator(cfg, dataset_name, output_folder):
+    evaluator_list = []
+    evaluator_type = MetadataCatalog.get(dataset_name).evaluator_type
+    if evaluator_type in ["sem_seg", "panoptic_seg"]:
+        evaluator_list.append(
+            SemSegEvaluator(
+                dataset_name,
+                distributed=True,
+                num_classes=cfg.MODEL.SEM_SEG_HEAD.NUM_CLASSES,
+                ignore_label=cfg.MODEL.SEM_SEG_HEAD.IGNORE_VALUE,
+                output_dir=output_folder,
+            )
+        )
+    if evaluator_type in ["coco", "panoptic_seg"]:
+        evaluator_list.append(
+            COCOEvaluator(dataset_name, COCOEvaluator.tasks_from_config(cfg), True, output_folder)
+        )
+    if len(evaluator_list) == 0:
+        raise NotImplementedError(
+            "no Evaluator for the dataset {} with the type {}".format(dataset_name, evaluator_type)
+        )
+    if len(evaluator_list) == 1:
+        return evaluator_list[0]
+    return DatasetEvaluators(evaluator_list)
+
+
 def do_test(cfg, model, is_final=True):
     """
     Args:
@@ -115,18 +147,7 @@ def do_test(cfg, model, is_final=True):
             else:
                 output_folder = None
 
-            if cfg.MODEL.META_ARCHITECTURE == "SemanticSegmentator":
-                evaluator = SemSegEvaluator(
-                    dataset_name,
-                    distributed=True,
-                    num_classes=cfg.MODEL.SEM_SEG_HEAD.NUM_CLASSES,
-                    ignore_label=cfg.MODEL.SEM_SEG_HEAD.IGNORE_VALUE,
-                    output_dir=output_folder,
-                )
-            else:
-                evaluator = COCOEvaluator(
-                    dataset_name, COCOEvaluator.tasks_from_config(cfg), True, output_folder
-                )
+            evaluator = get_evaluator(cfg, dataset_name, output_folder)
             data_loader = build_detection_test_loader(cfg, dataset_name)
             results_per_dataset = inference_on_dataset(model, data_loader, evaluator)
             if comm.is_main_process():

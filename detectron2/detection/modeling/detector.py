@@ -1,12 +1,11 @@
-import copy
 import torch
 from torch import nn
 
-from detectron2.structures import ImageList, Instances
+from detectron2.structures import ImageList
 
 from .backbone import build_backbone
 from .model_builder import META_ARCH_REGISTRY
-from .roi_heads.paste_mask import paste_masks_in_image
+from .postprocessing import detector_postprocess
 from .roi_heads.roi_heads import build_roi_heads
 from .rpn.rpn import build_rpn
 
@@ -46,9 +45,9 @@ class GeneralizedRCNN(nn.Module):
                 "height", "width" (int): the output resolution of the model, used in inference.
                     See :meth:`postprocess` for details.
         """
-        images = [x["image"] for x in batched_inputs]
-        images = ImageList.from_tensors(images, self.backbone.size_divisibility)
-        images = images.to(self.device)
+        images = ImageList.from_list_of_dicts_by_image_key(
+            batched_inputs, "image", self.backbone.size_divisibility
+        ).to(self.device)
 
         if "targets" in batched_inputs[0]:
             targets = [x["targets"].to(self.device) for x in batched_inputs]
@@ -76,57 +75,6 @@ class GeneralizedRCNN(nn.Module):
         ):
             height = input_per_image.get("height", image_size[0])
             width = input_per_image.get("width", image_size[1])
-            r = self.postprocess(results_per_image, height, width)
+            r = detector_postprocess(results_per_image, height, width)
             processed_results.append(r)
         return processed_results
-
-    def postprocess(self, results, output_height, output_width):
-        """
-        Postprocess the output boxes.
-        The input images are often resized when entering an object detector.
-        As a result, we often need the outputs of the detector in a different
-        resolution from its inputs.
-
-        This function will postprocess the raw outputs of an R-CNN detector
-        to produce outputs according to the desired output resolution.
-
-        Args:
-            results (Instances): the raw outputs from the detector.
-                `results.image_size` contains the input image resolution the detector sees.
-            output_height, output_width: the desired output resolution.
-
-        Returns:
-            Instances: the postprocessed output from the model, based on the output resolution
-        """
-        scale_x, scale_y = (
-            output_width / results.image_size[1],
-            output_height / results.image_size[0],
-        )
-        results = Instances((output_height, output_width), **copy.deepcopy(results.get_fields()))
-
-        if results.has("pred_boxes"):
-            output_boxes = results.pred_boxes
-        elif results.has("proposal_boxes"):
-            output_boxes = results.proposal_boxes
-
-        output_boxes.tensor[:, 0::2] *= scale_x
-        output_boxes.tensor[:, 1::2] *= scale_y
-        output_boxes.clip(results.image_size)
-
-        results = results[output_boxes.nonempty()]
-
-        if results.has("pred_masks"):
-            MASK_THRESHOLD = 0.5
-            results.pred_masks = paste_masks_in_image(
-                results.pred_masks,  # N, 1, M, M
-                results.pred_boxes,
-                results.image_size,
-                threshold=MASK_THRESHOLD,
-                padding=1,
-            ).squeeze(1)
-
-        if results.has("pred_keypoints"):
-            results.pred_keypoints.tensor[:, :, 0] *= scale_x
-            results.pred_keypoints.tensor[:, :, 1] *= scale_y
-
-        return results

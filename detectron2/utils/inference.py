@@ -5,6 +5,8 @@ from collections import OrderedDict
 from contextlib import contextmanager
 import torch
 
+from detectron2.utils.comm import is_main_process
+
 
 class DatasetEvaluator:
     """
@@ -38,6 +40,33 @@ class DatasetEvaluator:
         Evaluate/summarize the performance, after processing all input/output pairs.
         """
         pass
+
+
+class DatasetEvaluators(DatasetEvaluator):
+    def __init__(self, evaluators):
+        assert len(evaluators)
+        super().__init__()
+        self._evaluators = evaluators
+
+    def reset(self):
+        for evaluator in self._evaluators:
+            evaluator.reset()
+
+    def process(self, input, output):
+        for evaluator in self._evaluators:
+            evaluator.process(input, output)
+
+    def evaluate(self):
+        results = OrderedDict()
+        for evaluator in self._evaluators:
+            result = evaluator.evaluate()
+            if is_main_process():
+                for k, v in result.items():
+                    assert (
+                        k not in results
+                    ), "Different evalutors produce results with the same key {}".format(k)
+                    results[k] = v
+        return results
 
 
 def inference_on_dataset(model, data_loader, evaluator):

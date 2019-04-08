@@ -324,6 +324,14 @@ _C.MODEL.SEM_SEG_HEAD.COMMON_STRIDE = 4
 # Normalization method for the convolution layers. Options: "" (no norm), "GN".
 _C.MODEL.SEM_SEG_HEAD.NORM = "GN"
 
+_C.MODEL.PANOPTIC = CN()
+# Scaling of losses from semantic segmentation head.
+_C.MODEL.PANOPTIC.SEMANTIC_LOSS_SCALE = 1.0
+# Scaling of losses from instance segmentation head.
+_C.MODEL.PANOPTIC.INSTANCE_LOSS_SCALE = 1.0
+# Scaling of losses from RPN.
+_C.MODEL.PANOPTIC.RPN_LOSS_SCALE = 1.0
+
 # ---------------------------------------------------------------------------- #
 # ResNe[X]t options (ResNets = {ResNet, ResNeXt}
 # Note that parts of a resnet may be used for both the backbone and the head

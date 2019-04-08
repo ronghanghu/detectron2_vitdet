@@ -176,11 +176,12 @@ def build_detection_train_loader(cfg, start_iter=0):
         )
 
     assert len(cfg.DATASETS.TRAIN)
-    dataset_dicts = list(
-        itertools.chain.from_iterable(DatasetCatalog.get(split) for split in cfg.DATASETS.TRAIN)
-    )
+    dataset_dicts = [DatasetCatalog.get(dataset_name) for dataset_name in cfg.DATASETS.TRAIN]
+    dataset_dicts = list(itertools.chain.from_iterable(dataset_dicts))
 
     if "annotations" in dataset_dicts[0]:
+        # TODO: Do not filter out images without instance-level GT if a model has both semantic and
+        # instance heads. Currently instance-level head cannot handle empty GT.
         dataset_dicts = filter_images_with_only_crowd_annotations(dataset_dicts)
         if cfg.MODEL.KEYPOINT_ON:
             min_kp = cfg.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE
@@ -226,7 +227,8 @@ def build_detection_test_loader(cfg, dataset_name):
         DataLoader: a torch DataLoader, that loads the given detection
             dataset, with test-time transformation and batching.
     """
-    dataset = DatasetFromList(DatasetCatalog.get(dataset_name))
+    dataset_dicts = DatasetCatalog.get(dataset_name)
+    dataset = DatasetFromList(dataset_dicts)
     dataset = MapDataset(dataset, DetectionTransform(cfg, False))
 
     sampler = samplers.InferenceSampler(len(dataset))

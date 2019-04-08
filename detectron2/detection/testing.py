@@ -1,4 +1,5 @@
 import logging
+import numpy as np
 import pprint
 import sys
 
@@ -15,6 +16,8 @@ def verify_results(cfg, results):
     expected_results = cfg.TEST.EXPECTED_RESULTS
     for task, metric, expected, tolerance in expected_results:
         actual = results[task][metric]
+        if not np.isfinite(actual):
+            ok = False
         diff = abs(actual - expected)
         if diff > tolerance:
             ok = False

@@ -1,12 +1,15 @@
 _BASE_: "../Base-FPN.yaml"
 MODEL:
-  META_ARCHITECTURE: "SemanticSegmentator"
+  META_ARCHITECTURE: "PanopticFPN"
   WEIGHT: "catalog://ImageNetPretrained/MSRA/R-50"
+  MASK_ON: True
   RESNETS:
     DEPTH: 50
+  PANOPTIC:
+    SEMANTIC_LOSS_SCALE: 0.5
 DATASETS:
-  TRAIN: ("coco_2017_val_100_panoptic_stuffonly",)
-  TEST: ("coco_2017_val_100_panoptic_stuffonly",)
+  TRAIN: ("coco_2017_val_100_panoptic",)
+  TEST: ("coco_2017_val_100_panoptic",)
 INPUT:
   MIN_SIZE_TRAIN: (640, 672, 704, 736, 768, 800)
 SOLVER:

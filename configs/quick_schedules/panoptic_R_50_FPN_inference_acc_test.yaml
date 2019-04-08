@@ -1,0 +1,11 @@
+_BASE_: "../Base-FPN.yaml"
+MODEL:
+  META_ARCHITECTURE: "PanopticFPN"
+  WEIGHT: "/mnt/vol/gfsai-bistro-east/ai-group/bistro/gpu/akirillov/20190402/panoptic_R_50_FPN_coco_1x_configs/panoptic_R_50_FPN_1x.yaml.13_51_11.R4dPkV1u/output/model_final.pth"
+  MASK_ON: True
+  RESNETS:
+    DEPTH: 50
+DATASETS:
+  TEST: ("coco_2017_val_100_panoptic",)
+TEST:
+  EXPECTED_RESULTS: [["bbox", "AP", 44.12, 0.02], ["segm", "AP", 41.48, 0.02], ["sem_seg", "mIoU", 40.00, 0.02]]  # noqa

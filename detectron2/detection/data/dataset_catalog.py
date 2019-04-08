@@ -1,5 +1,6 @@
 """Centralized catalog of paths."""
 
+import copy
 import os
 
 from detectron2.data import MetadataCatalog
@@ -45,10 +46,13 @@ class DatasetCatalog(object):
         """
         return DatasetCatalog._REGISTERED_SPLITS[key]()
 
+    # TODO: move DatasetCatalog out of "detection/",
+    # and only keep task-specific code (after this line) here.
+
     @staticmethod
     def register_coco_format(key, dataset_name, json_file, image_root):
         """
-        Register a dataset in COCO's json annotation format.
+        Register a detection dataset in COCO's json annotation format.
 
         This is an example of how to register a new dataset.
         For a dataset of a different format,
@@ -58,7 +62,7 @@ class DatasetCatalog(object):
         Args:
             key (str): the key that identifies a split of a dataset, e.g. "coco_2014_train".
             dataset_name (str): the name of the dataset, e.g. "coco"
-            json_file (str): path to the json annotation file
+            json_file (str): path to the json instance annotation file
             image_root (str): directory which contains all the images
         """
         # 1. register a function which returns dicts
@@ -66,24 +70,73 @@ class DatasetCatalog(object):
 
         # 2. add metadata about this split, since they will be useful in evaluation or visualization
         MetadataCatalog.get(key).set(
-            dataset_name=dataset_name, json_file=json_file, image_root=image_root
+            dataset_name=dataset_name,
+            json_file=json_file,
+            image_root=image_root,
+            evaluator_type="coco",
         )
 
     @staticmethod
-    def register_sem_seg_format(key, dataset_name, gt_root, image_root):
+    def register_coco_panoptic(key, dataset_name, image_root, json_file, semseg_root):
         """
-        Register a dataset in semantic segmentation format.
+        Register a panoptic segmentation dataset, as well as a semantic
+        segmentation dataset named `key + '_stuffonly'`.
 
         Args:
-            key (str): the key that identifies a split of a dataset, e.g. "coco_stuff_2017_train".
+            key (str): the key that identifies a split of a dataset,
+                e.g. "coco_2017_train_panoptic".
             dataset_name (str): the name of the dataset, e.g. "coco"
-            gt_root (str): directory which contains all the ground truth images
             image_root (str): directory which contains all the images
+            json_file (str): path to the json instance annotation file
+            semseg_root (str): directory which contains all the ground truth semantic annotations.
         """
-        DatasetCatalog.register(key, lambda: load_sem_seg(gt_root, image_root))
-        MetadataCatalog.get(key).set(
-            dataset_name=dataset_name, gt_root=gt_root, image_root=image_root
+        DatasetCatalog.register(
+            key,
+            lambda: merge_to_panoptic(
+                load_coco_json(json_file, image_root, dataset_name),
+                load_sem_seg(semseg_root, image_root),
+            ),
         )
+        MetadataCatalog.get(key).set(
+            dataset_name=dataset_name,
+            json_file=json_file,
+            semseg_root=semseg_root,
+            image_root=image_root,
+            evaluator_type="panoptic_seg",
+        )
+
+        semantic_key = key + "_stuffonly"
+        DatasetCatalog.register(semantic_key, lambda: load_sem_seg(semseg_root, image_root))
+        MetadataCatalog.get(semantic_key).set(
+            dataset_name=dataset_name,
+            gt_root=semseg_root,
+            image_root=image_root,
+            evaluator_type="sem_seg",
+        )
+
+
+def merge_to_panoptic(detection_dicts, semantic_segmentation_dicts):
+    """
+    Create dataset dicts for panoptic segmentation, by
+    merging two dicts using "file_name" field to match their entries.
+
+    Args:
+        detection_dicts (list[dict]): lists of dicts for object detection.
+        semantic_segmentation_dicts (list[dict]): lists of dicts for semantic segmentation.
+
+    Returns:
+        list[dict] (one per input image): Each dict contains all (key, value) pairs from dicts in
+            both detection_dicts and semantic_segmentation_dicts that correspond to the same image.
+            The function assumes that the same key in different dicts has the same value.
+    """
+    results = []
+    semseg_file_to_entry = {x["file_name"]: x for x in semantic_segmentation_dicts}
+
+    for det_dict in detection_dicts:
+        dic = copy.copy(det_dict)
+        dic.update(semseg_file_to_entry[dic["file_name"]])
+        results.append(dic)
+    return results
 
 
 # ======================= Predefined datasets and splits ======================
@@ -94,9 +147,17 @@ def _add_predefined_metadata():
     meta = MetadataCatalog.get("coco")
     # fmt: off
     # Mapping from the incontiguous COCO category id to an id in [1, 80]
+    # TODO rename to instance_json_id_to_contiguous_id or thing_...
     meta.json_id_to_contiguous_id = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10, 11: 11, 13: 12, 14: 13, 15: 14, 16: 15, 17: 16, 18: 17, 19: 18, 20: 19, 21: 20, 22: 21, 23: 22, 24: 23, 25: 24, 27: 25, 28: 26, 31: 27, 32: 28, 33: 29, 34: 30, 35: 31, 36: 32, 37: 33, 38: 34, 39: 35, 40: 36, 41: 37, 42: 38, 43: 39, 44: 40, 46: 41, 47: 42, 48: 43, 49: 44, 50: 45, 51: 46, 52: 47, 53: 48, 54: 49, 55: 50, 56: 51, 57: 52, 58: 53, 59: 54, 60: 55, 61: 56, 62: 57, 63: 58, 64: 59, 65: 60, 67: 61, 70: 62, 72: 63, 73: 64, 74: 65, 75: 66, 76: 67, 77: 68, 78: 69, 79: 70, 80: 71, 81: 72, 82: 73, 84: 74, 85: 75, 86: 76, 87: 77, 88: 78, 89: 79, 90: 80}  # noqa
-    # 80 names for COCO
+    # 80 names for COCO instance categories:
+    # TODO rename to instance_class_names or thing_class_names
     meta.class_names = ["person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch", "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"]  # noqa
+
+    # Mapping from contiguous stuff id (in [0, 53], used in models)
+    # to id in the dataset (used for processing results)
+    meta.stuff_contiguous_id_to_dataset_id = {0: 255, 1: 92, 2: 93, 3: 95, 4: 100, 5: 107, 6: 109, 7: 112, 8: 118, 9: 119, 10: 122, 11: 125, 12: 128, 13: 130, 14: 133, 15: 138, 16: 141, 17: 144, 18: 145, 19: 147, 20: 148, 21: 149, 22: 151, 23: 154, 24: 155, 25: 156, 26: 159, 27: 161, 28: 166, 29: 168, 30: 171, 31: 175, 32: 176, 33: 177, 34: 178, 35: 180, 36: 181, 37: 184, 38: 185, 39: 186, 40: 187, 41: 188, 42: 189, 43: 190, 44: 191, 45: 192, 46: 193, 47: 194, 48: 195, 49: 196, 50: 197, 51: 198, 52: 199, 53: 200}  # noqa
+    # 54 names for COCO panoptic stuff categories
+    meta.stuff_class_names = ["things", "banner", "blanket", "bridge", "cardboard", "counter", "curtain", "door-stuff", "floor-wood", "flower", "fruit", "gravel", "house", "light", "mirror-stuff", "net", "pillow", "platform", "playingfield", "railroad", "river", "road", "roof", "sand", "sea", "shelf", "snow", "stairs", "tent", "towel", "wall-brick", "wall-stone", "wall-tile", "wall-wood", "water-other", "window-blind", "window-other", "tree-merged", "fence-merged", "ceiling-merged", "sky-other-merged", "cabinet-merged", "table-merged", "floor-other-merged", "pavement-merged", "mountain-merged", "grass-merged", "dirt-merged", "paper-merged", "food-other-merged", "building-other-merged", "rock-merged", "wall-other-merged", "rug-merged"]  # noqa
     # fmt: on
 
     # coco_person:
@@ -110,14 +171,6 @@ def _add_predefined_metadata():
     # TODO Perhaps switch to an order that's consistent with Cityscapes'
     # original label, when we don't need the legacy jsons any more.
     meta.class_names = ["bicycle", "motorcycle", "rider", "train", "car", "person", "truck", "bus"]
-
-    # coco panoptic stuff:
-    # fmt: off
-    meta = MetadataCatalog.get("coco_panoptic_stuff")
-    meta.train_id_to_dataset_id = {0: 255, 1: 92, 2: 93, 3: 95, 4: 100, 5: 107, 6: 109, 7: 112, 8: 118, 9: 119, 10: 122, 11: 125, 12: 128, 13: 130, 14: 133, 15: 138, 16: 141, 17: 144, 18: 145, 19: 147, 20: 148, 21: 149, 22: 151, 23: 154, 24: 155, 25: 156, 26: 159, 27: 161, 28: 166, 29: 168, 30: 171, 31: 175, 32: 176, 33: 177, 34: 178, 35: 180, 36: 181, 37: 184, 38: 185, 39: 186, 40: 187, 41: 188, 42: 189, 43: 190, 44: 191, 45: 192, 46: 193, 47: 194, 48: 195, 49: 196, 50: 197, 51: 198, 52: 199, 53: 200}  # noqa
-    # 54 names for COCO panoptic stuff categories
-    meta.class_names = [ "things", "banner", "blanket", "bridge", "cardboard", "counter", "curtain", "door-stuff", "floor-wood", "flower", "fruit", "gravel", "house", "light", "mirror-stuff", "net", "pillow", "platform", "playingfield", "railroad", "river", "road", "roof", "sand", "sea", "shelf", "snow", "stairs", "tent", "towel", "wall-brick", "wall-stone", "wall-tile", "wall-wood", "water-other", "window-blind", "window-other", "tree-merged", "fence-merged", "ceiling-merged", "sky-other-merged", "cabinet-merged", "table-merged", "floor-other-merged", "pavement-merged", "mountain-merged", "grass-merged", "dirt-merged", "paper-merged", "food-other-merged", "building-other-merged", "rock-merged", "wall-other-merged", "rug-merged"]  # noqa
-    # fmt: on
 
 
 # We hard-coded some metadata for common datasets. This will enable:
