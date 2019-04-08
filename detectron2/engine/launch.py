@@ -2,6 +2,8 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 
+from detectron2.utils.comm import synchronize
+
 
 def launch(main_func, num_gpus_per_machine, num_machines=1, machine_rank=0, dist_url=None, args=()):
     """
@@ -33,5 +35,8 @@ def _distributed_worker(
     dist.init_process_group(
         backend="NCCL", init_method=dist_url, world_size=world_size, rank=global_rank
     )
+    # synchronize is needed here to prevent a possible timeout after calling init_process_group
+    # See: https://github.com/facebookresearch/maskrcnn-benchmark/issues/172
+    synchronize()
     torch.cuda.set_device(local_rank)
     main_func(*args)
