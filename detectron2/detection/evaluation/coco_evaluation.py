@@ -22,19 +22,19 @@ class COCOEvaluator(DatasetEvaluator):
     outputs using COCO's metrics and APIs.
     """
 
-    def __init__(self, dataset_split, tasks, distributed, output_dir=None):
+    def __init__(self, dataset_split, cfg, distributed, output_dir=None):
         """
         Args:
             dataset_split (str): name of a dataset split to be evaluated.
                 It must has the following corresponding metadata:
                     "json_file": the path to the COCO format annotation
                     "dataset_name": the name of the dataset it belongs to.
-            tasks: (tuple[str]): allowed options are: "box_proposals", "bbox", "segm", "keypoints"
+            cfg (Config): config instance
             distributed (True): if True, will collect results from all ranks for evaluation.
                 Otherwise, will evaluate the results in the current process.
             output_dir (str): an output directory to dump results.
         """
-        self._tasks = tasks
+        self._tasks = self._tasks_from_config(cfg)
         self._distributed = distributed
         self._output_dir = output_dir
 
@@ -45,11 +45,12 @@ class COCOEvaluator(DatasetEvaluator):
         self._coco_api = COCO(split_meta.json_file)
         self._dataset_meta = MetadataCatalog.get(split_meta.dataset_name)
 
+        self.kpt_oks_sigmas = cfg.TEST.KEYPOINT_OKS_SIGMAS
+
     def reset(self):
         self._predictions = []
 
-    @staticmethod
-    def tasks_from_config(cfg):
+    def _tasks_from_config(self, cfg):
         """
         Returns:
             tuple[str]: tasks that can be evaluated under the given configuration.
@@ -148,7 +149,9 @@ class COCOEvaluator(DatasetEvaluator):
 
             self._logger.info("Evaluating predictions")
             for task in sorted(tasks):
-                res = evaluate_predictions_on_coco(self._coco_api, coco_results, file_path, task)
+                res = evaluate_predictions_on_coco(
+                    self._coco_api, coco_results, file_path, self.kpt_oks_sigmas, task
+                )
                 self._results[task] = res
 
     def _eval_box_proposals(self):
@@ -334,7 +337,9 @@ def evaluate_box_proposals(dataset_predictions, coco_api, thresholds=None, area=
     }
 
 
-def evaluate_predictions_on_coco(coco_gt, coco_results, json_result_file, iou_type="bbox"):
+def evaluate_predictions_on_coco(
+    coco_gt, coco_results, json_result_file, kpt_oks_sigmas, iou_type="bbox"
+):
     metrics = {
         "bbox": ["AP", "AP50", "AP75", "APs", "APm", "APl"],
         "segm": ["AP", "AP50", "AP75", "APs", "APm", "APl"],
@@ -347,6 +352,7 @@ def evaluate_predictions_on_coco(coco_gt, coco_results, json_result_file, iou_ty
     coco_dt = coco_gt.loadRes(str(json_result_file))
     # coco_dt = coco_gt.loadRes(coco_results)
     coco_eval = COCOeval(coco_gt, coco_dt, iou_type)
+    coco_eval.params.kpt_oks_sigmas = np.array(kpt_oks_sigmas)
     coco_eval.evaluate()
     coco_eval.accumulate()
     coco_eval.summarize()

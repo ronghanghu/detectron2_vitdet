@@ -112,7 +112,7 @@ def get_evaluator(cfg, dataset_name, output_folder):
         )
     if evaluator_type in ["coco", "panoptic_seg"]:
         evaluator_list.append(
-            COCOEvaluator(dataset_name, COCOEvaluator.tasks_from_config(cfg), True, output_folder)
+            COCOEvaluator(dataset_name, cfg, True, output_folder)
         )
     if len(evaluator_list) == 0:
         raise NotImplementedError(
