@@ -165,7 +165,9 @@ def do_train(cfg, model):
     optimizer = build_optimizer(cfg, model)
     scheduler = build_lr_scheduler(cfg, optimizer)
 
-    checkpointer = DetectionCheckpointer(model, optimizer, scheduler, cfg.OUTPUT_DIR)
+    checkpointer = DetectionCheckpointer(
+        model, optimizer, scheduler, cfg.OUTPUT_DIR, cache_on_load=cfg.CACHE_MODELS_ON_LOAD
+    )
     start_iter = checkpointer.load(cfg.MODEL.WEIGHT).get("iteration", 0)
     periodic_checkpointer = PeriodicCheckpointer(
         checkpointer, cfg, cfg.SOLVER.CHECKPOINT_PERIOD, cfg.SOLVER.MAX_ITER
@@ -281,7 +283,9 @@ def main(args):
     output_dir = cfg.OUTPUT_DIR
 
     if args.eval_only:
-        checkpointer = DetectionCheckpointer(model, save_dir=output_dir)
+        checkpointer = DetectionCheckpointer(
+            model, save_dir=output_dir, cache_on_load=cfg.CACHE_MODELS_ON_LOAD
+        )
         checkpointer.load(cfg.MODEL.WEIGHT)
         do_test(cfg, model)
         return

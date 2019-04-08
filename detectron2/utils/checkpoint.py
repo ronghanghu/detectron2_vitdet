@@ -4,11 +4,19 @@ import torch
 
 import detectron2.utils.comm as comm
 from detectron2.utils.model_serialization import load_state_dict
-from detectron2.utils.model_zoo import cache_url
+from detectron2.utils.model_zoo import cache_file, cache_url
 
 
 class Checkpointer(object):
-    def __init__(self, model, optimizer=None, scheduler=None, save_dir="", save_to_disk=None):
+    def __init__(
+        self,
+        model,
+        optimizer=None,
+        scheduler=None,
+        save_dir="",
+        save_to_disk=None,
+        cache_on_load=False,
+    ):
         """
         Args:
             model (nn.Module):
@@ -27,6 +35,7 @@ class Checkpointer(object):
             save_to_disk = comm.is_main_process()
         self.save_to_disk = save_to_disk
         self.logger = logging.getLogger(__name__)
+        self.cache_on_load = cache_on_load
 
     def save(self, name, **kwargs):
         """
@@ -68,6 +77,11 @@ class Checkpointer(object):
             # no checkpoint could be found
             self.logger.info("No checkpoint found. Initializing model from scratch")
             return {}
+        f = self._resolve_path(f)
+        if os.path.isfile(f) and self.cache_on_load:
+            cached_f = cache_file(f)
+            self.logger.info("File {} cached in {}".format(f, cached_f))
+            f = cached_f
         self.logger.info("Loading checkpoint from {}".format(f))
         if not os.path.isfile(f):
             f = self._download_file(f)
@@ -118,6 +132,17 @@ class Checkpointer(object):
         """
         return torch.load(f, map_location=torch.device("cpu"))
 
+    def _resolve_path(self, f):
+        """
+        Resolve the path to its actual destination. Can be overwritten by subclass.
+
+        Args:
+            f (str): path to resolve
+        Returns:
+            str: the resolved path
+        """
+        return f
+
     def _download_file(self, f):
         """
         Called when the file does not exist.
@@ -130,11 +155,12 @@ class Checkpointer(object):
         """
         if os.path.isfile(f):
             return f
+
         # download url files
         if f.startswith("http"):
             # if the file is a url path, download it and cache it
             cached_f = cache_url(f)
-            self.logger.info("url {} cached in {}".format(f, cached_f))
+            self.logger.info("URL {} cached in {}".format(f, cached_f))
             f = cached_f
         return f
 

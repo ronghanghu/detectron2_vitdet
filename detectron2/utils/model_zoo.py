@@ -1,5 +1,7 @@
+import logging
 import os
-import sys
+import shutil
+import tempfile
 from torch.utils.model_zoo import HASH_REGEX, _download_url_to_file, urlparse
 
 from detectron2.utils.comm import is_main_process, synchronize
@@ -24,11 +26,7 @@ def cache_url(url, model_dir=None, progress=True):
     Example:
         >>> cached_file = detectron2.utils.model_zoo.cache_url('https://dl.fbaipublicfiles.com/detectron/pytorch/models/resnet18-5c106cde.pth')  # noqa
     """
-    if model_dir is None:
-        torch_home = os.path.expanduser(os.getenv("TORCH_HOME", "~/.torch"))
-        model_dir = os.getenv("TORCH_MODEL_ZOO", os.path.join(torch_home, "models"))
-    if not os.path.exists(model_dir):
-        os.makedirs(model_dir)
+    model_dir = _get_model_dir(model_dir)
     parts = urlparse(url)
     filename = os.path.basename(parts.path)
     if filename == "model_final.pkl":
@@ -37,7 +35,10 @@ def cache_url(url, model_dir=None, progress=True):
         filename = parts.path.replace("/", "_")
     cached_file = os.path.join(model_dir, filename)
     if not os.path.exists(cached_file) and is_main_process():
-        sys.stderr.write('Downloading: "{}" to {}\n'.format(url, cached_file))
+        if not os.path.exists(model_dir):
+            os.makedirs(model_dir)
+        logger = logging.getLogger(__name__)
+        logger.info("Downloading: {} to {}".format(url, cached_file))
         hash_prefix = HASH_REGEX.search(filename)
         if hash_prefix is not None:
             hash_prefix = hash_prefix.group(1)
@@ -49,3 +50,40 @@ def cache_url(url, model_dir=None, progress=True):
         _download_url_to_file(url, cached_file, hash_prefix, progress=progress)
     synchronize()
     return cached_file
+
+
+def cache_file(file_name, model_dir=None):
+    """Caches a (presumably remote) file under model_dir."""
+    model_dir = _get_model_dir(model_dir)
+    if file_name.startswith(model_dir):
+        return file_name
+    src_dir, base_name = os.path.split(file_name)
+    if src_dir[0].startswith(os.path.sep):
+        src_dir = src_dir[len(os.path.sep) :]
+    dst_dir = os.path.join(model_dir, src_dir)
+    dst_file_name = os.path.join(dst_dir, base_name)
+    assert dst_file_name != file_name
+
+    if is_main_process():
+        f = tempfile.NamedTemporaryFile(delete=False)
+        try:
+            if not os.path.exists(dst_dir):
+                os.makedirs(dst_dir)
+            if not os.path.exists(dst_file_name):
+                logger = logging.getLogger(__name__)
+                logger.info("Caching {} locally...".format(file_name))
+                shutil.copy(file_name, f.name)
+                shutil.move(f.name, dst_file_name)
+        finally:
+            f.close()
+            if os.path.exists(f.name):
+                os.remove(f.name)
+    synchronize()
+    return dst_file_name
+
+
+def _get_model_dir(model_dir):
+    if model_dir is None:
+        torch_home = os.path.expanduser(os.getenv("TORCH_HOME", "~/.torch"))
+        model_dir = os.getenv("TORCH_MODEL_ZOO", os.path.join(torch_home, "models"))
+    return model_dir

@@ -117,17 +117,24 @@ def _convert_c2_detectron_names(weights):
 
 
 class DetectionCheckpointer(Checkpointer):
-    def __init__(self, model, optimizer=None, scheduler=None, save_dir="", save_to_disk=None):
-        super().__init__(model, optimizer, scheduler, save_dir, save_to_disk)
+    def __init__(
+        self,
+        model,
+        optimizer=None,
+        scheduler=None,
+        save_dir="",
+        save_to_disk=None,
+        cache_on_load=False,
+    ):
+        super().__init__(model, optimizer, scheduler, save_dir, save_to_disk, cache_on_load)
 
-    # TODO catalog lookup may be moved to base Checkpointer
-    def _download_file(self, f):
-        # catalog lookup
+    def _resolve_path(self, f):
+        # Resolve "catalog://" paths
         if f.startswith("catalog://"):
             catalog_f = ModelCatalog.get(f[len("catalog://") :])
             self.logger.info("{} points to {}".format(f, catalog_f))
             f = catalog_f
-        return super()._download_file(f)
+        return f
 
     def _load_file(self, f):
         # convert Caffe2 checkpoint from pkl
