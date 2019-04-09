@@ -297,10 +297,11 @@ class RPNOutputs(object):
 
             objectness_logits_gt_i = (matched_idxs >= 0).to(dtype=torch.int32)
             if self.boundary_threshold >= 0:
-                # discard anchors that go out of the boundaries of the image
+                # Discard anchors that go out of the boundaries of the image
+                # NOTE: This is legacy functionality that is turned off by default in Detectron2
                 anchors_inside_image = anchors_i.inside_image(image_size_i, self.boundary_threshold)
                 objectness_logits_gt_i[~anchors_inside_image] = -1
-            # discard indices that are neither foreground or background
+            # Discard indices that are neither foreground or background
             objectness_logits_gt_i[matched_idxs == Matcher.BETWEEN_THRESHOLDS] = -1
 
             # TODO wasted computation for ignored boxes

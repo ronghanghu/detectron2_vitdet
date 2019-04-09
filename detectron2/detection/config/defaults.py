@@ -130,7 +130,7 @@ _C.MODEL.RPN.ANCHOR_SIZES = [[32, 64, 128, 256, 512]]
 _C.MODEL.RPN.ANCHOR_ASPECT_RATIOS = [[0.5, 1.0, 2.0]]
 # Remove RPN anchors that go outside the image by BOUNDARY_THRESH pixels
 # Set to -1 or a large value, e.g. 100000, to disable pruning anchors
-_C.MODEL.RPN.BOUNDARY_THRESH = 0
+_C.MODEL.RPN.BOUNDARY_THRESH = -1
 # Minimum overlap required between an anchor and ground-truth box for the
 # (anchor, gt box) pair to be a positive example (IoU >= FG_IOU_THRESHOLD
 # ==> positive RPN example)
