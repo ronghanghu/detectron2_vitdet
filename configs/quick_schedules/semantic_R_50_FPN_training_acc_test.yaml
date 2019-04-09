@@ -8,9 +8,10 @@ DATASETS:
   TRAIN: ("coco_2017_val_panoptic_stuffonly",)
   TEST: ("coco_2017_val_panoptic_stuffonly",)
 SOLVER:
+  BASE_LR: 0.01
   WARMUP_FACTOR: 0.001
   WARMUP_ITERS: 300
-  STEPS: (5500, 5800)
-  MAX_ITER: 6000
+  STEPS: (5500,)
+  MAX_ITER: 7000
 TEST:
-  EXPECTED_RESULTS: [["sem_seg", "mIoU", 60.8, 1.0], ["sem_seg", "mACC", 68.8, 0.7]]
+  EXPECTED_RESULTS: [["sem_seg", "mIoU", 76.5, 0.7], ["sem_seg", "mACC", 83.3, 0.7]]
