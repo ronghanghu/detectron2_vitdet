@@ -21,7 +21,6 @@ DATASETS:
   TEST: ("cityscapes_fine_instanceonly_seg_val", "cityscapes_fine_instanceonly_seg_val_cocostyle")
 SOLVER:
   BASE_LR: 0.01
-  WEIGHT_DECAY: 0.0001
   STEPS: (18000,)
   MAX_ITER: 24000
   IMS_PER_BATCH: 8

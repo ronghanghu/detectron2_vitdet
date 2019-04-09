@@ -368,12 +368,10 @@ _C.SOLVER = CN()
 _C.SOLVER.MAX_ITER = 40000
 
 _C.SOLVER.BASE_LR = 0.001
-_C.SOLVER.BIAS_LR_FACTOR = 2
 
 _C.SOLVER.MOMENTUM = 0.9
 
-_C.SOLVER.WEIGHT_DECAY = 0.0005
-_C.SOLVER.WEIGHT_DECAY_BIAS = 0
+_C.SOLVER.WEIGHT_DECAY = 0.0001
 # The weight decay that's applied to parameters of normalization layers
 # (typically the affine transformation)
 _C.SOLVER.WEIGHT_DECAY_NORM = 0
@@ -391,6 +389,13 @@ _C.SOLVER.CHECKPOINT_PERIOD = 2500
 # If we have 16 GPUs and IMS_PER_BATCH = 32,
 # each GPU will see 2 images per batch.
 _C.SOLVER.IMS_PER_BATCH = 16
+
+# Detectron v1 (and previous detection code) used a 2x higher LR and 0 WD for
+# biases. This is not useful (at least for recent models). You should avoid
+# changing these and they exist only to reproduce Detectron v1 training if
+# desired.
+_C.SOLVER.BIAS_LR_FACTOR = 1.0
+_C.SOLVER.WEIGHT_DECAY_BIAS = _C.SOLVER.WEIGHT_DECAY
 
 # ---------------------------------------------------------------------------- #
 # Specific test options
