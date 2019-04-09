@@ -47,13 +47,11 @@ _C.INPUT.MIN_SIZE_TEST = 800
 _C.INPUT.MAX_SIZE_TEST = 1333
 
 # Values to be used for image normalization (BGR order)
-# We use the same pixel mean for all networks even though it's not exactly
-# what they were trained with (which is [103.53, 116.28, 123.675] for ImageNet)
-# "Fun" fact: the history of where these values comes from is lost
-_C.INPUT.PIXEL_MEAN = [102.9801, 115.9465, 122.7717]
+# Default values are the mean pixel value from ImageNet: [103.53, 116.28, 123.675]
+_C.INPUT.PIXEL_MEAN = [103.530, 116.280, 123.675]
 # When using the C2 pre-trained models, std has been abosbed into its conv1 weights,
 # so the std needs to be set 1.
-# Otherwise, you can use [57.375, 57.12, 58.395] (ImageNet std)
+# Otherwise, you can use [57.375, 57.120, 58.395] (ImageNet std)
 _C.INPUT.PIXEL_STD = [1.0, 1.0, 1.0]
 
 # Whether the model needs BGR input or RGB
