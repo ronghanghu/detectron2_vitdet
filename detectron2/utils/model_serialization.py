@@ -23,10 +23,16 @@ def align_and_update_state_dicts(model_state_dict, loaded_state_dict):
     model_keys = sorted(list(model_state_dict.keys()))
     loaded_keys = sorted(list(loaded_state_dict.keys()))
 
+    def match(a, b):
+        # Matched loaded_key should be a complete (starts with '.') suffix.
+        # For example, roi_heads.mesh_head.whatever_conv1 does not match conv1,
+        # but matches whatever_conv1 or mesh_head.whatever_conv1.
+        return a == b or a.endswith("." + b)
     # get a matrix of string matches, where each (i, j) entry correspond to the size of the
     # loaded_key string, if it matches
-    match_matrix = [len(j) if i.endswith(j) else 0 for i in model_keys for j in loaded_keys]
+    match_matrix = [len(j) if match(i, j) else 0 for i in model_keys for j in loaded_keys]
     match_matrix = torch.as_tensor(match_matrix).view(len(model_keys), len(loaded_keys))
+    # use the matched one with longest size in case of multiple matches
     max_match_size, idxs = match_matrix.max(1)
     # remove indices that correspond to no-match
     idxs[max_match_size == 0] = -1
@@ -36,8 +42,8 @@ def align_and_update_state_dicts(model_state_dict, loaded_state_dict):
     max_size_loaded = max(len(key) for key in loaded_keys) if loaded_keys else 1
     log_str_template = "{: <{}} loaded from {: <{}} of shape {}"
     logger = logging.getLogger(__name__)
-    matched_model_keys = set()
-    matched_loaded_keys = set()
+    # matched_pairs (matched loaded key --> matched model key)
+    matched_keys = {}
     for idx_new, idx_old in enumerate(idxs.tolist()):
         if idx_old == -1:
             continue
@@ -60,11 +66,21 @@ def align_and_update_state_dicts(model_state_dict, loaded_state_dict):
             continue
 
         model_state_dict[key] = loaded_value
-        matched_model_keys.add(key)
-        matched_loaded_keys.add(key_old)
+        if key_old in matched_keys:
+            logger.error(
+                "Ambiguity found for {} in checkpoint!"
+                "It matches at least two keys in the model ({} and {}).".format(
+                    key_old, key, matched_keys[key_old]
+                )
+            )
+            raise ValueError("Cannot match one checkpoint key to multiple keys in the model.")
+
+        matched_keys[key_old] = key
         logger.info(
             log_str_template.format(key, max_size, key_old, max_size_loaded, tuple(shape_in_model))
         )
+    matched_model_keys = matched_keys.values()
+    matched_loaded_keys = matched_keys.keys()
     # print warnings about unmatched keys on both side
     unmatched_model_keys = [k for k in model_keys if k not in matched_model_keys]
     if len(unmatched_model_keys):
