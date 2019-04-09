@@ -68,7 +68,7 @@ class SemanticSegmentator(nn.Module):
             height = input_per_image.get("height")
             width = input_per_image.get("width")
             r = sem_seg_postprocess(result, image_size, height, width)
-            processed_results.append(r)
+            processed_results.append({"sem_seg": r})
         return processed_results
 
 

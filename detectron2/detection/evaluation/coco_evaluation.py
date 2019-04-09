@@ -75,9 +75,7 @@ class COCOEvaluator(DatasetEvaluator):
                 list of dicts with key "detector" that contains :class:`Instances`.
         """
         for input, output in zip(inputs, outputs):
-            if isinstance(output, dict):
-                output = output["detector"]
-            output = output.to(self._cpu_device)
+            output = output["detector"].to(self._cpu_device)
             if output.has("pred_masks"):
                 # use RLE to encode the masks, because they are too large and takes memory
                 # since this evaluator stores outputs of the entire dataset

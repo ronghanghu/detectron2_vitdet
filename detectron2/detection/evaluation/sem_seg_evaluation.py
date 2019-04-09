@@ -71,9 +71,8 @@ class SemSegEvaluator(DatasetEvaluator):
                 segmentation prediction in the same format.
         """
         for input, output in zip(inputs, outputs):
-            if isinstance(output, dict):
-                output = output["sem_seg"]
-            pred = np.array(output.to(self._cpu_device), dtype=np.int)
+            output = output["sem_seg"].to(self._cpu_device)
+            pred = np.array(output, dtype=np.int)
             gt = np.array(Image.open(self.image_id_to_gt_file[input["image_id"]]), dtype=np.int)
 
             gt[gt == self._ignore_label] = self._num_classes

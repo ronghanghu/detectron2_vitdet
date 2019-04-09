@@ -48,7 +48,7 @@ class COCODemo(object):
             viz (np.ndarray): the visualization
         """
         predictions = self.compute_predictions(image)
-        top_predictions = self.select_top_predictions(predictions)
+        top_predictions = self.select_top_predictions(predictions["detector"])
 
         result = draw_instance_predictions(image.copy(), top_predictions, self.category_names)
         return top_predictions, result
@@ -73,7 +73,8 @@ class COCODemo(object):
         with torch.no_grad():
             predictions = self.model([inputs])
         # there is only a single image
-        predictions = predictions[0].to(self.cpu_device)
+        predictions = predictions[0]
+        predictions = {k: v.to(self.cpu_device) for k, v in predictions.items()}
         return predictions
 
     def select_top_predictions(self, predictions):
