@@ -28,10 +28,9 @@ from detectron2.detection import (
     set_global_cfg,
     verify_results,
 )
-from detectron2.detection.evaluation import COCOEvaluator, SemSegEvaluator
+from detectron2.detection.evaluation import CityscapesEvaluator, COCOEvaluator, SemSegEvaluator
 from detectron2.engine.launch import launch
 from detectron2.utils.collect_env import collect_env_info
-from detectron2.utils.comm import reduce_dict
 from detectron2.utils.events import EventStorage, JSONWriter, get_event_storage
 from detectron2.utils.inference import (
     DatasetEvaluators,
@@ -111,9 +110,13 @@ def get_evaluator(cfg, dataset_name, output_folder):
             )
         )
     if evaluator_type in ["coco", "panoptic_seg"]:
-        evaluator_list.append(
-            COCOEvaluator(dataset_name, cfg, True, output_folder)
-        )
+        evaluator_list.append(COCOEvaluator(dataset_name, cfg, True, output_folder))
+    if evaluator_type == "cityscapes":
+        # TODO add per-machine primitives (https://github.com/fairinternal/detectron2/issues/138)
+        assert (
+            torch.cuda.device_count() >= comm.get_rank()
+        ), "CityscapesEvaluator currently do not work with multiple machines."
+        evaluator_list.append(CityscapesEvaluator(dataset_name))
     if len(evaluator_list) == 0:
         raise NotImplementedError(
             "no Evaluator for the dataset {} with the type {}".format(dataset_name, evaluator_type)
@@ -203,7 +206,7 @@ def do_train(cfg, model):
                 raise FloatingPointError("Losses become NaN at iteration={}!".format(iteration))
 
             # reduce losses over all GPUs for logging purposes
-            loss_dict_reduced = {k: v.item() for k, v in reduce_dict(loss_dict).items()}
+            loss_dict_reduced = {k: v.item() for k, v in comm.reduce_dict(loss_dict).items()}
             losses_reduced = sum(loss for loss in loss_dict_reduced.values())
             storage.put_scalars(loss=losses_reduced, **loss_dict_reduced)
 

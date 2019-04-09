@@ -90,7 +90,7 @@ class DetectionTransform:
                 3. Prepare the annotations to :class:`Instances`
         """
         dataset_dict = copy.deepcopy(dataset_dict)  # it will be modified by code below
-        image = Image.open(dataset_dict.pop("file_name")).convert("RGB")
+        image = Image.open(dataset_dict["file_name"]).convert("RGB")
         image = np.asarray(image, dtype="uint8")
         if self.to_bgr:
             image = image[:, :, ::-1]
