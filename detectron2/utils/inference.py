@@ -85,23 +85,33 @@ def inference_on_dataset(model, data_loader, evaluator):
     num_devices = torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
     logger = logging.getLogger(__name__)
     logger.info("Start inference on {} images".format(len(data_loader)))
-    start_time = time.time()
 
     total = len(data_loader)  # inference data loader must have a fixed length
     evaluator.reset()
+
+    num_warmup = 5
+    start_time = time.time()
     for idx, inputs in enumerate(data_loader):
+        if idx == num_warmup:
+            start_time = time.time()
+
         with torch.no_grad():
             outputs = model(inputs)
         evaluator.process(inputs, outputs)
 
         if (idx + 1) % 50 == 0:
             duration = time.time() - start_time
+            seconds_per_img = duration / (idx + 1 - num_warmup)
             logger.info(
                 "Inference done {}/{}. {:.4f} s / img. ETA={}".format(
                     idx + 1,
                     total,
-                    duration / (idx + 1),
-                    str(datetime.timedelta(seconds=int(duration / (idx + 1) * total - duration))),
+                    seconds_per_img,
+                    str(
+                        datetime.timedelta(
+                            seconds=int(seconds_per_img * (total - num_warmup) - duration)
+                        )
+                    ),
                 )
             )
 
@@ -111,7 +121,7 @@ def inference_on_dataset(model, data_loader, evaluator):
     # NOTE this format is parsed by grep
     logger.info(
         "Total inference time: {} ({:.6f} s / img per device, on {} devices)".format(
-            total_time_str, total_time / len(data_loader), num_devices
+            total_time_str, total_time / (total - num_warmup), num_devices
         )
     )
 
