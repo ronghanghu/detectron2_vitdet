@@ -44,6 +44,11 @@ class GeneralizedRCNN(nn.Module):
             Other information that's included in the original dicts, such as:
                 "height", "width" (int): the output resolution of the model, used in inference.
                     See :meth:`postprocess` for details.
+
+        Returns:
+            list[dict]: Each dict is the output for one input image.
+                The dict contains one key "detector" whose value is a
+                :class:`Instances`.
         """
         images = ImageList.from_list_of_dicts_by_image_key(
             batched_inputs, "image", self.backbone.size_divisibility

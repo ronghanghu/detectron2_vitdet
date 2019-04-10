@@ -39,6 +39,12 @@ class SemanticSegmentator(nn.Module):
             Other information that's included in the original dicts, such as:
                 "height", "width" (int): the output resolution of the model, used in inference.
                     See :meth:`postprocess` for details.
+
+        Returns:
+            list[dict]: Each dict is the output for one input image.
+                The dict contains one key "sem_seg" whose value is a
+                Tensor of the output resolution that represents the
+                per-pixel segmentation prediction.
         """
         images = ImageList.from_list_of_dicts_by_image_key(
             batched_inputs, "image", self.backbone.size_divisibility
