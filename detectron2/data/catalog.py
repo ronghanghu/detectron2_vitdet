@@ -2,6 +2,47 @@ import copy
 import types
 
 
+class DatasetCatalog(object):
+    """
+    A catalog that stores information about the splits of datasets and how to obtain them.
+
+    It contains a mapping from strings
+    (which are the names of a dataset split, e.g. "coco_2014_train")
+    to a function which parses the dataset and returns the samples in the
+    format of `list[dict]`.
+
+    The returned dicts should be in Detectron2 Dataset format (See DATASETS.md for details)
+    if used with the data loader functionatilities in `detectron2/detection`.
+
+    The purpose of having this catalog is to make it easy to choose
+    different datasets, by just using the strings in the config.
+    """
+
+    _REGISTERED_SPLITS = {}
+
+    @staticmethod
+    def register(key, func):
+        """
+        Args:
+            key (str): the key that identifies a split of a dataset, e.g. "coco_2014_train".
+            func (callable): a callable which takes no arguments and returns a list of dicts.
+        """
+        DatasetCatalog._REGISTERED_SPLITS[key] = func
+
+    @staticmethod
+    def get(key):
+        """
+        Call the registered function and return its results.
+
+        Args:
+            key (str): the key that identifies a split of a dataset, e.g. "coco_2014_train".
+
+        Returns:
+            list[dict]: dataset annotations.0
+        """
+        return DatasetCatalog._REGISTERED_SPLITS[key]()
+
+
 class Metadata(types.SimpleNamespace):
     """
     A class that supports simple attribute setter/getter.

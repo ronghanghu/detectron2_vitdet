@@ -10,7 +10,7 @@ from PIL import Image
 from detectron2.structures import BoxMode
 from detectron2.utils.comm import get_world_size
 
-from ..metadata import MetadataCatalog
+from .. import MetadataCatalog
 
 try:
     import cv2  # noqa

@@ -5,18 +5,18 @@ from PIL import Image
 
 from detectron2.structures import BoxMode
 
-from ..metadata import MetadataCatalog
+from .. import MetadataCatalog
 
 logger = logging.getLogger(__name__)
 
 
 def load_coco_json(json_file, image_root, dataset_name=None):
     """
-    Load a json file with COCO's annotation format.
-    Currently only supports instance segmentation annotations.
+    Load a json file with COCO's instances annotation format.
+    Currently only supports instance detection/segmentation annotations.
 
     Args:
-        json_file (str): full path to the json file in COCO annotation format.
+        json_file (str): full path to the json file in COCO instances annotation format.
         image_root (str): the directory where the images in this json file exists.
         dataset_name (str): the name of the dataset (e.g., "coco", "cityscapes").
             If provided, this function will also put "class_names" into

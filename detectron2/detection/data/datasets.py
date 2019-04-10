@@ -3,116 +3,80 @@
 import copy
 import os
 
-from detectron2.data import MetadataCatalog
+from detectron2.data import DatasetCatalog, MetadataCatalog
 from detectron2.data.datasets import load_coco_json, load_sem_seg
 
-__all__ = ["DatasetCatalog"]
+__all__ = ["register_coco_instances", "register_coco_panoptic"]
 
 
-class DatasetCatalog(object):
+def register_coco_instances(key, dataset_name, json_file, image_root):
     """
-    A catalog that stores information about the splits of datasets and how to obtain them.
+    Register a dataset in COCO's json annotation format for
+    instance detection, instance segmentation and keypoint detection.
+    (i.e., Type 1 and 2 in http://cocodataset.org/#format-data.
+    `instances*.json` and `person_keypoints*.json` in the dataset).
 
-    It contains a mapping from strings
-    (which are the names of a dataset split, e.g. "coco_2014_train")
-    to a function which parses the dataset and returns the samples in the
-    format of `list[dict]` in Detectron2 Dataset format (See DATASETS.md for details).
+    This is an example of how to register a new dataset.
+    You can do something similar to this function, to register new datasets.
 
-    The purpose of having this catalog is to make it easy to choose
-    different datasets, by just using the strings in the config.
+    Args:
+        key (str): the key that identifies a split of a dataset, e.g. "coco_2014_train".
+        dataset_name (str): the name of the dataset, e.g. "coco"
+        json_file (str): path to the json instance annotation file
+        image_root (str): directory which contains all the images
     """
+    # 1. register a function which returns dicts
+    DatasetCatalog.register(key, lambda: load_coco_json(json_file, image_root, dataset_name))
 
-    _REGISTERED_SPLITS = {}
+    # 2. Optionally, add metadata about this split,
+    # since they might be useful in evaluation, visualization or logging
+    MetadataCatalog.get(key).set(
+        dataset_name=dataset_name, json_file=json_file, image_root=image_root, evaluator_type="coco"
+    )
 
-    @staticmethod
-    def register(key, func):
-        """
-        Args:
-            key (str): the key that identifies a split of a dataset, e.g. "coco_2014_train".
-            func (callable): a callable which takes no arguments and returns a list of dicts.
-        """
-        DatasetCatalog._REGISTERED_SPLITS[key] = func
 
-    @staticmethod
-    def get(key):
-        """
-        Call the registered function and return its results.
+def register_coco_panoptic(key, dataset_name, image_root, json_file, seg_root):
+    """
+    Register a COCO panoptic segmentation dataset, as well as a semantic
+    segmentation dataset named `key + '_stuffonly'`.
 
-        Args:
-            key (str): the key that identifies a split of a dataset, e.g. "coco_2014_train".
+    Note:
+        The added panoptic segmentation dataset uses polygons from the COCO
+        instances annotations, rather than the masks from the COCO panoptic annotations.
+        We now uses the polygons because it is what the PanopticFPN paper uses.
+        We may later need to add an option to use masks.
 
-        Returns:
-            list[dict]: dataset annotations in Detectron2 format.
-        """
-        return DatasetCatalog._REGISTERED_SPLITS[key]()
+        The two format have small differences:
+        Polygons in the instance annotations may have overlaps.
+        The mask annotations are produced by labeling the depth ordering of overlapped polygons.
 
-    # TODO: move DatasetCatalog out of "detection/",
-    # and only keep task-specific code (after this line) here.
+    Args:
+        key (str): the key that identifies a split of a dataset,
+            e.g. "coco_2017_train_panoptic".
+        dataset_name (str): the name of the dataset, e.g. "coco"
+        image_root (str): directory which contains all the images
+        json_file (str): path to the json instance annotation file
+        seg_root (str): directory which contains all the ground truth segmentation annotations.
+    """
+    DatasetCatalog.register(
+        key,
+        lambda: merge_to_panoptic(
+            load_coco_json(json_file, image_root, dataset_name), load_sem_seg(seg_root, image_root)
+        ),
+    )
+    MetadataCatalog.get(key).set(
+        dataset_name=dataset_name,
+        json_file=json_file,
+        seg_root=seg_root,
+        image_root=image_root,
+        evaluator_type="panoptic_seg",
+    )
 
-    @staticmethod
-    def register_coco_format(key, dataset_name, json_file, image_root):
-        """
-        Register a detection dataset in COCO's json annotation format.
-
-        This is an example of how to register a new dataset.
-        For a dataset of a different format,
-        you need to call `register()` to register it,
-        and you may want to add some useful metadata to `MetadataCatalog` as well.
-
-        Args:
-            key (str): the key that identifies a split of a dataset, e.g. "coco_2014_train".
-            dataset_name (str): the name of the dataset, e.g. "coco"
-            json_file (str): path to the json instance annotation file
-            image_root (str): directory which contains all the images
-        """
-        # 1. register a function which returns dicts
-        DatasetCatalog.register(key, lambda: load_coco_json(json_file, image_root, dataset_name))
-
-        # 2. add metadata about this split, since they will be useful in evaluation or visualization
-        MetadataCatalog.get(key).set(
-            dataset_name=dataset_name,
-            json_file=json_file,
-            image_root=image_root,
-            evaluator_type="coco",
-        )
-
-    @staticmethod
-    def register_coco_panoptic(key, dataset_name, image_root, json_file, semseg_root):
-        """
-        Register a panoptic segmentation dataset, as well as a semantic
-        segmentation dataset named `key + '_stuffonly'`.
-
-        Args:
-            key (str): the key that identifies a split of a dataset,
-                e.g. "coco_2017_train_panoptic".
-            dataset_name (str): the name of the dataset, e.g. "coco"
-            image_root (str): directory which contains all the images
-            json_file (str): path to the json instance annotation file
-            semseg_root (str): directory which contains all the ground truth semantic annotations.
-        """
-        DatasetCatalog.register(
-            key,
-            lambda: merge_to_panoptic(
-                load_coco_json(json_file, image_root, dataset_name),
-                load_sem_seg(semseg_root, image_root),
-            ),
-        )
-        MetadataCatalog.get(key).set(
-            dataset_name=dataset_name,
-            json_file=json_file,
-            semseg_root=semseg_root,
-            image_root=image_root,
-            evaluator_type="panoptic_seg",
-        )
-
-        semantic_key = key + "_stuffonly"
-        DatasetCatalog.register(semantic_key, lambda: load_sem_seg(semseg_root, image_root))
-        MetadataCatalog.get(semantic_key).set(
-            dataset_name=dataset_name,
-            gt_root=semseg_root,
-            image_root=image_root,
-            evaluator_type="sem_seg",
-        )
+    semantic_key = key + "_stuffonly"
+    DatasetCatalog.register(semantic_key, lambda: load_sem_seg(seg_root, image_root))
+    MetadataCatalog.get(semantic_key).set(
+        dataset_name=dataset_name, gt_root=seg_root, image_root=image_root, evaluator_type="sem_seg"
+    )
 
 
 def merge_to_panoptic(detection_dicts, semantic_segmentation_dicts):
@@ -121,7 +85,7 @@ def merge_to_panoptic(detection_dicts, semantic_segmentation_dicts):
     merging two dicts using "file_name" field to match their entries.
 
     Args:
-        detection_dicts (list[dict]): lists of dicts for object detection.
+        detection_dicts (list[dict]): lists of dicts for object detection or instance segmentation.
         semantic_segmentation_dicts (list[dict]): lists of dicts for semantic segmentation.
 
     Returns:
@@ -233,7 +197,7 @@ _PREDEFINED_SPLITS["coco_person"] = {
 for dataset_name, splits_per_dataset in _PREDEFINED_SPLITS.items():
     for key, (image_root, json_file) in splits_per_dataset.items():
         # Assume pre-defined datasets live in `./datasets`.
-        DatasetCatalog.register_coco_format(
+        register_coco_instances(
             key,
             dataset_name,
             os.path.join("datasets", json_file),

@@ -5,3 +5,5 @@
 isort -y -sp .
 black -l 100 .
 flake8 .
+
+command -v arc > /dev/null && arc lint

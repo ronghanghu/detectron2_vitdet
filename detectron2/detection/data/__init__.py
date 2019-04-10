@@ -1,3 +1,3 @@
 from .build import *
-from .dataset_catalog import *
+from .datasets import *
 from .transforms import *

@@ -8,8 +8,7 @@ import PIL.Image as Image
 import pycocotools.mask as mask_util
 import torch
 
-from detectron2.data import MetadataCatalog
-from detectron2.detection.data import DatasetCatalog
+from detectron2.data import DatasetCatalog, MetadataCatalog
 from detectron2.utils.comm import all_gather, is_main_process, synchronize
 from detectron2.utils.inference import DatasetEvaluator
 

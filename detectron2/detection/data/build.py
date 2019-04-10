@@ -6,12 +6,11 @@ import numpy as np
 import torch.utils.data
 from termcolor import colored
 
-from detectron2.data import DatasetFromList, MapDataset, MetadataCatalog, samplers
+from detectron2.data import DatasetCatalog, DatasetFromList, MapDataset, MetadataCatalog, samplers
 from detectron2.utils.comm import get_world_size
 
 from tabulate import tabulate
 
-from .dataset_catalog import DatasetCatalog
 from .transforms import DetectionTransform
 
 __all__ = ["build_detection_train_loader", "build_detection_test_loader"]
