@@ -263,9 +263,7 @@ def setup(args):
     )
     logger.info(args)
 
-    logger.info("Collecting env info (might take some time)")
-    logger.info("\n" + collect_env_info())
-
+    logger.info("Environment info:\n" + collect_env_info())
     logger.info(
         "Loaded config file {}:\n{}".format(args.config_file, open(args.config_file, "r").read())
     )
