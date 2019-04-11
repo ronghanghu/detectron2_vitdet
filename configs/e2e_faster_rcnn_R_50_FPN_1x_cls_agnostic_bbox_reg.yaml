@@ -1,0 +1,8 @@
+_BASE_: "Base-FPN.yaml"
+MODEL:
+  WEIGHT: "catalog://ImageNetPretrained/MSRA/R-50"
+  MASK_ON: False
+  RESNETS:
+    DEPTH: 50
+  ROI_BOX_HEAD:
+    CLS_AGNOSTIC_BBOX_REG: True

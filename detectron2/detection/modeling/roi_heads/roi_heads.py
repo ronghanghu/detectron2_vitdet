@@ -186,12 +186,13 @@ class Res5ROIHeads(ROIHeads):
         assert len(self.in_features) == 1
 
         # fmt: off
-        pooler_resolution   = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
-        pooler_scales       = (1.0 / self.feature_strides[self.in_features[0]], )
-        sampling_ratio      = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
-        num_classes         = cfg.MODEL.ROI_HEADS.NUM_CLASSES
-        bbox_reg_weights    = cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS
-        self.mask_on        = cfg.MODEL.MASK_ON
+        pooler_resolution          = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
+        pooler_scales              = (1.0 / self.feature_strides[self.in_features[0]], )
+        sampling_ratio             = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
+        num_classes                = cfg.MODEL.ROI_HEADS.NUM_CLASSES
+        bbox_reg_weights           = cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS
+        self.cls_agnostic_bbox_reg = cfg.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG
+        self.mask_on               = cfg.MODEL.MASK_ON
         # fmt: on
         assert not cfg.MODEL.KEYPOINT_ON
 
@@ -201,7 +202,9 @@ class Res5ROIHeads(ROIHeads):
 
         self.res5 = resnet.build_resnet_head(cfg)
         out_channels = self.res5[-1].out_channels
-        self.box_predictor = FastRCNNOutputHead(out_channels, num_classes)
+        self.box_predictor = FastRCNNOutputHead(
+            out_channels, num_classes, self.cls_agnostic_bbox_reg
+        )
         self.box2box_transform = Box2BoxTransform(weights=bbox_reg_weights)
 
         if self.mask_on:
@@ -235,7 +238,11 @@ class Res5ROIHeads(ROIHeads):
         del feature_pooled
 
         outputs = FastRCNNOutputs(
-            self.box2box_transform, pred_class_logits, pred_proposal_deltas, proposals
+            self.box2box_transform,
+            pred_class_logits,
+            pred_proposal_deltas,
+            proposals,
+            self.cls_agnostic_bbox_reg,
         )
 
         if self.training:
@@ -280,6 +287,7 @@ class StandardROIHeads(ROIHeads):
         sampling_ratio                           = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
         num_classes                              = cfg.MODEL.ROI_HEADS.NUM_CLASSES
         bbox_reg_weights                         = cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS
+        self.cls_agnostic_bbox_reg               = cfg.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG
         self.mask_on                             = cfg.MODEL.MASK_ON
         mask_pooler_resolution                   = cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION
         mask_pooler_scales                       = pooler_scales
@@ -310,7 +318,9 @@ class StandardROIHeads(ROIHeads):
         )
         self.box_head = build_box_head(cfg)
 
-        self.box_predictor = FastRCNNOutputHead(self.box_head.output_size, num_classes)
+        self.box_predictor = FastRCNNOutputHead(
+            self.box_head.output_size, num_classes, self.cls_agnostic_bbox_reg
+        )
         self.box2box_transform = Box2BoxTransform(weights=bbox_reg_weights)
 
         if self.mask_on:
@@ -357,7 +367,11 @@ class StandardROIHeads(ROIHeads):
         del box_features
 
         outputs = FastRCNNOutputs(
-            self.box2box_transform, pred_class_logits, pred_proposal_deltas, proposals
+            self.box2box_transform,
+            pred_class_logits,
+            pred_proposal_deltas,
+            proposals,
+            self.cls_agnostic_bbox_reg,
         )
 
         if self.training:

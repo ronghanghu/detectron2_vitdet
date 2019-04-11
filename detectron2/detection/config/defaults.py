@@ -222,6 +222,8 @@ _C.MODEL.ROI_BOX_HEAD.NORM = ""
 # The caller of box head is responsible to fill this computed attribute
 # about the input size of the box head.
 # _C.MODEL.ROI_BOX_HEAD.COMPUTED_INPUT_SIZE = (channel, height, width)
+# Whether to use class agnostic for bbox regression
+_C.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG = False
 
 
 # ---------------------------------------------------------------------------- #

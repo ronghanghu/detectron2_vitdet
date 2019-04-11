@@ -35,7 +35,9 @@ Naming convention:
 """
 
 
-def fast_rcnn_losses(gt_classes, proposal_deltas_gt, pred_class_logits, pred_proposal_deltas):
+def fast_rcnn_losses(
+    gt_classes, proposal_deltas_gt, pred_class_logits, pred_proposal_deltas, cls_agnostic_bbox_reg
+):
     """
     Compute the classification and box delta losses defined in the Fast R-CNN paper.
 
@@ -48,10 +50,13 @@ def fast_rcnn_losses(gt_classes, proposal_deltas_gt, pred_class_logits, pred_pro
         pred_class_logits (Tensor): A tensor for shape (R, K) storing predicted classification
             logits for the K-way classification problem. Each row corresponds to a predicted
             object instance.
-        pred_proposal_deltas (Tensor): shape (R, 4 * K), each row stores a list of class-specific
-            predicted box2box transform [dx_0, dy_0, dw_0, dh_0, ..., dx_k, dy_k, dw_k, dh_k, ...]
-            for each class k in [0, K). (Predictions for the background class, k = 0, are
-            meaningless.)
+        pred_proposal_deltas (Tensor): shape depends on cls_agnostic_bbox_reg,
+            1. not agnostic: Shape (R, 4 * k), each row stores a list of class-specific predicted
+            box2box transform [dx_0, dy_0, dw_0, dh_0, ..., dx_k, dy_k, dw_k, dh_k, ...] for each
+            class k in [0, K). (Predictions for the background class, k = 0, are meaningless.)
+            2. agnostic: Shape (R, 4), the second row stores the class-agnostic (foreground)
+            predicted box2box transform.
+        cls_agnostic_bbox_reg (bool): Whether to use class agnostic for bbox regression.
 
     Returns:
         loss_cls, loss_box_reg (Tensor): Scalar loss values.
@@ -68,8 +73,12 @@ def fast_rcnn_losses(gt_classes, proposal_deltas_gt, pred_class_logits, pred_pro
     # and would produce a nan loss).
     fg_inds = torch.nonzero(gt_classes > 0).squeeze(1)
     fg_gt_classes = gt_classes[fg_inds]
-    # pred_proposal_deltas for class k are located in columns [4 * k : 4 * k + 4]
-    gt_class_cols = 4 * fg_gt_classes[:, None] + torch.tensor([0, 1, 2, 3], device=device)
+    if cls_agnostic_bbox_reg:
+        # pred_proposal_deltas only corresponds to foreground class for agnostic
+        gt_class_cols = torch.tensor([0, 1, 2, 3], device=device)
+    else:
+        # pred_proposal_deltas for class k are located in columns [4 * k : 4 * k + 4]
+        gt_class_cols = 4 * fg_gt_classes[:, None] + torch.tensor([0, 1, 2, 3], device=device)
 
     loss_box_reg = smooth_l1_loss(
         pred_proposal_deltas[fg_inds[:, None], gt_class_cols],
@@ -93,14 +102,17 @@ def fast_rcnn_losses(gt_classes, proposal_deltas_gt, pred_class_logits, pred_pro
     return loss_cls, loss_box_reg
 
 
-def fast_rcnn_inference(boxes, scores, image_shapes, score_thresh, nms_thresh, topk_per_image):
+def fast_rcnn_inference(
+    boxes, scores, image_shapes, score_thresh, nms_thresh, topk_per_image, cls_agnostic_bbox_reg
+):
     """
     Call `fast_rcnn_inference_single_image` for all images.
 
     Args:
-        boxes (list[Tensor]): A list of Tensors of predicted class-specific boxes for each image.
-            Element i has shape (Ri, K * 4), where Ri is the number of predicted objects
-            for image i. Compatible with the output of :meth:`FastRCNNOutputs.predict_boxes`.
+        boxes (list[Tensor]): A list of Tensors of predicted class-specific or class-agnostic
+            boxes for each image. Element i has shape (Ri, K * 4) or (Ri, 4) depending on
+            cls_agnostic_bbox_reg, where Ri is the number of predicted objects for image i.
+            Compatible with the output of :meth:`FastRCNNOutputs.predict_boxes`.
         scores (list[Tensor]): A list of Tensors of predicted class scores for each image.
             Element i has shape (Ri, K), where Ri is the number of predicted objects
             for image i. Compatible with the output of :meth:`FastRCNNOutputs.predict_probs`.
@@ -110,6 +122,7 @@ def fast_rcnn_inference(boxes, scores, image_shapes, score_thresh, nms_thresh, t
         nms_thresh (float):  The threshold to use for box non-maximum suppression. Value in [0, 1].
         topk_per_image (int): The number of top scoring detections to return. Set < 0 to return
             all detections.
+        cls_agnostic_bbox_reg (bool): Whether to use class agnostic for bbox regression.
 
     Returns:
         list[Instances]: A list of N box lists, one for each image in the batch, that stores the
@@ -117,14 +130,20 @@ def fast_rcnn_inference(boxes, scores, image_shapes, score_thresh, nms_thresh, t
     """
     return [
         fast_rcnn_inference_single_image(
-            boxes_per_image, scores_per_image, image_shape, score_thresh, nms_thresh, topk_per_image
+            boxes_per_image,
+            scores_per_image,
+            image_shape,
+            score_thresh,
+            nms_thresh,
+            topk_per_image,
+            cls_agnostic_bbox_reg,
         )
         for scores_per_image, boxes_per_image, image_shape in zip(scores, boxes, image_shapes)
     ]
 
 
 def fast_rcnn_inference_single_image(
-    boxes, scores, image_shape, score_thresh, nms_thresh, topk_per_image
+    boxes, scores, image_shape, score_thresh, nms_thresh, topk_per_image, cls_agnostic_bbox_reg
 ):
     """
     Single-image inference. Return bounding-box detection results by thresholding
@@ -141,7 +160,7 @@ def fast_rcnn_inference_single_image(
     # convert to Boxes to use the `clip` function ...
     boxes = Boxes(boxes.reshape(-1, 4))
     boxes.clip(image_shape)
-    boxes = boxes.tensor.view(-1, num_classes, 4)
+    boxes = boxes.tensor.view(scores.shape[0], -1, 4)
 
     device = scores.device
     results = []
@@ -151,7 +170,10 @@ def fast_rcnn_inference_single_image(
     for j in range(1, num_classes):
         inds = inds_all[:, j].nonzero().squeeze(1)
         scores_j = scores[inds, j]
-        boxes_j = boxes[inds, j, :]
+        if cls_agnostic_bbox_reg:
+            boxes_j = boxes[inds, 0, :]
+        else:
+            boxes_j = boxes[inds, j, :]
         # image_size is not used, fill -1
         keep = nms(boxes_j, scores_j, nms_thresh)
         boxes_j = boxes_j[keep]
@@ -184,24 +206,34 @@ class FastRCNNOutputs(object):
     A class that stores information about outputs of a Fast R-CNN head.
     """
 
-    def __init__(self, box2box_transform, pred_class_logits, pred_proposal_deltas, proposals):
+    def __init__(
+        self,
+        box2box_transform,
+        pred_class_logits,
+        pred_proposal_deltas,
+        proposals,
+        cls_agnostic_bbox_reg,
+    ):
         """
         Args:
             box2box_transform (Box2BoxTransform): :class:`Box2BoxTransform` instance for
                 proposal-to-detection tranformations.
             pred_class_logits (Tensor): A tensor of shape (R, K) storing the predicted class
                 logits for all R predicted object instances.
-            pred_proposal_deltas (Tensor): A tensor of shape (R, K * 4) storing the predicted
-                deltas that transform proposals into final box detections.
+            pred_proposal_deltas (Tensor): A tensor of shape (R, K * 4) or (R, 4) for
+                class-specific or class-agnostic storing the predicted deltas that
+                transform proposals into final box detections.
             proposals (list[Instances]): A list of N Instancess, where Instances i stores the
                 proposals for image i. When training, each Instances has ground-truth labels
                 stored in the field "gt_classes" and "gt_boxes".
+            cls_agnostic_bbox_reg (bool): whether to use class agnostic for bbox regression.
         """
         self.box2box_transform = box2box_transform
         self.num_preds_per_image = [len(p) for p in proposals]
         self.num_classes = pred_class_logits.shape[1]
         self.pred_class_logits = pred_class_logits
         self.pred_proposal_deltas = pred_proposal_deltas
+        self.cls_agnostic_bbox_reg = cls_agnostic_bbox_reg
 
         # cat(..., dim=0) concatenates over all images in the batch
         self.proposals = Boxes.cat([p.proposal_boxes for p in proposals])
@@ -244,16 +276,20 @@ class FastRCNNOutputs(object):
             self.proposals.tensor, self.gt_boxes.tensor
         )
         loss_cls, loss_box_reg = fast_rcnn_losses(
-            self.gt_classes, proposal_deltas_gt, self.pred_class_logits, self.pred_proposal_deltas
+            self.gt_classes,
+            proposal_deltas_gt,
+            self.pred_class_logits,
+            self.pred_proposal_deltas,
+            self.cls_agnostic_bbox_reg,
         )
         return {"loss_cls": loss_cls, "loss_box_reg": loss_box_reg}
 
     def predict_boxes(self):
         """
         Returns:
-            list[Tensor]: A list of Tensors of predicted class-specific boxes for each image.
-                Element i has shape (Ri, K * 4), where Ri is the number of predicted objects
-                for image i.
+            list[Tensor]: A list of Tensors of predicted class-specific or class-agnostic boxes
+                for each image. Element i has shape (Ri, K * 4) or (Ri, 2 * 4), where Ri is
+                the number of predicted objects for image i.
         """
         boxes = self.box2box_transform.apply_deltas(
             self.pred_proposal_deltas, self.proposals.tensor
@@ -282,9 +318,16 @@ class FastRCNNOutputs(object):
         boxes = self.predict_boxes()
         scores = self.predict_probs()
         image_shapes = self.image_shapes
+        cls_agnostic_bbox_reg = self.cls_agnostic_bbox_reg
 
         return fast_rcnn_inference(
-            boxes, scores, image_shapes, score_thresh, nms_thresh, topk_per_image
+            boxes,
+            scores,
+            image_shapes,
+            score_thresh,
+            nms_thresh,
+            topk_per_image,
+            cls_agnostic_bbox_reg,
         )
 
 
@@ -294,11 +337,12 @@ class FastRCNNOutputHead(nn.Module):
     2 FC layers that does bbox regression and classification, respectively.
     """
 
-    def __init__(self, input_size, num_classes):
+    def __init__(self, input_size, num_classes, cls_agnostic_bbox_reg):
         """
         Args:
             input_size (int): channels, or (channels, height, width)
             num_classes (int):
+            cls_agnostic_bbox_reg (bool): whether to use class agnostic for bbox regression
         """
         super(FastRCNNOutputHead, self).__init__()
 
@@ -306,7 +350,8 @@ class FastRCNNOutputHead(nn.Module):
             input_size = np.prod(input_size)
 
         self.cls_score = nn.Linear(input_size, num_classes)
-        self.bbox_pred = nn.Linear(input_size, num_classes * 4)
+        num_bbox_reg_classes = 1 if cls_agnostic_bbox_reg else num_classes
+        self.bbox_pred = nn.Linear(input_size, num_bbox_reg_classes * 4)
 
         nn.init.normal_(self.cls_score.weight, std=0.01)
         nn.init.normal_(self.bbox_pred.weight, std=0.001)
