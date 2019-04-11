@@ -2,6 +2,7 @@
 from __future__ import division
 
 import torch
+from torch.nn import functional as F
 
 
 class ImageList(object):
@@ -39,12 +40,6 @@ class ImageList(object):
         return ImageList(cast_tensor, self.image_sizes)
 
     @staticmethod
-    def from_list_of_dicts_by_image_key(dicts, image_key, size_divisibility=0, pad_value=0):
-        images = [x[image_key] for x in dicts]
-        images = ImageList.from_tensors(images, size_divisibility, pad_value)
-        return images
-
-    @staticmethod
     def from_tensors(tensors, size_divisibility=0, pad_value=0.0):
         """
         Args:
@@ -63,9 +58,8 @@ class ImageList(object):
         for t in tensors:
             assert isinstance(t, torch.Tensor), type(t)
             assert t.shape[1:-2] == tensors[0].shape[1:-2], t.shape
-        max_size = tuple(max(s) for s in zip(*[img.shape for img in tensors]))
+        max_size = tuple(max(s) for s in zip(*[img.shape for img in tensors]))  # C, H, W
 
-        # TODO Ideally, just remove this and let the model handle arbitrary input sizes
         if size_divisibility > 0:
             import math
 
@@ -75,11 +69,22 @@ class ImageList(object):
             max_size[-1] = int(math.ceil(max_size[-1] / stride) * stride)
             max_size = tuple(max_size)
 
-        batch_shape = (len(tensors),) + max_size
-        batched_imgs = tensors[0].new_full(batch_shape, pad_value)
-        for img, pad_img in zip(tensors, batched_imgs):
-            pad_img[..., : img.shape[-2], : img.shape[-1]].copy_(img)
-
         image_sizes = [im.shape[-2:] for im in tensors]
+
+        if len(tensors) == 1:
+            # This seems slightly (2%) faster.
+            # TODO: check whether it's faster for multiple images as well
+            image_size = image_sizes[0]
+            padded = F.pad(
+                tensors[0],
+                [0, max_size[2] - image_size[1], 0, max_size[1] - image_size[0]],
+                value=pad_value,
+            )
+            batched_imgs = padded.unsqueeze_(0)
+        else:
+            batch_shape = (len(tensors),) + max_size
+            batched_imgs = tensors[0].new_full(batch_shape, pad_value)
+            for img, pad_img in zip(tensors, batched_imgs):
+                pad_img[..., : img.shape[-2], : img.shape[-1]].copy_(img)
 
         return ImageList(batched_imgs, image_sizes)

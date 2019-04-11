@@ -9,10 +9,12 @@ from tabulate import tabulate
 def collect_torch_env():
     try:
         import torch.__config__
+
         return torch.__config__.show()
     except ImportError:
         # compatible with older versions of pytorch
         from torch.utils.collect_env import get_pretty_env_info
+
         return get_pretty_env_info()
 
 
@@ -40,6 +42,7 @@ def collect_env_info():
 
     try:
         import cv2
+
         data.append(("cv2", cv2.__version__))
     except ImportError:
         pass

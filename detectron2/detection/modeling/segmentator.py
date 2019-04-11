@@ -46,22 +46,16 @@ class SemanticSegmentator(nn.Module):
                 Tensor of the output resolution that represents the
                 per-pixel segmentation prediction.
         """
-        images = ImageList.from_list_of_dicts_by_image_key(
-            batched_inputs, "image", self.backbone.size_divisibility
-        ).to(self.device)
+        images = [x["image"].to(self.device) for x in batched_inputs]
+        images = ImageList.from_tensors(images, self.backbone.size_divisibility)
+
         features = self.backbone(images.tensor)
 
         if "sem_seg_gt" in batched_inputs[0]:
-            targets = (
-                ImageList.from_list_of_dicts_by_image_key(
-                    batched_inputs,
-                    "sem_seg_gt",
-                    self.backbone.size_divisibility,
-                    self.sem_seg_head.ignore_value,
-                )
-                .to(self.device)
-                .tensor
-            )
+            targets = [x["sem_seg_gt"].to(self.device) for x in batched_inputs]
+            targets = ImageList.from_tensors(
+                targets, self.backbone.size_divisibility, self.sem_seg_head.ignore_value
+            ).tensor
         else:
             targets = None
         results, losses = self.sem_seg_head(features, targets)
@@ -114,22 +108,15 @@ class PanopticFPN(nn.Module):
                 "height", "width" (int): the output resolution of the model, used in inference.
                     See :meth:`postprocess` for details.
         """
-        images = ImageList.from_list_of_dicts_by_image_key(
-            batched_inputs, "image", self.backbone.size_divisibility
-        ).to(self.device)
+        images = [x["image"].to(self.device) for x in batched_inputs]
+        images = ImageList.from_tensors(images, self.backbone.size_divisibility)
         features = self.backbone(images.tensor)
 
         if "sem_seg_gt" in batched_inputs[0]:
-            sem_seg_targets = (
-                ImageList.from_list_of_dicts_by_image_key(
-                    batched_inputs,
-                    "sem_seg_gt",
-                    self.backbone.size_divisibility,
-                    self.sem_seg_head.ignore_value,
-                )
-                .to(self.device)
-                .tensor
-            )
+            sem_seg_targets = [x["sem_seg_gt"].to(self.device) for x in batched_inputs]
+            sem_seg_targets = ImageList.from_tensors(
+                sem_seg_targets, self.backbone.size_divisibility, self.sem_seg_head.ignore_value
+            ).tensor
         else:
             sem_seg_targets = None
         sem_seg_results, sem_seg_losses = self.sem_seg_head(features, sem_seg_targets)

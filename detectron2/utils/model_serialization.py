@@ -28,6 +28,7 @@ def align_and_update_state_dicts(model_state_dict, loaded_state_dict):
         # For example, roi_heads.mesh_head.whatever_conv1 does not match conv1,
         # but matches whatever_conv1 or mesh_head.whatever_conv1.
         return a == b or a.endswith("." + b)
+
     # get a matrix of string matches, where each (i, j) entry correspond to the size of the
     # loaded_key string, if it matches
     match_matrix = [len(j) if match(i, j) else 0 for i in model_keys for j in loaded_keys]

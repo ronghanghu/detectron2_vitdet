@@ -50,9 +50,8 @@ class GeneralizedRCNN(nn.Module):
                 The dict contains one key "detector" whose value is a
                 :class:`Instances`.
         """
-        images = ImageList.from_list_of_dicts_by_image_key(
-            batched_inputs, "image", self.backbone.size_divisibility
-        ).to(self.device)
+        images = [x["image"].to(self.device) for x in batched_inputs]
+        images = ImageList.from_tensors(images, self.backbone.size_divisibility)
 
         if "targets" in batched_inputs[0]:
             targets = [x["targets"].to(self.device) for x in batched_inputs]
