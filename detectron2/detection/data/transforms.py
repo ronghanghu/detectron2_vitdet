@@ -90,12 +90,13 @@ class DetectionTransform:
                 3. Prepare the annotations to :class:`Instances`
         """
         dataset_dict = copy.deepcopy(dataset_dict)  # it will be modified by code below
-        conversion_image_format = self.image_format
-        if self.img_format == "BGR":
+        conversion_image_format = self.img_format
+        if conversion_image_format == "BGR":
             # PIL only supports RGB, so convert to RGB and flip channels over below
             conversion_image_format = "RGB"
         image = Image.open(dataset_dict["file_name"]).convert(conversion_image_format)
         image = np.asarray(image, dtype="uint8")
+        # flip channels if needed
         if self.img_format == "BGR":
             image = image[:, :, ::-1]
 
