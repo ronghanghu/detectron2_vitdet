@@ -149,8 +149,24 @@ def build_batch_data_sampler(
     return batch_sampler
 
 
-def build_detection_train_loader(cfg, start_iter=0):
+def build_detection_train_loader(cfg, transform=None, start_iter=0):
     """
+    A data loader is created by the following steps:
+
+    1. Use the dataset names in config to query `DatasetCatalog`, and obtain a list of dicts.
+    2. Start workers to work on the dicts. Each worker will:
+        (1) Transform each dict into another dict
+        (2) Batch them by simply putting dicts into a list.
+    The batched `list[transformed_dict]` is what this dataloader will return.
+
+    Args:
+        cfg (CfgNode): the config
+        transform (callable): a callable which takes a sample (dict) from dataset and
+            returns a transformed dict.
+            By default it will be `DetectionTransform(cfg, is_train=True)`.
+        start_iter (int): the iteration number to start training with.
+            It is useful when resuming training: it will affect which sample to start loading.
+
     Returns:
         a torch DataLoader object
     """
@@ -200,7 +216,9 @@ def build_detection_train_loader(cfg, start_iter=0):
     group_bin_edges = [1] if cfg.DATALOADER.ASPECT_RATIO_GROUPING else []
     aspect_ratios = [float(img["height"]) / float(img["width"]) for img in dataset]
 
-    dataset = MapDataset(dataset, DetectionTransform(cfg, True))
+    if transform is None:
+        transform = DetectionTransform(cfg, True)
+    dataset = MapDataset(dataset, transform)
 
     sampler = samplers.TrainingSampler(len(dataset), seed=start_iter)
     batch_sampler = build_batch_data_sampler(
@@ -216,11 +234,18 @@ def build_detection_train_loader(cfg, start_iter=0):
     return data_loader
 
 
-def build_detection_test_loader(cfg, dataset_name):
+def build_detection_test_loader(cfg, dataset_name, transform=None):
     """
+    Similar to `build_detection_train_loader`.
+    But this function uses the given `dataset_name` argument (instead of the names in cfg),
+    and uses batch size 1.
+
     Args:
         cfg: a detectron2 CfgNode
         dataset_name (str): a name of the dataset that's available in the DatasetCatalog
+        transform (callable): a callable which takes a sample (dict) from dataset
+            and returns a transformed dict.
+            By default it will be `DetectionTransform(cfg, is_train=False)`.
 
     Returns:
         DataLoader: a torch DataLoader, that loads the given detection
@@ -228,7 +253,9 @@ def build_detection_test_loader(cfg, dataset_name):
     """
     dataset_dicts = DatasetCatalog.get(dataset_name)
     dataset = DatasetFromList(dataset_dicts)
-    dataset = MapDataset(dataset, DetectionTransform(cfg, False))
+    if transform is None:
+        transform = DetectionTransform(cfg, False)
+    dataset = MapDataset(dataset, transform)
 
     sampler = samplers.InferenceSampler(len(dataset))
     # Always use 1 image per GPU during inference since this is the
