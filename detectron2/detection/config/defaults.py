@@ -378,7 +378,7 @@ _C.SOLVER.MOMENTUM = 0.9
 _C.SOLVER.WEIGHT_DECAY = 0.0001
 # The weight decay that's applied to parameters of normalization layers
 # (typically the affine transformation)
-_C.SOLVER.WEIGHT_DECAY_NORM = 0
+_C.SOLVER.WEIGHT_DECAY_NORM = 0.0
 
 _C.SOLVER.GAMMA = 0.1
 _C.SOLVER.STEPS = (30000,)
