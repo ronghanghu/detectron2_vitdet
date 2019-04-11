@@ -1,5 +1,4 @@
 import numpy as np
-import cv2
 import torch
 
 # from PIL import Image  # TODO investigate how to avoid opencv dependency
@@ -166,6 +165,8 @@ def heatmaps_to_keypoints(maps, rois):
         height_correction = heights[i] / roi_map_height
 
         # Resample the roi map to its size in the original image
+        import cv2
+
         roi_map = cv2.resize(
             maps[i], (roi_map_width, roi_map_height), interpolation=cv2.INTER_CUBIC
         )

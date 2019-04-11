@@ -1,4 +1,4 @@
-import copy
+import torch
 from torch.nn import functional as F
 
 from detectron2.structures import Instances
@@ -19,13 +19,16 @@ def detector_postprocess(results, output_height, output_width):
     Args:
         results (Instances): the raw outputs from the detector.
             `results.image_size` contains the input image resolution the detector sees.
+            This object will be modified in-place.
         output_height, output_width: the desired output resolution.
 
     Returns:
         Instances: the postprocessed output from the model, based on the output resolution
     """
+    # Faster on CPU, probably because paste_masks contains many cpu operations
+    results = results.to(torch.device("cpu"))
     scale_x, scale_y = (output_width / results.image_size[1], output_height / results.image_size[0])
-    results = Instances((output_height, output_width), **copy.deepcopy(results.get_fields()))
+    results = Instances((output_height, output_width), **results.get_fields())
 
     if results.has("pred_boxes"):
         output_boxes = results.pred_boxes

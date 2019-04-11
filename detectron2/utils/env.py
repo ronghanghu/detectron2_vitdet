@@ -1,7 +1,17 @@
 import importlib
 import os
+import importlib.util
+import sys
 
-from detectron2.utils.imports import import_file
+
+# from https://stackoverflow.com/questions/67631/how-to-import-a-module-given-the-full-path
+def _import_file(module_name, file_path, make_importable=False):
+    spec = importlib.util.spec_from_file_location(module_name, file_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    if make_importable:
+        sys.modules[module_name] = module
+    return module
 
 
 def setup_environment():
@@ -10,6 +20,24 @@ def setup_environment():
     the $DETECTRON2_ENV_MODULE environment variable, that performs
     custom setup work that may be necessary to their computing environment.
     """
+
+    # An environment option to disable `import cv2` globally,
+    # in case it leads to negative performance impact
+    disable_cv2 = int(os.environ.get("DETECTRON2_DISABLE_CV2", False))
+    if disable_cv2:
+        sys.modules["cv2"] = None
+    else:
+        # Disable opencl in opencv since its interaction with cuda often has negative effects
+        # This envvar is supported after OpenCV 3.4.0
+        os.environ["OPENCV_OPENCL_RUNTIME"] = "disabled"
+        try:
+            import cv2
+
+            if int(cv2.__version__.split(".")[0]) >= 3:
+                cv2.ocl.setUseOpenCL(False)
+        except ImportError:
+            pass
+
     custom_module_path = os.environ.get("DETECTRON2_ENV_MODULE")
 
     # TODO remove this after a while
@@ -32,7 +60,7 @@ def setup_custom_environment(custom_module):
     module, and run the setup function.
     """
     if custom_module.endswith(".py"):
-        module = import_file("detectron2.utils.env.custom_module", custom_module)
+        module = _import_file("detectron2.utils.env.custom_module", custom_module)
     else:
         module = importlib.import_module(custom_module)
     assert hasattr(module, "setup_environment") and callable(module.setup_environment), (
