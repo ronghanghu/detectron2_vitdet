@@ -158,9 +158,10 @@ def fast_rcnn_inference_single_image(
     """
     num_classes = scores.shape[1]
     # convert to Boxes to use the `clip` function ...
+    num_bbox_reg_classes = boxes.shape[1] // 4
     boxes = Boxes(boxes.reshape(-1, 4))
     boxes.clip(image_shape)
-    boxes = boxes.tensor.view(scores.shape[0], -1, 4)
+    boxes = boxes.tensor.view(-1, num_bbox_reg_classes, 4)
 
     device = scores.device
     results = []
