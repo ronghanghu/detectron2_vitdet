@@ -54,8 +54,12 @@ _C.INPUT.PIXEL_MEAN = [103.530, 116.280, 123.675]
 # Otherwise, you can use [57.375, 57.120, 58.395] (ImageNet std)
 _C.INPUT.PIXEL_STD = [1.0, 1.0, 1.0]
 
-# Whether the model needs BGR input or RGB
-_C.INPUT.BGR = True
+# Whether the model needs RGB, YUV, HSV etc.
+# Should be one of the modes defined here, as we use PIL to read the image:
+# https://pillow.readthedocs.io/en/stable/handbook/concepts.html#concept-modes
+# with BGR being the one exception. One can set image format to BGR, we will
+# internally use RGB for conversion and flip the channels over
+_C.INPUT.FORMAT = "BGR"
 
 
 # -----------------------------------------------------------------------------

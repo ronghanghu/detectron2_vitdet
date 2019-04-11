@@ -64,7 +64,7 @@ class DetectionTransform:
                 len(min_size) == 2
             ), "more than 2 ({}) min_size(s) are provided for ranges".format(len(min_size))
 
-        self.to_bgr = cfg.INPUT.BGR
+        self.img_format = cfg.INPUT.FORMAT
         tfms = [ResizeShortestEdge(min_size, max_size, sample_style)]
         if is_train:
             tfms.append(Flip(horiz=True))
@@ -90,9 +90,13 @@ class DetectionTransform:
                 3. Prepare the annotations to :class:`Instances`
         """
         dataset_dict = copy.deepcopy(dataset_dict)  # it will be modified by code below
-        image = Image.open(dataset_dict["file_name"]).convert("RGB")
+        conversion_image_format = self.image_format
+        if self.img_format == "BGR":
+            # PIL only supports RGB, so convert to RGB and flip channels over below
+            conversion_image_format = "RGB"
+        image = Image.open(dataset_dict["file_name"]).convert(conversion_image_format)
         image = np.asarray(image, dtype="uint8")
-        if self.to_bgr:
+        if self.img_format == "BGR":
             image = image[:, :, ::-1]
 
         image, tfm_params = self.tfms.transform_image_get_params(image)

@@ -62,7 +62,8 @@ class COCODemo(object):
             predictions (Instances): the detected objects.
         """
         # apply pre-processing to image
-        if not self.cfg.INPUT.BGR:  # whether the model expects BGR inputs or RGB
+        # whether the model expects BGR inputs or RGB
+        if self.cfg.INPUT.FORMAT == "RGB":
             original_image = original_image[:, :, ::-1]
         height, width = original_image.shape[:2]
         image = self.transforms.transform_image(original_image)
