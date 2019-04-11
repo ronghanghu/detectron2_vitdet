@@ -2,7 +2,7 @@ import logging
 import os
 import shutil
 import tempfile
-from torch.utils.model_zoo import HASH_REGEX, _download_url_to_file, urlparse
+from torch.hub import HASH_REGEX, _download_url_to_file, urlparse
 
 from detectron2.utils.comm import is_main_process, synchronize
 
