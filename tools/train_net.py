@@ -158,6 +158,13 @@ def do_test(cfg, model, is_final=True):
                 if is_final:
                     print_csv_format(results_per_dataset)
 
+    storage = get_event_storage()
+    for dataset_name, results_per_dataset in zip(cfg.DATASETS.TEST, results):
+        for task, metrics_per_task in results_per_dataset.items():
+            for metric, value in metrics_per_task.items():
+                key = "{}/{}/{}".format(dataset_name, task, metric)
+                storage.put_scalar(key, value, smoothing_hint=False)
+
     if is_final and cfg.TEST.EXPECTED_RESULTS and comm.is_main_process():
         assert len(results) == 1, "Results verification only supports one dataset!"
         verify_results(cfg, results[0])
