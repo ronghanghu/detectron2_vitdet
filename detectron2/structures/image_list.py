@@ -58,7 +58,8 @@ class ImageList(object):
         for t in tensors:
             assert isinstance(t, torch.Tensor), type(t)
             assert t.shape[1:-2] == tensors[0].shape[1:-2], t.shape
-        max_size = tuple(max(s) for s in zip(*[img.shape for img in tensors]))  # C, H, W
+        # per dimension maximum (H, W) or (C_1, ..., C_K, H, W) where K >= 1 among all tensors
+        max_size = tuple(max(s) for s in zip(*[img.shape for img in tensors]))
 
         if size_divisibility > 0:
             import math
@@ -77,7 +78,7 @@ class ImageList(object):
             image_size = image_sizes[0]
             padded = F.pad(
                 tensors[0],
-                [0, max_size[2] - image_size[1], 0, max_size[1] - image_size[0]],
+                [0, max_size[-1] - image_size[1], 0, max_size[-2] - image_size[0]],
                 value=pad_value,
             )
             batched_imgs = padded.unsqueeze_(0)
