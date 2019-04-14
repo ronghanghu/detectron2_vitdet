@@ -244,7 +244,7 @@ def do_train(cfg, model):
     # NOTE this format is parsed by grep
     logger.info(
         "Total training time: {} ({:.4f} s / it)".format(
-            total_time_str, total_training_time / (max_iter)
+            total_time_str, total_training_time / (max_iter - start_iter)
         )
     )
 
