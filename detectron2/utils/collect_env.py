@@ -1,8 +1,8 @@
-import sys
 import os
+import sys
+from collections import defaultdict
 import PIL
 import torch
-from collections import defaultdict
 from tabulate import tabulate
 
 

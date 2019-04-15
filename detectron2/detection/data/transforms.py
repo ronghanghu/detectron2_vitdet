@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from PIL import Image
 
-from detectron2.data.transforms import Flip, ImageTransformers, Normalize, ResizeShortestEdge
+from detectron2.data.transforms import Flip, ImageTransformers, ResizeShortestEdge
 from detectron2.structures import Boxes, BoxMode, Instances, Keypoints, PolygonMasks
 
 __all__ = ["DetectionTransform"]
@@ -42,10 +42,11 @@ def annotations_to_instances(annos, image_size):
     return target
 
 
-# TODO this should be more accessible to users and be customizable
 class DetectionTransform:
     """
     A callable which takes a dict produced by the detection dataset, and applies transformations.
+
+    Note that mean/std normalization is expected to done by the model instead of here.
     """
 
     def __init__(self, cfg, is_train=True):
@@ -68,7 +69,6 @@ class DetectionTransform:
         tfms = [ResizeShortestEdge(min_size, max_size, sample_style)]
         if is_train:
             tfms.append(Flip(horiz=True))
-        tfms.append(Normalize(mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD))
         self.tfms = ImageTransformers(tfms)
         self.is_train = is_train
         self.keypoint_flip_indices = _create_flip_indices(cfg)

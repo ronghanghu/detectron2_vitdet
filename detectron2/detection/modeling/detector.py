@@ -30,6 +30,9 @@ class GeneralizedRCNN(nn.Module):
         else:
             self.roi_heads = build_roi_heads(cfg)
 
+        pixel_mean = torch.Tensor(cfg.INPUT.PIXEL_MEAN).to(self.device).view(3, 1, 1)
+        pixel_std = torch.Tensor(cfg.INPUT.PIXEL_STD).to(self.device).view(3, 1, 1)
+        self.normalizer = lambda x: (x - pixel_mean) / pixel_std
         self.to(self.device)
 
     def forward(self, batched_inputs):
@@ -51,6 +54,7 @@ class GeneralizedRCNN(nn.Module):
                 :class:`Instances`.
         """
         images = [x["image"].to(self.device) for x in batched_inputs]
+        images = [self.normalizer(x) for x in images]
         images = ImageList.from_tensors(images, self.backbone.size_divisibility)
 
         if "targets" in batched_inputs[0]:

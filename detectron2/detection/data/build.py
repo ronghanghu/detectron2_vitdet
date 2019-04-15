@@ -4,12 +4,11 @@ import itertools
 import logging
 import numpy as np
 import torch.utils.data
+from tabulate import tabulate
 from termcolor import colored
 
 from detectron2.data import DatasetCatalog, DatasetFromList, MapDataset, MetadataCatalog, samplers
 from detectron2.utils.comm import get_world_size
-
-from tabulate import tabulate
 
 from .transforms import DetectionTransform
 
