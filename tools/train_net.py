@@ -39,7 +39,6 @@ from detectron2.utils.inference import (
     print_csv_format,
 )
 from detectron2.utils.logger import setup_logger
-from detectron2.utils.misc import mkdir
 
 
 class PeriodicCheckpointer(object):
@@ -146,7 +145,7 @@ def do_test(cfg, model, is_final=True):
         for dataset_name in cfg.DATASETS.TEST:
             if cfg.OUTPUT_DIR:
                 output_folder = os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
-                mkdir(output_folder)
+                os.makedirs(output_folder, exist_ok=True)
             else:
                 output_folder = None
 
@@ -259,7 +258,7 @@ def setup(args):
     colorful_logging = not args.no_color
     output_dir = cfg.OUTPUT_DIR
     if output_dir:
-        mkdir(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
 
     logger = setup_logger(output_dir, color=colorful_logging, distributed_rank=comm.get_rank())
     logger.info(
@@ -338,8 +337,7 @@ def parse_args(in_args=None):
     return parser.parse_args(in_args)
 
 
-def detectron2_launch():
-    args = parse_args()
+def detectron2_launch(args):
     launch(
         main,
         args.num_gpus,
@@ -351,4 +349,4 @@ def detectron2_launch():
 
 
 if __name__ == "__main__":
-    detectron2_launch()
+    detectron2_launch(parse_args())
