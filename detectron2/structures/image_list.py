@@ -88,4 +88,4 @@ class ImageList(object):
             for img, pad_img in zip(tensors, batched_imgs):
                 pad_img[..., : img.shape[-2], : img.shape[-1]].copy_(img)
 
-        return ImageList(batched_imgs, image_sizes)
+        return ImageList(batched_imgs.contiguous(), image_sizes)
