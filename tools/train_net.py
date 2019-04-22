@@ -149,8 +149,10 @@ def do_test(cfg, model, is_final=True):
             else:
                 output_folder = None
 
-            evaluator = get_evaluator(cfg, dataset_name, output_folder)
+            # NOTE: creating evaluator after dataset is loaded as there might
+            # be dependency.
             data_loader = build_detection_test_loader(cfg, dataset_name)
+            evaluator = get_evaluator(cfg, dataset_name, output_folder)
             results_per_dataset = inference_on_dataset(model, data_loader, evaluator)
             if comm.is_main_process():
                 results.append(results_per_dataset)
