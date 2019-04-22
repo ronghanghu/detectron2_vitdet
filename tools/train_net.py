@@ -171,6 +171,9 @@ def do_train(cfg, model):
         model, optimizer, scheduler, cfg.OUTPUT_DIR, cache_on_load=cfg.CACHE_MODELS_ON_LOAD
     )
     start_iter = checkpointer.load(cfg.MODEL.WEIGHT).get("iteration", 0)
+    max_iter = cfg.SOLVER.MAX_ITER
+    if start_iter == max_iter:
+        return
     periodic_checkpointer = PeriodicCheckpointer(
         checkpointer, cfg, cfg.SOLVER.CHECKPOINT_PERIOD, cfg.SOLVER.MAX_ITER
     )
@@ -179,7 +182,6 @@ def do_train(cfg, model):
 
     logger = logging.getLogger("detectron2.trainer")
     logger.info("Start training")
-    max_iter = cfg.SOLVER.MAX_ITER
     model.train()
     start_training_time = time.time()
     iter_end = time.time()

@@ -144,6 +144,7 @@ class COCOEvaluator(DatasetEvaluator):
         with f:
             json.dump(coco_results, f)
             f.flush()
+            os.fsync(f.fileno())
 
             self._logger.info("Evaluating predictions")
             for task in sorted(tasks):
