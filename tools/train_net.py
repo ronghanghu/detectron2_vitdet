@@ -32,6 +32,7 @@ from detectron2.detection.evaluation import CityscapesEvaluator, COCOEvaluator, 
 from detectron2.engine.launch import launch
 from detectron2.utils.collect_env import collect_env_info
 from detectron2.utils.events import EventStorage, JSONWriter, get_event_storage
+from detectron2.utils.checkpoint import PeriodicCheckpointer
 from detectron2.utils.inference import (
     DatasetEvaluators,
     inference_context,
@@ -39,25 +40,6 @@ from detectron2.utils.inference import (
     print_csv_format,
 )
 from detectron2.utils.logger import setup_logger
-
-
-class PeriodicCheckpointer(object):
-    def __init__(self, checkpointer, cfg, period, max_iter):
-        self.checkpointer = checkpointer
-        self.period = period
-        self.max_iter = max_iter
-        self.cfg = cfg.clone()
-
-    def step(self, iteration, **kwargs):
-        """
-        Args:
-            kwargs: extra data to save, same as in :meth:`Checkpointer.save`
-        """
-        additional_state = {"iteration": iteration, "cfg": self.cfg.dump()}
-        if iteration % self.period == 0:
-            self.checkpointer.save("model_{:07d}".format(iteration), **additional_state)
-        if iteration == self.max_iter:
-            self.checkpointer.save("model_final", **additional_state)
 
 
 class MetricPrinter:
@@ -177,7 +159,7 @@ def do_train(cfg, model):
     if start_iter == max_iter:
         return
     periodic_checkpointer = PeriodicCheckpointer(
-        checkpointer, cfg, cfg.SOLVER.CHECKPOINT_PERIOD, cfg.SOLVER.MAX_ITER
+        checkpointer, cfg.SOLVER.CHECKPOINT_PERIOD, max_iter=cfg.SOLVER.MAX_ITER
     )
 
     data_loader = build_detection_train_loader(cfg, start_iter=start_iter)
@@ -240,7 +222,7 @@ def do_train(cfg, model):
             if iteration - start_iter > 5 and (iteration % 20 == 0 or iteration == max_iter):
                 for writer in writers:
                     writer.write()
-            periodic_checkpointer.step(iteration)
+            periodic_checkpointer.step(iteration, cfg=cfg.dump())
 
     total_training_time = time.time() - start_training_time
     total_time_str = str(datetime.timedelta(seconds=total_training_time))

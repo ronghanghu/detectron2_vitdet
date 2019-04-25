@@ -170,3 +170,47 @@ class Checkpointer(object):
             k: v if isinstance(v, torch.Tensor) else torch.from_numpy(v) for k, v in model.items()
         }
         load_state_dict(self.model, model)
+
+
+class PeriodicCheckpointer(object):
+    """
+    Save checkpoints periodically.
+
+    When `.step(iteration)` is called, it will execute `checkpointer.save` on
+    the given checkpointer, if iteration is a multiple of period or if `max_iter` is reached.
+    """
+    def __init__(self, checkpointer, period, max_iter=None):
+        """
+        Args:
+            checkpointer (Checkpointer): the checkpointer object used to save checkpoints
+            period (int): the period to save checkpoint.
+            max_iter (int): maximum number of iterations.
+                When it is reached, a checkpoint named "model_final" will be saved.
+                Setting it to None will disable this feature.
+        """
+        self.checkpointer = checkpointer
+        self.period = int(period)
+        self.max_iter = max_iter
+
+    def step(self, iteration, **kwargs):
+        """
+        Perform the appropriate action at the given iteration.
+
+        Args:
+            iteration (int): the current iteration
+            kwargs: extra data to save, same as in :meth:`Checkpointer.save`
+        """
+        iteration = int(iteration)
+        additional_state = {"iteration": iteration}
+        additional_state.update(kwargs)
+        if iteration % self.period == 0:
+            self.checkpointer.save("model_{:07d}".format(iteration), **additional_state)
+        if iteration == self.max_iter:
+            self.checkpointer.save("model_final", **additional_state)
+
+    def save(self, name, **kwargs):
+        """
+        Same argument as :meth:`Checkpointer.save`.
+        Use this method to manually save checkpoints outside the schedule.
+        """
+        return self.checkpointer.save(name, **kwargs)
