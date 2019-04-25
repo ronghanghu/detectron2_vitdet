@@ -68,7 +68,7 @@ def cityscapes_files_to_dict(files, use_polygons=False):
     from cityscapesscripts.helpers.labels import id2label
 
     meta = MetadataCatalog.get("cityscapes")
-    CATEGORY_TO_ID = {c: i + 1 for i, c in enumerate(meta.class_names)}
+    CATEGORY_TO_ID = {c: i for i, c in enumerate(meta.class_names)}
 
     # See also the official annotation parsing scripts at
     # https://github.com/mcordts/cityscapesScripts/blob/master/cityscapesscripts/evaluation/instances2dict.py
@@ -140,7 +140,7 @@ if __name__ == "__main__":
     logger.info("Done loading {} samples.".format(len(dicts)))
 
     for d in dicts:
-        vis = draw_coco_dict(d, ["0"] + meta.class_names)
+        vis = draw_coco_dict(d, meta.class_names + ["0"])
         fpath = os.path.join("cityscapes-data-vis", os.path.basename(d["file_name"]))
         cv2.imwrite(fpath, vis)
 

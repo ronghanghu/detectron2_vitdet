@@ -51,7 +51,7 @@ def mask_rcnn_loss(pred_mask_logits, instances):
 
     Args:
         pred_mask_logits (Tensor): A tensor of shape (B, C, Hmask, Wmask), where B is the
-            total number of predicted masks in all images, C is the number of classes,
+            total number of predicted masks in all images, C is the number of foreground classes,
             and Hmask, Wmask are the height and width of the mask predictions. The values
             are logits.
         instances (list[Instances]): A list of N Instances, where N is the number of images
@@ -77,9 +77,6 @@ def mask_rcnn_loss(pred_mask_logits, instances):
 
     gt_classes = cat(gt_classes, dim=0)
     gt_mask_logits = cat(gt_mask_logits, dim=0)
-
-    # Masks should not be predicted for boxes that were not matched to a gt box.
-    assert torch.all(gt_classes > 0)
 
     # torch.mean (in binary_cross_entropy_with_logits) doesn't
     # accept empty tensors, so handle it separately
@@ -109,7 +106,7 @@ def mask_rcnn_inference(pred_mask_logits, pred_instances):
 
     Args:
         pred_mask_logits (Tensor): A tensor of shape (B, C, Hmask, Wmask), where B is the
-            total number of predicted masks in all images, C is the number of classes,
+            total number of predicted masks in all images, C is the number of foreground classes,
             and Hmask, Wmask are the height and width of the mask predictions. The values
             are logits.
         pred_instances (list[Instances]): A list of N Instances, where N is the number of images

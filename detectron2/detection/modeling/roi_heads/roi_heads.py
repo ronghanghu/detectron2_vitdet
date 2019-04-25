@@ -24,14 +24,16 @@ def build_roi_heads(cfg):
     return ROI_HEADS_REGISTRY.get(name)(cfg)
 
 
-def select_foreground_proposals(proposals):
+def select_foreground_proposals(proposals, bg_label):
     """
     Given a list of N Instances (for N images), each containing a `gt_classes` field,
-    return a list of Instances that contain only boxes with `gt_classes > 0`.
+    return a list of Instances that contain only boxes with `gt_classes != -1 &&
+    gt_classes != bg_label`.
 
     Args:
         proposals (list[Instances]): A list of N Instances, where N is the number of
             images in the batch.
+        bg_label: label index of background class.
     """
     assert isinstance(proposals, (list, tuple))
     assert isinstance(proposals[0], Instances)
@@ -40,7 +42,7 @@ def select_foreground_proposals(proposals):
     fg_selection_masks = []
     for proposals_per_image in proposals:
         gt_classes = proposals_per_image.gt_classes
-        fg_selection_mask = gt_classes > 0
+        fg_selection_mask = (gt_classes != -1) & (gt_classes != bg_label)
         fg_inds = fg_selection_mask.nonzero().squeeze(1)
         fg_proposals.append(proposals_per_image[fg_inds])
         fg_selection_masks.append(fg_selection_mask)
@@ -65,6 +67,7 @@ class ROIHeads(torch.nn.Module):
         self.test_nms_thresh          = cfg.MODEL.ROI_HEADS.NMS
         self.test_detections_per_img  = cfg.MODEL.ROI_HEADS.DETECTIONS_PER_IMG
         self.in_features              = cfg.MODEL.ROI_HEADS.IN_FEATURES
+        self.num_classes              = cfg.MODEL.ROI_HEADS.NUM_CLASSES
         self.feature_strides          = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_STRIDES)
         self.feature_channels         = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_CHANNELS)
         # fmt: on
@@ -108,12 +111,15 @@ class ROIHeads(torch.nn.Module):
                 )
 
                 # Label background (below the low threshold)
-                gt_classes[matched_idxs == Matcher.BELOW_LOW_THRESHOLD] = 0
+                gt_classes[matched_idxs == Matcher.BELOW_LOW_THRESHOLD] = self.num_classes
                 # Label ignore proposals (between low and high thresholds)
                 gt_classes[matched_idxs == Matcher.BETWEEN_THRESHOLDS] = -1
 
                 sampled_fg_inds, sampled_bg_inds = subsample_labels(
-                    gt_classes, self.batch_size_per_image, self.positive_sample_fraction
+                    gt_classes,
+                    self.batch_size_per_image,
+                    self.positive_sample_fraction,
+                    self.num_classes,
                 )
 
                 num_fg_samples.append(sampled_fg_inds.numel())
@@ -189,7 +195,6 @@ class Res5ROIHeads(ROIHeads):
         pooler_resolution          = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
         pooler_scales              = (1.0 / self.feature_strides[self.in_features[0]], )
         sampling_ratio             = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
-        num_classes                = cfg.MODEL.ROI_HEADS.NUM_CLASSES
         bbox_reg_weights           = cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS
         self.cls_agnostic_bbox_reg = cfg.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG
         self.mask_on               = cfg.MODEL.MASK_ON
@@ -203,7 +208,7 @@ class Res5ROIHeads(ROIHeads):
         self.res5 = resnet.build_resnet_head(cfg)
         out_channels = self.res5[-1].out_channels
         self.box_predictor = FastRCNNOutputHead(
-            out_channels, num_classes, self.cls_agnostic_bbox_reg
+            out_channels, self.num_classes, self.cls_agnostic_bbox_reg
         )
         self.box2box_transform = Box2BoxTransform(weights=bbox_reg_weights)
 
@@ -249,7 +254,9 @@ class Res5ROIHeads(ROIHeads):
             del features
             losses = outputs.losses()
             if self.mask_on:
-                proposals, fg_selection_masks = select_foreground_proposals(proposals)
+                proposals, fg_selection_masks = select_foreground_proposals(
+                    proposals, self.num_classes
+                )
                 # Since the ROI feature transform is shared between boxes and masks,
                 # we don't need to recompute features. The mask loss is only defined
                 # on foreground proposals, so we need to select out the foreground
@@ -285,7 +292,6 @@ class StandardROIHeads(ROIHeads):
         pooler_resolution                        = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
         pooler_scales                            = tuple(1.0 / self.feature_strides[k] for k in self.in_features)  # noqa
         sampling_ratio                           = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
-        num_classes                              = cfg.MODEL.ROI_HEADS.NUM_CLASSES
         bbox_reg_weights                         = cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS
         self.cls_agnostic_bbox_reg               = cfg.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG
         self.mask_on                             = cfg.MODEL.MASK_ON
@@ -319,7 +325,7 @@ class StandardROIHeads(ROIHeads):
         self.box_head = build_box_head(cfg)
 
         self.box_predictor = FastRCNNOutputHead(
-            self.box_head.output_size, num_classes, self.cls_agnostic_bbox_reg
+            self.box_head.output_size, self.num_classes, self.cls_agnostic_bbox_reg
         )
         self.box2box_transform = Box2BoxTransform(weights=bbox_reg_weights)
 
@@ -377,7 +383,7 @@ class StandardROIHeads(ROIHeads):
         if self.training:
             losses = outputs.losses()
             if self.mask_on or self.keypoint_on:
-                proposals, _ = select_foreground_proposals(proposals)
+                proposals, _ = select_foreground_proposals(proposals, self.num_classes)
             proposal_boxes = [x.proposal_boxes for x in proposals]
             # During training the same proposals used by the box head are used by
             # the mask and keypoint heads. The loss is only defined on positive proposals.

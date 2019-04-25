@@ -14,8 +14,7 @@ Shape shorthand in this module:
     N: number of images in the minibatch
     R: number of ROIs, combined over all images, in the minibatch
     Ri: number of ROIs in image i
-    K: number of classes including both background and foreground. E.g., if there
-        are 80 foreground classes (as in COCO), then K = 81.
+    K: number of foreground classes. E.g.,there are 80 foreground classes in COCO.
 
 Naming convention:
 
@@ -25,8 +24,8 @@ Naming convention:
     pred_class_logits: predicted class scores in [-inf, +inf]; use
         softmax(pred_class_logits) to estimate P(class).
 
-    gt_classes: ground-truth classification labels in [0, K), where 0 represents
-        the background class and [1, K) represent foreground object classes.
+    gt_classes: ground-truth classification labels in [0, K], where [0, K) represent
+        foreground object classes and K represents the background class.
 
     pred_proposal_deltas: predicted box2box transform deltas for transforming proposals
         to detection box predictions.
@@ -43,17 +42,17 @@ def fast_rcnn_losses(
 
     Args:
         gt_classes (Tensor): A tensor of shape (R,) storing ground-truth classification
-            labels in [0, K)
+            labels in [0, K], including K fg class and 1 bg class.
         proposal_deltas_gt (Tensor): shape (R, 4), row i represents ground-truth box2box
             transform targets (dx, dy, dw, dh) that map object instance i to its matched
             ground-truth box.
-        pred_class_logits (Tensor): A tensor for shape (R, K) storing predicted classification
-            logits for the K-way classification problem. Each row corresponds to a predicted
+        pred_class_logits (Tensor): A tensor for shape (R, K + 1) storing predicted classification
+            logits for the K+1-way classification problem. Each row corresponds to a predicted
             object instance.
         pred_proposal_deltas (Tensor): shape depends on cls_agnostic_bbox_reg,
-            1. not agnostic: Shape (R, 4 * k), each row stores a list of class-specific predicted
-            box2box transform [dx_0, dy_0, dw_0, dh_0, ..., dx_k, dy_k, dw_k, dh_k, ...] for each
-            class k in [0, K). (Predictions for the background class, k = 0, are meaningless.)
+            1. not agnostic: Shape (R, 4 * K), each row stores a list of class-specific
+            predicted box2box transform [dx_0, dy_0, dw_0, dh_0, ..., dx_k, dy_k, dw_k, dh_k, ...]
+            for each class k in [0, K). (No predictions for the background class.)
             2. agnostic: Shape (R, 4), the second row stores the class-agnostic (foreground)
             predicted box2box transform.
         cls_agnostic_bbox_reg (bool): Whether to use class agnostic for bbox regression.
@@ -65,19 +64,22 @@ def fast_rcnn_losses(
 
     loss_cls = F.cross_entropy(pred_class_logits, gt_classes, reduction="mean")
 
+    num_fg_classes = pred_class_logits.shape[1] - 1
+
     # Box delta loss is only computed between the prediction for the gt class k
-    # (if k > 0) and the target; there is no loss defined on predictions for
-    # non-gt classes and background.
+    # (if 0 <= k < num_fg_classes) and the target; there is no loss defined on predictions
+    # for non-gt classes and background.
     # Empty fg_inds produces a valid loss of zero as long as the size_average
     # arg to smooth_l1_loss is False (otherwise it uses torch.mean internally
     # and would produce a nan loss).
-    fg_inds = torch.nonzero(gt_classes > 0).squeeze(1)
+    fg_inds = torch.nonzero((gt_classes >= 0) & (gt_classes < num_fg_classes)).squeeze(1)
     fg_gt_classes = gt_classes[fg_inds]
     if cls_agnostic_bbox_reg:
         # pred_proposal_deltas only corresponds to foreground class for agnostic
         gt_class_cols = torch.tensor([0, 1, 2, 3], device=device)
     else:
-        # pred_proposal_deltas for class k are located in columns [4 * k : 4 * k + 4]
+        # pred_proposal_deltas for class k are located in columns [4 * k : 4 * k + 4].
+        # Note that we remove background class for pred_proposal_deltas.
         gt_class_cols = 4 * fg_gt_classes[:, None] + torch.tensor([0, 1, 2, 3], device=device)
 
     loss_box_reg = smooth_l1_loss(
@@ -114,7 +116,7 @@ def fast_rcnn_inference(
             cls_agnostic_bbox_reg, where Ri is the number of predicted objects for image i.
             Compatible with the output of :meth:`FastRCNNOutputs.predict_boxes`.
         scores (list[Tensor]): A list of Tensors of predicted class scores for each image.
-            Element i has shape (Ri, K), where Ri is the number of predicted objects
+            Element i has shape (Ri, K + 1), where Ri is the number of predicted objects
             for image i. Compatible with the output of :meth:`FastRCNNOutputs.predict_probs`.
         image_shapes (list[tuple]): A list of (width, height) tuples for each image in the batch.
         score_thresh (float): Only return detections with a confidence score exceeding this
@@ -156,9 +158,9 @@ def fast_rcnn_inference_single_image(
     Returns:
         Same as `fast_rcnn_inference`, but for only one image.
     """
-    num_classes = scores.shape[1]
-    # convert to Boxes to use the `clip` function ...
+    num_fg_classes = scores.shape[1] - 1
     num_bbox_reg_classes = boxes.shape[1] // 4
+    # Convert to Boxes to use the `clip` function ...
     boxes = Boxes(boxes.reshape(-1, 4))
     boxes.clip(image_shape)
     boxes = boxes.tensor.view(-1, num_bbox_reg_classes, 4)
@@ -166,9 +168,8 @@ def fast_rcnn_inference_single_image(
     device = scores.device
     results = []
     # Apply threshold on detection probabilities and apply NMS
-    # Skip j = 0, because it's the background class
     inds_all = scores > score_thresh
-    for j in range(1, num_classes):
+    for j in range(num_fg_classes):
         inds = inds_all[:, j].nonzero().squeeze(1)
         scores_j = scores[inds, j]
         if cls_agnostic_bbox_reg:
@@ -219,7 +220,7 @@ class FastRCNNOutputs(object):
         Args:
             box2box_transform (Box2BoxTransform): :class:`Box2BoxTransform` instance for
                 proposal-to-detection tranformations.
-            pred_class_logits (Tensor): A tensor of shape (R, K) storing the predicted class
+            pred_class_logits (Tensor): A tensor of shape (R, K + 1) storing the predicted class
                 logits for all R predicted object instances.
             pred_proposal_deltas (Tensor): A tensor of shape (R, K * 4) or (R, 4) for
                 class-specific or class-agnostic storing the predicted deltas that
@@ -231,7 +232,6 @@ class FastRCNNOutputs(object):
         """
         self.box2box_transform = box2box_transform
         self.num_preds_per_image = [len(p) for p in proposals]
-        self.num_classes = pred_class_logits.shape[1]
         self.pred_class_logits = pred_class_logits
         self.pred_proposal_deltas = pred_proposal_deltas
         self.cls_agnostic_bbox_reg = cls_agnostic_bbox_reg
@@ -252,8 +252,9 @@ class FastRCNNOutputs(object):
         """
         num_instances = self.gt_classes.numel()
         pred_classes = self.pred_class_logits.argmax(dim=1)
+        num_fg_classes = self.pred_class_logits.shape[1] - 1
 
-        fg_inds = self.gt_classes > 0
+        fg_inds = (self.gt_classes >= 0) & (self.gt_classes < num_fg_classes)
         num_fg = fg_inds.nonzero().numel()
         fg_gt_classes = self.gt_classes[fg_inds]
         fg_pred_classes = pred_classes[fg_inds]
@@ -289,7 +290,7 @@ class FastRCNNOutputs(object):
         """
         Returns:
             list[Tensor]: A list of Tensors of predicted class-specific or class-agnostic boxes
-                for each image. Element i has shape (Ri, K * 4) or (Ri, 2 * 4), where Ri is
+                for each image. Element i has shape (Ri, K * 4) or (Ri, 4), where Ri is
                 the number of predicted objects for image i.
         """
         boxes = self.box2box_transform.apply_deltas(
@@ -301,7 +302,7 @@ class FastRCNNOutputs(object):
         """
         Returns:
             list[Tensor]: A list of Tensors of predicted class probabilities for each image.
-                Element i has shape (Ri, K), where Ri is the number of predicted objects
+                Element i has shape (Ri, K + 1), where Ri is the number of predicted objects
                 for image i.
         """
         probs = F.softmax(self.pred_class_logits, dim=-1)
@@ -342,7 +343,7 @@ class FastRCNNOutputHead(nn.Module):
         """
         Args:
             input_size (int): channels, or (channels, height, width)
-            num_classes (int):
+            num_classes (int): number of foreground classes
             cls_agnostic_bbox_reg (bool): whether to use class agnostic for bbox regression
         """
         super(FastRCNNOutputHead, self).__init__()
@@ -350,7 +351,9 @@ class FastRCNNOutputHead(nn.Module):
         if not isinstance(input_size, int):
             input_size = np.prod(input_size)
 
-        self.cls_score = nn.Linear(input_size, num_classes)
+        # The prediction layer for num_classes foreground classes and one background class
+        # (hence + 1)
+        self.cls_score = nn.Linear(input_size, num_classes + 1)
         num_bbox_reg_classes = 1 if cls_agnostic_bbox_reg else num_classes
         self.bbox_pred = nn.Linear(input_size, num_bbox_reg_classes * 4)
 

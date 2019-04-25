@@ -22,7 +22,7 @@ class COCODemo(object):
 
         self.cpu_device = torch.device("cpu")
         self.confidence_threshold = confidence_threshold
-        self.category_names = ["__background"] + MetadataCatalog.get("coco").class_names
+        self.category_names = MetadataCatalog.get("coco").class_names + ["__background"]
 
     def build_transform(self):
         """

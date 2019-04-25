@@ -1,5 +1,6 @@
 import copy
 import logging
+import numpy as np
 import re
 
 from detectron2.utils.c2_model_loading import convert_basic_c2_names, load_c2_weights
@@ -112,7 +113,26 @@ def _convert_c2_detectron_names(weights):
     new_weights = {}
     for orig, renamed in zip(original_keys, layer_keys):
         logger.info("C2 name: {: <{}} mapped name: {}".format(orig, max_c2_key_size, renamed))
-        new_weights[renamed] = weights[orig]
+        if renamed.startswith("bbox_pred.") or renamed.startswith("mask_head.predictor."):
+            # remove the meaningless prediction weight for background class
+            new_start_idx = 4 if renamed.startswith("bbox_pred.") else 1
+            new_weights[renamed] = weights[orig][new_start_idx:]
+            logger.info(
+                "Remove prediction weight for background class in {}. The shape changes from "
+                "{} to {}.".format(
+                    renamed, tuple(weights[orig].shape), tuple(new_weights[renamed].shape)
+                )
+            )
+        elif renamed.startswith("cls_score."):
+            # move weights of bg class from original index 0 to last index
+            logger.info(
+                "Move classification weights for background class in {} from index 0 to "
+                "index {}.".format(renamed, weights[orig].shape[0] - 1)
+            )
+            new_weights[renamed] = np.concatenate((weights[orig][1:], weights[orig][:1]))
+        else:
+            new_weights[renamed] = weights[orig]
+
     return new_weights
 
 

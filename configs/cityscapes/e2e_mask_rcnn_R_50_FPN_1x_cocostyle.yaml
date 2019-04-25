@@ -5,7 +5,7 @@ MODEL:
   WEIGHT: "catalog://Caffe2Detectron/COCO/35858933/e2e_mask_rcnn_R-50-FPN_1x"
   MASK_ON: True
   ROI_HEADS:
-    NUM_CLASSES: 9
+    NUM_CLASSES: 8
 INPUT:
   MIN_SIZE_TRAIN: (800, 832, 864, 896, 928, 960, 992, 1024)
   MIN_SIZE_TRAIN_SAMPLING: "choice"

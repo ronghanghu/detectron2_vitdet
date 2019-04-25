@@ -333,7 +333,7 @@ class RPNOutputs(object):
             included in the sample.
             """
             pos_idx, neg_idx = subsample_labels(
-                label, self.batch_size_per_image, self.positive_fraction
+                label, self.batch_size_per_image, self.positive_fraction, 0
             )
             # Fill with the ignore label (-1), then set positive and negative labels
             label.fill_(-1)

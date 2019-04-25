@@ -98,7 +98,7 @@ def print_instances_class_histogram(dataset_dicts, class_names):
     histogram = np.zeros((num_classes,), dtype=np.int)
     for entry in dataset_dicts:
         annos = entry["annotations"]
-        classes = [x["category_id"] - 1 for x in annos if not x["iscrowd"]]
+        classes = [x["category_id"] for x in annos if not x["iscrowd"]]
         histogram += np.histogram(classes, bins=hist_bins)[0]
     data = [[class_names[i], v] for i, v in enumerate(histogram)]
     data.append(["total ({} categories)".format(num_classes), sum(x[1] for x in data)])

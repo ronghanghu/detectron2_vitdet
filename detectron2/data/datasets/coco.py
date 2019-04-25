@@ -30,7 +30,7 @@ def load_coco_json(json_file, image_root, dataset_name=None):
            The results do not have the "image" field.
         2. When `dataset_name=='coco'`,
            this function will translate COCO's
-           incontiguous category ids to contiguous ids in [1, 80].
+           incontiguous category ids to contiguous ids in [0, 79].
     """
     from pycocotools.coco import COCO
 
@@ -51,7 +51,7 @@ def load_coco_json(json_file, image_root, dataset_name=None):
         # and by convention they are always ignored.
         #
         # This is a hack to deal with COCO's id issue and translate
-        # the category ids to contiguous ids in [1, 80].
+        # the category ids to contiguous ids in [0, 80).
         # We apply this hack for COCO only.
         # If the ids are incontiuguos for datasets other than COCO,
         # we'll just assume that it is intended
@@ -60,11 +60,15 @@ def load_coco_json(json_file, image_root, dataset_name=None):
         # If for some reason this hack is needed for other datasets,
         # we can parse the json and use a different predicate in this if statement.
         if dataset_name == "coco":
-            id_map = {v: i + 1 for i, v in enumerate(cat_ids)}
+            id_map = {v: i for i, v in enumerate(cat_ids)}
             meta.json_id_to_contiguous_id = id_map
         else:
             if not (min(cat_ids) == 1 and max(cat_ids) == len(cat_ids)):
                 logger.warning("Category ids in annotations are not contiguous!")
+            assert min(cat_ids) == 1, "Category ids must start from 1!"
+            # Category ids in all datasets start from 0 as the same in COCO.
+            id_map = {v: v - 1 for v in cat_ids}
+            meta.json_id_to_contiguous_id = id_map
 
     # sort indices for reproducible results
     img_ids = sorted(list(coco_api.imgs.keys()))
@@ -244,6 +248,6 @@ if __name__ == "__main__":
     logger.info("Done loading {} samples.".format(len(dicts)))
 
     for d in dicts:
-        vis = draw_coco_dict(d, ["0"] + meta.class_names)
+        vis = draw_coco_dict(d, meta.class_names + ["0"])
         fpath = os.path.join("coco-data-vis", os.path.basename(d["file_name"]))
         cv2.imwrite(fpath, vis)

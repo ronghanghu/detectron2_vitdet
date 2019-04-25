@@ -1,16 +1,16 @@
 import torch
 
 
-def subsample_labels(labels, num_samples, positive_fraction):
+def subsample_labels(labels, num_samples, positive_fraction, bg_label):
     """
     Return `num_samples` random samples from `labels`, with a fraction of
     positives no larger than `positive_fraction`.
 
     Args:
         labels (Tensor): (N, ) label vector with values:
-              -1: ignore
-               0: background ("negative") class
-             > 0: one or more foreground ("positive") classes
+                     -1: ignore
+               bg_label: background ("negative") class
+              otherwise: one or more foreground ("positive") classes
         num_samples (int): The total number of labels with value >= 0 to return.
             Values that are not sampled will be filled with -1 (ignore).
         positive_fraction (float): The number of subsampled labels with values > 0
@@ -19,13 +19,14 @@ def subsample_labels(labels, num_samples, positive_fraction):
             In order words, if there are not enough positives, the sample is filled with
             negatives. If there are also not enough negatives, then as many elements are
             sampled as is possible.
+        bg_label (int): label index of background ("negative") class.
 
     Returns:
         pos_idx, neg_idx (Tensor): 1D indices. The total number of indices is `num_samples`
             if possible. The fraction of positive indices is `positive_fraction` if possible.
     """
-    positive = torch.nonzero(labels >= 1).squeeze(1)
-    negative = torch.nonzero(labels == 0).squeeze(1)
+    positive = torch.nonzero((labels != -1) & (labels != bg_label)).squeeze(1)
+    negative = torch.nonzero(labels == bg_label).squeeze(1)
 
     num_pos = int(num_samples * positive_fraction)
     # protect against not enough positive examples
