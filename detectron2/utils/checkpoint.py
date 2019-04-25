@@ -179,6 +179,7 @@ class PeriodicCheckpointer(object):
     When `.step(iteration)` is called, it will execute `checkpointer.save` on
     the given checkpointer, if iteration is a multiple of period or if `max_iter` is reached.
     """
+
     def __init__(self, checkpointer, period, max_iter=None):
         """
         Args:

@@ -30,9 +30,9 @@ from detectron2.detection import (
 )
 from detectron2.detection.evaluation import CityscapesEvaluator, COCOEvaluator, SemSegEvaluator
 from detectron2.engine.launch import launch
+from detectron2.utils.checkpoint import PeriodicCheckpointer
 from detectron2.utils.collect_env import collect_env_info
 from detectron2.utils.events import EventStorage, JSONWriter, get_event_storage
-from detectron2.utils.checkpoint import PeriodicCheckpointer
 from detectron2.utils.inference import (
     DatasetEvaluators,
     inference_context,
@@ -279,8 +279,7 @@ def main(args):
             model, save_dir=output_dir, cache_on_load=cfg.CACHE_MODELS_ON_LOAD
         )
         checkpointer.load(cfg.MODEL.WEIGHT)
-        do_test(cfg, model)
-        return
+        return do_test(cfg, model)
 
     distributed = comm.get_world_size() > 1
     if distributed:
