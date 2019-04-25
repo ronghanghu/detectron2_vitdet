@@ -245,6 +245,8 @@ _C.MODEL.ROI_MASK_HEAD.NORM = ""
 # The caller of mask head is responsible to fill this computed attribute
 # about the input size of the mask head.
 # _C.MODEL.ROI_MASK_HEAD.COMPUTED_INPUT_SIZE = (channel, height, width)
+# Whether to use class agnostic for mask prediction
+_C.MODEL.ROI_MASK_HEAD.CLS_AGNOSTIC_MASK = False
 
 
 # ---------------------------------------------------------------------------- #

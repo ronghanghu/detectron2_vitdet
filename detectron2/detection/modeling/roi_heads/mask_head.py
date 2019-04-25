@@ -45,19 +45,20 @@ def get_mask_ground_truth(gt_masks, pred_boxes, mask_side_len):
     return torch.stack(gt_mask_logits, dim=0).to(device=device)
 
 
-def mask_rcnn_loss(pred_mask_logits, instances):
+def mask_rcnn_loss(pred_mask_logits, instances, cls_agnostic_mask):
     """
     Compute the mask prediction loss defined in the Mask R-CNN paper.
 
     Args:
-        pred_mask_logits (Tensor): A tensor of shape (B, C, Hmask, Wmask), where B is the
-            total number of predicted masks in all images, C is the number of foreground classes,
-            and Hmask, Wmask are the height and width of the mask predictions. The values
-            are logits.
+        pred_mask_logits (Tensor): A tensor of shape (B, C, Hmask, Wmask) or (B, 1, Hmask, Wmask)
+            for class-specific or class-agnostic, where B is the total number of predicted masks
+            in all images, C is the number of foreground classes, and Hmask, Wmask are the height
+            and width of the mask predictions. The values are logits.
         instances (list[Instances]): A list of N Instances, where N is the number of images
             in the batch. These instances are in 1:1
             correspondence with the pred_mask_logits. The ground-truth labels (class, box, mask,
             ...) associated with each instance are stored in fields.
+        cls_agnostic_mask (bool): whether to use class agnostic for mask prediction.
 
     Returns:
         mask_loss (Tensor): A scalar tensor containing the loss.
@@ -84,7 +85,10 @@ def mask_rcnn_loss(pred_mask_logits, instances):
         return pred_mask_logits.sum() * 0
 
     indices = torch.arange(len(gt_classes))
-    pred_mask_logits = pred_mask_logits[indices, gt_classes]
+    if cls_agnostic_mask:
+        pred_mask_logits = pred_mask_logits[indices, 0]
+    else:
+        pred_mask_logits = pred_mask_logits[indices, gt_classes]
 
     # Log the training accuracy (using gt classes and 0.5 threshold)
     mask_accurate = (pred_mask_logits > 0.5) == gt_mask_logits
@@ -97,7 +101,7 @@ def mask_rcnn_loss(pred_mask_logits, instances):
     return mask_loss
 
 
-def mask_rcnn_inference(pred_mask_logits, pred_instances):
+def mask_rcnn_inference(pred_mask_logits, pred_instances, cls_agnostic_mask):
     """
     Convert pred_mask_logits to estimated foreground probability masks while also
     extracting only the masks for the predicted classes in pred_instances. For each
@@ -105,12 +109,13 @@ def mask_rcnn_inference(pred_mask_logits, pred_instances):
     new "pred_masks" field to pred_instances.
 
     Args:
-        pred_mask_logits (Tensor): A tensor of shape (B, C, Hmask, Wmask), where B is the
-            total number of predicted masks in all images, C is the number of foreground classes,
-            and Hmask, Wmask are the height and width of the mask predictions. The values
-            are logits.
+        pred_mask_logits (Tensor): A tensor of shape (B, C, Hmask, Wmask) or (B, 1, Hmask, Wmask)
+            for class-specific or class-agnostic, where B is the total number of predicted masks
+            in all images, C is the number of foreground classes, and Hmask, Wmask are the height
+            and width of the mask predictions. The values are logits.
         pred_instances (list[Instances]): A list of N Instances, where N is the number of images
             in the batch. Each Instances must have field "pred_classes".
+        cls_agnostic_mask (bool): whether to use class agnostic for mask prediction.
 
     Returns:
         None. pred_instances will contain an extra "pred_masks" field storing a mask of size (Hmask,
@@ -121,11 +126,12 @@ def mask_rcnn_inference(pred_mask_logits, pred_instances):
     """
     mask_probs_pred = pred_mask_logits.sigmoid()
 
-    # Select masks coresponding to the predicted classes
-    num_masks = pred_mask_logits.shape[0]
-    class_pred = cat([i.pred_classes for i in pred_instances])
-    indices = torch.arange(num_masks, device=class_pred.device)
-    mask_probs_pred = mask_probs_pred[indices, class_pred][:, None]
+    if not cls_agnostic_mask:
+        # Select masks corresponding to the predicted classes
+        num_masks = pred_mask_logits.shape[0]
+        class_pred = cat([i.pred_classes for i in pred_instances])
+        indices = torch.arange(num_masks, device=class_pred.device)
+        mask_probs_pred = mask_probs_pred[indices, class_pred][:, None]
 
     num_boxes_per_image = [len(i) for i in pred_instances]
     mask_probs_pred = mask_probs_pred.split(num_boxes_per_image, dim=0)
@@ -151,11 +157,12 @@ class MaskRCNNConvUpsampleHead(nn.Module):
         super(MaskRCNNConvUpsampleHead, self).__init__()
 
         # fmt: off
-        num_classes      = cfg.MODEL.ROI_HEADS.NUM_CLASSES
-        conv_dims        = cfg.MODEL.ROI_MASK_HEAD.CONV_DIM
-        norm             = cfg.MODEL.ROI_MASK_HEAD.NORM
-        num_conv         = cfg.MODEL.ROI_MASK_HEAD.NUM_CONV
-        input_channels   = cfg.MODEL.ROI_MASK_HEAD.COMPUTED_INPUT_SIZE[0]
+        num_classes       = cfg.MODEL.ROI_HEADS.NUM_CLASSES
+        conv_dims         = cfg.MODEL.ROI_MASK_HEAD.CONV_DIM
+        norm              = cfg.MODEL.ROI_MASK_HEAD.NORM
+        num_conv          = cfg.MODEL.ROI_MASK_HEAD.NUM_CONV
+        input_channels    = cfg.MODEL.ROI_MASK_HEAD.COMPUTED_INPUT_SIZE[0]
+        cls_agnostic_mask = cfg.MODEL.ROI_MASK_HEAD.CLS_AGNOSTIC_MASK
         # fmt: on
 
         self.conv_norm_relus = []
@@ -182,10 +189,16 @@ class MaskRCNNConvUpsampleHead(nn.Module):
             stride=2,
             padding=0,
         )
-        self.predictor = Conv2d(conv_dims, num_classes, kernel_size=1, stride=1, padding=0)
 
-        for layer in self.conv_norm_relus + [self.deconv, self.predictor]:
+        num_mask_classes = 1 if cls_agnostic_mask else num_classes
+        self.predictor = Conv2d(conv_dims, num_mask_classes, kernel_size=1, stride=1, padding=0)
+
+        for layer in self.conv_norm_relus + [self.deconv]:
             weight_init.c2_msra_fill(layer)
+        # use normal distribution initialization for mask prediction layer
+        nn.init.normal_(self.predictor.weight, std=0.001)
+        if self.predictor.bias is not None:
+            nn.init.constant_(self.predictor.bias, 0)
 
     def forward(self, x):
         for layer in self.conv_norm_relus:
