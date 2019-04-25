@@ -3,7 +3,7 @@ INPUT:
   PIXEL_MEAN: [102.9801, 115.9465, 122.7717]  # Used to train this model
 MODEL:
   META_ARCHITECTURE: "PanopticFPN"
-  WEIGHT: "/mnt/vol/gfsai-bistro-east/ai-group/bistro/gpu/lyttonhao/panoptic_R_50_FPN_coco_1x_remove_bg_weights/model_final_update_bg.pth"
+  WEIGHT: "/mnt/vol/gfsai-bistro-east/ai-group/bistro/gpu/akirillov/20190402/panoptic_R_50_FPN_coco_1x_configs/panoptic_R_50_FPN_1x.yaml.13_51_11.R4dPkV1u/output/model_final.pth"
   MASK_ON: True
   RESNETS:
     DEPTH: 50

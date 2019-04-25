@@ -136,6 +136,73 @@ def _convert_c2_detectron_names(weights):
     return new_weights
 
 
+def _convert_background_class(model):
+    """
+    Automatically convert the model for breakage in D14880072.
+    """
+    # TODO This is temporary. Remove this function after a while
+
+    keys = model.keys()
+    bbox_pred = [k for k in keys if "box_predictor.bbox_pred.weight" in k]
+    cls_score = [k for k in keys if "box_predictor.cls_score.weight" in k]
+
+    if len(bbox_pred) == 0:
+        return model
+
+    # assume you only have one mask r-cnn ..
+    assert len(bbox_pred) == len(cls_score) and len(bbox_pred) == 1
+    bbox_pred, cls_score = bbox_pred[0], cls_score[0]
+
+    num_class_bbox = model[bbox_pred].shape[0] / 4
+    num_class_cls = model[cls_score].shape[0]
+
+    if num_class_bbox == num_class_cls:
+        need_conversion = True  # this model is trained before D14880072.
+    else:
+        assert num_class_cls == num_class_bbox + 1
+        need_conversion = False
+
+    if not need_conversion:
+        return model
+
+    logger = logging.getLogger(__name__)
+    logger.warning(
+        "Your weights are in an old format! Please see D14880072 and convert your weights!"
+    )
+    logger.warning("Now attempting to automatically convert the weights for you ...")
+
+    for k in keys:
+        if "roi_heads.box_predictor.bbox_pred." in k:
+            # remove bbox regression weights/bias for bg class
+            old_weight = model[k]
+            new_weight = old_weight[4:]
+            logger.warn(
+                "Change {} from shape {} to {}.".format(
+                    k, tuple(old_weight.shape), tuple(new_weight.shape)
+                )
+            )
+        elif "roi_heads.mask_head.predictor." in k:
+            # remove mask prediction weights for bg class
+            old_weight = model[k]
+            new_weight = old_weight[1:]
+            logger.warn(
+                "Change {} from shape {} to {}.".format(
+                    k, tuple(old_weight.shape), tuple(new_weight.shape)
+                )
+            )
+        elif "roi_heads.box_predictor.cls_score." in k:
+            # move classification weights for bg class from the first index to the last index
+            old_weight = model[k]
+            new_weight = np.concatenate((old_weight[1:], old_weight[:1]))
+            logger.warn(
+                "Change BG in {} from index 0 to index {}.".format(k, new_weight.shape[0] - 1)
+            )
+        else:
+            continue
+        model[k] = new_weight
+    return model
+
+
 class DetectionCheckpointer(Checkpointer):
     def __init__(
         self,
@@ -166,6 +233,7 @@ class DetectionCheckpointer(Checkpointer):
         loaded = super()._load_file(f)
         if "model" not in loaded:
             loaded = {"model": loaded}
+        loaded["model"] = _convert_background_class(loaded["model"])
         return loaded
 
 
