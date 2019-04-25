@@ -235,9 +235,13 @@ if __name__ == "__main__":
     Usage:
         python -m detectron2.data.datasets.coco \
             path/to/json path/to/image_root dataset_name
+
+        "dataset_name" can be "coco", "coco_person", or other
+        pre-registered ones
     """
     from detectron2.utils.logger import setup_logger
     from detectron2.utils.vis import draw_coco_dict
+    import detectron2.detection.data.datasets  # noqa # add pre-defined metadata
     import cv2
     import sys
 
@@ -247,7 +251,9 @@ if __name__ == "__main__":
     dicts = load_coco_json(sys.argv[1], sys.argv[2], sys.argv[3])
     logger.info("Done loading {} samples.".format(len(dicts)))
 
+    dirname = "coco-data-vis"
+    os.makedirs(dirname, exist_ok=True)
     for d in dicts:
         vis = draw_coco_dict(d, meta.class_names + ["0"])
-        fpath = os.path.join("coco-data-vis", os.path.basename(d["file_name"]))
+        fpath = os.path.join(dirname, os.path.basename(d["file_name"]))
         cv2.imwrite(fpath, vis)

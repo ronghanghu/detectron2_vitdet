@@ -113,6 +113,16 @@ def draw_mask(img, mask, color, alpha=0.4, draw_contours=True):
     return img.astype(np.uint8)
 
 
+def draw_keypoints(img, keypoints):
+    """
+    Args:
+        keypoints (ndarray): Nx2 array, each row is an (x, y) coordinate.
+    """
+    for coord in keypoints:
+        cv2.circle(img, tuple(coord), thickness=-1, lineType=cv2.LINE_AA, radius=3, color=_GREEN)
+    return img
+
+
 def draw_coco_dict(dataset_dict, class_names=None):
     """
     Draw the instance annotations for an image.
@@ -147,6 +157,10 @@ def draw_coco_dict(dataset_dict, class_names=None):
     for num, i in enumerate(sorted_inds):
         anno = annos[i]
         bbox = anno["bbox"]
+        assert anno["bbox_mode"] in [
+            BoxMode.XYXY_ABS,
+            BoxMode.XYWH_ABS,
+        ], "Relative coordinates not yet supported in visualization."
         iscrowd = anno.get("iscrowd", 0)
         clsid = anno["category_id"]
         text = class_names[clsid] if class_names is not None else str(clsid)
@@ -165,7 +179,10 @@ def draw_coco_dict(dataset_dict, class_names=None):
             else:
                 img = draw_polygons(img, segs)
 
-    # TODO keypoints
+        kpts = anno.get("keypoints", None)
+        if kpts is not None and not iscrowd:
+            kpts = np.asarray(kpts).reshape(-1, 3)[:, :2]
+            img = draw_keypoints(img, kpts)
     return img
 
 
@@ -213,5 +230,8 @@ def draw_instance_predictions(img, predictions, class_names=None):
             mask_color = cmap[num % len(cmap)]
             img = draw_mask(img, mask, color=mask_color, draw_contours=True)
 
-        # TODO keypoints
+        if predictions.has("pred_keypoints"):
+            keypoints = predictions.pred_keypoints.tensor[i].numpy()
+            coords = keypoints.reshape(-1, 3)[:, :2]
+            img = draw_keypoints(img, coords)
     return img
