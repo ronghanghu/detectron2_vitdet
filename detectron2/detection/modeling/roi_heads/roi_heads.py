@@ -198,7 +198,6 @@ class Res5ROIHeads(ROIHeads):
         bbox_reg_weights           = cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS
         self.cls_agnostic_bbox_reg = cfg.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG
         self.mask_on               = cfg.MODEL.MASK_ON
-        self.cls_agnostic_mask     = cfg.MODEL.ROI_MASK_HEAD.CLS_AGNOSTIC_MASK
         # fmt: on
         assert not cfg.MODEL.KEYPOINT_ON
 
@@ -244,11 +243,7 @@ class Res5ROIHeads(ROIHeads):
         del feature_pooled
 
         outputs = FastRCNNOutputs(
-            self.box2box_transform,
-            pred_class_logits,
-            pred_proposal_deltas,
-            proposals,
-            self.cls_agnostic_bbox_reg,
+            self.box2box_transform, pred_class_logits, pred_proposal_deltas, proposals
         )
 
         if self.training:
@@ -265,7 +260,7 @@ class Res5ROIHeads(ROIHeads):
                 mask_features = box_features[torch.cat(fg_selection_masks, dim=0)]
                 del box_features
                 mask_logits = self.mask_head(mask_features)
-                losses["loss_mask"] = mask_rcnn_loss(mask_logits, proposals, self.cls_agnostic_mask)
+                losses["loss_mask"] = mask_rcnn_loss(mask_logits, proposals)
             return [], losses
         else:
             pred_instances = outputs.inference(
@@ -274,7 +269,7 @@ class Res5ROIHeads(ROIHeads):
             if self.mask_on:
                 x = self._shared_roi_transform(features, [x.pred_boxes for x in pred_instances])
                 mask_logits = self.mask_head(x)
-                mask_rcnn_inference(mask_logits, pred_instances, self.cls_agnostic_mask)
+                mask_rcnn_inference(mask_logits, pred_instances)
             return pred_instances, {}
 
 
@@ -299,7 +294,6 @@ class StandardROIHeads(ROIHeads):
         mask_pooler_resolution                   = cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION
         mask_pooler_scales                       = pooler_scales
         mask_sampling_ratio                      = cfg.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO
-        self.cls_agnostic_mask                   = cfg.MODEL.ROI_MASK_HEAD.CLS_AGNOSTIC_MASK
         self.keypoint_on                         = cfg.MODEL.KEYPOINT_ON
         keypoint_pooler_resolution               = cfg.MODEL.ROI_KEYPOINT_HEAD.POOLER_RESOLUTION
         keypoint_pooler_scales                   = pooler_scales
@@ -375,11 +369,7 @@ class StandardROIHeads(ROIHeads):
         del box_features
 
         outputs = FastRCNNOutputs(
-            self.box2box_transform,
-            pred_class_logits,
-            pred_proposal_deltas,
-            proposals,
-            self.cls_agnostic_bbox_reg,
+            self.box2box_transform, pred_class_logits, pred_proposal_deltas, proposals
         )
 
         if self.training:
@@ -392,7 +382,7 @@ class StandardROIHeads(ROIHeads):
             if self.mask_on:
                 mask_features = self.mask_pooler(features, proposal_boxes)
                 mask_logits = self.mask_head(mask_features)
-                losses["loss_mask"] = mask_rcnn_loss(mask_logits, proposals, self.cls_agnostic_mask)
+                losses["loss_mask"] = mask_rcnn_loss(mask_logits, proposals)
             if self.keypoint_on:
                 keypoint_features = self.keypoint_pooler(features, proposal_boxes)
                 keypoint_logits = self.keypoint_head(keypoint_features)
@@ -422,7 +412,7 @@ class StandardROIHeads(ROIHeads):
                 # applied to the top scoring box detections.
                 mask_features = self.mask_pooler(features, pred_boxes)
                 mask_logits = self.mask_head(mask_features)
-                mask_rcnn_inference(mask_logits, pred_instances, self.cls_agnostic_mask)
+                mask_rcnn_inference(mask_logits, pred_instances)
             if self.keypoint_on:
                 keypoint_features = self.keypoint_pooler(features, pred_boxes)
                 keypoint_logits = self.keypoint_head(keypoint_features)

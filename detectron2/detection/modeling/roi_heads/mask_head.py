@@ -45,7 +45,7 @@ def get_mask_ground_truth(gt_masks, pred_boxes, mask_side_len):
     return torch.stack(gt_mask_logits, dim=0).to(device=device)
 
 
-def mask_rcnn_loss(pred_mask_logits, instances, cls_agnostic_mask):
+def mask_rcnn_loss(pred_mask_logits, instances):
     """
     Compute the mask prediction loss defined in the Mask R-CNN paper.
 
@@ -58,25 +58,28 @@ def mask_rcnn_loss(pred_mask_logits, instances, cls_agnostic_mask):
             in the batch. These instances are in 1:1
             correspondence with the pred_mask_logits. The ground-truth labels (class, box, mask,
             ...) associated with each instance are stored in fields.
-        cls_agnostic_mask (bool): whether to use class agnostic for mask prediction.
 
     Returns:
         mask_loss (Tensor): A scalar tensor containing the loss.
     """
-    gt_classes = []
-    gt_mask_logits = []
+    cls_agnostic_mask = pred_mask_logits.size(1) == 1
+    total_num_masks = pred_mask_logits.size(0)
     mask_side_len = pred_mask_logits.size(2)
     assert pred_mask_logits.size(2) == pred_mask_logits.size(3), "Mask prediction must be square!"
+
+    gt_classes = []
+    gt_mask_logits = []
     for instances_per_image in instances:
-        gt_classes_per_image = instances_per_image.gt_classes.to(dtype=torch.int64)
+        if not cls_agnostic_mask:
+            gt_classes_per_image = instances_per_image.gt_classes.to(dtype=torch.int64)
+            gt_classes.append(gt_classes_per_image)
+
         gt_masks = instances_per_image.gt_masks
         gt_mask_logits_per_image = get_mask_ground_truth(
             gt_masks, instances_per_image.proposal_boxes, mask_side_len
         )
-        gt_classes.append(gt_classes_per_image)
         gt_mask_logits.append(gt_mask_logits_per_image)
 
-    gt_classes = cat(gt_classes, dim=0)
     gt_mask_logits = cat(gt_mask_logits, dim=0)
 
     # torch.mean (in binary_cross_entropy_with_logits) doesn't
@@ -84,10 +87,11 @@ def mask_rcnn_loss(pred_mask_logits, instances, cls_agnostic_mask):
     if gt_mask_logits.numel() == 0:
         return pred_mask_logits.sum() * 0
 
-    indices = torch.arange(len(gt_classes))
     if cls_agnostic_mask:
-        pred_mask_logits = pred_mask_logits[indices, 0]
+        pred_mask_logits = pred_mask_logits[:, 0]
     else:
+        indices = torch.arange(total_num_masks)
+        gt_classes = cat(gt_classes, dim=0)
         pred_mask_logits = pred_mask_logits[indices, gt_classes]
 
     # Log the training accuracy (using gt classes and 0.5 threshold)
@@ -101,7 +105,7 @@ def mask_rcnn_loss(pred_mask_logits, instances, cls_agnostic_mask):
     return mask_loss
 
 
-def mask_rcnn_inference(pred_mask_logits, pred_instances, cls_agnostic_mask):
+def mask_rcnn_inference(pred_mask_logits, pred_instances):
     """
     Convert pred_mask_logits to estimated foreground probability masks while also
     extracting only the masks for the predicted classes in pred_instances. For each
@@ -115,7 +119,6 @@ def mask_rcnn_inference(pred_mask_logits, pred_instances, cls_agnostic_mask):
             and width of the mask predictions. The values are logits.
         pred_instances (list[Instances]): A list of N Instances, where N is the number of images
             in the batch. Each Instances must have field "pred_classes".
-        cls_agnostic_mask (bool): whether to use class agnostic for mask prediction.
 
     Returns:
         None. pred_instances will contain an extra "pred_masks" field storing a mask of size (Hmask,
@@ -124,20 +127,23 @@ def mask_rcnn_inference(pred_mask_logits, pred_instances, cls_agnostic_mask):
             the predicted masks to the original image resolution and/or binarizing them, is left
             to the caller.
     """
-    mask_probs_pred = pred_mask_logits.sigmoid()
+    cls_agnostic_mask = pred_mask_logits.size(1) == 1
 
-    if not cls_agnostic_mask:
+    if cls_agnostic_mask:
+        mask_probs_pred = pred_mask_logits.sigmoid()
+    else:
         # Select masks corresponding to the predicted classes
         num_masks = pred_mask_logits.shape[0]
         class_pred = cat([i.pred_classes for i in pred_instances])
         indices = torch.arange(num_masks, device=class_pred.device)
-        mask_probs_pred = mask_probs_pred[indices, class_pred][:, None]
+        mask_probs_pred = pred_mask_logits[indices, class_pred][:, None].sigmoid()
+    # mask_probs_pred.shape: (B, 1, Hmask, Wmask)
 
     num_boxes_per_image = [len(i) for i in pred_instances]
     mask_probs_pred = mask_probs_pred.split(num_boxes_per_image, dim=0)
 
     for prob, instances in zip(mask_probs_pred, pred_instances):
-        instances.pred_masks = prob
+        instances.pred_masks = prob  # (1, Hmask, Wmask)
 
 
 @ROI_MASK_HEAD_REGISTRY.register()

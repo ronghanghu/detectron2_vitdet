@@ -34,9 +34,7 @@ Naming convention:
 """
 
 
-def fast_rcnn_losses(
-    gt_classes, proposal_deltas_gt, pred_class_logits, pred_proposal_deltas, cls_agnostic_bbox_reg
-):
+def fast_rcnn_losses(gt_classes, proposal_deltas_gt, pred_class_logits, pred_proposal_deltas):
     """
     Compute the classification and box delta losses defined in the Fast R-CNN paper.
 
@@ -49,17 +47,18 @@ def fast_rcnn_losses(
         pred_class_logits (Tensor): A tensor for shape (R, K + 1) storing predicted classification
             logits for the K+1-way classification problem. Each row corresponds to a predicted
             object instance.
-        pred_proposal_deltas (Tensor): shape depends on cls_agnostic_bbox_reg,
-            1. not agnostic: Shape (R, 4 * K), each row stores a list of class-specific
+        pred_proposal_deltas (Tensor): shape depends on whether we are doing
+            cls-agnoistic or cls-specific regression.
+            1. cls-specific: Shape (R, 4 * K), each row stores a list of class-specific
             predicted box2box transform [dx_0, dy_0, dw_0, dh_0, ..., dx_k, dy_k, dw_k, dh_k, ...]
             for each class k in [0, K). (No predictions for the background class.)
-            2. agnostic: Shape (R, 4), the second row stores the class-agnostic (foreground)
+            2. cls-agnostic: Shape (R, 4), the second row stores the class-agnostic (foreground)
             predicted box2box transform.
-        cls_agnostic_bbox_reg (bool): Whether to use class agnostic for bbox regression.
 
     Returns:
         loss_cls, loss_box_reg (Tensor): Scalar loss values.
     """
+    cls_agnostic_bbox_reg = pred_proposal_deltas.size(1) == 4
     device = pred_class_logits.device
 
     loss_cls = F.cross_entropy(pred_class_logits, gt_classes, reduction="mean")
@@ -73,13 +72,14 @@ def fast_rcnn_losses(
     # arg to smooth_l1_loss is False (otherwise it uses torch.mean internally
     # and would produce a nan loss).
     fg_inds = torch.nonzero((gt_classes >= 0) & (gt_classes < num_fg_classes)).squeeze(1)
-    fg_gt_classes = gt_classes[fg_inds]
     if cls_agnostic_bbox_reg:
         # pred_proposal_deltas only corresponds to foreground class for agnostic
         gt_class_cols = torch.tensor([0, 1, 2, 3], device=device)
     else:
+        fg_gt_classes = gt_classes[fg_inds]
         # pred_proposal_deltas for class k are located in columns [4 * k : 4 * k + 4].
-        # Note that we remove background class for pred_proposal_deltas.
+        # Note that compared to Detectron1,
+        # we do not perform bounding box regression for background classes.
         gt_class_cols = 4 * fg_gt_classes[:, None] + torch.tensor([0, 1, 2, 3], device=device)
 
     loss_box_reg = smooth_l1_loss(
@@ -104,17 +104,16 @@ def fast_rcnn_losses(
     return loss_cls, loss_box_reg
 
 
-def fast_rcnn_inference(
-    boxes, scores, image_shapes, score_thresh, nms_thresh, topk_per_image, cls_agnostic_bbox_reg
-):
+def fast_rcnn_inference(boxes, scores, image_shapes, score_thresh, nms_thresh, topk_per_image):
     """
     Call `fast_rcnn_inference_single_image` for all images.
 
     Args:
         boxes (list[Tensor]): A list of Tensors of predicted class-specific or class-agnostic
-            boxes for each image. Element i has shape (Ri, K * 4) or (Ri, 4) depending on
-            cls_agnostic_bbox_reg, where Ri is the number of predicted objects for image i.
-            Compatible with the output of :meth:`FastRCNNOutputs.predict_boxes`.
+            boxes for each image. Element i has shape (Ri, K * 4) if doing
+            class-specific regression, or (Ri, 4) if doing class-agnostic
+            regression, where Ri is the number of predicted objects for image i.
+            This is compatible with the output of :meth:`FastRCNNOutputs.predict_boxes`.
         scores (list[Tensor]): A list of Tensors of predicted class scores for each image.
             Element i has shape (Ri, K + 1), where Ri is the number of predicted objects
             for image i. Compatible with the output of :meth:`FastRCNNOutputs.predict_probs`.
@@ -124,7 +123,6 @@ def fast_rcnn_inference(
         nms_thresh (float):  The threshold to use for box non-maximum suppression. Value in [0, 1].
         topk_per_image (int): The number of top scoring detections to return. Set < 0 to return
             all detections.
-        cls_agnostic_bbox_reg (bool): Whether to use class agnostic for bbox regression.
 
     Returns:
         list[Instances]: A list of N box lists, one for each image in the batch, that stores the
@@ -132,20 +130,14 @@ def fast_rcnn_inference(
     """
     return [
         fast_rcnn_inference_single_image(
-            boxes_per_image,
-            scores_per_image,
-            image_shape,
-            score_thresh,
-            nms_thresh,
-            topk_per_image,
-            cls_agnostic_bbox_reg,
+            boxes_per_image, scores_per_image, image_shape, score_thresh, nms_thresh, topk_per_image
         )
         for scores_per_image, boxes_per_image, image_shape in zip(scores, boxes, image_shapes)
     ]
 
 
 def fast_rcnn_inference_single_image(
-    boxes, scores, image_shape, score_thresh, nms_thresh, topk_per_image, cls_agnostic_bbox_reg
+    boxes, scores, image_shape, score_thresh, nms_thresh, topk_per_image
 ):
     """
     Single-image inference. Return bounding-box detection results by thresholding
@@ -172,7 +164,7 @@ def fast_rcnn_inference_single_image(
     for j in range(num_fg_classes):
         inds = inds_all[:, j].nonzero().squeeze(1)
         scores_j = scores[inds, j]
-        if cls_agnostic_bbox_reg:
+        if num_bbox_reg_classes == 1:  # class-agnostic regression
             boxes_j = boxes[inds, 0, :]
         else:
             boxes_j = boxes[inds, j, :]
@@ -208,14 +200,7 @@ class FastRCNNOutputs(object):
     A class that stores information about outputs of a Fast R-CNN head.
     """
 
-    def __init__(
-        self,
-        box2box_transform,
-        pred_class_logits,
-        pred_proposal_deltas,
-        proposals,
-        cls_agnostic_bbox_reg,
-    ):
+    def __init__(self, box2box_transform, pred_class_logits, pred_proposal_deltas, proposals):
         """
         Args:
             box2box_transform (Box2BoxTransform): :class:`Box2BoxTransform` instance for
@@ -228,13 +213,11 @@ class FastRCNNOutputs(object):
             proposals (list[Instances]): A list of N Instancess, where Instances i stores the
                 proposals for image i. When training, each Instances has ground-truth labels
                 stored in the field "gt_classes" and "gt_boxes".
-            cls_agnostic_bbox_reg (bool): whether to use class agnostic for bbox regression.
         """
         self.box2box_transform = box2box_transform
         self.num_preds_per_image = [len(p) for p in proposals]
         self.pred_class_logits = pred_class_logits
         self.pred_proposal_deltas = pred_proposal_deltas
-        self.cls_agnostic_bbox_reg = cls_agnostic_bbox_reg
 
         # cat(..., dim=0) concatenates over all images in the batch
         self.proposals = Boxes.cat([p.proposal_boxes for p in proposals])
@@ -278,11 +261,7 @@ class FastRCNNOutputs(object):
             self.proposals.tensor, self.gt_boxes.tensor
         )
         loss_cls, loss_box_reg = fast_rcnn_losses(
-            self.gt_classes,
-            proposal_deltas_gt,
-            self.pred_class_logits,
-            self.pred_proposal_deltas,
-            self.cls_agnostic_bbox_reg,
+            self.gt_classes, proposal_deltas_gt, self.pred_class_logits, self.pred_proposal_deltas
         )
         return {"loss_cls": loss_cls, "loss_box_reg": loss_box_reg}
 
@@ -320,16 +299,9 @@ class FastRCNNOutputs(object):
         boxes = self.predict_boxes()
         scores = self.predict_probs()
         image_shapes = self.image_shapes
-        cls_agnostic_bbox_reg = self.cls_agnostic_bbox_reg
 
         return fast_rcnn_inference(
-            boxes,
-            scores,
-            image_shapes,
-            score_thresh,
-            nms_thresh,
-            topk_per_image,
-            cls_agnostic_bbox_reg,
+            boxes, scores, image_shapes, score_thresh, nms_thresh, topk_per_image
         )
 
 
