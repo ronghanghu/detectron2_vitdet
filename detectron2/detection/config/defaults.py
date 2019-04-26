@@ -145,6 +145,10 @@ _C.MODEL.RPN.BG_IOU_THRESHOLD = 0.3
 _C.MODEL.RPN.BATCH_SIZE_PER_IMAGE = 256
 # Target fraction of foreground (positive) examples per RPN minibatch
 _C.MODEL.RPN.POSITIVE_FRACTION = 0.5
+# Weights on (dx, dy, dw, dh) for normalizing RPN anchor regression targets
+_C.MODEL.RPN.BBOX_REG_WEIGHTS = (1.0, 1.0, 1.0, 1.0)
+# The transition point from L1 to L2 loss. Set to 0.0 to make the loss simply L1.
+_C.MODEL.RPN.SMOOTH_L1_BETA = 0.0
 # Number of top scoring RPN proposals to keep before applying NMS
 # When FPN is used, this is *per FPN level* (not total)
 _C.MODEL.RPN.PRE_NMS_TOPK_TRAIN = 12000
@@ -214,6 +218,8 @@ _C.MODEL.ROI_BOX_HEAD.NAME = ""
 # Default weights on (dx, dy, dw, dh) for normalizing bbox regression targets
 # These are empirically chosen to approximately lead to unit variance targets
 _C.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS = (10.0, 10.0, 5.0, 5.0)
+# The transition point from L1 to L2 loss. Set to 0.0 to make the loss simply L1.
+_C.MODEL.ROI_BOX_HEAD.SMOOTH_L1_BETA = 0.0
 _C.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION = 14
 _C.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO = 0
 _C.MODEL.ROI_BOX_HEAD.NUM_FC = 0

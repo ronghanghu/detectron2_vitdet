@@ -21,8 +21,12 @@ class Box2BoxTransform(object):
     def __init__(self, weights, scale_clamp=_DEFAULT_SCALE_CLAMP):
         """
         Args:
-            weights (4-element tuple)
-            scale_clamp (float)
+            weights (4-element tuple): Scaling factors that are applied to the
+                (dx, dy, dw, dh) deltas. In Fast R-CNN, these were originally set
+                such that the deltas have unit variance; now they are treated as
+                hyperparameters of the system.
+            scale_clamp (float): When predicting deltas, the predicted box scaling
+                factors (dw and dh) are clamped such that they are <= scale_clamp.
         """
         self.weights = weights
         self.scale_clamp = scale_clamp

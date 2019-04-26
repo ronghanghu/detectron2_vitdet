@@ -10,6 +10,10 @@ MODEL:
   ROI_KEYPOINT_HEAD:
     POOLER_RESOLUTION: 14
     POOLER_SAMPLING_RATIO: 2
+  ROI_BOX_HEAD:
+    SMOOTH_L1_BETA: 1.0  # Keypoint AP degrades when using plain L1 loss
+  RPN:
+    SMOOTH_L1_BETA: 0.2  # Keypoint AP degrades when using plain L1 loss
 DATASETS:
   TRAIN: ("keypoints_coco_2014_minival",)
   TEST: ("keypoints_coco_2014_minival",)

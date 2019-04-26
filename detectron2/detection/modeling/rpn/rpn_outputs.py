@@ -193,7 +193,13 @@ def _find_top_rpn_proposals_single_feature_map(
     return result
 
 
-def rpn_losses(objectness_logits_gt, anchor_deltas_gt, objectness_logits_pred, anchor_deltas_pred):
+def rpn_losses(
+    objectness_logits_gt,
+    anchor_deltas_gt,
+    objectness_logits_pred,
+    anchor_deltas_pred,
+    smooth_l1_beta,
+):
     """
     Args:
         objectness_logits_gt (Tensor): shape (N,), each element in {-1, 0, 1} representing
@@ -205,13 +211,16 @@ def rpn_losses(objectness_logits_gt, anchor_deltas_gt, objectness_logits_pred, a
             logit.
         anchor_deltas_pred (Tensor): shape (N, 4), each row is a predicted box2box
             transform (dx, dy, dw, dh).
+        smooth_l1_beta (float): The transition point between L1 and L2 loss in
+            the smooth L1 loss function. When set to 0, the loss becomes L1. When
+            set to +inf, the loss becomes constant 0.
 
     Returns:
         objectness_loss, localization_loss, both unnormalized (summed over samples).
     """
     pos_masks = objectness_logits_gt == 1
     localization_loss = smooth_l1_loss(
-        anchor_deltas_pred[pos_masks], anchor_deltas_gt[pos_masks], beta=1.0 / 9, size_average=False
+        anchor_deltas_pred[pos_masks], anchor_deltas_gt[pos_masks], smooth_l1_beta
     )
 
     valid_masks = objectness_logits_gt >= 0
@@ -236,6 +245,7 @@ class RPNOutputs(object):
         anchors,
         boundary_threshold=0,
         gt_boxes=None,
+        smooth_l1_beta=0.0,
     ):
         """
         Args:
@@ -260,6 +270,9 @@ class RPNOutputs(object):
                 number or < 0 to disable this behavior. Only needed in training.
             gt_boxes (list[Boxes], optional): A list of N elements. Element i a Boxes storing
                 the ground-truth ("gt") boxes for image i.
+            smooth_l1_beta (float): The transition point between L1 and L2 loss in
+                the smooth L1 loss function. When set to 0, the loss becomes L1. When
+                set to +inf, the loss becomes constant 0.
         """
         self.box2box_transform = box2box_transform
         self.anchor_matcher = anchor_matcher
@@ -273,6 +286,7 @@ class RPNOutputs(object):
         self.num_images = len(images)
         self.image_sizes = images.image_sizes
         self.boundary_threshold = boundary_threshold
+        self.smooth_l1_beta = smooth_l1_beta
 
     def _get_ground_truth(self):
         """
@@ -403,7 +417,11 @@ class RPNOutputs(object):
         )
 
         objectness_loss, localization_loss = rpn_losses(
-            objectness_logits_gt, anchor_deltas_gt, objectness_logits_pred, anchor_deltas_pred
+            objectness_logits_gt,
+            anchor_deltas_gt,
+            objectness_logits_pred,
+            anchor_deltas_pred,
+            self.smooth_l1_beta,
         )
         normalizer = 1.0 / (self.batch_size_per_image * self.num_images)
         loss_cls = objectness_loss * normalizer  # cls: classification loss

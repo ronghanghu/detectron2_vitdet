@@ -149,6 +149,7 @@ class RPN(nn.Module):
         self.min_box_side_len       = cfg.MODEL.RPN.MIN_SIZE
         self.batch_size_per_image   = cfg.MODEL.RPN.BATCH_SIZE_PER_IMAGE
         self.positive_fraction      = cfg.MODEL.RPN.POSITIVE_FRACTION
+        self.smooth_l1_beta         = cfg.MODEL.RPN.SMOOTH_L1_BETA
         # fmt: on
 
         # Map from self.training state to train/test settings
@@ -163,7 +164,7 @@ class RPN(nn.Module):
         self.boundary_threshold = cfg.MODEL.RPN.BOUNDARY_THRESH
 
         self.anchor_generator = build_anchor_generator(cfg)
-        self.box2box_transform = Box2BoxTransform(weights=(1.0, 1.0, 1.0, 1.0))
+        self.box2box_transform = Box2BoxTransform(weights=cfg.MODEL.RPN.BBOX_REG_WEIGHTS)
         self.anchor_matcher = Matcher(
             cfg.MODEL.RPN.FG_IOU_THRESHOLD,
             cfg.MODEL.RPN.BG_IOU_THRESHOLD,
@@ -200,6 +201,7 @@ class RPN(nn.Module):
             anchors,
             self.boundary_threshold,
             gt_boxes,
+            self.smooth_l1_beta,
         )
 
         if self.training:

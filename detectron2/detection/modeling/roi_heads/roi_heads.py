@@ -53,13 +53,6 @@ class ROIHeads(torch.nn.Module):
     def __init__(self, cfg):
         super(ROIHeads, self).__init__()
 
-        # match proposals to gt boxes
-        self.proposal_matcher = Matcher(
-            cfg.MODEL.ROI_HEADS.FG_IOU_THRESHOLD,
-            cfg.MODEL.ROI_HEADS.BG_IOU_THRESHOLD,
-            allow_low_quality_matches=False,
-        )
-
         # fmt: off
         self.batch_size_per_image     = cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE
         self.positive_sample_fraction = cfg.MODEL.ROI_HEADS.POSITIVE_FRACTION
@@ -70,7 +63,19 @@ class ROIHeads(torch.nn.Module):
         self.num_classes              = cfg.MODEL.ROI_HEADS.NUM_CLASSES
         self.feature_strides          = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_STRIDES)
         self.feature_channels         = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_CHANNELS)
+        self.cls_agnostic_bbox_reg    = cfg.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG
+        self.smooth_l1_beta           = cfg.MODEL.ROI_BOX_HEAD.SMOOTH_L1_BETA
         # fmt: on
+
+        # Matcher to assign box proposals to gt boxes
+        self.proposal_matcher = Matcher(
+            cfg.MODEL.ROI_HEADS.FG_IOU_THRESHOLD,
+            cfg.MODEL.ROI_HEADS.BG_IOU_THRESHOLD,
+            allow_low_quality_matches=False,
+        )
+
+        # Box2BoxTransform for bounding box regression
+        self.box2box_transform = Box2BoxTransform(weights=cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS)
 
     def label_and_sample_proposals(self, proposals, targets):
         """
@@ -195,8 +200,6 @@ class Res5ROIHeads(ROIHeads):
         pooler_resolution          = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
         pooler_scales              = (1.0 / self.feature_strides[self.in_features[0]], )
         sampling_ratio             = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
-        bbox_reg_weights           = cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS
-        self.cls_agnostic_bbox_reg = cfg.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG
         self.mask_on               = cfg.MODEL.MASK_ON
         # fmt: on
         assert not cfg.MODEL.KEYPOINT_ON
@@ -210,7 +213,6 @@ class Res5ROIHeads(ROIHeads):
         self.box_predictor = FastRCNNOutputHead(
             out_channels, self.num_classes, self.cls_agnostic_bbox_reg
         )
-        self.box2box_transform = Box2BoxTransform(weights=bbox_reg_weights)
 
         if self.mask_on:
             cfg = cfg.clone()
@@ -243,7 +245,11 @@ class Res5ROIHeads(ROIHeads):
         del feature_pooled
 
         outputs = FastRCNNOutputs(
-            self.box2box_transform, pred_class_logits, pred_proposal_deltas, proposals
+            self.box2box_transform,
+            pred_class_logits,
+            pred_proposal_deltas,
+            proposals,
+            self.smooth_l1_beta,
         )
 
         if self.training:
@@ -288,8 +294,6 @@ class StandardROIHeads(ROIHeads):
         pooler_resolution                        = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
         pooler_scales                            = tuple(1.0 / self.feature_strides[k] for k in self.in_features)  # noqa
         sampling_ratio                           = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
-        bbox_reg_weights                         = cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS
-        self.cls_agnostic_bbox_reg               = cfg.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG
         self.mask_on                             = cfg.MODEL.MASK_ON
         mask_pooler_resolution                   = cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION
         mask_pooler_scales                       = pooler_scales
@@ -323,7 +327,6 @@ class StandardROIHeads(ROIHeads):
         self.box_predictor = FastRCNNOutputHead(
             self.box_head.output_size, self.num_classes, self.cls_agnostic_bbox_reg
         )
-        self.box2box_transform = Box2BoxTransform(weights=bbox_reg_weights)
 
         if self.mask_on:
             self.mask_pooler = ROIPooler(
@@ -369,7 +372,11 @@ class StandardROIHeads(ROIHeads):
         del box_features
 
         outputs = FastRCNNOutputs(
-            self.box2box_transform, pred_class_logits, pred_proposal_deltas, proposals
+            self.box2box_transform,
+            pred_class_logits,
+            pred_proposal_deltas,
+            proposals,
+            self.smooth_l1_beta,
         )
 
         if self.training:

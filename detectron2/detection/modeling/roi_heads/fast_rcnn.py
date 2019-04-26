@@ -34,7 +34,9 @@ Naming convention:
 """
 
 
-def fast_rcnn_losses(gt_classes, proposal_deltas_gt, pred_class_logits, pred_proposal_deltas):
+def fast_rcnn_losses(
+    gt_classes, proposal_deltas_gt, pred_class_logits, pred_proposal_deltas, smooth_l1_beta
+):
     """
     Compute the classification and box delta losses defined in the Fast R-CNN paper.
 
@@ -54,6 +56,9 @@ def fast_rcnn_losses(gt_classes, proposal_deltas_gt, pred_class_logits, pred_pro
             for each class k in [0, K). (No predictions for the background class.)
             2. cls-agnostic: Shape (R, 4), the second row stores the class-agnostic (foreground)
             predicted box2box transform.
+        smooth_l1_beta (float): The transition point between L1 and L2 loss in
+            the smooth L1 loss function. When set to 0, the loss becomes L1. When
+            set to +inf, the loss becomes constant 0.
 
     Returns:
         loss_cls, loss_box_reg (Tensor): Scalar loss values.
@@ -85,8 +90,7 @@ def fast_rcnn_losses(gt_classes, proposal_deltas_gt, pred_class_logits, pred_pro
     loss_box_reg = smooth_l1_loss(
         pred_proposal_deltas[fg_inds[:, None], gt_class_cols],
         proposal_deltas_gt[fg_inds],
-        size_average=False,
-        beta=1,
+        smooth_l1_beta,
     )
     # The loss is normalized using the total number of regions (R), not the number
     # of foreground regions even though the box regression loss is only defined on
@@ -200,7 +204,9 @@ class FastRCNNOutputs(object):
     A class that stores information about outputs of a Fast R-CNN head.
     """
 
-    def __init__(self, box2box_transform, pred_class_logits, pred_proposal_deltas, proposals):
+    def __init__(
+        self, box2box_transform, pred_class_logits, pred_proposal_deltas, proposals, smooth_l1_beta
+    ):
         """
         Args:
             box2box_transform (Box2BoxTransform): :class:`Box2BoxTransform` instance for
@@ -213,11 +219,15 @@ class FastRCNNOutputs(object):
             proposals (list[Instances]): A list of N Instancess, where Instances i stores the
                 proposals for image i. When training, each Instances has ground-truth labels
                 stored in the field "gt_classes" and "gt_boxes".
+            smooth_l1_beta (float): The transition point between L1 and L2 loss in
+                the smooth L1 loss function. When set to 0, the loss becomes L1. When
+                set to +inf, the loss becomes constant 0.
         """
         self.box2box_transform = box2box_transform
         self.num_preds_per_image = [len(p) for p in proposals]
         self.pred_class_logits = pred_class_logits
         self.pred_proposal_deltas = pred_proposal_deltas
+        self.smooth_l1_beta = smooth_l1_beta
 
         # cat(..., dim=0) concatenates over all images in the batch
         self.proposals = Boxes.cat([p.proposal_boxes for p in proposals])
@@ -261,7 +271,11 @@ class FastRCNNOutputs(object):
             self.proposals.tensor, self.gt_boxes.tensor
         )
         loss_cls, loss_box_reg = fast_rcnn_losses(
-            self.gt_classes, proposal_deltas_gt, self.pred_class_logits, self.pred_proposal_deltas
+            self.gt_classes,
+            proposal_deltas_gt,
+            self.pred_class_logits,
+            self.pred_proposal_deltas,
+            self.smooth_l1_beta,
         )
         return {"loss_cls": loss_cls, "loss_box_reg": loss_box_reg}
 

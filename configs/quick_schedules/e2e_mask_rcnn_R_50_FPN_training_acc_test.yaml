@@ -18,4 +18,4 @@ SOLVER:
   STEPS: (5500, 5800)
   MAX_ITER: 6000
 TEST:
-  EXPECTED_RESULTS: [["bbox", "AP", 43.49, 0.7], ["segm", "AP", 37.17, 0.7]]
+  EXPECTED_RESULTS: [["bbox", "AP", 42.9, 0.7], ["segm", "AP", 35.8, 0.7]]
