@@ -124,9 +124,10 @@ class Boxes:
             Tensor: a binary vector which represents
                 whether each box is empty (False) or non-empty (True).
         """
+        TO_REMOVE = 1
         box = self.tensor
-        widths = box[:, 2] - box[:, 0]
-        heights = box[:, 3] - box[:, 1]
+        widths = (box[:, 2] + TO_REMOVE) - box[:, 0]
+        heights = (box[:, 3] + TO_REMOVE) - box[:, 1]
         keep = (widths > threshold) & (heights > threshold)
         return keep
 
