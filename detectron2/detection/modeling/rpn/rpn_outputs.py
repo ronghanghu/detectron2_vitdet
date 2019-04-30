@@ -184,6 +184,7 @@ def _find_top_rpn_proposals_single_feature_map(
         scores = objectness_logits_pred_i[keep]
         keep = nms(boxes.tensor, scores, nms_thresh)
         if post_nms_topk > 0:
+            # outputs of nms() are already sorted by scores
             keep = keep[:post_nms_topk]
 
         instances = Instances(image_size_i)
