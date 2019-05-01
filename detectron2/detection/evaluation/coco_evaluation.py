@@ -49,6 +49,7 @@ class COCOEvaluator(DatasetEvaluator):
 
     def reset(self):
         self._predictions = []
+        self._coco_results = []
 
     def _tasks_from_config(self, cfg):
         """
@@ -105,7 +106,9 @@ class COCOEvaluator(DatasetEvaluator):
                 return
 
         if self._output_dir:
-            torch.save(self._predictions, os.path.join(self._output_dir, "predictions.pth"))
+            torch.save(
+                self._predictions, os.path.join(self._output_dir, "instances_predictions.pth")
+            )
 
         tasks = set(self._tasks)
         self._results = OrderedDict()
@@ -125,31 +128,31 @@ class COCOEvaluator(DatasetEvaluator):
         Fill self._results with the metrics of the tasks.
         """
         self._logger.info("Preparing results for COCO format")
-        coco_results = prepare_for_coco_evaluation(self._predictions)
+        self._coco_results = prepare_for_coco_evaluation(self._predictions)
 
         # unmap the category ids for COCO
         if hasattr(self._dataset_meta, "json_id_to_contiguous_id"):
             reverse_id_mapping = {
                 v: k for k, v in self._dataset_meta.json_id_to_contiguous_id.items()
             }
-            for result in coco_results:
+            for result in self._coco_results:
                 result["category_id"] = reverse_id_mapping[result["category_id"]]
 
         if self._output_dir:
-            file_path = os.path.join(self._output_dir, "coco_results.json")
+            file_path = os.path.join(self._output_dir, "coco_instances_results.json")
             f = open(file_path, "w")
         else:
             f = tempfile.NamedTemporaryFile(suffix=".json")
             file_path = f.name
         with f:
-            json.dump(coco_results, f)
+            json.dump(self._coco_results, f)
             f.flush()
             os.fsync(f.fileno())
 
             self._logger.info("Evaluating predictions")
             for task in sorted(tasks):
                 res = evaluate_predictions_on_coco(
-                    self._coco_api, coco_results, file_path, self.kpt_oks_sigmas, task
+                    self._coco_api, self._coco_results, file_path, self.kpt_oks_sigmas, task
                 )
                 self._results[task] = res
 

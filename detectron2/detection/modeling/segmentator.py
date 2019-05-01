@@ -5,7 +5,11 @@ from detectron2.structures import ImageList
 
 from .backbone import build_backbone
 from .model_builder import META_ARCH_REGISTRY
-from .postprocessing import detector_postprocess, sem_seg_postprocess
+from .postprocessing import (
+    combine_semantic_and_instance_outputs,
+    detector_postprocess,
+    sem_seg_postprocess,
+)
 from .roi_heads.roi_heads import build_roi_heads
 from .rpn.rpn import build_rpn
 from .sem_seg_heads import build_sem_seg_head
@@ -88,9 +92,18 @@ class PanopticFPN(nn.Module):
 
         self.device = torch.device(cfg.MODEL.DEVICE)
 
+        # weights for all losses
         self.semantic_loss_scale = cfg.MODEL.PANOPTIC.SEMANTIC_LOSS_SCALE
         self.instance_loss_scale = cfg.MODEL.PANOPTIC.INSTANCE_LOSS_SCALE
         self.rpn_loss_scale = cfg.MODEL.PANOPTIC.RPN_LOSS_SCALE
+
+        # options when combining instance & semantic outputs
+        self.combine_on = cfg.MODEL.PANOPTIC.COMBINE_ON
+        self.combine_overlap_threshold = cfg.MODEL.PANOPTIC.COMBINE_OVERLAP_THRESHOLD
+        self.combine_stuff_area_limit = cfg.MODEL.PANOPTIC.COMBINE_STUFF_AREA_LIMIT
+        self.combine_instances_confidence_threshold = (
+            cfg.MODEL.PANOPTIC.COMBINE_INSTANCES_CONFIDENCE_THRESHOLD
+        )
 
         self.backbone = build_backbone(cfg)
         self.rpn = build_rpn(cfg)
@@ -154,5 +167,16 @@ class PanopticFPN(nn.Module):
             width = input_per_image.get("width")
             sem_seg_r = sem_seg_postprocess(sem_seg_result, image_size, height, width)
             detector_r = detector_postprocess(detector_result, height, width)
-            processed_results.append({"sem_seg": sem_seg_r, "detector": detector_r})
+
+            processed_results.append({"sem_seg": sem_seg_r, "detector": detector_r})  # TODO rename
+
+            if self.combine_on:
+                panoptic_r = combine_semantic_and_instance_outputs(
+                    detector_r,
+                    sem_seg_r,
+                    self.combine_overlap_threshold,
+                    self.combine_stuff_area_limit,
+                    self.combine_instances_confidence_threshold,
+                )
+                processed_results[-1]["panoptic_seg"] = panoptic_r
         return processed_results

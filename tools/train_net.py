@@ -28,7 +28,12 @@ from detectron2.detection import (
     set_global_cfg,
     verify_results,
 )
-from detectron2.detection.evaluation import CityscapesEvaluator, COCOEvaluator, SemSegEvaluator
+from detectron2.detection.evaluation import (
+    CityscapesEvaluator,
+    COCOEvaluator,
+    COCOPanopticEvaluator,
+    SemSegEvaluator,
+)
 from detectron2.engine.launch import launch
 from detectron2.utils.checkpoint import PeriodicCheckpointer
 from detectron2.utils.collect_env import collect_env_info
@@ -80,7 +85,7 @@ lr: {lr:.6f}  max mem: {memory:.0f}M \
 def get_evaluator(cfg, dataset_name, output_folder):
     evaluator_list = []
     evaluator_type = MetadataCatalog.get(dataset_name).evaluator_type
-    if evaluator_type in ["sem_seg", "panoptic_seg"]:
+    if evaluator_type in ["semantic_seg", "coco_panoptic_seg"]:
         evaluator_list.append(
             SemSegEvaluator(
                 dataset_name,
@@ -90,14 +95,19 @@ def get_evaluator(cfg, dataset_name, output_folder):
                 output_dir=output_folder,
             )
         )
-    if evaluator_type in ["coco", "panoptic_seg"]:
+    if evaluator_type in ["coco", "coco_panoptic_seg"]:
         evaluator_list.append(COCOEvaluator(dataset_name, cfg, True, output_folder))
-    if evaluator_type == "cityscapes":
+    if evaluator_type == "coco_panoptic_seg":
         # TODO add per-machine primitives (https://github.com/fairinternal/detectron2/issues/138)
         assert (
             torch.cuda.device_count() >= comm.get_rank()
+        ), "COCOPanopticEvaluator currently do not work with multiple machines."
+        evaluator_list.append(COCOPanopticEvaluator(dataset_name, output_folder))
+    if evaluator_type == "cityscapes":
+        assert (
+            torch.cuda.device_count() >= comm.get_rank()
         ), "CityscapesEvaluator currently do not work with multiple machines."
-        evaluator_list.append(CityscapesEvaluator(dataset_name))
+        return CityscapesEvaluator(dataset_name)
     if len(evaluator_list) == 0:
         raise NotImplementedError(
             "no Evaluator for the dataset {} with the type {}".format(dataset_name, evaluator_type)
@@ -131,8 +141,7 @@ def do_test(cfg, model, is_final=True):
             else:
                 output_folder = None
 
-            # NOTE: creating evaluator after dataset is loaded as there might
-            # be dependency.
+            # NOTE: creating evaluator after dataset is loaded as there might be dependency.
             data_loader = build_detection_test_loader(cfg, dataset_name)
             evaluator = get_evaluator(cfg, dataset_name, output_folder)
             results_per_dataset = inference_on_dataset(model, data_loader, evaluator)

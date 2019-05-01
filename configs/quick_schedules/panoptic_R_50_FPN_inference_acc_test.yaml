@@ -8,6 +8,6 @@ MODEL:
   RESNETS:
     DEPTH: 50
 DATASETS:
-  TEST: ("coco_2017_val_100_panoptic",)
+  TEST: ("coco_2017_val_100_panoptic_separated",)
 TEST:
-  EXPECTED_RESULTS: [["bbox", "AP", 44.12, 0.02], ["segm", "AP", 41.48, 0.02], ["sem_seg", "mIoU", 40.00, 0.02]]  # noqa
+  EXPECTED_RESULTS: [["bbox", "AP", 44.12, 0.02], ["segm", "AP", 41.48, 0.02], ["semantic_seg", "mIoU", 40.00, 0.02], ["panoptic_seg", "PQ", 39.10, 0.02]]  # noqa

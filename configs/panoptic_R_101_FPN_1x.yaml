@@ -8,7 +8,7 @@ MODEL:
   PANOPTIC:
     SEMANTIC_LOSS_SCALE: 0.5
 DATASETS:
-  TRAIN: ("coco_2017_train_panoptic",)
-  TEST: ("coco_2017_val_panoptic",)
+  TRAIN: ("coco_2017_train_panoptic_separated",)
+  TEST: ("coco_2017_val_panoptic_separated",)
 INPUT:
   MIN_SIZE_TRAIN: (640, 672, 704, 736, 768, 800)

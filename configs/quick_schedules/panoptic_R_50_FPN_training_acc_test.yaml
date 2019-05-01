@@ -8,8 +8,8 @@ MODEL:
   PANOPTIC:
     SEMANTIC_LOSS_SCALE: 0.5
 DATASETS:
-  TRAIN: ("coco_2017_val_panoptic",)
-  TEST: ("coco_2017_val_panoptic",)
+  TRAIN: ("coco_2017_val_panoptic_separated",)
+  TEST: ("coco_2017_val_panoptic_separated",)
 INPUT:
   MIN_SIZE_TRAIN: (640, 672, 704, 736, 768, 800)
 SOLVER:
@@ -19,4 +19,4 @@ SOLVER:
   STEPS: (5500,)
   MAX_ITER: 7000
 TEST:
-  EXPECTED_RESULTS: [["bbox", "AP", 46.4, 0.7], ["segm", "AP", 38.6, 0.7], ["sem_seg", "mIoU", 63.1, 0.9]]
+  EXPECTED_RESULTS: [["bbox", "AP", 46.4, 0.7], ["segm", "AP", 38.6, 0.7], ["semantic_seg", "mIoU", 63.1, 0.9], ["panoptic_seg", "PQ", 46.8, 0.7]]

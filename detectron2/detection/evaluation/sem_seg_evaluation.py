@@ -103,7 +103,7 @@ class SemSegEvaluator(DatasetEvaluator):
                 self._conf_matrix += conf_matrix
 
         if self._output_dir:
-            with open(os.path.join(self._output_dir, "sem_seg_predictions.json"), "w") as f:
+            with open(os.path.join(self._output_dir, "semantic_seg_predictions.json"), "w") as f:
                 json.dump(self._predictions, f)
 
         acc = np.zeros(self._num_classes, dtype=np.float)
@@ -129,8 +129,8 @@ class SemSegEvaluator(DatasetEvaluator):
         res["pACC"] = 100 * pacc
 
         if self._output_dir:
-            torch.save(res, os.path.join(self._output_dir, "sem_seg_evaluation.pth"))
-        results = OrderedDict({"sem_seg": res})
+            torch.save(res, os.path.join(self._output_dir, "semantic_seg_evaluation.pth"))
+        results = OrderedDict({"semantic_seg": res})
         self._logger.info(results)
         return results
 

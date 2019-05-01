@@ -1,3 +1,4 @@
 from .cityscapes_evaluation import CityscapesEvaluator
 from .coco_evaluation import COCOEvaluator
+from .panoptic_evaluation import COCOPanopticEvaluator
 from .sem_seg_evaluation import SemSegEvaluator

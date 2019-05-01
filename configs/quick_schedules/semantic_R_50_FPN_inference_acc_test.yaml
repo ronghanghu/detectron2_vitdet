@@ -7,4 +7,4 @@ MODEL:
 DATASETS:
   TEST: ("coco_2017_val_100_panoptic_stuffonly",)
 TEST:
-  EXPECTED_RESULTS: [["sem_seg", "mIoU", 37.66, 0.02], ["sem_seg", "mACC", 49.32, 0.02]]
+  EXPECTED_RESULTS: [["semantic_seg", "mIoU", 37.66, 0.02], ["semantic_seg", "mACC", 49.32, 0.02]]

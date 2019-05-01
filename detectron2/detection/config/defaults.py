@@ -345,6 +345,13 @@ _C.MODEL.PANOPTIC.INSTANCE_LOSS_SCALE = 1.0
 # Scaling of losses from RPN.
 _C.MODEL.PANOPTIC.RPN_LOSS_SCALE = 1.0
 
+# options when combining instance & semantic segmentation outputs
+_C.MODEL.PANOPTIC.COMBINE_ON = True
+_C.MODEL.PANOPTIC.COMBINE_OVERLAP_THRESHOLD = 0.5
+_C.MODEL.PANOPTIC.COMBINE_STUFF_AREA_LIMIT = 4096
+_C.MODEL.PANOPTIC.COMBINE_INSTANCES_CONFIDENCE_THRESHOLD = 0.5
+
+
 # ---------------------------------------------------------------------------- #
 # ResNe[X]t options (ResNets = {ResNet, ResNeXt}
 # Note that parts of a resnet may be used for both the backbone and the head
@@ -442,7 +449,6 @@ _C.TEST.KEYPOINT_OKS_SIGMAS = [
     0.089,
     0.089,
 ]
-
 
 # ---------------------------------------------------------------------------- #
 # Misc options

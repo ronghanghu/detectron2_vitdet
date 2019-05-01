@@ -176,7 +176,7 @@ def _convert_background_class(model):
             # remove bbox regression weights/bias for bg class
             old_weight = model[k]
             new_weight = old_weight[4:]
-            logger.warn(
+            logger.warning(
                 "Change {} from shape {} to {}.".format(
                     k, tuple(old_weight.shape), tuple(new_weight.shape)
                 )
@@ -185,7 +185,7 @@ def _convert_background_class(model):
             # remove mask prediction weights for bg class
             old_weight = model[k]
             new_weight = old_weight[1:]
-            logger.warn(
+            logger.warning(
                 "Change {} from shape {} to {}.".format(
                     k, tuple(old_weight.shape), tuple(new_weight.shape)
                 )
@@ -194,7 +194,7 @@ def _convert_background_class(model):
             # move classification weights for bg class from the first index to the last index
             old_weight = model[k]
             new_weight = np.concatenate((old_weight[1:], old_weight[:1]))
-            logger.warn(
+            logger.warning(
                 "Change BG in {} from index 0 to index {}.".format(k, new_weight.shape[0] - 1)
             )
         else:
