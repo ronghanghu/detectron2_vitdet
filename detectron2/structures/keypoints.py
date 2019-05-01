@@ -1,5 +1,6 @@
-import numpy as np
 import torch
+
+from detectron2.layers import interpolate
 
 # from PIL import Image  # TODO investigate how to avoid opencv dependency
 
@@ -128,7 +129,7 @@ def _keypoints_to_heatmap(keypoints, rois, heatmap_size):
     return heatmaps, valid
 
 
-# TODO: direct copy from caffe2 detectron.
+@torch.no_grad()
 def heatmaps_to_keypoints(maps, rois):
     """
     Extract predicted keypoint locations from heatmaps. Output has shape
@@ -142,60 +143,53 @@ def heatmaps_to_keypoints(maps, rois):
     offset_x = rois[:, 0]
     offset_y = rois[:, 1]
 
-    widths = rois[:, 2] - rois[:, 0]
-    heights = rois[:, 3] - rois[:, 1]
-    widths = np.maximum(widths, 1)
-    heights = np.maximum(heights, 1)
-    widths_ceil = np.ceil(widths)
-    heights_ceil = np.ceil(heights)
+    widths = (rois[:, 2] - rois[:, 0]).clamp(min=1)
+    heights = (rois[:, 3] - rois[:, 1]).clamp(min=1)
+    widths_ceil = widths.ceil()
+    heights_ceil = heights.ceil()
 
-    # NCHW to NHWC for use with OpenCV
-    num_keypoints = maps.shape[1]
-    maps = np.transpose(maps, [0, 2, 3, 1])
-    min_size = 0  # cfg.KRCNN.INFERENCE_MIN_SIZE
-    xy_preds = np.zeros((len(rois), 4, num_keypoints), dtype=np.float32)
-    for i in range(len(rois)):
-        if min_size > 0:
-            roi_map_width = int(np.maximum(widths_ceil[i], min_size))
-            roi_map_height = int(np.maximum(heights_ceil[i], min_size))
-        else:
-            roi_map_width = widths_ceil[i]
-            roi_map_height = heights_ceil[i]
-        width_correction = widths[i] / roi_map_width
-        height_correction = heights[i] / roi_map_height
+    num_rois, num_keypoints = maps.shape[:2]
+    xy_preds = maps.new_zeros(rois.shape[0], num_keypoints, 4)
 
-        # Resample the roi map to its size in the original image
-        import cv2
+    width_corrections = widths / widths_ceil
+    height_corrections = heights / heights_ceil
 
-        roi_map = cv2.resize(
-            maps[i], (roi_map_width, roi_map_height), interpolation=cv2.INTER_CUBIC
+    keypoints_idx = torch.arange(num_keypoints, device=maps.device)
+
+    for i in range(num_rois):
+        outsize = (int(heights_ceil[i]), int(widths_ceil[i]))
+        roi_map = interpolate(maps[[i]], size=outsize, mode="bicubic", align_corners=False).squeeze(
+            0
         )
 
-        # Bring back to CHW
-        roi_map = np.transpose(roi_map, [2, 0, 1])
-        roi_map_probs = scores_to_probs(roi_map.copy())
-        w = roi_map.shape[2]
-        for k in range(num_keypoints):
-            pos = roi_map[k, :, :].argmax()
-            x_int = pos % w
-            y_int = (pos - x_int) // w
-            assert roi_map_probs[k, y_int, x_int] == roi_map_probs[k, :, :].max()
-            x = (x_int + 0.5) * width_correction
-            y = (y_int + 0.5) * height_correction
-            xy_preds[i, 0, k] = x + offset_x[i]
-            xy_preds[i, 1, k] = y + offset_y[i]
-            xy_preds[i, 2, k] = roi_map[k, y_int, x_int]
-            xy_preds[i, 3, k] = roi_map_probs[k, y_int, x_int]
+        roi_map_probs = scores_to_probs(roi_map)
 
-    return np.transpose(xy_preds, [0, 2, 1])
+        w = roi_map.shape[2]
+        pos = roi_map.view(num_keypoints, -1).argmax(1)
+
+        x_int = pos % w
+        y_int = (pos - x_int) // w
+
+        assert (
+            roi_map_probs[keypoints_idx, y_int, x_int]
+            == roi_map_probs.view(num_keypoints, -1).max(1)[0]
+        ).all()
+
+        x = (x_int.float() + 0.5) * width_corrections[i]
+        y = (y_int.float() + 0.5) * height_corrections[i]
+
+        xy_preds[i, :, 0] = x + offset_x[i]
+        xy_preds[i, :, 1] = y + offset_y[i]
+        xy_preds[i, :, 2] = roi_map[keypoints_idx, y_int, x_int]
+        xy_preds[i, :, 3] = roi_map_probs[keypoints_idx, y_int, x_int]
+
+    return xy_preds
 
 
 def scores_to_probs(scores):
     """ Converts a CxHxW tensor of scores to probabilities spatially."""
-    channels = scores.shape[0]
-    for c in range(channels):
-        temp = scores[c, :, :]
-        max_score = temp.max()
-        temp = np.exp(temp - max_score) / np.sum(np.exp(temp - max_score))
-        scores[c, :, :] = temp
+    num_keypoints = scores.shape[0]
+    max_score, _ = scores.view(num_keypoints, -1).max(1)
+    tmp = (scores - max_score.view(num_keypoints, 1, 1)).exp_()
+    scores = tmp / tmp.sum((1, 2), keepdim=True)
     return scores

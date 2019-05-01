@@ -91,10 +91,7 @@ def keypoint_rcnn_inference(pred_keypoint_logits, pred_instances):
     # flatten all bboxes from all images together (list[Boxes] -> Nx4 tensor)
     bboxes_flat = cat([b.pred_boxes.tensor for b in pred_instances], dim=0)
 
-    keypoint_results = heatmaps_to_keypoints(
-        pred_keypoint_logits.cpu().detach().numpy(), bboxes_flat.cpu().detach().numpy()
-    )
-    keypoint_results = torch.from_numpy(keypoint_results).to(pred_keypoint_logits.device)
+    keypoint_results = heatmaps_to_keypoints(pred_keypoint_logits.detach(), bboxes_flat.detach())
     num_instances_per_image = [len(i) for i in pred_instances]
     keypoint_results = keypoint_results.split(num_instances_per_image, dim=0)
 
