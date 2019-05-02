@@ -1,14 +1,18 @@
 import functools
 import glob
+import json
 import logging
 import multiprocessing as mp
 import numpy as np
 import os
+from itertools import chain
 import pycocotools.mask as mask_util
 from PIL import Image
 
 from detectron2.structures import BoxMode
 from detectron2.utils.comm import get_world_size
+
+from shapely.geometry import MultiPolygon, Polygon
 
 from .. import MetadataCatalog
 
@@ -19,17 +23,23 @@ except ImportError:
     pass
 
 
-def load_cityscapes_instances(image_dir, gt_dir, use_polygons=False):
+def load_cityscapes_instances(image_dir, gt_dir, from_json=True, to_polygons=True):
     """
     Args:
         image_dir (str): path to the raw dataset. e.g., "~/cityscapes/leftImg8bit/train".
         gt_dir (str): path to the raw annotations. e.g., "~/cityscapes/gtFine/train".
-        use_polygons (bool): whether to represent the segmentation as masks
-            (cityscapes's format) or polygons (COCO's format).
+        from_json (bool): whether to read annotations from the raw json file or the png files.
+        to_polygons (bool): whether to represent the segmentation as polygons
+            (COCO's format) instead of masks (cityscapes's format).
 
     Returns:
         list[dict]: a list of dicts in "Detectron2 Dataset" format. (See DATASETS.md)
     """
+    if from_json:
+        assert to_polygons, (
+            "Cityscapes's json annotations are in polygon format. "
+            "Converting to mask format is not supported now."
+        )
     files = []
     for image_file in glob.glob(os.path.join(image_dir, "**/*.png")):
         suffix = "leftImg8bit.png"
@@ -40,7 +50,9 @@ def load_cityscapes_instances(image_dir, gt_dir, use_polygons=False):
 
         label_file = gt_dir + image_file[len(prefix) : -len(suffix)] + "gtFine_labelIds.png"
         assert os.path.isfile(label_file), label_file
-        files.append((image_file, instance_file, label_file))
+
+        json_file = gt_dir + image_file[len(prefix) : -len(suffix)] + "gtFine_polygons.json"
+        files.append((image_file, instance_file, label_file, json_file))
 
     logger = logging.getLogger(__name__)
     logger.info("Preprocessing cityscapes annotations ...")
@@ -48,75 +60,156 @@ def load_cityscapes_instances(image_dir, gt_dir, use_polygons=False):
     # take up to 10m on a 8GPU server.
     pool = mp.Pool(processes=mp.cpu_count() // get_world_size() // 2)
 
-    ret = pool.map(functools.partial(cityscapes_files_to_dict, use_polygons=use_polygons), files)
+    ret = pool.map(
+        functools.partial(cityscapes_files_to_dict, from_json=from_json, to_polygons=to_polygons),
+        files,
+    )
     logger.info("Loaded {} images from {}".format(len(ret), image_dir))
     return ret
 
 
-def cityscapes_files_to_dict(files, use_polygons=False):
+def cityscapes_files_to_dict(files, from_json, to_polygons):
     """
     Parse cityscapes annotation files to a dict.
 
     Args:
-        files (tuple): consists of (image_file, instance_id_file, label_id_file)
-        use_polygons (bool): whether to represent the segmentation as masks
-            (cityscapes's format) or polygons (COCO's format).
+        files (tuple): consists of (image_file, instance_id_file, label_id_file, json_file)
+        from_json (bool): whether to read annotations from the raw json file or the png files.
+        to_polygons (bool): whether to represent the segmentation as polygons
+            (COCO's format) instead of masks (cityscapes's format).
 
     Returns:
         A dict in Detectron2 Dataset format.
     """
-    from cityscapesscripts.helpers.labels import id2label
+    from cityscapesscripts.helpers.labels import id2label, name2label
 
     meta = MetadataCatalog.get("cityscapes")
     CATEGORY_TO_ID = {c: i for i, c in enumerate(meta.class_names)}
 
-    # See also the official annotation parsing scripts at
-    # https://github.com/mcordts/cityscapesScripts/blob/master/cityscapesscripts/evaluation/instances2dict.py
-    inst_image = np.asarray(Image.open(files[1]), order="F")
-    # ids < 24 are stuff labels (filtering them first is about 5% faster)
-    flattened_ids = np.unique(inst_image[inst_image >= 24])
+    image_file, instance_id_file, _, json_file = files
 
-    ret = {
-        "file_name": files[0],
-        "image_id": os.path.basename(files[0]),
-        "height": inst_image.shape[0],
-        "width": inst_image.shape[1],
-    }
     annos = []
 
-    for instance_id in flattened_ids:
-        # For non-crowd annotations, instance_id // 1000 is the label_id
-        # Crowd annotations have <1000 instance ids
-        label_id = instance_id // 1000 if instance_id >= 1000 else instance_id
-        label = id2label[label_id]
-        if not label.hasInstances or label.ignoreInEval:
-            continue
+    if from_json:
+        with open(json_file) as f:
+            jsonobj = json.load(f)
+        ret = {
+            "file_name": image_file,
+            "image_id": os.path.basename(image_file),
+            "height": jsonobj["imgHeight"],
+            "width": jsonobj["imgWidth"],
+        }
 
-        anno = {}
-        anno["iscrowd"] = instance_id < 1000
-        anno["category_id"] = CATEGORY_TO_ID[label.name]
+        # `polygons_union` contains the union of all valid polygons.
+        polygons_union = Polygon()
 
-        mask = np.asarray(inst_image == instance_id, dtype=np.uint8, order="F")
-
-        inds = np.nonzero(mask)
-        ymin, ymax = inds[0].min(), inds[0].max()
-        xmin, xmax = inds[1].min(), inds[1].max()
-        # TODO Maybe need an offset (xmax + 1 or 0.5 ?). Revisit this when we train the models.
-        anno["bbox"] = (xmin, ymin, xmax, ymax)
-        if xmax <= xmin or ymax <= ymin:
-            continue
-        anno["bbox_mode"] = BoxMode.XYXY_ABS
-        if use_polygons:
-            # This conversion comes from D4809743 and D5171122, when Mask-RCNN was first developed.
-            contours = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[-2]
-            polygons = [c.reshape(-1).tolist() for c in contours if len(c) >= 3]
-            # opencv's can produce invalid polygons
-            if len(polygons) == 0:
+        # CityscapesScripts draw the polygons in sequential order
+        # and each polygon *overwrites* existing ones. See
+        # (https://github.com/mcordts/cityscapesScripts/blob/master/cityscapesscripts/preparation/json2instanceImg.py) # noqa
+        # We use reverse order, and each polygon *avoids* early ones.
+        # This will resolve the ploygon overlaps in the same way as CityscapesScripts.
+        for obj in jsonobj["objects"][::-1]:
+            if "deleted" in obj:  # cityscapes data format specific
                 continue
-            anno["segmentation"] = polygons
-        else:
-            anno["segmentation"] = mask_util.encode(mask[:, :, None])[0]
-        annos.append(anno)
+            label_name = obj["label"]
+
+            try:
+                label = name2label[label_name]
+            except KeyError:
+                if label_name.endswith("group"):  # crowd area
+                    label = name2label[label_name[: -len("group")]]
+                else:
+                    raise
+            if label.id < 0:  # cityscapes data format
+                continue
+
+            poly_coord = np.asarray(obj["polygon"], dtype="f4")
+            poly = Polygon(poly_coord).buffer(0.0)
+
+            if not label.hasInstances or label.ignoreInEval:
+                # even if we won't store the polygon it still contributes to overlaps resolution
+                polygons_union = polygons_union.union(poly)
+                continue
+
+            # Take non-overlapping part of the polygon
+            poly_wo_overlaps = poly.difference(polygons_union)
+            if poly_wo_overlaps.is_empty:
+                continue
+            polygons_union = polygons_union.union(poly)
+
+            anno = {}
+            anno["iscrowd"] = label_name.endswith("group")
+            anno["category_id"] = CATEGORY_TO_ID[label.name]
+
+            if isinstance(poly_wo_overlaps, Polygon):
+                poly_list = [poly_wo_overlaps]
+            elif isinstance(poly_wo_overlaps, MultiPolygon):
+                poly_list = poly_wo_overlaps.geoms
+            else:
+                raise NotImplementedError("Unknown geometric structure {}".format(poly_wo_overlaps))
+
+            poly_coord = []
+            for poly_el in poly_list:
+                # COCO API can work only with exterior boundaries now, hence we store only them.
+                # TODO: store both exterior and interior boundaries once other parts of the
+                # codebase support holes in polygons.
+                poly_coord.append(list(chain(*poly_el.exterior.coords)))
+            anno["segmentation"] = poly_coord
+            (xmin, ymin, xmax, ymax) = poly_wo_overlaps.bounds
+
+            anno["bbox"] = (xmin, ymin, xmax, ymax)
+            anno["bbox_mode"] = BoxMode.XYXY_ABS
+
+            annos.append(anno)
+    else:
+        # See also the official annotation parsing scripts at
+        # https://github.com/mcordts/cityscapesScripts/blob/master/cityscapesscripts/evaluation/instances2dict.py  # noqa
+        inst_image = np.asarray(Image.open(instance_id_file), order="F")
+        # ids < 24 are stuff labels (filtering them first is about 5% faster)
+        flattened_ids = np.unique(inst_image[inst_image >= 24])
+
+        ret = {
+            "file_name": image_file,
+            "image_id": os.path.basename(image_file),
+            "height": inst_image.shape[0],
+            "width": inst_image.shape[1],
+        }
+
+        for instance_id in flattened_ids:
+            # For non-crowd annotations, instance_id // 1000 is the label_id
+            # Crowd annotations have <1000 instance ids
+            label_id = instance_id // 1000 if instance_id >= 1000 else instance_id
+            label = id2label[label_id]
+            if not label.hasInstances or label.ignoreInEval:
+                continue
+
+            anno = {}
+            anno["iscrowd"] = instance_id < 1000
+            anno["category_id"] = CATEGORY_TO_ID[label.name]
+
+            mask = np.asarray(inst_image == instance_id, dtype=np.uint8, order="F")
+
+            inds = np.nonzero(mask)
+            ymin, ymax = inds[0].min(), inds[0].max()
+            xmin, xmax = inds[1].min(), inds[1].max()
+            anno["bbox"] = (xmin, ymin, xmax, ymax)
+            if xmax <= xmin or ymax <= ymin:
+                continue
+            anno["bbox_mode"] = BoxMode.XYXY_ABS
+            if to_polygons:
+                # This conversion comes from D4809743 and D5171122,
+                # when Mask-RCNN was first developed.
+                contours = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[
+                    -2
+                ]
+                polygons = [c.reshape(-1).tolist() for c in contours if len(c) >= 3]
+                # opencv's can produce invalid polygons
+                if len(polygons) == 0:
+                    continue
+                anno["segmentation"] = polygons
+            else:
+                anno["segmentation"] = mask_util.encode(mask[:, :, None])[0]
+            annos.append(anno)
     ret["annotations"] = annos
     return ret
 
@@ -137,7 +230,7 @@ if __name__ == "__main__":
     logger = setup_logger(name=__name__)
     meta = MetadataCatalog.get("cityscapes")
 
-    dicts = load_cityscapes_instances(sys.argv[1], sys.argv[2], use_polygons=False)
+    dicts = load_cityscapes_instances(sys.argv[1], sys.argv[2], from_json=True, to_polygons=True)
     logger.info("Done loading {} samples.".format(len(dicts)))
 
     dirname = "cityscapes-data-vis"

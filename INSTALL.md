@@ -36,6 +36,9 @@ pip install --user 'git+https://github.com/cocodataset/cocoapi.git#subdirectory=
 # optionally, install cityscapescripts
 pip install --user cityscapescripts
 
+# optionally, install shapely to work with cityscapes' ground truth JSON files
+pip install --user shapely
+
 # Clone this repo, and run:
 python setup.py build develop
 # This will install the lib with
@@ -46,5 +49,3 @@ python setup.py build develop
 # or if you are on macOS
 # MACOSX_DEPLOYMENT_TARGET=10.9 CC=clang CXX=clang++ python setup.py build develop
 ```
-
-

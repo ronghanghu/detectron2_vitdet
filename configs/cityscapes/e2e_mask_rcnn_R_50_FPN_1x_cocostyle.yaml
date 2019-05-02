@@ -13,9 +13,9 @@ INPUT:
   MAX_SIZE_TRAIN: 2048
   MAX_SIZE_TEST: 2048
 DATASETS:
-  # Uncomment to use raw annotations:
-  # TRAIN: ("cityscapes_fine_instanceonly_seg_train",)
-  TRAIN: ("cityscapes_fine_instanceonly_seg_train_cocostyle",)
+  # Uncomment to use coco style annotations:
+  # TRAIN: ("cityscapes_fine_instanceonly_seg_train_cocostyle",)
+  TRAIN: ("cityscapes_fine_instanceonly_seg_train",)
 
   # Evaluate with both coco API and cityscapes API
   TEST: ("cityscapes_fine_instanceonly_seg_val", "cityscapes_fine_instanceonly_seg_val_cocostyle")

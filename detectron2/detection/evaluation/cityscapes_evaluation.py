@@ -48,12 +48,12 @@ class CityscapesEvaluator(DatasetEvaluator):
             basename = os.path.splitext(os.path.basename(file_name))[0]
             pred_txt = os.path.join(self._temp_dir, basename + "_pred.txt")
 
-            output = output.to(self._cpu_device)
+            output = output["detector"].to(self._cpu_device)
             num_instances = len(output)
             with open(pred_txt, "w") as fout:
                 for i in range(num_instances):
                     pred_class = output.pred_classes[i]
-                    class_name = self._dataset_meta.class_names[pred_class - 1]
+                    class_name = self._dataset_meta.class_names[pred_class]
                     class_id = name2label[class_name].id
                     score = output.scores[i]
                     mask = output.pred_masks[i].numpy()
