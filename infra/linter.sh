@@ -2,7 +2,7 @@
 
 # Run this script at project root by "./infra/linter.sh" before you commit
 
-isort -y -sp .
+isort -y -sp . --skip datasets
 black -l 100 .
 flake8 .
 

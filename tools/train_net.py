@@ -176,6 +176,8 @@ def do_train(cfg, model):
     logger = logging.getLogger("detectron2.trainer")
     logger.info("Start training")
     model.train()
+
+    total_training_time = 0
     start_training_time = time.time()
     iter_end = time.time()
 
@@ -209,14 +211,18 @@ def do_train(cfg, model):
             optimizer.step()
 
             batch_time = time.time() - iter_end
-            iter_end = time.time()
+            total_training_time += batch_time
             # Consider the first several iteration as warmup and don't time it.
             if iteration <= 3:
-                start_training_time = time.time()
+                total_training_time = 0
             else:
                 storage.put_scalars(time=batch_time, data_time=data_time)
 
-            if cfg.TEST.EVAL_PERIOD > 0 and iteration % cfg.TEST.EVAL_PERIOD == 0:
+            if (
+                cfg.TEST.EVAL_PERIOD > 0
+                and iteration % cfg.TEST.EVAL_PERIOD == 0
+                and iteration != max_iter
+            ):
                 results = do_test(cfg, model, is_final=False)
 
                 for dataset_name, results_per_dataset in zip(cfg.DATASETS.TEST, results):
@@ -232,15 +238,22 @@ def do_train(cfg, model):
                 for writer in writers:
                     writer.write()
             periodic_checkpointer.step(iteration, cfg=cfg.dump())
+            iter_end = time.time()
 
-    total_training_time = time.time() - start_training_time
-    total_time_str = str(datetime.timedelta(seconds=total_training_time))
+    total_training_time_str = str(datetime.timedelta(seconds=total_training_time))
     # NOTE this format is parsed by grep
     logger.info(
-        "Total training time: {} ({:.4f} s / it)".format(
-            total_time_str, total_training_time / (max_iter - start_iter)
+        "Overall training speed: {} iterations in {} ({:.4f} s / it)".format(
+            max_iter - start_iter,
+            total_training_time_str,
+            total_training_time / (max_iter - start_iter),
         )
     )
+
+    total_time_spent = str(
+        datetime.timedelta(seconds=time.time() - start_training_time)
+    )  # This includes time for checkpointing, evaluation, etc.
+    logger.info("Total training time: {}".format(total_time_spent))
 
 
 def setup(args):

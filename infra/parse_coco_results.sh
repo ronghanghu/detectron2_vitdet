@@ -11,7 +11,7 @@ fi
 # [12/15 11:49:03] inference INFO: Total inference time: 0:01:25.326167 (0.13652186737060548 s / img per device, on 8 devices)
 
 # training time
-trainspeed=$(grep -o 'Total training.*' "$LOG" | grep -Eo '\(.*\)' | grep -o '[0-9\.]*')
+trainspeed=$(grep -o 'Overall training.*' "$LOG" | grep -Eo '\(.*\)' | grep -o '[0-9\.]*')
 echo "Training speed: $trainspeed s/it"
 
 # inference time: there could be multiple inference during training
