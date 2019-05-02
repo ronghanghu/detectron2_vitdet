@@ -12,8 +12,6 @@ from PIL import Image
 from detectron2.structures import BoxMode
 from detectron2.utils.comm import get_world_size
 
-from shapely.geometry import MultiPolygon, Polygon
-
 from .. import MetadataCatalog
 
 try:
@@ -91,6 +89,8 @@ def cityscapes_files_to_dict(files, from_json, to_polygons):
     annos = []
 
     if from_json:
+        from shapely.geometry import MultiPolygon, Polygon
+
         with open(json_file) as f:
             jsonobj = json.load(f)
         ret = {
