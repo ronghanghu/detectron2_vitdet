@@ -163,7 +163,8 @@ def do_train(cfg, model):
     checkpointer = DetectionCheckpointer(
         model, optimizer, scheduler, cfg.OUTPUT_DIR, cache_on_load=cfg.CACHE_MODELS_ON_LOAD
     )
-    start_iter = checkpointer.load(cfg.MODEL.WEIGHT).get("iteration", 0)
+    file = checkpointer.get_checkpoint_file() if checkpointer.has_checkpoint() else cfg.MODEL.WEIGHT
+    start_iter = checkpointer.load(file).get("iteration", 0)
     max_iter = cfg.SOLVER.MAX_ITER
     if start_iter == max_iter:
         return

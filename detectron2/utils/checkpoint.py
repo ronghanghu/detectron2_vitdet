@@ -64,13 +64,13 @@ class Checkpointer(object):
 
     def load(self, f=None):
         """
-        Load from latest checkpoint.
-        When a checkpoint does not exist, load from the provided file.
+        Load from the specified checkpoint. If one is not provided,
+        load the latest available checkpoint.
 
         Returns:
             dict: extra data loaded from the checkpoint, other than model, optimizer and scheduler.
         """
-        if self.has_checkpoint():
+        if not f and self.has_checkpoint():
             # override argument with existing checkpoint
             f = self.get_checkpoint_file()
         if not f:
