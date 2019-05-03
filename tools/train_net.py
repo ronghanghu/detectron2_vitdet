@@ -175,7 +175,7 @@ def do_train(cfg, model):
     data_loader = build_detection_train_loader(cfg, start_iter=start_iter)
 
     logger = logging.getLogger("detectron2.trainer")
-    logger.info("Start training")
+    logger.info("Starting training from iteration {}".format(start_iter))
     model.train()
 
     total_training_time = 0
@@ -200,7 +200,7 @@ def do_train(cfg, model):
 
             losses = sum(loss for loss in loss_dict.values())
             if torch.isnan(losses).any():
-                raise FloatingPointError("Losses become NaN at iteration={}!".format(iteration))
+                raise FloatingPointError("Loss became NaN at iteration={}!".format(iteration))
 
             # reduce losses over all GPUs for logging purposes
             loss_dict_reduced = {k: v.item() for k, v in comm.reduce_dict(loss_dict).items()}

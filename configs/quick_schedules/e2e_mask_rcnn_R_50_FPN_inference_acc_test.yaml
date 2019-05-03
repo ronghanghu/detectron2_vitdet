@@ -1,9 +1,8 @@
 _BASE_: "../e2e_mask_rcnn_R_50_FPN_1x.yaml"
-INPUT:
-  PIXEL_MEAN: [102.9801, 115.9465, 122.7717]  # Default in Detectron v1
 MODEL:
-  WEIGHT: "catalog://Caffe2Detectron/COCO/35858933/e2e_mask_rcnn_R-50-FPN_1x"
+  # f111801949
+  WEIGHT: "/mnt/vol/gfsai-bistro-east/ai-group/bistro/gpu/rbg/20190430/baseline_2b13c3d25abc_rm_plus_one_final_V100/e2e_mask_rcnn_R_50_FPN_1x.yaml.20_16_11.MWImpr5Z/output/model_final.pth"
 DATASETS:
   TEST: ("coco_2014_minival_100",)
 TEST:
-  EXPECTED_RESULTS: [["bbox", "AP", 43.96, 0.02], ["segm", "AP",  40.19, 0.025]]
+  EXPECTED_RESULTS: [["bbox", "AP", 43.51, 0.02], ["segm", "AP",  40.12, 0.02]]

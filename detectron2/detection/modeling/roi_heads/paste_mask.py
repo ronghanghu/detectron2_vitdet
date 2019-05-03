@@ -2,10 +2,6 @@ import numpy as np
 import torch
 from PIL import Image
 
-# The infamous "+ 1" for box width and height dating back to the DPM days:
-# https://github.com/rbgirshick/voc-dpm/blob/master/data/pascal_data.m#L72
-_TO_REMOVE = 1  # See https://github.com/fairinternal/detectron2/issues/49
-
 
 def paste_masks_in_image(masks, boxes, image_shape, threshold=0.5, padding=1):
     """
@@ -68,13 +64,12 @@ def paste_mask_in_image(mask, box, img_h, img_w, threshold):
     """
     # Quantize box to determine which pixels indices the mask will be pasted into.
     box = box.to(dtype=torch.int32)
-    w = box[2] - box[0] + _TO_REMOVE
-    h = box[3] - box[1] + _TO_REMOVE
-    w = max(w, 1)
-    h = max(h, 1)
+    samples_w = box[2] - box[0] + 1  # Number of pixel samples, *not* geometric width
+    samples_h = box[3] - box[1] + 1  # Number of pixel samples, *not* geometric height
 
+    # Resample the mask from it's original grid to the new samples_w x samples_h grid
     mask = Image.fromarray(mask.cpu().numpy())
-    mask = mask.resize((w, h), resample=Image.BILINEAR)
+    mask = mask.resize((samples_w, samples_h), resample=Image.BILINEAR)
     mask = np.array(mask, copy=False)
 
     if threshold >= 0:

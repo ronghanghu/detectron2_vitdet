@@ -1,7 +1,0 @@
-_BASE_: "../e2e_keypoint_rcnn_R_50_FPN_1x.yaml"
-INPUT:
-  PIXEL_MEAN: [102.9801, 115.9465, 122.7717]  # Default in Detectron v1
-MODEL:
-  WEIGHT: "catalog://Caffe2Detectron/COCO/37697547/e2e_keypoint_rcnn_R-50-FPN_1x"
-TEST:
-  EXPECTED_RESULTS: [["bbox", "AP", 53.56, 0.02], ["keypoints", "AP", 64.21, 0.02]]

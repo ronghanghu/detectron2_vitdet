@@ -1,5 +1,0 @@
-_BASE_: "../e2e_mask_rcnn_R_101_FPN_1x.yaml"
-INPUT:
-  PIXEL_MEAN: [102.9801, 115.9465, 122.7717]  # Default in Detectron v1
-MODEL:
-  WEIGHT: "catalog://Caffe2Detectron/COCO/35861795/e2e_mask_rcnn_R-101-FPN_1x"

@@ -6,10 +6,6 @@ import torch
 # 1000px box (based on a small anchor, 16px, and a typical image size, 1000px).
 _DEFAULT_SCALE_CLAMP = math.log(1000.0 / 16)
 
-# The infamous "+ 1" for box width and height dating back to the DPM days:
-# https://github.com/rbgirshick/voc-dpm/blob/master/data/pascal_data.m#L72
-_TO_REMOVE = 1  # See https://github.com/fairinternal/detectron2/issues/49
-
 
 class Box2BoxTransform(object):
     """
@@ -46,13 +42,13 @@ class Box2BoxTransform(object):
         assert isinstance(src_boxes, torch.Tensor), type(src_boxes)
         assert isinstance(target_boxes, torch.Tensor), type(target_boxes)
 
-        src_widths = src_boxes[:, 2] - src_boxes[:, 0] + _TO_REMOVE
-        src_heights = src_boxes[:, 3] - src_boxes[:, 1] + _TO_REMOVE
+        src_widths = src_boxes[:, 2] - src_boxes[:, 0]
+        src_heights = src_boxes[:, 3] - src_boxes[:, 1]
         src_ctr_x = src_boxes[:, 0] + 0.5 * src_widths
         src_ctr_y = src_boxes[:, 1] + 0.5 * src_heights
 
-        target_widths = target_boxes[:, 2] - target_boxes[:, 0] + _TO_REMOVE
-        target_heights = target_boxes[:, 3] - target_boxes[:, 1] + _TO_REMOVE
+        target_widths = target_boxes[:, 2] - target_boxes[:, 0]
+        target_heights = target_boxes[:, 3] - target_boxes[:, 1]
         target_ctr_x = target_boxes[:, 0] + 0.5 * target_widths
         target_ctr_y = target_boxes[:, 1] + 0.5 * target_heights
 
@@ -78,8 +74,8 @@ class Box2BoxTransform(object):
 
         boxes = boxes.to(deltas.dtype)
 
-        widths = boxes[:, 2] - boxes[:, 0] + _TO_REMOVE
-        heights = boxes[:, 3] - boxes[:, 1] + _TO_REMOVE
+        widths = boxes[:, 2] - boxes[:, 0]
+        heights = boxes[:, 3] - boxes[:, 1]
         ctr_x = boxes[:, 0] + 0.5 * widths
         ctr_y = boxes[:, 1] + 0.5 * heights
 
@@ -99,13 +95,9 @@ class Box2BoxTransform(object):
         pred_h = torch.exp(dh) * heights[:, None]
 
         pred_boxes = torch.zeros_like(deltas)
-        # x1
-        pred_boxes[:, 0::4] = pred_ctr_x - 0.5 * pred_w
-        # y1
-        pred_boxes[:, 1::4] = pred_ctr_y - 0.5 * pred_h
-        # x2 (note: "- 1" is correct; don't be fooled by the asymmetry)
-        pred_boxes[:, 2::4] = pred_ctr_x + 0.5 * pred_w - _TO_REMOVE
-        # y2 (note: "- 1" is correct; don't be fooled by the asymmetry)
-        pred_boxes[:, 3::4] = pred_ctr_y + 0.5 * pred_h - _TO_REMOVE
+        pred_boxes[:, 0::4] = pred_ctr_x - 0.5 * pred_w  # x1
+        pred_boxes[:, 1::4] = pred_ctr_y - 0.5 * pred_h  # y1
+        pred_boxes[:, 2::4] = pred_ctr_x + 0.5 * pred_w  # x2
+        pred_boxes[:, 3::4] = pred_ctr_y + 0.5 * pred_h  # y2
 
         return pred_boxes

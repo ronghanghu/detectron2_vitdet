@@ -1,8 +1,13 @@
 _BASE_: "../Base-FPN.yaml"
 MODEL:
-  #WEIGHT: "catalog://ImageNetPretrained/MSRA/R-50"
-  # better and stable performance if initialized from COCO
-  WEIGHT: "catalog://Caffe2Detectron/COCO/35858933/e2e_mask_rcnn_R-50-FPN_1x"
+  # WEIGHT: "catalog://ImageNetPretrained/MSRA/R-50"
+  # For better, more stable performance initialize from COCO
+  # Create from f111801949 by:
+  #   checkpoint = torch.load("/mnt/vol/gfsai-bistro-east/ai-group/bistro/gpu/rbg/20190430/baseline_2b13c3d25abc_rm_plus_one_final_V100/e2e_mask_rcnn_R_50_FPN_1x.yaml.20_16_11.MWImpr5Z/output/model_final.pth")
+  #   new_checkpoint = {"model": checkpoint["model"], "cfg": checkpoint["cfg"]}
+  #   torch.save(new_checkpoint, "/path/to/model_final_weights_only.pth")
+  # to remove optimizer, scheduler, and iteration data.
+  WEIGHT: "/mnt/vol/gfsai-bistro-east/ai-group/bistro/gpu/rbg/20190430/baseline_2b13c3d25abc_rm_plus_one_final_V100/e2e_mask_rcnn_R_50_FPN_1x.yaml.20_16_11.MWImpr5Z/output/model_final_weights_only.pth"
   MASK_ON: True
   ROI_HEADS:
     NUM_CLASSES: 8

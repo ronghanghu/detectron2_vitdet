@@ -32,7 +32,6 @@ mkdir -pv $OUTPUT
 
 set -v
 
-$DEMO_BIN --config-file ./configs/caffe2/e2e_mask_rcnn_R_50_FPN_1x_caffe2.yaml \
+$DEMO_BIN --config-file ./configs/quick_schedules/e2e_mask_rcnn_R_50_FPN_inference_acc_test.yaml \
   --input $COCO_DIR/COCO_val2014_0000001933* --output $OUTPUT
 rm -rf $OUTPUT
-

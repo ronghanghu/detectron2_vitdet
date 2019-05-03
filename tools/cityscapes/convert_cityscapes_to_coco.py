@@ -49,14 +49,12 @@ def xyxy_to_xywh(xyxy):
         # Single box given as a list of coordinates
         assert len(xyxy) == 4
         x1, y1 = xyxy[0], xyxy[1]
-        # TODO(TO_REMOVE) maybe remove +1
-        w = xyxy[2] - x1 + 1
-        h = xyxy[3] - y1 + 1
+        w = xyxy[2] - x1
+        h = xyxy[3] - y1
         return (x1, y1, w, h)
     elif isinstance(xyxy, np.ndarray):
         # Multiple boxes given as a 2D ndarray
-        # TODO(TO_REMOVE) maybe remove +1
-        return np.hstack((xyxy[:, 0:2], xyxy[:, 2:4] - xyxy[:, 0:2] + 1))
+        return np.hstack((xyxy[:, 0:2], xyxy[:, 2:4] - xyxy[:, 0:2]))
     else:
         raise TypeError("Argument xyxy must be a list, tuple, or numpy array.")
 

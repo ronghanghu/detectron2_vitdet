@@ -1,13 +1,12 @@
 _BASE_: "../Base-FPN.yaml"
-INPUT:
-  PIXEL_MEAN: [102.9801, 115.9465, 122.7717]  # Used to train this model
 MODEL:
   META_ARCHITECTURE: "PanopticFPN"
-  WEIGHT: "/mnt/vol/gfsai-bistro-east/ai-group/bistro/gpu/akirillov/20190402/panoptic_R_50_FPN_coco_1x_configs/panoptic_R_50_FPN_1x.yaml.13_51_11.R4dPkV1u/output/model_final.pth"
+  # f111802095
+  WEIGHT: "/mnt/vol/gfsai-bistro-east/ai-group/bistro/gpu/rbg/20190430/baseline_2b13c3d25abc_rm_plus_one_final_V100/panoptic_R_50_FPN_1x.yaml.20_17_23.UoZEwckl/output/model_final.pth"
   MASK_ON: True
   RESNETS:
     DEPTH: 50
 DATASETS:
   TEST: ("coco_2017_val_100_panoptic_separated",)
 TEST:
-  EXPECTED_RESULTS: [["bbox", "AP", 44.12, 0.02], ["segm", "AP", 41.48, 0.02], ["semantic_seg", "mIoU", 40.00, 0.02], ["panoptic_seg", "PQ", 39.10, 0.02]]  # noqa
+  EXPECTED_RESULTS: [["bbox", "AP", 46.34, 0.02], ["segm", "AP", 43.83, 0.02], ["semantic_seg", "mIoU", 40.41, 0.02]]  # noqa

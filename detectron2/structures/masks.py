@@ -3,7 +3,6 @@ import pycocotools.mask as mask_utils
 import torch
 
 
-# TODO TO_REMOVE maybe replace this with roialign when we deal with masks with fewer quantizations
 def rasterize_polygons_within_box(polygons, box, mask_size):
     """
     Rasterize the polygons into a mask image and

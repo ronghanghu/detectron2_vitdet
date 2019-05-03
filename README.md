@@ -18,10 +18,10 @@ We provide a simple demo that illustrates how you can use `detectron2` for infer
 ```bash
 cd demo
 # use input files:
-python demo.py --config-file ../configs/caffe2/e2e_mask_rcnn_R_101_FPN_1x_caffe2.py \
+python demo.py --config-file ../configs/quick_schedules/e2e_mask_rcnn_R_50_FPN_inference_acc_test.yaml \
   --input /path/to/images*.jpg --output /path/to/output/directory
 # use webcam:
-python demo.py --config-file ../configs/caffe2/e2e_mask_rcnn_R_101_FPN_1x_caffe2.py --webcam
+python demo.py --config-file ../configs/quick_schedules/e2e_mask_rcnn_R_50_FPN_inference_acc_test.yaml --webcam
 ```
 
 ## Installation
@@ -64,10 +64,19 @@ See methods in "DatasetCatalog".
 python /path_to_detectron2/tools/train_net.py --config-file "/path/to/config/file.yaml"
 ```
 
+## Environment variables
+
+- `DETECTRON2_ENV_MODULE`: Name of a module defining a function called `setup_environment` to call before running any detectron2 code. This function can be used to perform set up steps that are specific to different computing or cluster environments.
+
 ## Troubleshooting
 If you have issues running or compiling this code, we have compiled a list of common issues in
 [TROUBLESHOOTING.md](TROUBLESHOOTING.md). If your issue is not present there, please feel
 free to open a new issue.
+
+## Major Compatibility Differences Compared to Detectron (v1)
+
+- The height and width of a box with corners (x1, y1) and (x2, y2) is computed as width = x2 - x1 and height = y2 - y1; in Detectron v1 a "+ 1" was added both height and width.
+- For a dataset with K object categories, these categories are assigned labels [0, K - 1]. If a background category is used (e.g., with a classifier that uses softmax), the background category is assigned label K. In Detectron v1 background was assigned label 0 and the object classes labels [1, K].
 
 ## License
 

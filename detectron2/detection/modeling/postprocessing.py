@@ -82,7 +82,9 @@ def sem_seg_postprocess(result, img_size, output_height, output_width):
             (output_height, output_width) that contains per-pixel semantic segementation prediction.
     """
     result = result[:, : img_size[0], : img_size[1]].expand(1, -1, -1, -1)
-    result = F.interpolate(result, size=(output_height, output_width), mode="bilinear")[0]
+    result = F.interpolate(
+        result, size=(output_height, output_width), mode="bilinear", align_corners=False
+    )[0]
     return result.argmax(dim=0)
 
 

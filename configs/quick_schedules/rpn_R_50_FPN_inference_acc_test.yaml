@@ -1,9 +1,8 @@
 _BASE_: "../rpn_R_50_FPN_1x.yaml"
-INPUT:
-  PIXEL_MEAN: [102.9801, 115.9465, 122.7717]  # Default in Detectron v1
 MODEL:
-  WEIGHT: "catalog://Caffe2Detectron/COCO/35998814/rpn_R-50-FPN_1x"
+  # f111802748
+  WEIGHT: "/mnt/vol/gfsai-bistro-east/ai-group/bistro/gpu/rbg/20190430/baseline_2b13c3d25abc_rm_plus_one_final_V100/rpn_R_50_FPN_1x.yaml.20_23_40.lnUjvSJ4/output/model_final.pth"
 DATASETS:
   TEST: ("coco_2014_minival_100",)
 TEST:
-  EXPECTED_RESULTS: [["box_proposals", "AR@1000", 58.23, 0.02]]
+  EXPECTED_RESULTS: [["box_proposals", "AR@1000", 59.51, 0.02]]

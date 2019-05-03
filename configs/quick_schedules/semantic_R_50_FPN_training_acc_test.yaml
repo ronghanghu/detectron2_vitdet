@@ -14,4 +14,4 @@ SOLVER:
   STEPS: (5500,)
   MAX_ITER: 7000
 TEST:
-  EXPECTED_RESULTS: [["semantic_seg", "mIoU", 76.5, 0.7], ["semantic_seg", "mACC", 83.3, 0.7]]
+  EXPECTED_RESULTS: [["semantic_seg", "mIoU", 76.51, 1.0], ["semantic_seg", "mACC", 83.25, 1.0]]

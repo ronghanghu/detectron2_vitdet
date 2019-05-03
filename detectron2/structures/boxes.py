@@ -23,13 +23,11 @@ class BoxMode(Enum):
     XYWH_REL = 3
 
     @staticmethod
-    def convert(box, from_mode, to_mode, image_shape=None):
+    def convert(box, from_mode, to_mode):
         """
         Args:
             box: can be a 4-tuple, 4-list or a Nx4 array.
             from_mode, to_mode (BoxMode)
-            image_shape (tuple): h, w shape. Not used if relative modes
-                are not involved in the conversion.
 
         Returns:
             The converted box of the same type.
@@ -39,16 +37,13 @@ class BoxMode(Enum):
 
         assert to_mode.value < 2 and from_mode.value < 2, "Relative mode not yet supported!"
 
-        # This should be considered dataset-specific and should be handled at dataset level.
-        # Need to rerun jobs to see the impact of removing this.
-        TO_REMOVE = 1
         arr = np.array(box).reshape(-1, 4)
         if to_mode == BoxMode.XYXY_ABS and from_mode == BoxMode.XYWH_ABS:
-            arr[:, 2] += arr[:, 0] - TO_REMOVE
-            arr[:, 3] += arr[:, 1] - TO_REMOVE
+            arr[:, 2] += arr[:, 0]
+            arr[:, 3] += arr[:, 1]
         elif from_mode == BoxMode.XYXY_ABS and to_mode == BoxMode.XYWH_ABS:
-            arr[:, 2] -= arr[:, 0] - TO_REMOVE
-            arr[:, 3] -= arr[:, 1] - TO_REMOVE
+            arr[:, 2] -= arr[:, 0]
+            arr[:, 3] -= arr[:, 1]
         else:
             raise RuntimeError("Cannot be here!")
         if not isinstance(box, np.ndarray):
@@ -96,24 +91,22 @@ class Boxes:
             torch.Tensor: a vector with areas of each box.
         """
         box = self.tensor
-
-        TO_REMOVE = 1
-        area = (box[:, 2] - box[:, 0] + TO_REMOVE) * (box[:, 3] - box[:, 1] + TO_REMOVE)
+        area = (box[:, 2] - box[:, 0]) * (box[:, 3] - box[:, 1])
         return area
 
-    def clip(self, image_size):
+    def clip(self, box_size):
         """
-        Clip (in place) the boxes to the shape of the image.
+        Clip (in place) the boxes by limiting x coordinates to the range [0, width]
+        and y coordinates to the range [0, height].
 
         Args:
-            image_size (h, w)
+            box_size (height, width): The clipping box's size.
         """
-        h, w = image_size
-        TO_REMOVE = 1
-        self.tensor[:, 0].clamp_(min=0, max=w - TO_REMOVE)
-        self.tensor[:, 1].clamp_(min=0, max=h - TO_REMOVE)
-        self.tensor[:, 2].clamp_(min=0, max=w - TO_REMOVE)
-        self.tensor[:, 3].clamp_(min=0, max=h - TO_REMOVE)
+        h, w = box_size
+        self.tensor[:, 0].clamp_(min=0, max=w)
+        self.tensor[:, 1].clamp_(min=0, max=h)
+        self.tensor[:, 2].clamp_(min=0, max=w)
+        self.tensor[:, 3].clamp_(min=0, max=h)
 
     def nonempty(self, threshold=0):
         """
@@ -124,10 +117,9 @@ class Boxes:
             Tensor: a binary vector which represents
                 whether each box is empty (False) or non-empty (True).
         """
-        TO_REMOVE = 1
         box = self.tensor
-        widths = (box[:, 2] + TO_REMOVE) - box[:, 0]
-        heights = (box[:, 3] + TO_REMOVE) - box[:, 1]
+        widths = box[:, 2] - box[:, 0]
+        heights = box[:, 3] - box[:, 1]
         keep = (widths > threshold) & (heights > threshold)
         return keep
 
@@ -154,19 +146,17 @@ class Boxes:
     def __len__(self):
         return self.tensor.shape[0]
 
-    def inside_image(self, image_size, boundary_threshold=0):
+    def inside_box(self, box_size, boundary_threshold=0):
         """
         Args:
-            image_size (h, w):
-            boundary_threshold (int): Boxes that extend beyond the image
+            box_size (height, width): Size of the reference box.
+            boundary_threshold (int): Boxes that extend beyond the reference box
                 boundary by more than boundary_threshold are considered "outside".
-                Can be set to negative value to determine more boxes to be "outside".
-                Setting it to a very large number will effectively disable this behavior.
 
         Returns:
-            a binary vector, indicating whether each box is inside the image.
+            a binary vector, indicating whether each box is inside the reference box.
         """
-        height, width = image_size
+        height, width = box_size
         inds_inside = (
             (self.tensor[..., 0] >= -boundary_threshold)
             & (self.tensor[..., 1] >= -boundary_threshold)
@@ -213,11 +203,11 @@ def pairwise_iou(boxes1, boxes2):
     between __all__ N x M pairs of boxes.
     The box order must be (xmin, ymin, xmax, ymax).
 
-    Arguments:
-      boxes1,boxes2 (Boxes): two `Boxes`. Contains N & M boxes, respectively.
+    Args:
+        boxes1,boxes2 (Boxes): two `Boxes`. Contains N & M boxes, respectively.
 
     Returns:
-      Tensor: IoU, sized [N,M].
+        Tensor: IoU, sized [N,M].
     """
     area1 = boxes1.area()
     area2 = boxes2.area()
@@ -227,9 +217,7 @@ def pairwise_iou(boxes1, boxes2):
     lt = torch.max(boxes1[:, None, :2], boxes2[:, :2])  # [N,M,2]
     rb = torch.min(boxes1[:, None, 2:], boxes2[:, 2:])  # [N,M,2]
 
-    TO_REMOVE = 1
-
-    wh = (rb - lt + TO_REMOVE).clamp(min=0)  # [N,M,2]
+    wh = (rb - lt).clamp(min=0)  # [N,M,2]
     inter = wh[:, :, 0] * wh[:, :, 1]  # [N,M]
 
     iou = inter / (area1[:, None] + area2 - inter)
