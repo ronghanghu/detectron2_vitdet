@@ -50,6 +50,12 @@ def paste_mask_in_image(mask, box, img_h, img_w, threshold):
     """
     Paste a single mask in an image.
 
+    Pasting uses the continuous-discrete conversion from Heckbert 1990 ("What is
+    the coordinate of a pixel?"):
+        d = truncate(c)
+        c = d + 0.5,
+    where d is a discrete coordinate and c is a continuous coordinate.
+
     Args:
         mask (Tensor): A tensor of shape (Hmask, Wmask) storing the mask of a single
             object instance. Values are in [0, 1].
@@ -62,8 +68,13 @@ def paste_mask_in_image(mask, box, img_h, img_w, threshold):
         im_mask (Tensor): The resized and binarized object mask pasted into the original
             image plane (a tensor of shape (img_h, img_w)).
     """
-    # Quantize box to determine which pixels indices the mask will be pasted into.
-    box = box.to(dtype=torch.int32)
+    # Conversion from continuous box coordinates to discrete pixel coordinates
+    # via truncation (cast to int32). This determines which pixels to paste the
+    # mask onto.
+    box = box.to(dtype=torch.int32)  # Continuous to discrete coordinate conversion
+    # An example (1D) box with continuous coordinates (x0=0.7, x1=4.3) will map to
+    # a discrete coordinates (x0=0, x1=4). Note that box is mapped to 5 = x1 - x0 + 1
+    # pixels (not x1 - x0 pixels).
     samples_w = box[2] - box[0] + 1  # Number of pixel samples, *not* geometric width
     samples_h = box[3] - box[1] + 1  # Number of pixel samples, *not* geometric height
 
