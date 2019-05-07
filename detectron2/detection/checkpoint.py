@@ -248,6 +248,7 @@ class DetectionCheckpointer(Checkpointer):
 
 class ModelCatalog(object):
     S3_C2_DETECTRON_PREFIX = "https://dl.fbaipublicfiles.com/detectron"
+    S3_DETECTRON2_PREFIX = "https://dl.fbaipublicfiles.com/detectron2"
     C2_IMAGENET_MODELS = {
         "MSRA/R-50": "ImageNetPretrained/MSRA/R-50.pkl",
         "MSRA/R-101": "ImageNetPretrained/MSRA/R-101.pkl",
@@ -319,5 +320,5 @@ class ModelCatalog(object):
 
     @staticmethod
     def _get_detectron2_baseline(name):
-        # TODO do it from github
-        return "Not available outside fb yet."
+        name = name[len("Detectron2"):]
+        return ModelCatalog.S3_DETECTRON2_PREFIX + name
