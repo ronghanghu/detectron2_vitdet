@@ -1,8 +1,7 @@
 _BASE_: "../Base-FPN.yaml"
 MODEL:
   META_ARCHITECTURE: "PanopticFPN"
-  # f111802095
-  WEIGHT: "/mnt/vol/gfsai-bistro-east/ai-group/bistro/gpu/rbg/20190430/baseline_2b13c3d25abc_rm_plus_one_final_V100/panoptic_R_50_FPN_1x.yaml.20_17_23.UoZEwckl/output/model_final.pth"
+  WEIGHT: "catalog://Detectron2/panoptic_R_50_FPN_1x/111802095/model_final_b5e6e676227baeca42cc501b7221ec3a.pkl"
   MASK_ON: True
   RESNETS:
     DEPTH: 50

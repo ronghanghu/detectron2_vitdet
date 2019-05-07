@@ -1,4 +1,5 @@
 import logging
+import numpy as np
 import os
 import torch
 
@@ -166,9 +167,16 @@ class Checkpointer(object):
 
     def _load_model(self, checkpoint):
         model = checkpoint.pop("model")
-        model = {
-            k: v if isinstance(v, torch.Tensor) else torch.from_numpy(v) for k, v in model.items()
-        }
+        for k, v in model.items():
+            if not isinstance(v, np.ndarray) and not isinstance(v, torch.Tensor):
+                raise ValueError("Unsupported type found in checkpoint! {}: {}".format(k, type(v)))
+        # model could be an OrderedDict with _metadata attribute
+        # (as returned by Pytorch's state_dict()). We should preserve these properties.
+        for k in list(model.keys()):
+            v = model[k]
+            if not isinstance(v, torch.Tensor):
+                model[k] = torch.from_numpy(v)
+
         load_state_dict(self.model, model)
 
 

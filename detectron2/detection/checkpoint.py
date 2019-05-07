@@ -1,9 +1,10 @@
 import copy
 import logging
 import numpy as np
+import pickle
 import re
 
-from detectron2.utils.c2_model_loading import convert_basic_c2_names, load_c2_weights
+from detectron2.utils.c2_model_loading import convert_basic_c2_names
 from detectron2.utils.checkpoint import Checkpointer
 
 
@@ -224,13 +225,21 @@ class DetectionCheckpointer(Checkpointer):
         return f
 
     def _load_file(self, f):
-        # convert Caffe2 checkpoint from pkl
         if f.endswith(".pkl"):
-            model = load_c2_weights(f)
-            model = _convert_c2_detectron_names(model)
+            data = pickle.load(open(f, "rb"), encoding="latin1")
+            if "model" in data and "__author__" in data:
+                # file is in Detectron2 model zoo format
+                self.logger.info("Reading a file from '{}'".format(data.pop("__author__")))
+                return data
+            else:
+                # assume file is from Caffe2
+                if "blobs" in data:
+                    # Detection models have "blobs", but ImageNet models don't
+                    data = data["blobs"]
+                data = {k: v for k, v in data.items() if not k.endswith("_momentum")}
+                model = _convert_c2_detectron_names(data)
             return {"model": model}
-        # load native detectron.pytorch checkpoint
-        loaded = super()._load_file(f)
+        loaded = super()._load_file(f)  # load native pth checkpoint
         if "model" not in loaded:
             loaded = {"model": loaded}
         loaded["model"] = _convert_background_class(loaded["model"])
@@ -272,9 +281,11 @@ class ModelCatalog(object):
     @staticmethod
     def get(name):
         if name.startswith("Caffe2Detectron/COCO"):
-            return ModelCatalog._get_c2_detectron_baselines(name)
-        if name.startswith("ImageNetPretrained"):
+            return ModelCatalog._get_c2_detectron_baseline(name)
+        if name.startswith("ImageNetPretrained/"):
             return ModelCatalog._get_c2_imagenet_pretrained(name)
+        if name.startswith("Detectron2/"):
+            return ModelCatalog._get_detectron2_baseline(name)
         raise RuntimeError("model not present in the catalog {}".format(name))
 
     @staticmethod
@@ -286,7 +297,7 @@ class ModelCatalog(object):
         return url
 
     @staticmethod
-    def _get_c2_detectron_baselines(name):
+    def _get_c2_detectron_baseline(name):
         name = name[len("Caffe2Detectron/COCO/") :]
         url = ModelCatalog.C2_DETECTRON_MODELS[name]
         if "keypoint_rcnn" in name:
@@ -305,3 +316,8 @@ class ModelCatalog(object):
             prefix=ModelCatalog.S3_C2_DETECTRON_PREFIX, url=url, type=type, dataset=dataset
         )
         return url
+
+    @staticmethod
+    def _get_detectron2_baseline(name):
+        # TODO do it from github
+        return "Not available outside fb yet."

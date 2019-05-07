@@ -1,21 +1,5 @@
 import copy
-import pickle
 import re
-
-
-def load_c2_weights(file_path):
-    """
-    Returns:
-        dict: name -> numpy array
-    """
-    with open(file_path, "rb") as f:
-        data = pickle.load(f, encoding="latin1")
-    if "blobs" in data:
-        weights = data["blobs"]
-    else:
-        weights = data
-    weights = {k: v for k, v in weights.items() if not k.endswith("_momentum")}
-    return weights
 
 
 def convert_basic_c2_names(original_keys):

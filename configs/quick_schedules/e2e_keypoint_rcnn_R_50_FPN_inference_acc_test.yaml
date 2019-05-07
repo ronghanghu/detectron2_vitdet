@@ -1,7 +1,6 @@
 _BASE_: "../e2e_keypoint_rcnn_R_50_FPN_1x.yaml"
 MODEL:
-  # f111802035
-  WEIGHT: "/mnt/vol/gfsai-bistro-east/ai-group/bistro/gpu/rbg/20190430/baseline_2b13c3d25abc_rm_plus_one_final_V100/e2e_keypoint_rcnn_R_50_FPN_1x.yaml.20_16_49.LKlAeHdn/output/model_final.pth"
+  WEIGHT: "catalog://Detectron2/e2e_keypoint_rcnn_R_50_FPN_1x/111802035/model_final_71819d611aa7d5b23bf693fc453ca7f2.pkl"
 DATASETS:
   TEST: ("keypoints_coco_2014_minival_100",)
 TEST:

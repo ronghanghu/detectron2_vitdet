@@ -1,7 +1,6 @@
 _BASE_: "../rpn_R_50_FPN_1x.yaml"
 MODEL:
-  # f111802748
-  WEIGHT: "/mnt/vol/gfsai-bistro-east/ai-group/bistro/gpu/rbg/20190430/baseline_2b13c3d25abc_rm_plus_one_final_V100/rpn_R_50_FPN_1x.yaml.20_23_40.lnUjvSJ4/output/model_final.pth"
+  WEIGHT: "catalog://Detectron2/rpn_R_50_FPN_1x/111802748/model_final_0f534777b6b57e1d5e99e5bed6db6f94.pkl"
 DATASETS:
   TEST: ("coco_2014_minival_100",)
 TEST:

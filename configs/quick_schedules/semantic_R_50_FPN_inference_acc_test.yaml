@@ -1,8 +1,7 @@
 _BASE_: "../Base-FPN.yaml"
 MODEL:
   META_ARCHITECTURE: "SemanticSegmentator"
-  # f111802073
-  WEIGHT: "/mnt/vol/gfsai-bistro-east/ai-group/bistro/gpu/rbg/20190430/baseline_2b13c3d25abc_rm_plus_one_final_V100/semantic_R_50_FPN_1x.yaml.20_17_08.cn31tg0o/output/model_final.pth"
+  WEIGHT: "catalog://Detectron2/semantic_R_50_FPN_1x/111802073/model_final_c18079783c55a94968edc28b7101c5f0.pkl"
   RESNETS:
     DEPTH: 50
 DATASETS:
