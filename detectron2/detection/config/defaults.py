@@ -118,6 +118,8 @@ _C.MODEL.RPN = CN()
 # Names of the input feature maps to be used by RPN
 # e.g., ["p2", "p3", "p4", "p5", "p6"] for FPN
 _C.MODEL.RPN.IN_FEATURES = ["res4"]
+# The generator can be any name in the ANCHOR_GENERATOR registry
+_C.MODEL.RPN.ANCHOR_GENERATOR_NAME = "DefaultAnchorGenerator"
 # RPN anchor sizes given in absolute pixels w.r.t. the scaled network input.
 # Format: list of lists of sizes. ANCHOR_SIZES[i] specifies the list of sizes
 # to use for IN_FEATURES[i]; len(ANCHOR_SIZES) == len(IN_FEATURES) must be true,

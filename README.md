@@ -75,8 +75,9 @@ free to open a new issue.
 
 ## Major Compatibility Differences Compared to Detectron (v1)
 
-- The height and width of a box with corners (x1, y1) and (x2, y2) is computed as width = x2 - x1 and height = y2 - y1; in Detectron v1 a "+ 1" was added both height and width.
+- The height and width of a box with corners (x1, y1) and (x2, y2) is computed as width = x2 - x1 and height = y2 - y1; in Detectron v1 a "+ 1" was added both height and width. This makes detectron2 incompatible with models trained using Detectron v1.
 - For a dataset with K object categories, these categories are assigned labels [0, K - 1]. If a background category is used (e.g., with a classifier that uses softmax), the background category is assigned label K. In Detectron v1 background was assigned label 0 and the object classes labels [1, K].
+- RPN anchors are now center-aligned to feature grid points and they are not quantized. If one loads a model trained using the original RPN anchor definition, then `MODEL.RPN.ANCHOR_GENERATOR_NAME` must be set to `OriginalRPNAnchorGenerator`.
 
 ## License
 

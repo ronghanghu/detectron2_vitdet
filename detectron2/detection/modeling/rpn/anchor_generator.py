@@ -1,9 +1,13 @@
 import copy
+import math
 import numpy as np
 import torch
 from torch import nn
 
 from detectron2.structures import Boxes
+from detectron2.utils.registry import Registry
+
+ANCHOR_GENERATOR_REGISTRY = Registry("ANCHOR_GENERATOR")
 
 
 class BufferList(nn.Module):
@@ -29,27 +33,34 @@ class BufferList(nn.Module):
         return iter(self._buffers.values())
 
 
-class AnchorGenerator(nn.Module):
+@ANCHOR_GENERATOR_REGISTRY.register()
+class DefaultAnchorGenerator(nn.Module):
     """
     For a set of image sizes and feature maps, computes a set of anchors.
     """
 
-    def __init__(self, feature_strides, sizes, aspect_ratios):
+    def __init__(self, cfg):
+        super().__init__()
+
+        # fmt: off
+        sizes           = cfg.MODEL.RPN.ANCHOR_SIZES
+        aspect_ratios   = cfg.MODEL.RPN.ANCHOR_ASPECT_RATIOS
+        feature_strides = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_STRIDES)
+        feature_strides = [feature_strides[f] for f in cfg.MODEL.RPN.IN_FEATURES]
         """
-        Args:
-            feature_strides (list[number]): list of feature map strides (with respect
-                to the input image) for each input feature map.
-            sizes (list[list[number]]): sizes[i] is the list of anchor sizes to use
-                for the i-th feature map. If len(sizes) == 1, then the same list of
-                anchor sizes, given by sizes[0], is used for all feature maps. Anchor
-                sizes are given in absolute lengths in units of the input image;
-                they do not dynamically scale if the input image size changes.
-            aspect_ratios (list[list[number]]): aspect_ratios[i] is the list of
-                anchor aspect ratios to use for the i-th feature map. If
-                len(aspect_ratios) == 1, then the same list of anchor aspect ratios,
-                given by aspect_ratios[0], is used for all feature maps.
+        sizes (list[list[number]]): sizes[i] is the list of anchor sizes to use
+            for the i-th feature map. If len(sizes) == 1, then the same list of
+            anchor sizes, given by sizes[0], is used for all feature maps. Anchor
+            sizes are given in absolute lengths in units of the input image;
+            they do not dynamically scale if the input image size changes.
+        aspect_ratios (list[list[number]]): aspect_ratios[i] is the list of
+            anchor aspect ratios to use for the i-th feature map. If
+            len(aspect_ratios) == 1, then the same list of anchor aspect ratios,
+            given by aspect_ratios[0], is used for all feature maps.
+        feature_strides (list[number]): list of feature map strides (with respect
+            to the input image) for each input feature map.
         """
-        super(AnchorGenerator, self).__init__()
+        # fmt: on
 
         # If one size (or aspect ratio) is specified and there are multiple feature
         # maps, then we "broadcast" anchors of that single size (or aspect ratio)
@@ -63,8 +74,8 @@ class AnchorGenerator(nn.Module):
         assert num_feature_maps == len(aspect_ratios)
 
         cell_anchors = [
-            generate_anchors(anchor_stride, s, a).float()
-            for anchor_stride, s, a in zip(feature_strides, sizes, aspect_ratios)
+            self.generate_cell_anchors(s, a, stride).float()
+            for s, a, stride in zip(sizes, aspect_ratios, feature_strides)
         ]
         self.strides = feature_strides
         self.cell_anchors = BufferList(cell_anchors)
@@ -103,6 +114,41 @@ class AnchorGenerator(nn.Module):
 
         return anchors
 
+    def generate_cell_anchors(
+        self, sizes=(32, 64, 128, 256, 512), aspect_ratios=(0.5, 1, 2), _unused_stride=None
+    ):
+        """
+        Generate a tensor storing anchor boxes for one feature map location. The entire
+        set of anchors is formed by tiling these feature map "cell" anchors across the
+        feature map. Anchor boxes are continuous geometric rectangles centered on feature
+        map point samples.
+
+        Args:
+            sizes (tuple[float]): Absolute size of the anchors relative to the input image
+                (the input received by the network, after ungoing necessary scaling). The
+                absolute size is given as the side length of a box.
+            aspect_ratios (tuple[float]]): Aspect ratios of the boxes computed as box
+                height / width.
+
+        Returns:
+            Tensor of shape (len(sizes) * len(aspect_ratios), 4) storing anchor boxes
+                in XYXY format.
+        """
+        anchors = []
+        for size in sizes:
+            area = size ** 2.0
+            for aspect_ratio in aspect_ratios:
+                # s * s = w * h
+                # a = h / w
+                # ... some algebra ...
+                # w = sqrt(s * s / a)
+                # h = a * w
+                w = math.sqrt(area / aspect_ratio)
+                h = aspect_ratio * w
+                x0, y0, x1, y1 = -w / 2.0, -h / 2.0, w / 2.0, h / 2.0
+                anchors.append([x0, y0, x1, y1])
+        return torch.tensor(anchors)
+
     def forward(self, image_list, feature_maps):
         """
         Returns:
@@ -121,14 +167,31 @@ class AnchorGenerator(nn.Module):
         return anchors
 
 
-def build_anchor_generator(cfg):
-    sizes = cfg.MODEL.RPN.ANCHOR_SIZES
-    aspect_ratios = cfg.MODEL.RPN.ANCHOR_ASPECT_RATIOS
-    feature_strides = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_STRIDES)
-    feature_strides = [feature_strides[f] for f in cfg.MODEL.RPN.IN_FEATURES]
-    anchor_generator = AnchorGenerator(feature_strides, sizes, aspect_ratios)
-    return anchor_generator
+@ANCHOR_GENERATOR_REGISTRY.register()
+class OriginalRPNAnchorGenerator(DefaultAnchorGenerator):
+    """
+    The anchor generator that was defined in the original Faster R-CNN code.
+    Models using this generator yield the same AP as those using the new default one,
+    however this version defines cell anchors in a less natural way with a shift
+    relative to the feature grid and quantization that results in slightly different
+    sizes for the different aspect ratios.
+    """
 
+    def generate_cell_anchors(
+        self, sizes=(32, 64, 128, 256, 512), aspect_ratios=(0.5, 1, 2), stride=16
+    ):
+        return _original_rpn_generate_anchors(sizes, aspect_ratios, stride)
+
+
+def build_anchor_generator(cfg):
+    anchor_generator = cfg.MODEL.RPN.ANCHOR_GENERATOR_NAME
+    return ANCHOR_GENERATOR_REGISTRY.get(anchor_generator)(cfg)
+
+
+#
+# Code for the original RPN anchor generation method is below. We no longer use
+# this by default.
+#
 
 # Copyright (c) 2017-present, Facebook, Inc.
 #
@@ -182,7 +245,9 @@ def build_anchor_generator(cfg):
 #        [-167., -343.,  184.,  360.]])
 
 
-def generate_anchors(stride=16, sizes=(32, 64, 128, 256, 512), aspect_ratios=(0.5, 1, 2)):
+def _original_rpn_generate_anchors(
+    sizes=(32, 64, 128, 256, 512), aspect_ratios=(0.5, 1, 2), stride=16
+):
     """
     Generates anchor boxes in (x1, y1, x2, y2) format. Anchors
     are centered on stride / 2, have (approximate) sqrt areas of the specified
