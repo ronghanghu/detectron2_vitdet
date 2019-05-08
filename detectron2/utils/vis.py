@@ -186,7 +186,7 @@ def draw_coco_dict(dataset_dict, class_names=None):
     return img
 
 
-def draw_instance_predictions(img, predictions, class_names=None):
+def draw_instance_predictions(img, predictions, color_idx=0, class_names=None):
     """
     Draw instance-level prediction results on an image.
 
@@ -194,6 +194,7 @@ def draw_instance_predictions(img, predictions, class_names=None):
         predictions (Instances): the output of an instance detection/segmentation
             model. Following fields will be used to draw:
             "pred_boxes", "scores", "pred_classes", "pred_masks" (or "pred_masks_rle").
+        color_idx (int): index of color in colormap to start from
         class_names (list[str] or None): `class_names[cateogory_id]` is the
             name for this category. If not provided, the visualization will
             not contain class names.
@@ -213,7 +214,7 @@ def draw_instance_predictions(img, predictions, class_names=None):
 
     cmap = colormap()
 
-    for num, i in enumerate(sorted_inds):
+    for i in sorted_inds:
         bbox = predictions.pred_boxes.tensor[i].numpy()
         cls = predictions.pred_classes[i]
         score = predictions.scores[i]
@@ -227,11 +228,54 @@ def draw_instance_predictions(img, predictions, class_names=None):
             mask_rle = predictions.pred_masks_rle[i]
             mask = mask_util.decode(mask_rle)
         if mask is not None:
-            mask_color = cmap[num % len(cmap)]
+            mask_color = cmap[color_idx]
+            color_idx = (color_idx + 1) % len(cmap)
             img = draw_mask(img, mask, color=mask_color, draw_contours=True)
 
         if predictions.has("pred_keypoints"):
             keypoints = predictions.pred_keypoints.tensor[i].numpy()
             coords = keypoints.reshape(-1, 3)[:, :2]
             img = draw_keypoints(img, coords)
-    return img
+    return img, color_idx
+
+
+def draw_stuff_predictions(
+    img, predictions, color_idx=0, class_names=None, area_limit=None, ignore_label=0
+):
+    """
+    Draw stuff prediction results on an image.
+
+    Args:
+        predictions (Tensor): the output of a semantic/panotic segmentation model. The tensor of
+            shape (H, W).
+        color_idx (int): index of color in colormap to start from
+        class_names (list[str] or None): `class_names[category_id]` is the
+            name for this category. If not provided, the visualization will
+            not contain class names.
+        area_limit (int): segmenta with less than `area_limit` are not drawn.
+        ignore_label (int): segment with label `ignore_label` will not be drawn.
+    """
+    predictions = predictions.to("cpu").numpy()
+
+    cmap = colormap()
+
+    labels, areas = np.unique(predictions, return_counts=True)
+    for label, area in zip(labels, areas):
+        # do not draw ignore class
+        if label == ignore_label:
+            continue
+        # do not draw segments that are too small
+        if area_limit and area < area_limit:
+            continue
+
+        mask_color = cmap[color_idx]
+        color_idx = (color_idx + 1) % cmap.shape[0]
+
+        mask = (predictions == label).astype(np.uint8)
+        img = draw_mask(img, mask, color=mask_color, draw_contours=True)
+        if class_names is not None:
+            _, _, stats, centroids = cv2.connectedComponentsWithStats(mask, 8)
+            largest_component_id = np.argmax(stats[1:, -1]) + 1
+            center = centroids[largest_component_id]
+            img = draw_text(img, center, class_names[label])
+    return img, color_idx

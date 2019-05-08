@@ -4,11 +4,11 @@ from detectron2.data import MetadataCatalog
 from detectron2.data.transforms import ImageTransformers, Normalize, ResizeShortestEdge
 from detectron2.detection.checkpoint import DetectionCheckpointer
 from detectron2.detection.modeling import build_model
-from detectron2.utils.vis import draw_instance_predictions
+from detectron2.utils.vis import draw_instance_predictions, draw_stuff_predictions
 
 
 class COCODemo(object):
-    def __init__(self, cfg, confidence_threshold=0.7):
+    def __init__(self, cfg, confidence_threshold=0.7, stuff_area_threshold=4096):
         self.cfg = cfg.clone()
         self.model = build_model(self.cfg)  # cfg can be modified by model
         self.model.eval()
@@ -22,7 +22,13 @@ class COCODemo(object):
 
         self.cpu_device = torch.device("cpu")
         self.confidence_threshold = confidence_threshold
-        self.category_names = MetadataCatalog.get("coco").class_names + ["__background"]
+        self.stuff_area_threshold = stuff_area_threshold
+
+        meta = MetadataCatalog.get("coco")
+        self.things_names = meta.class_names + ["__background"]
+        self.stuff_names = [
+            name.replace("-other", "").replace("-merged", "") for name in meta.stuff_class_names
+        ]
 
     def build_transform(self):
         """
@@ -48,9 +54,23 @@ class COCODemo(object):
             viz (np.ndarray): the visualization
         """
         predictions = self.compute_predictions(image)
-        top_predictions = self.select_top_predictions(predictions["detector"])
-
-        result = draw_instance_predictions(image.copy(), top_predictions, self.category_names)
+        result = image.copy()
+        color_idx = 0
+        if "sem_seg" in predictions:
+            result, color_idx = draw_stuff_predictions(
+                result,
+                predictions["sem_seg"].to(self.cpu_device),
+                color_idx,
+                self.stuff_names,
+                self.stuff_area_threshold,
+            )
+        if "detector" in predictions:
+            top_predictions = self.select_top_predictions(
+                predictions["detector"].to(self.cpu_device)
+            )
+            result, color_idx = draw_instance_predictions(
+                result, top_predictions, color_idx, self.things_names
+            )
         return top_predictions, result
 
     def compute_predictions(self, original_image):
@@ -75,7 +95,6 @@ class COCODemo(object):
             predictions = self.model([inputs])
         # there is only a single image
         predictions = predictions[0]
-        predictions = {k: v.to(self.cpu_device) for k, v in predictions.items()}
         return predictions
 
     def select_top_predictions(self, predictions):
