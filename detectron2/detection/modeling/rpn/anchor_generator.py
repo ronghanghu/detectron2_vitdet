@@ -118,15 +118,14 @@ class DefaultAnchorGenerator(nn.Module):
         self, sizes=(32, 64, 128, 256, 512), aspect_ratios=(0.5, 1, 2), _unused_stride=None
     ):
         """
-        Generate a tensor storing anchor boxes for one feature map location. The entire
-        set of anchors is formed by tiling these feature map "cell" anchors across the
-        feature map. Anchor boxes are continuous geometric rectangles centered on feature
-        map point samples.
+        Generate a tensor storing anchor boxes, which are continuous geometric rectangles
+        centered on one feature map point sample. We can later build the set of anchors
+        for the entire feature map by tiling these tensors; see `meth:grid_anchors`.
 
         Args:
-            sizes (tuple[float]): Absolute size of the anchors relative to the input image
-                (the input received by the network, after ungoing necessary scaling). The
-                absolute size is given as the side length of a box.
+            sizes (tuple[float]): Absolute size of the anchors in the units of the input
+                image (the input received by the network, after ungoing necessary scaling).
+                The absolute size is given as the side length of a box.
             aspect_ratios (tuple[float]]): Aspect ratios of the boxes computed as box
                 height / width.
 
