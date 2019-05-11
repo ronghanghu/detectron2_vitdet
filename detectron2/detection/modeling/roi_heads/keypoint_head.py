@@ -4,7 +4,7 @@ from torch.nn import functional as F
 
 from detectron2 import layers
 from detectron2.layers import Conv2d, cat
-from detectron2.structures import Keypoints, heatmaps_to_keypoints
+from detectron2.structures import heatmaps_to_keypoints
 from detectron2.utils.events import get_event_storage
 from detectron2.utils.registry import Registry
 
@@ -21,8 +21,8 @@ def build_keypoint_head(cfg):
 def keypoint_rcnn_loss(pred_keypoint_logits, instances, normalizer):
     """
     Arguments:
-        pred_keypoint_logits (Tensor): A tensor of shape (B, N, S, S) where B is the batch size,
-            N is the number of keypoints, and S is the side length of the keypoint heatmap. The
+        pred_keypoint_logits (Tensor): A tensor of shape (N, K, S, S) where N is the batch size,
+            K is the number of keypoints, and S is the side length of the keypoint heatmap. The
             values are spatial logits.
         instances (list[Instances]): A list of N Instances, where N is the batch size.
             These instances are predictions from the model
@@ -80,13 +80,15 @@ def keypoint_rcnn_inference(pred_keypoint_logits, pred_instances):
         and add it to the `pred_instances` as a `pred_keypoints` field.
 
     Args:
-        pred_keypoint_logits (Tensor): A tensor of shape (B, N, S, S) where B is the batch size,
-            N is the number of keypoints, and S is the side length of the keypoint heatmap. The
+        pred_keypoint_logits (Tensor): A tensor of shape (N, K, S, S) where N is the batch size,
+            K is the number of keypoints, and S is the side length of the keypoint heatmap. The
             values are spatial logits.
         pred_instances (list[Instances]): A list of N Instances, where N is the batch size.
 
     Returns:
         None. boxes will contain an extra "pred_keypoints" field.
+            The field is a tensor of shape (#instance, K, 3) where the last
+            dimension corresponds to (x, y, probability).
     """
     # flatten all bboxes from all images together (list[Boxes] -> Nx4 tensor)
     bboxes_flat = cat([b.pred_boxes.tensor for b in pred_instances], dim=0)
@@ -97,15 +99,8 @@ def keypoint_rcnn_inference(pred_keypoint_logits, pred_instances):
 
     for keypoint_results_per_image, instances_per_image in zip(keypoint_results, pred_instances):
         # keypoint_results_per_image is (num instances)x(num keypoints)x(x, y, score, prob)
-        vis = torch.ones(
-            len(instances_per_image),
-            keypoint_results_per_image.size(1),
-            1,
-            device=keypoint_results_per_image.device,
-        )
-        keypoint_xy = keypoint_results_per_image[:, :, :2]
-        keypoint_xyv = cat((keypoint_xy, vis), dim=2)
-        instances_per_image.pred_keypoints = Keypoints(keypoint_xyv)
+        keypoint_xyp = keypoint_results_per_image[:, :, [0, 1, 3]]
+        instances_per_image.pred_keypoints = keypoint_xyp
 
 
 @ROI_KEYPOINT_HEAD_REGISTRY.register()

@@ -42,18 +42,17 @@ def detector_postprocess(results, output_height, output_width):
     results = results[output_boxes.nonempty()]
 
     if results.has("pred_masks"):
-        MASK_THRESHOLD = 0.5
         results.pred_masks = paste_masks_in_image(
             results.pred_masks,  # N, 1, M, M
             results.pred_boxes,
             results.image_size,
-            threshold=MASK_THRESHOLD,
+            threshold=0.5,
             padding=1,
         ).squeeze(1)
 
     if results.has("pred_keypoints"):
-        results.pred_keypoints.tensor[:, :, 0] *= scale_x
-        results.pred_keypoints.tensor[:, :, 1] *= scale_y
+        results.pred_keypoints[:, :, 0] *= scale_x
+        results.pred_keypoints[:, :, 1] *= scale_y
 
     return results
 

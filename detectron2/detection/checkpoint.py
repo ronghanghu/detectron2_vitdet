@@ -320,5 +320,5 @@ class ModelCatalog(object):
 
     @staticmethod
     def _get_detectron2_baseline(name):
-        name = name[len("Detectron2"):]
+        name = name[len("Detectron2") :]
         return ModelCatalog.S3_DETECTRON2_PREFIX + name

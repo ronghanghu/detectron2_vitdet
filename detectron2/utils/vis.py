@@ -101,8 +101,8 @@ def draw_mask(img, mask, color, alpha=0.4, draw_contours=True):
             connected component (object part) in the mask.
     """
     img = img.astype(np.float32)
-    idx = np.nonzero(mask)
 
+    idx = np.nonzero(mask)
     img[idx[0], idx[1], :] *= 1.0 - alpha
     img[idx[0], idx[1], :] += alpha * color
 
@@ -233,7 +233,7 @@ def draw_instance_predictions(img, predictions, color_idx=0, class_names=None):
             img = draw_mask(img, mask, color=mask_color, draw_contours=True)
 
         if predictions.has("pred_keypoints"):
-            keypoints = predictions.pred_keypoints.tensor[i].numpy()
+            keypoints = predictions.pred_keypoints[i].numpy()
             coords = keypoints.reshape(-1, 3)[:, :2]
             img = draw_keypoints(img, coords)
     return img, color_idx

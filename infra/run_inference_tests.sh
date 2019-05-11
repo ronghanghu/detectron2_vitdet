@@ -4,13 +4,19 @@ BIN="python tools/train_net.py"
 OUTPUT="inference_test_output"
 NUM_GPUS=2
 
-for cfg in ./configs/quick_schedules/*inference_acc_test.yaml; do
-    if [[ $cfg == *"DC5"* ]]; then
-      # TODO
-      echo "Skipping $cfg ... See https://github.com/fairinternal/detectron2/issues/114"
-      continue
-    fi
-    echo
+CFG_LIST=( "${@:1}" )
+
+if [ ${#CFG_LIST[@]} -eq 0 ]; then
+  CFG_LIST=( ./configs/quick_schedules/*inference_acc_test.yaml )
+fi
+
+echo "========================================================================"
+echo "Configs to run:"
+echo "${CFG_LIST[@]}"
+echo "========================================================================"
+
+
+for cfg in "${CFG_LIST[@]}"; do
     echo "========================================================================"
     echo "Running $cfg ..."
     echo "========================================================================"

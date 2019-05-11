@@ -52,6 +52,8 @@ class GeneralizedRCNN(nn.Module):
             list[dict]: Each dict is the output for one input image.
                 The dict contains one key "detector" whose value is a
                 :class:`Instances`.
+                The :class:`Instances` object has the following keys:
+                    "pred_boxes", "pred_classes", "scores", "pred_masks", "pred_keypoints"
         """
         images = [x["image"].to(self.device) for x in batched_inputs]
         images = [self.normalizer(x) for x in images]

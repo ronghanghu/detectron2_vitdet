@@ -210,7 +210,7 @@ def prepare_for_coco_evaluation(dataset_predictions):
 
         has_keypoints = predictions.has("pred_keypoints")
         if has_keypoints:
-            keypoints = predictions.pred_keypoints.tensor.flatten(1).tolist()
+            keypoints = predictions.pred_keypoints.flatten(1).tolist()
 
         for k in range(num_instance):
             result = {

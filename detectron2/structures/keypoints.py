@@ -8,8 +8,8 @@ from detectron2.layers import interpolate
 class Keypoints:
     """
     Stores the keypoints for all objects in one image. Instances have a `keypoints` property that
-        contains the x, y and visibility of each keypoint as a tensor of shape  (N, M, 3) where
-        N is the number of instances, and M is the number of keypoints per instance.
+        contains the x, y and visibility of each keypoint as a tensor of shape  (N, K, 3) where
+        N is the number of instances, and K is the number of keypoints per instance.
 
     The visiblity of each keypoint may be one of three integers:
         0 - not visible
@@ -21,8 +21,8 @@ class Keypoints:
         """
         Arguments:
             keypoints: A Tensor, numpy array, or list of the x, y, and visibility of each keypoint.
-                The shape should be (N, M, 3) where N is the number of
-                instances, and M is the number of keypoints per instance.
+                The shape should be (N, K, 3) where N is the number of
+                instances, and K is the number of keypoints per instance.
         """
         device = keypoints.device if isinstance(keypoints, torch.Tensor) else torch.device("cpu")
         keypoints = torch.as_tensor(keypoints, dtype=torch.float32, device=device)
@@ -41,9 +41,9 @@ class Keypoints:
             boxes: Nx4 tensor, the boxes to draw the keypoints to
 
         Returns:
-            heatmaps: A tensor of shape (N, M) containing an integer spatial label
+            heatmaps: A tensor of shape (N, K) containing an integer spatial label
                 in the range [0, heatmap_size**2 - 1] for each keypoint in the input.
-            valid: A tensor of shape (N, M) containing whether each keypoint is in
+            valid: A tensor of shape (N, K) containing whether each keypoint is in
                 the roi or not.
         """
         return _keypoints_to_heatmap(self.tensor, boxes, heatmap_size)
@@ -82,14 +82,14 @@ def _keypoints_to_heatmap(keypoints, rois, heatmap_size):
     d = floor(c) and c = d + 0.5, where d is a discrete coordinate and c is a continuous coordinate.
 
     Arguments:
-        keypoints: tensor of keypoint locations in of shape (N, M, 3).
+        keypoints: tensor of keypoint locations in of shape (N, K, 3).
         rois: Nx4 tensor of rois in xyxy format
         heatmap_size: integer side length of square heatmap.
 
     Returns:
-        heatmaps: A tensor of shape (N, M) containing an integer spatial label
+        heatmaps: A tensor of shape (N, K) containing an integer spatial label
             in the range [0, heatmap_size**2 - 1] for each keypoint in the input.
-        valid: A tensor of shape (N, M) containing whether each keypoint is in
+        valid: A tensor of shape (N, K) containing whether each keypoint is in
             the roi or not.
     """
 
