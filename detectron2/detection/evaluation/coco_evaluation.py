@@ -3,6 +3,7 @@ import json
 import logging
 import numpy as np
 import os
+import pickle
 import tempfile
 from collections import OrderedDict
 import pycocotools.mask as mask_util
@@ -56,7 +57,7 @@ class COCOEvaluator(DatasetEvaluator):
         Returns:
             tuple[str]: tasks that can be evaluated under the given configuration.
         """
-        if cfg.MODEL.RPN_ONLY:
+        if cfg.MODEL.PROPOSAL_GENERATOR_ONLY:
             tasks = ("box_proposals",)
         else:
             tasks = ("bbox",)
@@ -113,6 +114,25 @@ class COCOEvaluator(DatasetEvaluator):
         tasks = set(self._tasks)
         self._results = OrderedDict()
         if "box_proposals" in tasks:
+            if self._output_dir:
+                # Saving generated box proposals to file.
+                # Predicted box_proposals are in XYXY_ABS mode.
+                bbox_mode = BoxMode.XYXY_ABS.value
+                ids, boxes, objectness_logits = [], [], []
+                for prediction in self._predictions:
+                    ids.append(prediction["image_id"])
+                    boxes.append(prediction["instances"].proposal_boxes.tensor.numpy())
+                    objectness_logits.append(prediction["instances"].objectness_logits.numpy())
+
+                proposal_data = {
+                    "boxes": boxes,
+                    "objectness_logits": objectness_logits,
+                    "ids": ids,
+                    "bbox_mode": bbox_mode,
+                }
+                with open(os.path.join(self._output_dir, "box_proposals.pkl"), "wb") as f:
+                    pickle.dump(proposal_data, f)
+
             self._eval_box_proposals()
             tasks.remove("box_proposals")
 

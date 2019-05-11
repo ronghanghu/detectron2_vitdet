@@ -6,6 +6,8 @@ from PIL import Image
 from detectron2.data.transforms import Flip, ImageTransformers, ResizeShortestEdge
 from detectron2.structures import Boxes, BoxMode, Instances, Keypoints, PolygonMasks
 
+from ..modeling.proposal_generator.proposal_utils import add_ground_truth_to_proposals_single_image
+
 __all__ = ["DetectionTransform"]
 
 
@@ -44,7 +46,9 @@ def annotations_to_instances(annos, image_size):
 
 class DetectionTransform:
     """
-    A callable which takes a dict produced by the detection dataset, and applies transformations.
+    A callable which takes a dict produced by the detection dataset, and applies transformations,
+    including image resizing and flipping. The transformation parameters are parsed from cfg file
+    and depending on the is_train condition.
 
     Note that mean/std normalization is expected to done by the model instead of here.
     """
@@ -75,6 +79,14 @@ class DetectionTransform:
         self.mask_on = cfg.MODEL.MASK_ON
         self.keypoint_on = cfg.MODEL.KEYPOINT_ON
 
+        if cfg.MODEL.LOAD_PROPOSALS:
+            self.min_box_side_len = cfg.MODEL.PROPOSAL_GENERATOR.MIN_SIZE
+            self.proposal_topk = (
+                cfg.DATASETS.PRECOMPUTED_PROPOSAL_TOPK_TRAIN
+                if is_train
+                else cfg.DATASETS.PRECOMPUTED_PROPOSAL_TOPK_TEST
+            )
+
     def __call__(self, dataset_dict):
         """
         Transform the dataset_dict according to the configured transformations.
@@ -96,7 +108,7 @@ class DetectionTransform:
             conversion_image_format = "RGB"
         image = Image.open(dataset_dict["file_name"]).convert(conversion_image_format)
         image = np.asarray(image, dtype="uint8")
-        # flip channels if needed
+        # Flip channels if needed
         if self.img_format == "BGR":
             image = image[:, :, ::-1]
 
@@ -111,6 +123,27 @@ class DetectionTransform:
         # Can use uint8 if it turns out to be slow some day
         dataset_dict["image"] = image
 
+        if "proposal_boxes" in dataset_dict:
+            # Tranform proposal boxes
+            boxes = self.transform_bbox(
+                dataset_dict.pop("proposal_boxes"), dataset_dict["proposal_bbox_mode"], tfm_params
+            )
+            dataset_dict["proposal_bbox_mode"] = BoxMode.XYXY_ABS
+            boxes = Boxes(boxes)
+            objectness_logits = torch.as_tensor(
+                dataset_dict.pop("proposal_objectness_logits").astype("float32")
+            )
+
+            boxes.clip(image_shape)
+            keep = boxes.nonempty(threshold=self.min_box_side_len)
+            boxes = boxes[keep]
+            objectness_logits = objectness_logits[keep]
+
+            proposals = Instances(image_shape)
+            proposals.proposal_boxes = boxes[: self.proposal_topk]
+            proposals.objectness_logits = objectness_logits[: self.proposal_topk]
+            dataset_dict["proposals"] = proposals
+
         if not self.is_train:
             dataset_dict.pop("annotations", None)
             dataset_dict.pop("sem_seg_file_name", None)
@@ -123,7 +156,7 @@ class DetectionTransform:
                 if obj.get("iscrowd", 0) == 0
             ]
             targets = annotations_to_instances(annos, image_shape)
-            # should not be empty during training
+            # Should not be empty during training
             dataset_dict["targets"] = targets
         if "sem_seg_file_name" in dataset_dict:
             sem_seg_gt = Image.open(dataset_dict.pop("sem_seg_file_name"))
@@ -131,6 +164,12 @@ class DetectionTransform:
             sem_seg_gt = self.tfms.transform_segmentation(sem_seg_gt, tfm_params)
             sem_seg_gt = torch.as_tensor(sem_seg_gt.astype("long"))
             dataset_dict["sem_seg_gt"] = sem_seg_gt
+
+        if "proposals" in dataset_dict:
+            # Augment precomputed proposals with groundtruth boxes during training.
+            dataset_dict["proposals"] = add_ground_truth_to_proposals_single_image(
+                targets.gt_boxes, dataset_dict.pop("proposals")
+            )
         return dataset_dict
 
     def transform_annotations(self, annotation, tfm_params, image_size):
@@ -139,15 +178,10 @@ class DetectionTransform:
 
         After this method, the box mode will be set to XYXY_ABS.
         """
-        bbox = BoxMode.convert(annotation["bbox"], annotation["bbox_mode"], BoxMode.XYXY_ABS)
+        annotation["bbox"] = self.transform_bbox(
+            annotation["bbox"], annotation["bbox_mode"], tfm_params
+        )
         annotation["bbox_mode"] = BoxMode.XYXY_ABS
-
-        x0, y0, x1, y1 = bbox
-        coords = np.array([[x0, y0], [x1, y0], [x0, y1], [x1, y1]], dtype="float32")
-        coords = self.tfms.transform_coords(coords, tfm_params)
-        minxy = coords.min(axis=0)
-        maxxy = coords.max(axis=0)
-        annotation["bbox"] = (minxy[0], minxy[1], maxxy[0], maxxy[1])
 
         # each instance contains 1 or more polygons
         if self.mask_on and "segmentation" in annotation:
@@ -162,6 +196,28 @@ class DetectionTransform:
             annotation["keypoints"] = keypoints
 
         return annotation
+
+    def transform_bbox(self, boxes, box_mode, tfm_params):
+        """
+        Apply image transformations to the boxes.
+        The box modes of output boxes would be XYXY_ABS.
+        """
+        # First convert input boxes to XXXY_ABS mode.
+        convert_boxes = BoxMode.convert(boxes, box_mode, BoxMode.XYXY_ABS)
+        # Indexes of converting (x0, y0, x1, y1) box into 4 coordinates of
+        # ([x0, y0], [x1, y0], [x0, y1], [x1, y1])
+        idxs = np.array([(0, 1), (2, 1), (0, 3), (2, 3)]).flatten()
+        coords = np.array(convert_boxes).reshape(-1, 4)[:, idxs].reshape(-1, 2)
+        coords = self.tfms.transform_coords(coords, tfm_params)
+        coords = coords.reshape((-1, 4, 2))
+        minxy = coords.min(axis=1)
+        maxxy = coords.max(axis=1)
+        trans_boxes = np.concatenate((minxy, maxxy), axis=1)
+
+        if not isinstance(boxes, np.ndarray):
+            return type(boxes)(trans_boxes.flatten())
+
+        return trans_boxes
 
     def _process_keypoints(self, keypoints, tfm_params, image_width):
         # (N*3,) -> (N, 3)

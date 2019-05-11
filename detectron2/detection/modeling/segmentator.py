@@ -10,8 +10,8 @@ from .postprocessing import (
     detector_postprocess,
     sem_seg_postprocess,
 )
+from .proposal_generator import build_proposal_generator
 from .roi_heads.roi_heads import build_roi_heads
-from .rpn.rpn import build_rpn
 from .sem_seg_heads import build_sem_seg_head
 
 
@@ -106,7 +106,7 @@ class PanopticFPN(nn.Module):
         )
 
         self.backbone = build_backbone(cfg)
-        self.rpn = build_rpn(cfg)
+        self.proposal_generator = build_proposal_generator(cfg)
         self.roi_heads = build_roi_heads(cfg)
         self.sem_seg_head = build_sem_seg_head(cfg)
 
@@ -134,6 +134,10 @@ class PanopticFPN(nn.Module):
         images = ImageList.from_tensors(images, self.backbone.size_divisibility)
         features = self.backbone(images.tensor)
 
+        if "proposals" in batched_inputs[0]:
+            proposals = [x["proposals"].to(self.device) for x in batched_inputs]
+            proposal_losses = {}
+
         if "sem_seg_gt" in batched_inputs[0]:
             sem_seg_targets = [x["sem_seg_gt"].to(self.device) for x in batched_inputs]
             sem_seg_targets = ImageList.from_tensors(
@@ -147,7 +151,8 @@ class PanopticFPN(nn.Module):
             detector_targets = [x["targets"].to(self.device) for x in batched_inputs]
         else:
             detector_targets = None
-        proposals, proposal_losses = self.rpn(images, features, detector_targets)
+        if self.proposal_generator:
+            proposals, proposal_losses = self.proposal_generator(images, features, detector_targets)
         detector_results, detector_losses = self.roi_heads(
             images, features, proposals, detector_targets
         )

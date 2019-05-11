@@ -1,6 +1,6 @@
 import json
-from collections import defaultdict
 import os
+from collections import defaultdict
 
 from borc.common.history_buffer import HistoryBuffer
 

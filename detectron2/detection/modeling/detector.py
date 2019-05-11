@@ -6,8 +6,8 @@ from detectron2.structures import ImageList
 from .backbone import build_backbone
 from .model_builder import META_ARCH_REGISTRY
 from .postprocessing import detector_postprocess
+from .proposal_generator import build_proposal_generator
 from .roi_heads.roi_heads import build_roi_heads
-from .rpn.rpn import build_rpn
 
 
 @META_ARCH_REGISTRY.register()
@@ -24,8 +24,8 @@ class GeneralizedRCNN(nn.Module):
         self.device = torch.device(cfg.MODEL.DEVICE)
 
         self.backbone = build_backbone(cfg)
-        self.rpn = build_rpn(cfg)
-        if cfg.MODEL.RPN_ONLY:
+        self.proposal_generator = build_proposal_generator(cfg)
+        if cfg.MODEL.PROPOSAL_GENERATOR_ONLY:
             self.roi_heads = None
         else:
             self.roi_heads = build_roi_heads(cfg)
@@ -44,6 +44,7 @@ class GeneralizedRCNN(nn.Module):
         For now, each item in the list is a dict that contains:
             image: Tensor, image in (C, H, W) format.
             targets: Instances
+            proposals: Instances, precomputed proposals.
             Other information that's included in the original dicts, such as:
                 "height", "width" (int): the output resolution of the model, used in inference.
                     See :meth:`postprocess` for details.
@@ -58,6 +59,9 @@ class GeneralizedRCNN(nn.Module):
         images = [x["image"].to(self.device) for x in batched_inputs]
         images = [self.normalizer(x) for x in images]
         images = ImageList.from_tensors(images, self.backbone.size_divisibility)
+        if "proposals" in batched_inputs[0]:
+            proposals = [x["proposals"].to(self.device) for x in batched_inputs]
+            proposal_losses = {}
 
         if "targets" in batched_inputs[0]:
             targets = [x["targets"].to(self.device) for x in batched_inputs]
@@ -65,7 +69,8 @@ class GeneralizedRCNN(nn.Module):
             targets = None
 
         features = self.backbone(images.tensor)
-        proposals, proposal_losses = self.rpn(images, features, targets)
+        if self.proposal_generator:
+            proposals, proposal_losses = self.proposal_generator(images, features, targets)
         if self.roi_heads:
             results, detector_losses = self.roi_heads(images, features, proposals, targets)
         else:

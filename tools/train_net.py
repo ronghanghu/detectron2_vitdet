@@ -131,10 +131,15 @@ def do_test(cfg, model, is_final=True):
     if isinstance(model, DistributedDataParallel):
         model = model.module
     torch.cuda.empty_cache()  # TODO check if it helps
+    if not cfg.MODEL.LOAD_PROPOSALS:
+        proposal_files_test = (None,) * len(cfg.DATASETS.TEST)
+    else:
+        proposal_files_test = cfg.DATASETS.PROPOSAL_FILES_TEST
+    assert len(proposal_files_test) == len(cfg.DATASETS.TEST)
 
     with inference_context(model):
         results = []
-        for dataset_name in cfg.DATASETS.TEST:
+        for dataset_name, proposal_file in zip(cfg.DATASETS.TEST, proposal_files_test):
             if cfg.OUTPUT_DIR:
                 output_folder = os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
                 os.makedirs(output_folder, exist_ok=True)
@@ -142,7 +147,7 @@ def do_test(cfg, model, is_final=True):
                 output_folder = None
 
             # NOTE: creating evaluator after dataset is loaded as there might be dependency.
-            data_loader = build_detection_test_loader(cfg, dataset_name)
+            data_loader = build_detection_test_loader(cfg, dataset_name, proposal_file)
             evaluator = get_evaluator(cfg, dataset_name, output_folder)
             results_per_dataset = inference_on_dataset(model, data_loader, evaluator)
             if comm.is_main_process():

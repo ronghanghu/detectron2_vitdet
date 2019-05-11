@@ -40,3 +40,9 @@ can read from "file_name" if "image" is not available.
 				`n` must be equal to the number of keypoint categories.
 				The Xs and Ys are either relative coordinates in [0, 1], or absolute coordinates,
 				depend on whether "bbox_mode" is relative.
++ proposal_boxes (array): 2D numpy array with shape (K, 4). K precomputed proposal boxes for this image.
++ proposal_objectness_logits (array): numpy array with shape (K, ), which corresponds to the objectness 
+        logits of proposals in 'propopsal_boxes'.
++ proposal_bbox_mode (int): the format of the precomputed proposal bbox.
+        It must be a member of [detectron2.structures.BoxMode](detectron2/structures/boxes.py).
+        Default format is `BoxMode.XYXY_ABS`.

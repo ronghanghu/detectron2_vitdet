@@ -3,11 +3,13 @@ import copy
 import itertools
 import logging
 import numpy as np
+import pickle
 import torch.utils.data
 from tabulate import tabulate
 from termcolor import colored
 
 from detectron2.data import DatasetCatalog, DatasetFromList, MapDataset, MetadataCatalog, samplers
+from detectron2.structures import BoxMode
 from detectron2.utils.comm import get_world_size
 
 from .transforms import DetectionTransform
@@ -54,7 +56,7 @@ def filter_images_with_few_keypoints(dataset_dicts, min_keypoints_per_image):
         dataset_dicts (list[dict]): annotations in Detectron2 Dataset format.
 
     Returns:
-        list[dict]: the same format, but filtered.
+        list[dict]: the same format as dataset_dicts, but filtered.
     """
     num_before = len(dataset_dicts)
 
@@ -77,6 +79,57 @@ def filter_images_with_few_keypoints(dataset_dicts, min_keypoints_per_image):
             num_before - num_after, min_keypoints_per_image
         )
     )
+    return dataset_dicts
+
+
+def load_proposals_into_dataset(dataset_dicts, proposal_file=None):
+    """
+    load precomputed proposals into the dataset.
+
+    Args:
+        dataset_dicts (list[dict]): annotations in Detectron2 Dataset format.
+        proposal_file (str): file path of pre-computed proposals.
+
+    Returns:
+        list[dict]: the same format as dataset_dicts, but added proposal field.
+    """
+    if proposal_file is None:
+        return dataset_dicts
+
+    logger = logging.getLogger(__name__)
+    logger.info("Loading proposals from: {}".format(proposal_file))
+
+    with open(proposal_file, "rb") as f:
+        proposals = pickle.load(f, encoding="latin1")
+
+    # Rename the key names in D1 proposal files
+    rename_keys = {"indexes": "ids", "scores": "objectness_logits"}
+    for key in rename_keys:
+        if key in proposals:
+            proposals[rename_keys[key]] = proposals.pop(key)
+
+    # Remove proposals whose ids are not in dataset
+    img_ids = set({entry["image_id"] for entry in dataset_dicts})
+    keep = [i for i, id in enumerate(proposals["ids"]) if id in img_ids]
+    # Sort proposals by ids following the image order in dataset
+    keep = sorted(keep)
+    for key in ["boxes", "ids", "objectness_logits"]:
+        proposals[key] = [proposals[key][i] for i in keep]
+    # Assuming default bbox_mode of precomputed proposals are 'XYXY_ABS'
+    bbox_mode = BoxMode(proposals["bbox_mode"]) if "bbox_mode" in proposals else BoxMode.XYXY_ABS
+
+    for i, record in enumerate(dataset_dicts):
+        # Sanity check that these proposals are for the correct image id
+        assert record["image_id"] == proposals["ids"][i]
+
+        boxes = proposals["boxes"][i]
+        objectness_logits = proposals["objectness_logits"][i]
+        # Sort the proposals in descending order of the scores
+        inds = objectness_logits.argsort()[::-1]
+        record["proposal_boxes"] = boxes[inds]
+        record["proposal_objectness_logits"] = objectness_logits[inds]
+        record["proposal_bbox_mode"] = bbox_mode
+
     return dataset_dicts
 
 
@@ -191,6 +244,16 @@ def build_detection_train_loader(cfg, transform=None, start_iter=0):
 
     assert len(cfg.DATASETS.TRAIN)
     dataset_dicts = [DatasetCatalog.get(dataset_name) for dataset_name in cfg.DATASETS.TRAIN]
+    if cfg.MODEL.LOAD_PROPOSALS:
+        assert len(cfg.DATASETS.TRAIN) == len(cfg.DATASETS.PROPOSAL_FILES_TRAIN)
+        # load precomputed proposals from proposal files
+        dataset_dicts = [
+            load_proposals_into_dataset(dataset_i_dicts, proposal_file)
+            for dataset_i_dicts, proposal_file in zip(
+                dataset_dicts, cfg.DATASETS.PROPOSAL_FILES_TRAIN
+            )
+        ]
+
     dataset_dicts = list(itertools.chain.from_iterable(dataset_dicts))
 
     if "annotations" in dataset_dicts[0]:
@@ -233,7 +296,7 @@ def build_detection_train_loader(cfg, transform=None, start_iter=0):
     return data_loader
 
 
-def build_detection_test_loader(cfg, dataset_name, transform=None):
+def build_detection_test_loader(cfg, dataset_name, proposal_file=None, transform=None):
     """
     Similar to `build_detection_train_loader`.
     But this function uses the given `dataset_name` argument (instead of the names in cfg),
@@ -242,6 +305,7 @@ def build_detection_test_loader(cfg, dataset_name, transform=None):
     Args:
         cfg: a detectron2 CfgNode
         dataset_name (str): a name of the dataset that's available in the DatasetCatalog
+        proposal_file (str): a name of pre-computed proposal file path for this dataset
         transform (callable): a callable which takes a sample (dict) from dataset
             and returns a transformed dict.
             By default it will be `DetectionTransform(cfg, is_train=False)`.
@@ -251,6 +315,9 @@ def build_detection_test_loader(cfg, dataset_name, transform=None):
             dataset, with test-time transformation and batching.
     """
     dataset_dicts = DatasetCatalog.get(dataset_name)
+    if proposal_file is not None:
+        # load precomputed proposals from proposal files
+        dataset_dicts = load_proposals_into_dataset(dataset_dicts, proposal_file)
     dataset = DatasetFromList(dataset_dicts)
     if transform is None:
         transform = DetectionTransform(cfg, False)

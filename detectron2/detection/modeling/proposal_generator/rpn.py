@@ -1,54 +1,15 @@
-import math
 import torch
 import torch.nn.functional as F
 from torch import nn
 
-from detectron2.structures import Instances
 from detectron2.utils.registry import Registry
 
 from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher
 from .anchor_generator import build_anchor_generator
+from .build import PROPOSAL_GENERATOR_REGISTRY
+from .proposal_utils import add_ground_truth_to_proposals
 from .rpn_outputs import RPNOutputs, find_top_rpn_proposals
-
-
-# In the future when we have more proposal mechanisms (including precomputed)
-# this function should move into a shared module.
-def add_ground_truth_to_proposals(gt_boxes, proposals):
-    """
-    Augment `proposals` with ground-truth boxes from `gt_boxes`.
-
-    Args:
-        gt_boxes(list[Boxes]): list of N elements. Element i is a Boxes
-            representing the gound-truth for image i.
-        proposals (list[Instances]): list of N elements. Element i is a Instances
-            representing the proposals for image i.
-
-    Returns:
-        list[Instances]: list of N Instances. Each is the proposals for the image,
-            with field "proposal_boxes" and "objectness_logits".
-    """
-    assert gt_boxes is not None
-
-    assert len(proposals) == len(gt_boxes)
-    if len(proposals) == 0:
-        return proposals
-
-    device = proposals[0].objectness_logits.device
-    # Concating gt_boxes with proposals requires them to have the same fields
-    # Assign all ground-truth boxes an objectness logit corresponding to P(object) \approx 1.
-    gt_logit_value = math.log((1.0 - 1e-10) / (1 - (1.0 - 1e-10)))
-
-    new_proposals = []
-    for proposal, gt_boxes_i in zip(proposals, gt_boxes):
-        gt_logits_i = gt_logit_value * torch.ones(len(gt_boxes_i), device=device)
-        gt_proposal = Instances(proposal.image_size)
-
-        gt_proposal.proposal_boxes = gt_boxes_i
-        gt_proposal.objectness_logits = gt_logits_i
-        new_proposals.append(Instances.cat([proposal, gt_proposal]))
-    return new_proposals
-
 
 RPN_HEAD_REGISTRY = Registry("RPN_HEAD")
 
@@ -134,6 +95,7 @@ class StandardRPNHead(nn.Module):
         return objectness_logits_pred, anchor_deltas_pred
 
 
+@PROPOSAL_GENERATOR_REGISTRY.register()
 class RPN(nn.Module):
     """
     RPN subnetwork.
@@ -143,13 +105,13 @@ class RPN(nn.Module):
         super(RPN, self).__init__()
 
         # fmt: off
-        self.rpn_only               = cfg.MODEL.RPN_ONLY
-        self.in_features            = cfg.MODEL.RPN.IN_FEATURES
-        self.nms_thresh             = cfg.MODEL.RPN.NMS_THRESH
-        self.min_box_side_len       = cfg.MODEL.RPN.MIN_SIZE
-        self.batch_size_per_image   = cfg.MODEL.RPN.BATCH_SIZE_PER_IMAGE
-        self.positive_fraction      = cfg.MODEL.RPN.POSITIVE_FRACTION
-        self.smooth_l1_beta         = cfg.MODEL.RPN.SMOOTH_L1_BETA
+        self.min_box_side_len        = cfg.MODEL.PROPOSAL_GENERATOR.MIN_SIZE
+        self.proposal_generator_only = cfg.MODEL.PROPOSAL_GENERATOR_ONLY
+        self.in_features             = cfg.MODEL.RPN.IN_FEATURES
+        self.nms_thresh              = cfg.MODEL.RPN.NMS_THRESH
+        self.batch_size_per_image    = cfg.MODEL.RPN.BATCH_SIZE_PER_IMAGE
+        self.positive_fraction       = cfg.MODEL.RPN.POSITIVE_FRACTION
+        self.smooth_l1_beta          = cfg.MODEL.RPN.SMOOTH_L1_BETA
         # fmt: on
 
         # Map from self.training state to train/test settings
@@ -170,7 +132,7 @@ class RPN(nn.Module):
             cfg.MODEL.RPN.BG_IOU_THRESHOLD,
             allow_low_quality_matches=True,
         )
-        self.head = build_rpn_head(cfg)
+        self.rpn_head = build_rpn_head(cfg)
 
     def forward(self, images, features, gt_instances=None):
         """
@@ -180,13 +142,13 @@ class RPN(nn.Module):
                 map name to tensor. Axis 0 represents the number of images `N` in
                 the input data; axes 1-3 are channels, height, and width, which may
                 vary between feature maps (e.g., if a feature pyramid is used).
-            gt_instances (list[Instances], optional): a length `N` list of `Instances`s. Each
-                `Instances` stores ground-truth instances for the corresponding image.
+            gt_instances (list[Instances], optional): a length `N` list of `Instances`s.
+                Each `Instances` stores ground-truth instances for the corresponding image.
         """
         gt_boxes = [x.gt_boxes for x in gt_instances] if gt_instances is not None else None
         del gt_instances
         features = [features[f] for f in self.in_features]
-        objectness_logits_pred, anchor_deltas_pred = self.head(features)
+        objectness_logits_pred, anchor_deltas_pred = self.rpn_head(features)
         anchors = self.anchor_generator(images, features)
         # TODO: The anchors only depend on the feature map shape; there's probably
         # an opportunity for some optimizations (e.g., caching anchors).
@@ -206,7 +168,7 @@ class RPN(nn.Module):
 
         if self.training:
             losses = outputs.losses()
-            if self.rpn_only:
+            if self.proposal_generator_only:
                 # When training an RPN-only model, the loss is determined by the
                 # objectness_logits_pred and anchor_deltas_pred values and there is
                 # no need to transform the anchors into predicted boxes; this is an
@@ -245,8 +207,9 @@ class RPN(nn.Module):
                 # points (under one tested configuration).
                 proposals = add_ground_truth_to_proposals(gt_boxes, proposals)
 
-            if self.rpn_only:
-                # We must be in testing mode (self.training and self.rpn_only returns early)
+            if self.proposal_generator_only:
+                # We must be in testing mode
+                # (self.training and self.proposal_generator_only returns early)
                 assert not self.training
                 # For end-to-end models, the RPN proposals are an intermediate state
                 # and don't bother to sort them in decreasing score order. For RPN-only
@@ -256,7 +219,3 @@ class RPN(nn.Module):
                 proposals = [p[ind] for p, ind in zip(proposals, inds)]
 
         return proposals, losses
-
-
-def build_rpn(cfg):
-    return RPN(cfg)

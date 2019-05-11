@@ -17,7 +17,9 @@ from detectron2.utils.config import CfgNode as CN
 _C = CN()
 
 _C.MODEL = CN()
-_C.MODEL.RPN_ONLY = False
+# If only have the subnetwork of proposal generation, e.g. RPN
+_C.MODEL.PROPOSAL_GENERATOR_ONLY = False
+_C.MODEL.LOAD_PROPOSALS = False
 _C.MODEL.MASK_ON = False
 _C.MODEL.KEYPOINT_ON = False
 _C.MODEL.DEVICE = "cuda"
@@ -68,8 +70,18 @@ _C.INPUT.FORMAT = "BGR"
 _C.DATASETS = CN()
 # List of the dataset names for training. Must be registered in DatasetCatalog
 _C.DATASETS.TRAIN = ()
+# List of the pre-computed proposal files for training, which must be consistent
+# with datasets listed in DATASETS.TRAIN.
+_C.DATASETS.PROPOSAL_FILES_TRAIN = ()
+# Number of top scoring precomputed proposals to keep for training
+_C.DATASETS.PRECOMPUTED_PROPOSAL_TOPK_TRAIN = 2000
 # List of the dataset names for testing. Must be registered in DatasetCatalog
 _C.DATASETS.TEST = ()
+# List of the pre-computed proposal files for test, which must be consistent
+# with datasets listed in DATASETS.TEST.
+_C.DATASETS.PROPOSAL_FILES_TEST = ()
+# Number of top scoring precomputed proposals to keep for test
+_C.DATASETS.PRECOMPUTED_PROPOSAL_TOPK_TEST = 1000
 
 # -----------------------------------------------------------------------------
 # DataLoader
@@ -109,6 +121,17 @@ _C.MODEL.FPN.OUT_CHANNELS = 256
 
 # Options: "" (no norm), "GN"
 _C.MODEL.FPN.NORM = ""
+
+
+# ---------------------------------------------------------------------------- #
+# Proposal generator options
+# ---------------------------------------------------------------------------- #
+_C.MODEL.PROPOSAL_GENERATOR = CN()
+# Current proposal generators include "RPN" and "PrecomputedProposals"
+_C.MODEL.PROPOSAL_GENERATOR.NAME = "RPN"
+# Proposal height and width both need to be greater than MIN_SIZE
+# (a the scale used during training or inference)
+_C.MODEL.PROPOSAL_GENERATOR.MIN_SIZE = 0
 
 
 # ---------------------------------------------------------------------------- #
@@ -162,9 +185,7 @@ _C.MODEL.RPN.POST_NMS_TOPK_TRAIN = 2000
 _C.MODEL.RPN.POST_NMS_TOPK_TEST = 1000
 # NMS threshold used on RPN proposals
 _C.MODEL.RPN.NMS_THRESH = 0.7
-# Proposal height and width both need to be greater than RPN_MIN_SIZE
-# (a the scale used during training or inference)
-_C.MODEL.RPN.MIN_SIZE = 0
+
 
 # ---------------------------------------------------------------------------- #
 # RPN HEAD options

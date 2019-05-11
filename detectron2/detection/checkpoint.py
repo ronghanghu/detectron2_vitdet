@@ -32,21 +32,32 @@ def _convert_c2_detectron_names(weights):
     # FPN case
     # In the C2 model, the RPN hidden layer conv is defined for FPN level 2 and then
     # shared for all other levels, hence the appearance of "fpn2"
-    layer_keys = [k.replace("conv.rpn.fpn2", "rpn.head.conv") for k in layer_keys]
+    layer_keys = [
+        k.replace("conv.rpn.fpn2", "proposal_generator.rpn_head.conv") for k in layer_keys
+    ]
     # Non-FPN case
-    layer_keys = [k.replace("conv.rpn", "rpn.head.conv") for k in layer_keys]
+    layer_keys = [k.replace("conv.rpn", "proposal_generator.rpn_head.conv") for k in layer_keys]
 
     # --------------------------------------------------------------------------
     # RPN box transformation conv
     # --------------------------------------------------------------------------
     # FPN case (see note above about "fpn2")
-    layer_keys = [k.replace("rpn.bbox.pred.fpn2", "rpn.head.anchor_deltas") for k in layer_keys]
     layer_keys = [
-        k.replace("rpn.cls.logits.fpn2", "rpn.head.objectness_logits") for k in layer_keys
+        k.replace("rpn.bbox.pred.fpn2", "proposal_generator.rpn_head.anchor_deltas")
+        for k in layer_keys
+    ]
+    layer_keys = [
+        k.replace("rpn.cls.logits.fpn2", "proposal_generator.rpn_head.objectness_logits")
+        for k in layer_keys
     ]
     # Non-FPN case
-    layer_keys = [k.replace("rpn.bbox.pred", "rpn.head.anchor_deltas") for k in layer_keys]
-    layer_keys = [k.replace("rpn.cls.logits", "rpn.head.objectness_logits") for k in layer_keys]
+    layer_keys = [
+        k.replace("rpn.bbox.pred", "proposal_generator.rpn_head.anchor_deltas") for k in layer_keys
+    ]
+    layer_keys = [
+        k.replace("rpn.cls.logits", "proposal_generator.rpn_head.objectness_logits")
+        for k in layer_keys
+    ]
 
     # --------------------------------------------------------------------------
     # Fast R-CNN box head
@@ -204,6 +215,33 @@ def _convert_background_class(model):
     return model
 
 
+def _convert_rpn_name(model):
+    """
+    Automatically convert the model for breakage in D15084700.
+    """
+    # TODO This is temporary. Remove this function after a while
+
+    keys = model.keys()
+    rpn_keys = [k for k in keys if "rpn.head." in k]
+
+    if len(rpn_keys) == 0:
+        return model
+
+    logger = logging.getLogger(__name__)
+    logger.warning(
+        "Your rpn weight names are in an old format! Please see D15084700 "
+        "and convert your weight names!"
+    )
+    logger.warning("Now attempting to automatically convert the weight names for you ...")
+
+    for old_key in rpn_keys:
+        new_key = old_key.replace("rpn.head.", "proposal_generator.rpn_head.")
+        logger.warning("Change origin rpn weight name {} to {}.".format(old_key, new_key))
+        model[new_key] = model.pop(old_key)
+
+    return model
+
+
 class DetectionCheckpointer(Checkpointer):
     def __init__(
         self,
@@ -230,6 +268,7 @@ class DetectionCheckpointer(Checkpointer):
             if "model" in data and "__author__" in data:
                 # file is in Detectron2 model zoo format
                 self.logger.info("Reading a file from '{}'".format(data.pop("__author__")))
+                data["model"] = _convert_rpn_name(data["model"])
                 return data
             else:
                 # assume file is from Caffe2
@@ -243,6 +282,7 @@ class DetectionCheckpointer(Checkpointer):
         if "model" not in loaded:
             loaded = {"model": loaded}
         loaded["model"] = _convert_background_class(loaded["model"])
+        loaded["model"] = _convert_rpn_name(loaded["model"])
         return loaded
 
 
@@ -277,6 +317,7 @@ class ModelCatalog(object):
         "37697547/e2e_keypoint_rcnn_R-50-FPN_1x": "37697547/12_2017_baselines/e2e_keypoint_rcnn_R-50-FPN_1x.yaml.08_42_54.kdzV35ao",  # noqa B950
         "35998355/rpn_R-50-C4_1x": "35998355/12_2017_baselines/rpn_R-50-C4_1x.yaml.08_00_43.njH5oD9L",  # noqa B950
         "35998814/rpn_R-50-FPN_1x": "35998814/12_2017_baselines/rpn_R-50-FPN_1x.yaml.08_06_03.Axg0r179",  # noqa B950
+        "36225147/fast_R-50-FPN_1x": "36225147/12_2017_baselines/fast_rcnn_R-50-FPN_1x.yaml.08_39_09.L3obSdQ2",  # noqa B950
     }
 
     @staticmethod
