@@ -222,7 +222,7 @@ def _convert_rpn_name(model):
     # TODO This is temporary. Remove this function after a while
 
     keys = model.keys()
-    rpn_keys = [k for k in keys if "rpn.head." in k]
+    rpn_keys = [k for k in keys if "rpn.head." in k or "rpn.anchor_generator" in k]
 
     if len(rpn_keys) == 0:
         return model
@@ -235,7 +235,9 @@ def _convert_rpn_name(model):
     logger.warning("Now attempting to automatically convert the weight names for you ...")
 
     for old_key in rpn_keys:
-        new_key = old_key.replace("rpn.head.", "proposal_generator.rpn_head.")
+        new_key = old_key.replace("rpn.head.", "proposal_generator.rpn_head.").replace(
+            "rpn.anchor_", "proposal_generator.anchor_"
+        )
         logger.warning("Change origin rpn weight name {} to {}.".format(old_key, new_key))
         model[new_key] = model.pop(old_key)
 
