@@ -266,8 +266,22 @@ def build_detection_train_loader(cfg, transform=None, start_iter=0):
                 dataset_dicts = filter_images_with_few_keypoints(dataset_dicts, min_kp)
 
         try:
-            dataset_name = MetadataCatalog.get(cfg.DATASETS.TRAIN[0]).dataset_name
-            class_names = MetadataCatalog.get(dataset_name).class_names
+            class_names_per_dataset = [
+                MetadataCatalog.get(d).class_names for d in cfg.DATASETS.TRAIN
+            ]
+            for idx, class_names in enumerate(class_names_per_dataset):
+                if class_names != class_names_per_dataset[0]:
+                    logger.error(
+                        "class_names for dataset {} is {}".format(
+                            cfg.DATASETS.TRAIN[idx], str(class_names)
+                        )
+                    )
+                    logger.error(
+                        "class_names for dataset {} is {}".format(
+                            cfg.DATASETS.TRAIN[0], str(class_names_per_dataset[0])
+                        )
+                    )
+                    raise ValueError("Training on several datasets with different class names!")
             print_instances_class_histogram(dataset_dicts, class_names)
         except AttributeError:  # class names are not available for this dataset
             pass

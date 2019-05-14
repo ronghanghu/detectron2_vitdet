@@ -132,8 +132,6 @@ def draw_coco_dict(dataset_dict, class_names=None):
         class_names (list[str] or None): `class_names[cateogory_id]` is the
             name for this category. If not provided, the visualization will
             not contain class names.
-            Note that the category ids in Detectron2 Dataset format are 1-based.
-            So this list may need a dummy first element.
     """
     img = dataset_dict.get("image", None)
     if img is None:

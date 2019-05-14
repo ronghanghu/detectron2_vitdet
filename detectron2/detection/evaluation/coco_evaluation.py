@@ -23,13 +23,12 @@ class COCOEvaluator(DatasetEvaluator):
     outputs using COCO's metrics and APIs.
     """
 
-    def __init__(self, dataset_split, cfg, distributed, output_dir=None):
+    def __init__(self, dataset_name, cfg, distributed, output_dir=None):
         """
         Args:
-            dataset_split (str): name of a dataset split to be evaluated.
+            dataset_name (str): name of the dataset to be evaluated.
                 It must has the following corresponding metadata:
                     "json_file": the path to the COCO format annotation
-                    "dataset_name": the name of the dataset it belongs to.
             cfg (Config): config instance
             distributed (True): if True, will collect results from all ranks for evaluation.
                 Otherwise, will evaluate the results in the current process.
@@ -42,9 +41,8 @@ class COCOEvaluator(DatasetEvaluator):
         self._cpu_device = torch.device("cpu")
         self._logger = logging.getLogger(__name__)
 
-        split_meta = MetadataCatalog.get(dataset_split)
-        self._coco_api = COCO(split_meta.json_file)
-        self._dataset_meta = MetadataCatalog.get(split_meta.dataset_name)
+        self._metadata = MetadataCatalog.get(dataset_name)
+        self._coco_api = COCO(self._metadata.json_file)
 
         self.kpt_oks_sigmas = cfg.TEST.KEYPOINT_OKS_SIGMAS
 
@@ -151,9 +149,9 @@ class COCOEvaluator(DatasetEvaluator):
         self._coco_results = prepare_for_coco_evaluation(self._predictions)
 
         # unmap the category ids for COCO
-        if hasattr(self._dataset_meta, "json_id_to_contiguous_id"):
+        if hasattr(self._metadata, "dataset_id_to_contiguous_id"):
             reverse_id_mapping = {
-                v: k for k, v in self._dataset_meta.json_id_to_contiguous_id.items()
+                v: k for k, v in self._metadata.dataset_id_to_contiguous_id.items()
             }
             for result in self._coco_results:
                 result["category_id"] = reverse_id_mapping[result["category_id"]]

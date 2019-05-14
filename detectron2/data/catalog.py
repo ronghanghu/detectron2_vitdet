@@ -1,13 +1,14 @@
 import copy
+import logging
 import types
 
 
 class DatasetCatalog(object):
     """
-    A catalog that stores information about the splits of datasets and how to obtain them.
+    A catalog that stores information about the datasets and how to obtain them.
 
     It contains a mapping from strings
-    (which are the names of a dataset split, e.g. "coco_2014_train")
+    (which are names that identify a dataset, e.g. "coco_2014_train")
     to a function which parses the dataset and returns the samples in the
     format of `list[dict]`.
 
@@ -18,29 +19,29 @@ class DatasetCatalog(object):
     different datasets, by just using the strings in the config.
     """
 
-    _REGISTERED_SPLITS = {}
+    _REGISTERED = {}
 
     @staticmethod
-    def register(key, func):
+    def register(name, func):
         """
         Args:
-            key (str): the key that identifies a split of a dataset, e.g. "coco_2014_train".
+            name (str): the name that identifies a dataset, e.g. "coco_2014_train".
             func (callable): a callable which takes no arguments and returns a list of dicts.
         """
-        DatasetCatalog._REGISTERED_SPLITS[key] = func
+        DatasetCatalog._REGISTERED[name] = func
 
     @staticmethod
-    def get(key):
+    def get(name):
         """
         Call the registered function and return its results.
 
         Args:
-            key (str): the key that identifies a split of a dataset, e.g. "coco_2014_train".
+            name (str): the name that identifies a dataset, e.g. "coco_2014_train".
 
         Returns:
             list[dict]: dataset annotations.0
         """
-        return DatasetCatalog._REGISTERED_SPLITS[key]()
+        return DatasetCatalog._REGISTERED[name]()
 
 
 class Metadata(types.SimpleNamespace):
@@ -94,8 +95,7 @@ class Metadata(types.SimpleNamespace):
 
 class MetadataCatalog:
     """
-    MetadataCatalog provides access to "Metadata" of
-    a given dataset (e.g., "coco", "cityscapes") or dataset split.
+    MetadataCatalog provides access to "Metadata" of a given dataset.
 
     The metadata associated with a certain name is a singleton: once created,
     the metadata will stay alive and will be returned by future calls to `get(name)`.
@@ -111,17 +111,29 @@ class MetadataCatalog:
     def get(name):
         """
         Args:
-            name (str): A string that is either a dataset split (e.g. coco_2014_train),
-                or the name of the dataset (e.g., coco)
+            name (str): name of a dataset (e.g. coco_2014_train).
 
         Returns:
             Metadata: The :class:`Metadata` instance associated with this name,
                 or create an empty one if none is available.
         """
         assert len(name)
-        name = name.lower()
         if name in MetadataCatalog._NAME_TO_META:
-            return MetadataCatalog._NAME_TO_META[name]
+            ret = MetadataCatalog._NAME_TO_META[name]
+            # TODO this is for the BC breaking change in D15247032.
+            # Remove this in the future.
+            if hasattr(ret, "dataset_name"):
+                logger = logging.getLogger()
+                logger.warning(
+                    """
+The 'dataset_name' key in metadata is no longer used for
+sharing metadata among splits after D15247032! Add
+metadata to each split (now called dataset) separately!
+                    """
+                )
+                parent_meta = MetadataCatalog.get(ret.dataset_name).as_dict()
+                ret.set(**parent_meta)
+            return ret
         else:
             m = MetadataCatalog._NAME_TO_META[name] = Metadata(name=name)
             return m

@@ -18,7 +18,7 @@ def load_coco_json(json_file, image_root, dataset_name=None):
     Args:
         json_file (str): full path to the json file in COCO instances annotation format.
         image_root (str): the directory where the images in this json file exists.
-        dataset_name (str): the name of the dataset (e.g., "coco", "cityscapes").
+        dataset_name (str): the name of the dataset (e.g., coco_2017_train).
             If provided, this function will also put "class_names" into
             the metadata associated with this dataset.
 
@@ -28,9 +28,6 @@ def load_coco_json(json_file, image_root, dataset_name=None):
     Notes:
         1. This function does not read the image files.
            The results do not have the "image" field.
-        2. When `dataset_name=='coco'`,
-           this function will translate COCO's
-           incontiguous category ids to contiguous ids in [0, 79].
     """
     from pycocotools.coco import COCO
 
@@ -45,30 +42,23 @@ def load_coco_json(json_file, image_root, dataset_name=None):
         class_names = [c["name"] for c in sorted(cats, key=lambda x: x["id"])]
         meta.class_names = class_names
 
-        # A user can provide a dataset where some category ids have no
-        # samples -- that's a valid thing to do.
-        # However, in COCO, certain category ids are artificially removed,
+        # In COCO, certain category ids are artificially removed,
         # and by convention they are always ignored.
-        #
-        # This is a hack to deal with COCO's id issue and translate
+        # We deal with COCO's id issue and translate
         # the category ids to contiguous ids in [0, 80).
-        # We apply this hack for COCO only.
-        # If the ids are incontiuguos for datasets other than COCO,
-        # we'll just assume that it is intended
-        # (you'll just train/test with 0 samples for certain classes).
-        #
-        # If for some reason this hack is needed for other datasets,
-        # we can parse the json and use a different predicate in this if statement.
-        if dataset_name == "coco":
-            id_map = {v: i for i, v in enumerate(cat_ids)}
-            meta.json_id_to_contiguous_id = id_map
-        else:
-            if not (min(cat_ids) == 1 and max(cat_ids) == len(cat_ids)):
-                logger.warning("Category ids in annotations are not contiguous!")
-            assert min(cat_ids) == 1, "Category ids must start from 1!"
-            # Category ids in all datasets start from 0 as the same in COCO.
-            id_map = {v: v - 1 for v in cat_ids}
-            meta.json_id_to_contiguous_id = id_map
+
+        # It works by looking at the "categories" field in the json, therefore
+        # if users' own json also have incontiguous ids, we'll
+        # apply this mapping as well but print a warning.
+        if not (min(cat_ids) == 1 and max(cat_ids) == len(cat_ids)):
+            if "coco" not in dataset_name:
+                logger.warning(
+                    """
+Category ids in annotations are not in [1, #categories]! We'll apply a mapping for you.
+"""
+                )
+        id_map = {v: i for i, v in enumerate(cat_ids)}
+        meta.dataset_id_to_contiguous_id = id_map
 
     # sort indices for reproducible results
     img_ids = sorted(list(coco_api.imgs.keys()))

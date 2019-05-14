@@ -18,13 +18,14 @@ class CityscapesEvaluator(DatasetEvaluator):
     Note: does not work in distributed training for now
     """
 
-    def __init__(self, dataset_split):
+    def __init__(self, dataset_name):
         """
         Args:
-            dataset_split (str): the name of the dataset split
+            dataset_name (str): the name of the dataset.
+                It must have the following metadata associated with it:
+                "class_names", "gt_dir".
         """
-        self._split_meta = MetadataCatalog.get(dataset_split)
-        self._dataset_meta = MetadataCatalog.get(self._split_meta.dataset_name)
+        self._metadata = MetadataCatalog.get(dataset_name)
         self._cpu_device = torch.device("cpu")
         self._logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ class CityscapesEvaluator(DatasetEvaluator):
             with open(pred_txt, "w") as fout:
                 for i in range(num_instances):
                     pred_class = output.pred_classes[i]
-                    class_name = self._dataset_meta.class_names[pred_class]
+                    class_name = self._metadata.class_names[pred_class]
                     class_id = name2label[class_name].id
                     score = output.scores[i]
                     mask = output.pred_masks[i].numpy()
@@ -69,7 +70,7 @@ class CityscapesEvaluator(DatasetEvaluator):
         if comm.get_rank() > 0:
             return
         os.environ["CITYSCAPES_DATASET"] = os.path.abspath(
-            os.path.join(self._split_meta.gt_dir, "..", "..")
+            os.path.join(self._metadata.gt_dir, "..", "..")
         )
         # Load the Cityscapes eval script *after* setting the required env var,
         # since the script reads CITYSCAPES_DATASET into global variables at load time.

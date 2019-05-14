@@ -1,8 +1,10 @@
 import torch
 
-from detectron2.data import MetadataCatalog
 from detectron2.data.transforms import ImageTransformers, Normalize, ResizeShortestEdge
 from detectron2.detection.checkpoint import DetectionCheckpointer
+
+# import the hard-coded metadata
+from detectron2.detection.data.builtin import COCO_CATEGORIES
 from detectron2.detection.modeling import build_model
 from detectron2.utils.vis import draw_instance_predictions, draw_stuff_predictions
 
@@ -24,10 +26,13 @@ class COCODemo(object):
         self.confidence_threshold = confidence_threshold
         self.stuff_area_threshold = stuff_area_threshold
 
-        meta = MetadataCatalog.get("coco")
-        self.things_names = meta.class_names + ["__background"]
         self.stuff_names = [
-            name.replace("-other", "").replace("-merged", "") for name in meta.stuff_class_names
+            k["name"].replace("-other", "").replace("-merged", "")
+            for k in COCO_CATEGORIES
+            if k["isthing"] == 0
+        ]
+        self.things_names = [k["name"] for k in COCO_CATEGORIES if k["isthing"] == 1] + [
+            "__background"
         ]
 
     def build_transform(self):

@@ -18,17 +18,15 @@ class COCOPanopticEvaluator(DatasetEvaluator):
     It saves panoptic segmentation prediction in `output_dir`
     """
 
-    def __init__(self, dataset_split, output_dir):
+    def __init__(self, dataset_name, output_dir):
         """
         Args:
-            dataset_split (str): name of the dataset split
+            dataset_name (str): name of the dataset
             output_dir (str): output directory to save results for evaluation
         """
-        self._dataset_split = dataset_split
-        dataset_name = MetadataCatalog.get(dataset_split).dataset_name
-        self._dataset_meta = MetadataCatalog.get(dataset_name)
+        self._metadata = MetadataCatalog.get(dataset_name)
         self._instances_contiguous_id_to_dataset_id = {
-            v: k for k, v in self._dataset_meta.json_id_to_contiguous_id.items()
+            v: k for k, v in self._metadata.dataset_id_to_contiguous_id.items()
         }
 
         self._output_dir = output_dir
@@ -49,7 +47,7 @@ class COCOPanopticEvaluator(DatasetEvaluator):
                 segment_info["category_id"]
             ]
         else:
-            segment_info["category_id"] = self._dataset_meta.stuff_contiguous_id_to_dataset_id[
+            segment_info["category_id"] = self._metadata.stuff_contiguous_id_to_dataset_id[
                 segment_info["category_id"]
             ]
         return segment_info
@@ -84,9 +82,8 @@ class COCOPanopticEvaluator(DatasetEvaluator):
         if not comm.is_main_process():
             return
 
-        dataset_split_meta = MetadataCatalog.get(self._dataset_split)
-        gt_json = dataset_split_meta.panoptic_json
-        gt_folder = dataset_split_meta.panoptic_root
+        gt_json = self._metadata.panoptic_json
+        gt_folder = self._metadata.panoptic_root
 
         with open(gt_json, "r") as f:
             json_data = json.load(f)

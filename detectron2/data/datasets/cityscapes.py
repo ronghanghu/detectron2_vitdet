@@ -12,8 +12,6 @@ from PIL import Image
 from detectron2.structures import BoxMode
 from detectron2.utils.comm import get_world_size
 
-from .. import MetadataCatalog
-
 try:
     import cv2  # noqa
 except ImportError:
@@ -21,7 +19,9 @@ except ImportError:
     pass
 
 
-def load_cityscapes_instances(image_dir, gt_dir, from_json=True, to_polygons=True):
+def load_cityscapes_instances(
+    image_dir, gt_dir, from_json=True, to_polygons=True, dataset_id_to_contiguous_id=None
+):
     """
     Args:
         image_dir (str): path to the raw dataset. e.g., "~/cityscapes/leftImg8bit/train".
@@ -29,6 +29,9 @@ def load_cityscapes_instances(image_dir, gt_dir, from_json=True, to_polygons=Tru
         from_json (bool): whether to read annotations from the raw json file or the png files.
         to_polygons (bool): whether to represent the segmentation as polygons
             (COCO's format) instead of masks (cityscapes's format).
+        dataset_id_to_contiguous_id (dict): mapping from id in the dataset to
+            a contiguous id in [0, #categories). If None, will not apply this
+            mapping and the categories in the returned dicts will have cityscapes' original id.
 
     Returns:
         list[dict]: a list of dicts in "Detectron2 Dataset" format. (See DATASETS.md)
@@ -63,6 +66,11 @@ def load_cityscapes_instances(image_dir, gt_dir, from_json=True, to_polygons=Tru
         files,
     )
     logger.info("Loaded {} images from {}".format(len(ret), image_dir))
+
+    if dataset_id_to_contiguous_id is not None:
+        for dict_per_image in ret:
+            for anno in dict_per_image["annotations"]:
+                anno["category_id"] = dataset_id_to_contiguous_id[anno["category_id"]]
     return ret
 
 
@@ -80,9 +88,6 @@ def cityscapes_files_to_dict(files, from_json, to_polygons):
         A dict in Detectron2 Dataset format.
     """
     from cityscapesscripts.helpers.labels import id2label, name2label
-
-    meta = MetadataCatalog.get("cityscapes")
-    CATEGORY_TO_ID = {c: i for i, c in enumerate(meta.class_names)}
 
     image_file, instance_id_file, _, json_file = files
 
@@ -139,7 +144,7 @@ def cityscapes_files_to_dict(files, from_json, to_polygons):
 
             anno = {}
             anno["iscrowd"] = label_name.endswith("group")
-            anno["category_id"] = CATEGORY_TO_ID[label.name]
+            anno["category_id"] = label.id
 
             if isinstance(poly_wo_overlaps, Polygon):
                 poly_list = [poly_wo_overlaps]
@@ -185,7 +190,7 @@ def cityscapes_files_to_dict(files, from_json, to_polygons):
 
             anno = {}
             anno["iscrowd"] = instance_id < 1000
-            anno["category_id"] = CATEGORY_TO_ID[label.name]
+            anno["category_id"] = label.id
 
             mask = np.asarray(inst_image == instance_id, dtype=np.uint8, order="F")
 
@@ -224,11 +229,13 @@ if __name__ == "__main__":
     """
     from detectron2.utils.logger import setup_logger
     from detectron2.utils.vis import draw_coco_dict
-    import detectron2.detection.data.datasets  # noqa # add pre-defined metadata
     import sys
 
     logger = setup_logger(name=__name__)
-    meta = MetadataCatalog.get("cityscapes")
+
+    from cityscapesscripts.helpers.labels import labels
+
+    thing_names = [k.name for k in labels]
 
     dicts = load_cityscapes_instances(sys.argv[1], sys.argv[2], from_json=True, to_polygons=True)
     logger.info("Done loading {} samples.".format(len(dicts)))
@@ -236,7 +243,7 @@ if __name__ == "__main__":
     dirname = "cityscapes-data-vis"
     os.makedirs(dirname, exist_ok=True)
     for d in dicts:
-        vis = draw_coco_dict(d, meta.class_names + ["0"])
+        vis = draw_coco_dict(d, thing_names)
         fpath = os.path.join(dirname, os.path.basename(d["file_name"]))
         cv2.imwrite(fpath, vis)
 

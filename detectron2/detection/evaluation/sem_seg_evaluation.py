@@ -18,12 +18,10 @@ class SemSegEvaluator(DatasetEvaluator):
     Evaluate semantic segmentation
     """
 
-    def __init__(self, dataset_split, distributed, num_classes, ignore_label=255, output_dir=None):
+    def __init__(self, dataset_name, distributed, num_classes, ignore_label=255, output_dir=None):
         """
         Args:
-            dataset_split (str): name of a dataset split to be evaluated.
-                It must has the following corresponding metadata:
-                    "dataset_name": the name of the dataset it belongs to.
+            dataset_name (str): name of the dataset to be evaluated.
             distributed (True): if True, will collect results from all ranks for evaluation.
                 Otherwise, will evaluate the results in the current process.
             num_classes (int): number of classes
@@ -31,6 +29,7 @@ class SemSegEvaluator(DatasetEvaluator):
             corresponding pixels should be ignored.
             output_dir (str): an output directory to dump results.
         """
+        self._dataset_name = dataset_name
         self._distributed = distributed
         self._output_dir = output_dir
         self._num_classes = num_classes
@@ -42,16 +41,13 @@ class SemSegEvaluator(DatasetEvaluator):
 
         self.image_id_to_gt_file = {
             dataset_record["image_id"]: dataset_record["sem_seg_file_name"]
-            for dataset_record in DatasetCatalog.get(dataset_split)
+            for dataset_record in DatasetCatalog.get(dataset_name)
         }
 
-        split_meta = MetadataCatalog.get(dataset_split)
-        self._dataset_name = split_meta.dataset_name
+        meta = MetadataCatalog.get(dataset_name)
         # Dict that maps contiguous training ids to COCO category ids
         try:
-            self._contiguous_id_to_dataset_id = MetadataCatalog.get(
-                self._dataset_name
-            ).stuff_contiguous_id_to_dataset_id
+            self._contiguous_id_to_dataset_id = meta.stuff_contiguous_id_to_dataset_id
         except AttributeError:
             self._contiguous_id_to_dataset_id = None
 
@@ -144,7 +140,7 @@ class SemSegEvaluator(DatasetEvaluator):
             if self._contiguous_id_to_dataset_id is not None:
                 assert (
                     label in self._contiguous_id_to_dataset_id
-                ), "Label {} is not in the meta info for {}".format(label, self._dataset_name)
+                ), "Label {} is not in the metadata info for {}".format(label, self._dataset_name)
                 dataset_id = self._contiguous_id_to_dataset_id[label]
             else:
                 dataset_id = int(label)
