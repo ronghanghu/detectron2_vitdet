@@ -58,6 +58,7 @@ class ROIAlign(nn.Module):
             input: NCHW images
             rois: Bx5 boxes. First column is the index into N. The other 4 columns are xyxy.
         """
+        assert rois.dim() == 2 and rois.size(1) == 5
         return roi_align(input, rois, self.output_size, self.spatial_scale, self.sampling_ratio)
 
     def __repr__(self):
