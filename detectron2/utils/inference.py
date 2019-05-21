@@ -150,7 +150,7 @@ def print_csv_format(results):
     Args:
         results: OrderedDict
     """
-    assert isinstance(results, OrderedDict)  # unordered results cannot be properly printed
+    assert isinstance(results, OrderedDict), results  # unordered results cannot be properly printed
     logger = logging.getLogger(__name__)
     for task in ["bbox", "segm", "keypoints", "box_proposals", "semantic_seg", "panoptic_seg"]:
         if task not in results:

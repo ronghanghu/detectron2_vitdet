@@ -11,6 +11,32 @@ from ..modeling.proposal_generator.proposal_utils import add_ground_truth_to_pro
 __all__ = ["DetectionTransform"]
 
 
+def _read_image(file_name, format=None):
+    """
+    Read an image into the given format.
+
+    Args:
+        file_name (str):
+        format (str): one of the supported image modes in PIL, or "BGR"
+
+    Returns:
+        image (np.ndarray)
+    """
+    image = Image.open(file_name)
+
+    if format is not None:
+        # PIL only supports RGB, so convert to RGB and flip channels over below
+        conversion_format = format
+        if format == "BGR":
+            conversion_format = "RGB"
+        image = image.convert(conversion_format)
+    image = np.asarray(image)
+    if format == "BGR":
+        # flip channels if needed
+        image = image[:, :, ::-1]
+    return image
+
+
 def annotations_to_instances(annos, image_size):
     """
     Create an :class:`Instances` object used by the models, from annotations in the dataset dict.
@@ -50,34 +76,37 @@ class DetectionTransform:
     including image resizing and flipping. The transformation parameters are parsed from cfg file
     and depending on the is_train condition.
 
-    Note that mean/std normalization is expected to done by the model instead of here.
+    Note that for our existing models, mean/std normalization is done by the model instead of here.
     """
 
     def __init__(self, cfg, is_train=True):
         if is_train:
             min_size = cfg.INPUT.MIN_SIZE_TRAIN
             max_size = cfg.INPUT.MAX_SIZE_TRAIN
+            sample_style = cfg.INPUT.MIN_SIZE_TRAIN_SAMPLING
         else:
             min_size = cfg.INPUT.MIN_SIZE_TEST
             max_size = cfg.INPUT.MAX_SIZE_TEST
             sample_style = "choice"
-
-        # in testing, no random sample happens for now
-        sample_style = cfg.INPUT.MIN_SIZE_TRAIN_SAMPLING
         if sample_style == "range":
             assert (
                 len(min_size) == 2
             ), "more than 2 ({}) min_size(s) are provided for ranges".format(len(min_size))
 
         self.img_format = cfg.INPUT.FORMAT
-        tfms = [ResizeShortestEdge(min_size, max_size, sample_style)]
+
+        tfms = []
+        if not min_size == 0:  # set to zero to disable resize
+            tfms.append(ResizeShortestEdge(min_size, max_size, sample_style))
         if is_train:
             tfms.append(Flip(horiz=True))
         self.tfms = ImageTransformers(tfms)
-        self.is_train = is_train
+
         self.keypoint_flip_indices = _create_flip_indices(cfg)
         self.mask_on = cfg.MODEL.MASK_ON
         self.keypoint_on = cfg.MODEL.KEYPOINT_ON
+
+        self.is_train = is_train
 
         if cfg.MODEL.LOAD_PROPOSALS:
             self.min_box_side_len = cfg.MODEL.PROPOSAL_GENERATOR.MIN_SIZE
@@ -102,16 +131,7 @@ class DetectionTransform:
                 3. Prepare the annotations to :class:`Instances`
         """
         dataset_dict = copy.deepcopy(dataset_dict)  # it will be modified by code below
-        conversion_image_format = self.img_format
-        if conversion_image_format == "BGR":
-            # PIL only supports RGB, so convert to RGB and flip channels over below
-            conversion_image_format = "RGB"
-        image = Image.open(dataset_dict["file_name"]).convert(conversion_image_format)
-        image = np.asarray(image, dtype="uint8")
-        # Flip channels if needed
-        if self.img_format == "BGR":
-            image = image[:, :, ::-1]
-
+        image = _read_image(dataset_dict["file_name"], format=self.img_format)
         image, tfm_params = self.tfms.transform_image_get_params(image)
 
         image_shape = image.shape[:2]  # h, w
@@ -189,11 +209,15 @@ class DetectionTransform:
                 self.tfms.transform_coords(np.asarray(p).reshape(-1, 2), tfm_params).reshape(-1)
                 for p in annotation["segmentation"]
             ]
+        else:
+            annotation.pop("segmentation", None)
 
         if self.keypoint_on and "keypoints" in annotation:
             _, image_width = image_size
             keypoints = self._process_keypoints(annotation["keypoints"], tfm_params, image_width)
             annotation["keypoints"] = keypoints
+        else:
+            annotation.pop("keypoints", None)
 
         return annotation
 

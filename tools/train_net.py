@@ -19,6 +19,7 @@ import detectron2.utils.comm as comm
 from detectron2.data import MetadataCatalog
 from detectron2.detection import (
     DetectionCheckpointer,
+    DetectionTransform,
     build_detection_test_loader,
     build_detection_train_loader,
     build_lr_scheduler,
@@ -34,6 +35,7 @@ from detectron2.detection.evaluation import (
     COCOPanopticEvaluator,
     SemSegEvaluator,
 )
+from detectron2.detection.modeling import DetectionTransformTTA, GeneralizedRCNNWithTTA
 from detectron2.engine.launch import launch
 from detectron2.utils.checkpoint import PeriodicCheckpointer
 from detectron2.utils.collect_env import collect_env_info
@@ -136,6 +138,7 @@ def do_test(cfg, model, is_final=True):
     else:
         proposal_files_test = cfg.DATASETS.PROPOSAL_FILES_TEST
     assert len(proposal_files_test) == len(cfg.DATASETS.TEST)
+    logger = logging.getLogger("detectron2.trainer")
 
     with inference_context(model):
         results = []
@@ -153,6 +156,28 @@ def do_test(cfg, model, is_final=True):
             if comm.is_main_process():
                 results.append(results_per_dataset)
                 if is_final:
+                    print_csv_format(results_per_dataset)
+
+            if is_final and cfg.TEST.AUG_ON:
+                # In the end of training, run an evaluation with TTA
+                output_folder = os.path.join(cfg.OUTPUT_DIR, "inference_TTA", dataset_name)
+                os.makedirs(output_folder, exist_ok=True)
+                assert proposal_file is None, "TTA with pre-computed proposal is not supported now."
+
+                newcfg = cfg.clone()
+                newcfg.defrost()
+                newcfg.INPUT.MIN_SIZE_TEST = 0
+                data_loader = build_detection_test_loader(
+                    cfg, dataset_name, transform=DetectionTransform(newcfg, is_train=False)
+                )
+                transform = DetectionTransformTTA(cfg)
+                model = GeneralizedRCNNWithTTA(cfg, model, transform)
+                evaluator = get_evaluator(cfg, dataset_name, output_folder)
+                results_per_dataset = inference_on_dataset(model, data_loader, evaluator)
+                logger.info(
+                    "Evaluation results on {} with test-time augmentation:".format(dataset_name)
+                )
+                if comm.is_main_process():
                     print_csv_format(results_per_dataset)
 
     if is_final and cfg.TEST.EXPECTED_RESULTS and comm.is_main_process():

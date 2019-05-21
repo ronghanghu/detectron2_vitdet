@@ -5,20 +5,19 @@ def smooth_l1_loss(input, target, beta):
     """
     Smooth L1 loss defined in the Fast R-CNN paper as:
 
-            | 0.5 * x ** 2 / beta   if abs(x) < beta
-     f(x) = |
-            | abs(x) - 0.5 * beta   otherwise,
+                  | 0.5 * x ** 2 / beta   if abs(x) < beta
+    smoothl1(x) = |
+                  | abs(x) - 0.5 * beta   otherwise,
 
     where x = input - target.
 
     Smooth L1 loss is related to Huber loss, which is defined as:
 
-            | 0.5 * x ** 2                  if abs(x) < beta
-     h(x) = |
-            | beta * (abs(x) - 0.5 * beta)  otherwise
+                | 0.5 * x ** 2                  if abs(x) < beta
+     huber(x) = |
+                | beta * (abs(x) - 0.5 * beta)  otherwise
 
-    Smooth L1 loss differs by a factor of 1 / beta in the quadratic segment
-    and a factor of beta in the linear segment. This leads to the following
+    Smooth L1 loss is equal to huber(x) / beta. This leads to the following
     differences:
 
      - As beta -> 0, Smooth L1 loss converges to L1 loss, while Huber loss

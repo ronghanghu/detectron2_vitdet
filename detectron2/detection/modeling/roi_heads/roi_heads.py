@@ -233,13 +233,14 @@ class Res5ROIHeads(ROIHeads):
         """
         del images
 
-        features = [features[f] for f in self.in_features]
         if self.training:
             proposals = self.label_and_sample_proposals(proposals, targets)
         del targets
 
         proposal_boxes = [x.proposal_boxes for x in proposals]
-        box_features = self._shared_roi_transform(features, proposal_boxes)
+        box_features = self._shared_roi_transform(
+            [features[f] for f in self.in_features], proposal_boxes
+        )
         feature_pooled = F.avg_pool2d(box_features, 7)  # gap
         pred_class_logits, pred_proposal_deltas = self.box_predictor(feature_pooled)
         del feature_pooled
@@ -272,11 +273,31 @@ class Res5ROIHeads(ROIHeads):
             pred_instances = outputs.inference(
                 self.test_score_thresh, self.test_nms_thresh, self.test_detections_per_img
             )
-            if self.mask_on:
-                x = self._shared_roi_transform(features, [x.pred_boxes for x in pred_instances])
-                mask_logits = self.mask_head(x)
-                mask_rcnn_inference(mask_logits, pred_instances)
+            pred_instances = self.forward_with_given_boxes(features, pred_instances)
             return pred_instances, {}
+
+    def forward_with_given_boxes(self, features, instances):
+        """
+        Use the given boxes in `instances` to produce other (non-box) per-ROI outputs.
+
+        Args:
+            features: same as in `forward()`
+            instances (list[Instances]): instances to predict other outputs. Expect the keys
+                "pred_boxes" and "pred_classes" to exist.
+
+        Returns:
+            instances (Instances): the same `Instances` object, with extra
+                fields such as `pred_masks` or `pred_keypoints`.
+        """
+        assert not self.training
+        assert instances[0].has("pred_boxes") and instances[0].has("pred_classes")
+
+        if self.mask_on:
+            features = [features[f] for f in self.in_features]
+            x = self._shared_roi_transform(features, [x.pred_boxes for x in instances])
+            mask_logits = self.mask_head(x)
+            mask_rcnn_inference(mask_logits, instances)
+        return instances
 
 
 @ROI_HEADS_REGISTRY.register()
@@ -361,12 +382,13 @@ class StandardROIHeads(ROIHeads):
         num_images = len(images)
         del images
 
-        features = [features[f] for f in self.in_features]
         if self.training:
             proposals = self.label_and_sample_proposals(proposals, targets)
         del targets
 
-        box_features = self.box_pooler(features, [x.proposal_boxes for x in proposals])
+        box_features = self.box_pooler(
+            [features[f] for f in self.in_features], [x.proposal_boxes for x in proposals]
+        )
         box_features = self.box_head(box_features)
         pred_class_logits, pred_proposal_deltas = self.box_predictor(box_features)
         del box_features
@@ -413,15 +435,33 @@ class StandardROIHeads(ROIHeads):
             )
             # During inference cascaded prediction is used: the mask and keypoints heads are only
             # applied to the top scoring box detections.
-            pred_boxes = [x.pred_boxes for x in pred_instances]
-            if self.mask_on:
-                # During inference cascaded prediction is used: the mask head is only
-                # applied to the top scoring box detections.
-                mask_features = self.mask_pooler(features, pred_boxes)
-                mask_logits = self.mask_head(mask_features)
-                mask_rcnn_inference(mask_logits, pred_instances)
-            if self.keypoint_on:
-                keypoint_features = self.keypoint_pooler(features, pred_boxes)
-                keypoint_logits = self.keypoint_head(keypoint_features)
-                keypoint_rcnn_inference(keypoint_logits, pred_instances)
+            pred_instances = self.forward_with_given_boxes(features, pred_instances)
             return pred_instances, {}
+
+    def forward_with_given_boxes(self, features, instances):
+        """
+        Use the given boxes in `instances` to produce other (non-box) per-ROI outputs.
+
+        Args:
+            features: same as in `forward()`
+            instances (list[Instances]): instances to predict other outputs. Expect the keys
+                "pred_boxes" and "pred_classes" to exist.
+
+        Returns:
+            instances (Instances): the same `Instances` object, with extra
+                fields such as `pred_masks` or `pred_keypoints`.
+        """
+        assert not self.training
+        assert instances[0].has("pred_boxes") and instances[0].has("pred_classes")
+        features = [features[f] for f in self.in_features]
+
+        pred_boxes = [x.pred_boxes for x in instances]
+        if self.mask_on:
+            mask_features = self.mask_pooler(features, pred_boxes)
+            mask_logits = self.mask_head(mask_features)
+            mask_rcnn_inference(mask_logits, instances)
+        if self.keypoint_on:
+            keypoint_features = self.keypoint_pooler(features, pred_boxes)
+            keypoint_logits = self.keypoint_head(keypoint_features)
+            keypoint_rcnn_inference(keypoint_logits, instances)
+        return instances

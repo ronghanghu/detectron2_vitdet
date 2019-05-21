@@ -14,6 +14,8 @@ from .proposal_generator import build_proposal_generator
 from .roi_heads.roi_heads import build_roi_heads
 from .sem_seg_heads import build_sem_seg_head
 
+__all__ = ["SemanticSegmentator", "PanopticFPN"]
+
 
 @META_ARCH_REGISTRY.register()
 class SemanticSegmentator(nn.Module):

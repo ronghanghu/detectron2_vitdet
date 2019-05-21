@@ -36,14 +36,13 @@ _C.MODEL.WEIGHT = ""
 # -----------------------------------------------------------------------------
 _C.INPUT = CN()
 # Size of the smallest side of the image during training
-# _C.INPUT.MIN_SIZE_TRAIN = 800  # (800,)
 _C.INPUT.MIN_SIZE_TRAIN = (800,)
 # Sample size of smallest side by choice or random selection from range give by
 # INPUT.MIN_SIZE_TRAIN
 _C.INPUT.MIN_SIZE_TRAIN_SAMPLING = "choice"
 # Maximum size of the side of the image during training
 _C.INPUT.MAX_SIZE_TRAIN = 1333
-# Size of the smallest side of the image during testing
+# Size of the smallest side of the image during testing. Set to zero to disable resize in testing.
 _C.INPUT.MIN_SIZE_TEST = 800
 # Maximum size of the side of the image during testing
 _C.INPUT.MAX_SIZE_TEST = 1333
@@ -472,6 +471,11 @@ _C.TEST.KEYPOINT_OKS_SIGMAS = [
     0.089,
     0.089,
 ]
+
+_C.TEST.AUG_ON = False
+_C.TEST.AUG_MIN_SIZES = (400, 500, 600, 700, 800, 900, 1000, 1100, 1200)
+_C.TEST.AUG_MAX_SIZE = 4000
+_C.TEST.AUG_FLIP = True
 
 # ---------------------------------------------------------------------------- #
 # Misc options

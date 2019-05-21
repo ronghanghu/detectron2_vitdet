@@ -9,6 +9,8 @@ from .postprocessing import detector_postprocess
 from .proposal_generator import build_proposal_generator
 from .roi_heads.roi_heads import build_roi_heads
 
+__all__ = ["GeneralizedRCNN"]
+
 
 @META_ARCH_REGISTRY.register()
 class GeneralizedRCNN(nn.Module):
@@ -56,40 +58,91 @@ class GeneralizedRCNN(nn.Module):
                 The :class:`Instances` object has the following keys:
                     "pred_boxes", "pred_classes", "scores", "pred_masks", "pred_keypoints"
         """
-        images = [x["image"].to(self.device) for x in batched_inputs]
-        images = [self.normalizer(x) for x in images]
-        images = ImageList.from_tensors(images, self.backbone.size_divisibility)
-        if "proposals" in batched_inputs[0]:
-            proposals = [x["proposals"].to(self.device) for x in batched_inputs]
-            proposal_losses = {}
+        if not self.training:
+            return self.inference(batched_inputs)
 
+        images = self.preprocess_image(batched_inputs)
         if "targets" in batched_inputs[0]:
             targets = [x["targets"].to(self.device) for x in batched_inputs]
         else:
             targets = None
 
         features = self.backbone(images.tensor)
+
         if self.proposal_generator:
             proposals, proposal_losses = self.proposal_generator(images, features, targets)
+        else:
+            assert "proposals" in batched_inputs[0]
+            proposals = [x["proposals"].to(self.device) for x in batched_inputs]
+            proposal_losses = {}
+
         if self.roi_heads:
-            results, detector_losses = self.roi_heads(images, features, proposals, targets)
+            _, detector_losses = self.roi_heads(images, features, proposals, targets)
         else:
             # RPN-only models don't have roi_heads.
-            results = proposals
             detector_losses = {}
 
-        if self.training:
-            losses = {}
-            losses.update(detector_losses)
-            losses.update(proposal_losses)
-            return losses
+        losses = {}
+        losses.update(detector_losses)
+        losses.update(proposal_losses)
+        return losses
 
-        processed_results = []
-        for results_per_image, input_per_image, image_size in zip(
-            results, batched_inputs, images.image_sizes
-        ):
-            height = input_per_image.get("height", image_size[0])
-            width = input_per_image.get("width", image_size[1])
-            r = detector_postprocess(results_per_image, height, width)
-            processed_results.append({"detector": r})
-        return processed_results
+    def inference(self, batched_inputs, detected_instances=None, do_postprocess=True):
+        """
+        Run inference on the given inputs.
+
+        Args:
+            batched_inputs (list[dict]): same as in :meth:`forward`
+            detected_instances (None or list[Instances]): if not None, it
+                contains an `Instances` object per image. The `Instances`
+                object contains "pred_boxes" and "pred_classes" which are
+                known boxes in the image.
+                The inference will then skip the detection of bounding boxes,
+                and only predict other per-ROI outputs.
+            do_postprocess (bool): whether to apply post-processing on the outputs.
+
+        Returns:
+            same as in :meth:`forward`.
+        """
+        assert not self.training
+
+        images = self.preprocess_image(batched_inputs)
+        features = self.backbone(images.tensor)
+
+        if detected_instances is None:
+            if self.proposal_generator:
+                proposals, _ = self.proposal_generator(images, features, None)
+            else:
+                assert "proposals" in batched_inputs[0]
+                proposals = [x["proposals"].to(self.device) for x in batched_inputs]
+
+            if self.roi_heads:
+                results, _ = self.roi_heads(images, features, proposals, None)
+            else:
+                # RPN-only models don't have roi_heads.
+                results = proposals
+        else:
+            detected_instances = [x.to(self.device) for x in detected_instances]
+            results = self.roi_heads.forward_with_given_boxes(features, detected_instances)
+
+        if do_postprocess:
+            processed_results = []
+            for results_per_image, input_per_image, image_size in zip(
+                results, batched_inputs, images.image_sizes
+            ):
+                height = input_per_image.get("height", image_size[0])
+                width = input_per_image.get("width", image_size[1])
+                r = detector_postprocess(results_per_image, height, width)
+                processed_results.append({"detector": r})
+            return processed_results
+        else:
+            return results
+
+    def preprocess_image(self, batched_inputs):
+        """
+        Normalize, pad and batch the input images.
+        """
+        images = [x["image"].to(self.device) for x in batched_inputs]
+        images = [self.normalizer(x) for x in images]
+        images = ImageList.from_tensors(images, self.backbone.size_divisibility)
+        return images

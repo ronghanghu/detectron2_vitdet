@@ -6,7 +6,7 @@ from detectron2.structures import Instances
 from .roi_heads.paste_mask import paste_masks_in_image
 
 
-def detector_postprocess(results, output_height, output_width):
+def detector_postprocess(results, output_height, output_width, mask_threshold=0.5):
     """
     Postprocess the output boxes.
     The input images are often resized when entering an object detector.
@@ -19,7 +19,7 @@ def detector_postprocess(results, output_height, output_width):
     Args:
         results (Instances): the raw outputs from the detector.
             `results.image_size` contains the input image resolution the detector sees.
-            This object will be modified in-place.
+            This object might be modified in-place.
         output_height, output_width: the desired output resolution.
 
     Returns:
@@ -46,7 +46,7 @@ def detector_postprocess(results, output_height, output_width):
             results.pred_masks,  # N, 1, M, M
             results.pred_boxes,
             results.image_size,
-            threshold=0.5,
+            threshold=mask_threshold,
             padding=1,
         ).squeeze(1)
 

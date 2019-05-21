@@ -215,7 +215,7 @@ def build_detection_train_loader(cfg, transform=None, start_iter=0):
         cfg (CfgNode): the config
         transform (callable): a callable which takes a sample (dict) from dataset and
             returns a transformed dict.
-            By default it will be `DetectionTransform(cfg, is_train=True)`.
+            By default it will be `DetectionTransform(cfg, True)`.
         start_iter (int): the iteration number to start training with.
             It is useful when resuming training: it will affect which sample to start loading.
 
@@ -322,7 +322,7 @@ def build_detection_test_loader(cfg, dataset_name, proposal_file=None, transform
         proposal_file (str): a name of pre-computed proposal file path for this dataset
         transform (callable): a callable which takes a sample (dict) from dataset
             and returns a transformed dict.
-            By default it will be `DetectionTransform(cfg, is_train=False)`.
+            By default it will be `DetectionTransform(cfg, False)`.
 
     Returns:
         DataLoader: a torch DataLoader, that loads the given detection
