@@ -37,7 +37,7 @@ from detectron2.detection.evaluation import (
 from detectron2.engine.launch import launch
 from detectron2.utils.checkpoint import PeriodicCheckpointer
 from detectron2.utils.collect_env import collect_env_info
-from detectron2.utils.events import EventStorage, JSONWriter, get_event_storage
+from detectron2.utils.events import EventStorage, JSONWriter, TensorboardXWriter, get_event_storage
 from detectron2.utils.inference import (
     DatasetEvaluators,
     inference_context,
@@ -188,7 +188,11 @@ def do_train(cfg, model):
     iter_end = time.time()
 
     writers = (
-        [MetricPrinter(max_iter), JSONWriter(os.path.join(cfg.OUTPUT_DIR, "metrics.json"))]
+        [
+            MetricPrinter(max_iter),
+            JSONWriter(os.path.join(cfg.OUTPUT_DIR, "metrics.json")),
+            TensorboardXWriter(cfg.OUTPUT_DIR),
+        ]
         if comm.is_main_process()
         else []
     )
