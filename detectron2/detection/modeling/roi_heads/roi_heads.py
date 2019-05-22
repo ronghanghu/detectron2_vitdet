@@ -386,9 +386,9 @@ class StandardROIHeads(ROIHeads):
             proposals = self.label_and_sample_proposals(proposals, targets)
         del targets
 
-        box_features = self.box_pooler(
-            [features[f] for f in self.in_features], [x.proposal_boxes for x in proposals]
-        )
+        features_list = [features[f] for f in self.in_features]
+
+        box_features = self.box_pooler(features_list, [x.proposal_boxes for x in proposals])
         box_features = self.box_head(box_features)
         pred_class_logits, pred_proposal_deltas = self.box_predictor(box_features)
         del box_features
@@ -409,11 +409,11 @@ class StandardROIHeads(ROIHeads):
             # During training the same proposals used by the box head are used by
             # the mask and keypoint heads. The loss is only defined on positive proposals.
             if self.mask_on:
-                mask_features = self.mask_pooler(features, proposal_boxes)
+                mask_features = self.mask_pooler(features_list, proposal_boxes)
                 mask_logits = self.mask_head(mask_features)
                 losses["loss_mask"] = mask_rcnn_loss(mask_logits, proposals)
             if self.keypoint_on:
-                keypoint_features = self.keypoint_pooler(features, proposal_boxes)
+                keypoint_features = self.keypoint_pooler(features_list, proposal_boxes)
                 keypoint_logits = self.keypoint_head(keypoint_features)
 
                 normalizer = (
