@@ -1,6 +1,6 @@
 _BASE_: "../e2e_mask_rcnn_R_50_C4_1x.yaml"
 MODEL:
-  WEIGHT: "catalog://Detectron2/e2e_mask_rcnn_R_50_C4_1x/111802010/model_final_2303578b8d2a5f0bddbe76709042dabe.pkl"
+  WEIGHT: "detectron2://e2e_mask_rcnn_R_50_C4_1x/111802010/model_final_2303578b8d2a5f0bddbe76709042dabe.pkl"
 DATASETS:
   TEST: ("coco_2014_minival_100",)
 TEST:

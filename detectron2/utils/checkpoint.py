@@ -4,8 +4,9 @@ import os
 import torch
 
 import detectron2.utils.comm as comm
+from detectron2.utils.file_io import PathManager
 from detectron2.utils.model_serialization import load_state_dict
-from detectron2.utils.model_zoo import cache_file, cache_url
+from detectron2.utils.model_zoo import cache_file
 
 
 class Checkpointer(object):
@@ -78,15 +79,14 @@ class Checkpointer(object):
             # no checkpoint could be found
             self.logger.info("No checkpoint found. Initializing model from scratch")
             return {}
-        f = self._resolve_path(f)
+        self.logger.info("Loading checkpoint from {}".format(f))
+        if not os.path.isfile(f):
+            f = PathManager.get_file_name(f)
+            assert os.path.isfile(f), "Checkpoint {} not found!".format(f)
         if os.path.isfile(f) and self.cache_on_load:
             cached_f = cache_file(f)
             self.logger.info("File {} cached in {}".format(f, cached_f))
             f = cached_f
-        self.logger.info("Loading checkpoint from {}".format(f))
-        if not os.path.isfile(f):
-            f = self._download_file(f)
-            assert os.path.isfile(f), "Checkpoint {} not found!".format(f)
 
         checkpoint = self._load_file(f)
         self._load_model(checkpoint)
@@ -132,38 +132,6 @@ class Checkpointer(object):
                 dict["model"] must be a dict which maps strings to torch.Tensor or numpy arrays.
         """
         return torch.load(f, map_location=torch.device("cpu"))
-
-    def _resolve_path(self, f):
-        """
-        Resolve the path to its actual destination. Can be overwritten by subclass.
-
-        Args:
-            f (str): path to resolve
-        Returns:
-            str: the resolved path
-        """
-        return f
-
-    def _download_file(self, f):
-        """
-        Called when the file does not exist.
-        Can be overwritten by subclass.
-
-        Args:
-            f (str):
-        Returns:
-            str: a file name
-        """
-        if os.path.isfile(f):
-            return f
-
-        # download url files
-        if f.startswith("http"):
-            # if the file is a url path, download it and cache it
-            cached_f = cache_url(f)
-            self.logger.info("URL {} cached in {}".format(f, cached_f))
-            f = cached_f
-        return f
 
     def _load_model(self, checkpoint):
         model = checkpoint.pop("model")

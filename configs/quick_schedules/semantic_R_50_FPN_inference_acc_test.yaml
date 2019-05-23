@@ -1,7 +1,7 @@
 _BASE_: "../Base-FPN.yaml"
 MODEL:
   META_ARCHITECTURE: "SemanticSegmentator"
-  WEIGHT: "catalog://Detectron2/semantic_R_50_FPN_1x/111802073/model_final_c18079783c55a94968edc28b7101c5f0.pkl"
+  WEIGHT: "detectron2://semantic_R_50_FPN_1x/111802073/model_final_c18079783c55a94968edc28b7101c5f0.pkl"
   RESNETS:
     DEPTH: 50
 DATASETS:

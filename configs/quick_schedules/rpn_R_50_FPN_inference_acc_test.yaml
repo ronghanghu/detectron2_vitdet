@@ -1,6 +1,6 @@
 _BASE_: "../rpn_R_50_FPN_1x.yaml"
 MODEL:
-  WEIGHT: "catalog://Detectron2/rpn_R_50_FPN_1x/111802748/model_final_0f534777b6b57e1d5e99e5bed6db6f94.pkl"
+  WEIGHT: "detectron2://rpn_R_50_FPN_1x/111802748/model_final_0f534777b6b57e1d5e99e5bed6db6f94.pkl"
 DATASETS:
   TEST: ("coco_2014_minival_100",)
 TEST:

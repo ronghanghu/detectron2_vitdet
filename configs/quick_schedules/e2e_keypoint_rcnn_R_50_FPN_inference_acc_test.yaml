@@ -1,6 +1,6 @@
 _BASE_: "../e2e_keypoint_rcnn_R_50_FPN_1x.yaml"
 MODEL:
-  WEIGHT: "catalog://Detectron2/e2e_keypoint_rcnn_R_50_FPN_1x/111802035/model_final_71819d611aa7d5b23bf693fc453ca7f2.pkl"
+  WEIGHT: "detectron2://e2e_keypoint_rcnn_R_50_FPN_1x/111802035/model_final_71819d611aa7d5b23bf693fc453ca7f2.pkl"
 DATASETS:
   TEST: ("keypoints_coco_2014_minival_100",)
 TEST:

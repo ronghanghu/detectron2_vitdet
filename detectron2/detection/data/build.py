@@ -11,6 +11,7 @@ from termcolor import colored
 from detectron2.data import DatasetCatalog, DatasetFromList, MapDataset, MetadataCatalog, samplers
 from detectron2.structures import BoxMode
 from detectron2.utils.comm import get_world_size
+from detectron2.utils.file_io import PathManager
 
 from .transforms import DetectionTransform
 
@@ -99,7 +100,7 @@ def load_proposals_into_dataset(dataset_dicts, proposal_file=None):
     logger = logging.getLogger(__name__)
     logger.info("Loading proposals from: {}".format(proposal_file))
 
-    with open(proposal_file, "rb") as f:
+    with PathManager.open(proposal_file, "rb") as f:
         proposals = pickle.load(f, encoding="latin1")
 
     # Rename the key names in D1 proposal files
