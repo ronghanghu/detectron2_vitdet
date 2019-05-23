@@ -89,7 +89,8 @@ def inference_on_dataset(model, data_loader, evaluator):
     total = len(data_loader)  # inference data loader must have a fixed length
     evaluator.reset()
 
-    num_warmup = 5
+    logging_interval = 50
+    num_warmup = min(5, logging_interval - 1, total - 1)
     start_time = time.time()
     for idx, inputs in enumerate(data_loader):
         if idx == num_warmup:
@@ -99,7 +100,7 @@ def inference_on_dataset(model, data_loader, evaluator):
             outputs = model(inputs)
         evaluator.process(inputs, outputs)
 
-        if (idx + 1) % 50 == 0:
+        if (idx + 1) % logging_interval == 0:
             duration = time.time() - start_time
             seconds_per_img = duration / (idx + 1 - num_warmup)
             logger.info(
