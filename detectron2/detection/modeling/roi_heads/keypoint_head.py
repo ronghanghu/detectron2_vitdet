@@ -21,10 +21,10 @@ def build_keypoint_head(cfg):
 def keypoint_rcnn_loss(pred_keypoint_logits, instances, normalizer):
     """
     Arguments:
-        pred_keypoint_logits (Tensor): A tensor of shape (N, K, S, S) where N is the batch size,
-            K is the number of keypoints, and S is the side length of the keypoint heatmap. The
-            values are spatial logits.
-        instances (list[Instances]): A list of N Instances, where N is the batch size.
+        pred_keypoint_logits (Tensor): A tensor of shape (N, K, S, S) where N is the total number
+            of instances in the batch, K is the number of keypoints, and S is the side length
+            of the keypoint heatmap. The values are spatial logits.
+        instances (list[Instances]): A list of M Instances, where M is the batch size.
             These instances are predictions from the model
             that are in 1:1 correspondence with pred_keypoint_logits.
             Each Instances should contain a `gt_keypoints` field containing a `structures.Keypoint`
@@ -80,10 +80,10 @@ def keypoint_rcnn_inference(pred_keypoint_logits, pred_instances):
         and add it to the `pred_instances` as a `pred_keypoints` field.
 
     Args:
-        pred_keypoint_logits (Tensor): A tensor of shape (N, K, S, S) where N is the batch size,
-            K is the number of keypoints, and S is the side length of the keypoint heatmap. The
-            values are spatial logits.
-        pred_instances (list[Instances]): A list of N Instances, where N is the batch size.
+        pred_keypoint_logits (Tensor): A tensor of shape (N, K, S, S) where N is the total number
+           of instances in the batch, K is the number of keypoints, and S is the side length of
+           the keypoint heatmap. The values are spatial logits.
+        pred_instances (list[Instances]): A list of M Instances, where M is the batch size.
 
     Returns:
         None. boxes will contain an extra "pred_keypoints" field.
