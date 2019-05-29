@@ -43,7 +43,6 @@ class COCODemo(object):
         transforms = ImageTransformers(
             [
                 ResizeShortestEdge([cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST]),
-                Normalize(mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD),
             ]
         )
         return transforms
