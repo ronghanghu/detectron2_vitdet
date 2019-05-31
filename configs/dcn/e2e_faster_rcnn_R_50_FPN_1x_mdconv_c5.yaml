@@ -1,0 +1,9 @@
+_BASE_: "../Base-FPN.yaml"
+MODEL:
+  WEIGHT: "catalog://ImageNetPretrained/MSRA/R-50"
+  MASK_ON: False
+  RESNETS:
+    DEPTH: 50
+    DEFORM_ON_PER_STAGE: [False, False, False, True] # on Res5
+    DEFORM_MODULATED: True
+

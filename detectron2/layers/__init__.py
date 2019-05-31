@@ -1,5 +1,6 @@
 from .backbone import Backbone
 from .batch_norm import FrozenBatchNorm2d
+from .deform_conv import DeformConv, ModulatedDeformConv
 from .misc import BatchNorm2d, Conv2d, ConvTranspose2d, cat, interpolate
 from .nms import nms
 from .resnet import *
@@ -22,8 +23,11 @@ __all__ = [
     "cat",
     "ResNetBlockBase",
     "BottleneckBlock",
+    "DeformBottleneckBlock",
     "BasicStem",
     "ResNet",
     "make_stage",
     "Backbone",
+    "DeformConv",
+    "ModulatedDeformConv",
 ]

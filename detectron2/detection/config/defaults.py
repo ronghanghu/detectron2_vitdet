@@ -405,6 +405,15 @@ _C.MODEL.RESNETS.RES5_DILATION = 1
 _C.MODEL.RESNETS.RES2_OUT_CHANNELS = 256
 _C.MODEL.RESNETS.STEM_OUT_CHANNELS = 64
 
+# Apply Deformable Convolution in stages
+# Specify if apply deform_conv on Res2, Res3, Res4, Res5
+_C.MODEL.RESNETS.DEFORM_ON_PER_STAGE = [False, False, False, False]
+# Use True to use modulated deform_conv (DeformableV2, https://arxiv.org/abs/1811.11168);
+# Use False for DeformableV1.
+_C.MODEL.RESNETS.DEFORM_MODULATED = False
+# Number of groups in deformable conv.
+_C.MODEL.RESNETS.DEFORM_NUM_GROUPS = 1
+
 # ---------------------------------------------------------------------------- #
 # Solver
 # ---------------------------------------------------------------------------- #

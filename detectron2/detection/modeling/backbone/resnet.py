@@ -1,6 +1,6 @@
 from torch import nn
 
-from detectron2.layers import BasicStem, BottleneckBlock, ResNet, make_stage
+from detectron2.layers import BasicStem, BottleneckBlock, DeformBottleneckBlock, ResNet, make_stage
 
 from . import BACKBONE_REGISTRY
 
@@ -51,6 +51,9 @@ def build_resnet_backbone(cfg):
     out_channels        = cfg.MODEL.RESNETS.RES2_OUT_CHANNELS
     stride_in_1x1       = cfg.MODEL.RESNETS.STRIDE_IN_1X1
     res5_dilation       = cfg.MODEL.RESNETS.RES5_DILATION
+    deform_on_per_stage = cfg.MODEL.RESNETS.DEFORM_ON_PER_STAGE
+    deform_modulated    = cfg.MODEL.RESNETS.DEFORM_MODULATED
+    deform_num_groups   = cfg.MODEL.RESNETS.DEFORM_NUM_GROUPS
     # fmt: on
     assert res5_dilation in {1, 2}
 
@@ -65,18 +68,24 @@ def build_resnet_backbone(cfg):
     for idx, stage_idx in enumerate(range(2, max_stage_idx + 1)):
         dilation = res5_dilation if stage_idx == 5 else 1
         first_stride = 1 if idx == 0 or (stage_idx == 5 and dilation == 2) else 2
-        blocks = make_stage(
-            BottleneckBlock,
-            num_blocks_per_stage[idx],
-            first_stride=first_stride,
-            in_channels=in_channels,
-            bottleneck_channels=bottleneck_channels,
-            out_channels=out_channels,
-            num_groups=num_groups,
-            norm=norm,
-            stride_in_1x1=stride_in_1x1,
-            dilation=dilation,
-        )
+        stage_kargs = {
+            "num_blocks": num_blocks_per_stage[idx],
+            "first_stride": first_stride,
+            "in_channels": in_channels,
+            "bottleneck_channels": bottleneck_channels,
+            "out_channels": out_channels,
+            "num_groups": num_groups,
+            "norm": norm,
+            "stride_in_1x1": stride_in_1x1,
+            "dilation": dilation,
+        }
+        if deform_on_per_stage[idx]:
+            stage_kargs["block_class"] = DeformBottleneckBlock
+            stage_kargs["deform_modulated"] = deform_modulated
+            stage_kargs["deform_num_groups"] = deform_num_groups
+        else:
+            stage_kargs["block_class"] = BottleneckBlock
+        blocks = make_stage(**stage_kargs)
         in_channels = out_channels
         out_channels *= 2
         bottleneck_channels *= 2
