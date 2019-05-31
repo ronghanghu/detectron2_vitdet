@@ -50,7 +50,7 @@ class _DeformConv(Function):
             cur_im2col_step = _DeformConv._cal_im2col_step(input.shape[0], ctx.im2col_step)
             assert (input.shape[0] % cur_im2col_step) == 0, "im2col step must divide batchsize"
 
-            _C.deform_conv_forward_cuda(
+            _C.deform_conv_forward(
                 input,
                 weight,
                 offset,
@@ -87,7 +87,7 @@ class _DeformConv(Function):
             if ctx.needs_input_grad[0] or ctx.needs_input_grad[1]:
                 grad_input = torch.zeros_like(input)
                 grad_offset = torch.zeros_like(offset)
-                _C.deform_conv_backward_input_cuda(
+                _C.deform_conv_backward_input(
                     input,
                     offset,
                     grad_output,
@@ -110,7 +110,7 @@ class _DeformConv(Function):
 
             if ctx.needs_input_grad[2]:
                 grad_weight = torch.zeros_like(weight)
-                _C.deform_conv_backward_parameters_cuda(
+                _C.deform_conv_backward_filter(
                     input,
                     offset,
                     grad_output,
@@ -209,7 +209,7 @@ class _ModulatedDeformConv(Function):
             ctx.save_for_backward(input, offset, mask, weight, bias)
         output = input.new_empty(_ModulatedDeformConv._infer_shape(ctx, input, weight))
         ctx._bufs = [input.new_empty(0), input.new_empty(0)]
-        _C.modulated_deform_conv_cuda_forward(
+        _C.modulated_deform_conv_forward(
             input,
             weight,
             bias,
@@ -243,7 +243,7 @@ class _ModulatedDeformConv(Function):
         grad_mask = torch.zeros_like(mask)
         grad_weight = torch.zeros_like(weight)
         grad_bias = torch.zeros_like(bias)
-        _C.modulated_deform_conv_cuda_backward(
+        _C.modulated_deform_conv_backward(
             input,
             weight,
             bias,
@@ -320,10 +320,14 @@ class DeformConv(nn.Module):
         activation=None,
     ):
         """
-        Extra keyword arguments supported similar to `Conv2D`:
+        Deformable convolution.
 
-        norm (nn.Module, optional): a normalization layer
-        activation (callable(Tensor) -> Tensor): a callable activation function
+        Args:
+            similar to `Conv2D`.
+
+            deformable_groups (int): number of groups used in deformable convolution.
+            norm (nn.Module, optional): a normalization layer
+            activation (callable(Tensor) -> Tensor): a callable activation function
         """
         super(DeformConv, self).__init__()
 
@@ -412,6 +416,16 @@ class ModulatedDeformConv(nn.Module):
         norm=None,
         activation=None,
     ):
+        """
+        Modulated deformable convolution.
+
+        Args:
+            similar to `Conv2D`.
+
+            deformable_groups (int): number of groups used in deformable convolution.
+            norm (nn.Module, optional): a normalization layer
+            activation (callable(Tensor) -> Tensor): a callable activation function
+        """
         super(ModulatedDeformConv, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels

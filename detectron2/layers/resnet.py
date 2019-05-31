@@ -185,6 +185,9 @@ class DeformBottleneckBlock(ResNetBlockBase):
         deform_modulated=False,
         deform_num_groups=1,
     ):
+        """
+        Similar to :class:`BottleneckBlock`, but with deformable conv in the 3x3 convolution.
+        """
         super().__init__(in_channels, out_channels, stride)
         self.deform_modulated = deform_modulated
 

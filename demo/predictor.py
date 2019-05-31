@@ -1,6 +1,6 @@
 import torch
 
-from detectron2.data.transforms import ImageTransformers, Normalize, ResizeShortestEdge
+from detectron2.data.transforms import ImageTransformers, ResizeShortestEdge
 from detectron2.detection.checkpoint import DetectionCheckpointer
 
 # import the hard-coded metadata
@@ -41,9 +41,7 @@ class COCODemo(object):
         """
         cfg = self.cfg
         transforms = ImageTransformers(
-            [
-                ResizeShortestEdge([cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST]),
-            ]
+            [ResizeShortestEdge([cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST])]
         )
         return transforms
 
