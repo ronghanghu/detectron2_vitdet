@@ -2,8 +2,6 @@ import torch
 
 from detectron2.layers import interpolate
 
-# from PIL import Image  # TODO investigate how to avoid opencv dependency
-
 
 class Keypoints:
     """

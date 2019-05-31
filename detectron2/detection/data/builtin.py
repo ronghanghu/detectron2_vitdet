@@ -154,6 +154,31 @@ COCO_CATEGORIES = [
     {"supercategory": "wall", "color": [102, 102, 156], "isthing": 0, "id": 199, "name": "wall-other-merged"}, # noqa
     {"supercategory": "textile", "color": [250, 141, 255], "isthing": 0, "id": 200, "name": "rug-merged"}, # noqa
 ]
+
+COCO_PERSON_KEYPOINT_NAMES = (
+    "nose",
+    "left_eye", "right_eye",
+    "left_ear", "right_ear",
+    "left_shoulder", "right_shoulder",
+    "left_elbow", "right_elbow",
+    "left_wrist", "right_wrist",
+    "left_hip", "right_hip",
+    "left_knee", "right_knee",
+    "left_ankle", "right_ankle",
+)
+
+# Pairs of keypoints that should be exchanged under horizontal flipping
+COCO_PERSON_KEYPOINT_FLIP_MAP = (
+    ("left_eye", "right_eye"),
+    ("left_ear", "right_ear"),
+    ("left_shoulder", "right_shoulder"),
+    ("left_elbow", "right_elbow"),
+    ("left_wrist", "right_wrist"),
+    ("left_hip", "right_hip"),
+    ("left_knee", "right_knee"),
+    ("left_ankle", "right_ankle"),
+)
+
 # fmt: on
 
 
@@ -200,7 +225,11 @@ def _get_builtin_metadata(dataset_name):
     if dataset_name == "coco_panoptic_separated":
         return _get_coco_panoptic_separated_meta()
     elif dataset_name == "coco_person":
-        return {"class_names": ["person"]}
+        return {
+            "class_names": ["person"],
+            "keypoint_names": COCO_PERSON_KEYPOINT_NAMES,
+            "keypoint_flip_map": COCO_PERSON_KEYPOINT_FLIP_MAP,
+        }
     elif dataset_name == "cityscapes":
         # We choose this order because it is consistent with our old json annotation files
         # TODO Perhaps switch to an order that's consistent with Cityscapes'

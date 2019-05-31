@@ -287,40 +287,11 @@ _C.MODEL.ROI_KEYPOINT_HEAD.NAME = "KRCNNConvDeconvUpsampleHead"
 _C.MODEL.ROI_KEYPOINT_HEAD.POOLER_RESOLUTION = 14
 _C.MODEL.ROI_KEYPOINT_HEAD.POOLER_SAMPLING_RATIO = 0
 _C.MODEL.ROI_KEYPOINT_HEAD.CONV_DIMS = tuple(512 for _ in range(8))
-_C.MODEL.ROI_KEYPOINT_HEAD.NUM_KEYPOINTS = 17
+_C.MODEL.ROI_KEYPOINT_HEAD.NUM_KEYPOINTS = 17  # 17 is the number of keypoints in COCO.
 # The caller of keypoint head is responsible to fill this computed attribute
 # about the input size of the keypoint head.
 # _C.MODEL.ROI_KEYPOINT_HEAD.COMPUTED_INPUT_SIZE = (channel, height, width)
-_C.MODEL.ROI_KEYPOINT_HEAD.KEYPOINT_NAMES = (
-    "nose",
-    "left_eye",
-    "right_eye",
-    "left_ear",
-    "right_ear",
-    "left_shoulder",
-    "right_shoulder",
-    "left_elbow",
-    "right_elbow",
-    "left_wrist",
-    "right_wrist",
-    "left_hip",
-    "right_hip",
-    "left_knee",
-    "right_knee",
-    "left_ankle",
-    "right_ankle",
-)
-# Pairs of keypoints that should be exchanged under horizontal flipping
-_C.MODEL.ROI_KEYPOINT_HEAD.KEYPOINT_FLIP_MAP = (
-    ("left_eye", "right_eye"),
-    ("left_ear", "right_ear"),
-    ("left_shoulder", "right_shoulder"),
-    ("left_elbow", "right_elbow"),
-    ("left_wrist", "right_wrist"),
-    ("left_hip", "right_hip"),
-    ("left_knee", "right_knee"),
-    ("left_ankle", "right_ankle"),
-)
+
 _C.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE = 10
 # Normalize by the total number of visible keypoints in the minibatch if True.
 # Otherwise, normalize by the total number of keypoints that could ever exist

@@ -1,8 +1,10 @@
 import copy
+import logging
 import numpy as np
 import torch
 from PIL import Image
 
+from detectron2.data import MetadataCatalog
 from detectron2.data.transforms import Flip, ImageTransformers, ResizeShortestEdge
 from detectron2.structures import Boxes, BoxMode, Instances, Keypoints, PolygonMasks
 
@@ -102,9 +104,10 @@ class DetectionTransform:
             tfms.append(Flip(horiz=True))
         self.tfms = ImageTransformers(tfms)
 
-        self.keypoint_flip_indices = _create_flip_indices(cfg)
         self.mask_on = cfg.MODEL.MASK_ON
         self.keypoint_on = cfg.MODEL.KEYPOINT_ON
+        if self.keypoint_on:
+            self.keypoint_flip_indices = _create_flip_indices(cfg)
 
         self.is_train = is_train
 
@@ -263,8 +266,29 @@ class DetectionTransform:
 
 
 def _create_flip_indices(cfg):
-    names = cfg.MODEL.ROI_KEYPOINT_HEAD.KEYPOINT_NAMES
-    flip_map = dict(cfg.MODEL.ROI_KEYPOINT_HEAD.KEYPOINT_FLIP_MAP)
+    names_per_dataset = [MetadataCatalog.get(ds).keypoint_names for ds in cfg.DATASETS.TRAIN]
+    flip_maps_per_dataset = [MetadataCatalog.get(ds).keypoint_flip_map for ds in cfg.DATASETS.TRAIN]
+
+    logger = logging.getLogger(__name__)
+
+    def _check_consistent(name, entries_per_dataset):
+        for idx, entry in enumerate(entries_per_dataset):
+            if entry != entries_per_dataset[0]:
+                logger.error(
+                    "{} for dataset {} is {}".format(name, cfg.DATASETS.TRAIN[idx], str(entry))
+                )
+                logger.error(
+                    "{} for dataset {} is {}".format(
+                        name, cfg.DATASETS.TRAIN[0], str(entries_per_dataset[0])
+                    )
+                )
+                raise ValueError("Training on several datasets with different '{}'!".format(name))
+
+    _check_consistent("keypoint_names", names_per_dataset)
+    _check_consistent("keypoint_flip_map", flip_maps_per_dataset)
+
+    names = names_per_dataset[0]
+    flip_map = dict(flip_maps_per_dataset[0])
     flip_map.update({v: k for k, v in flip_map.items()})
     flipped_names = [i if i not in flip_map else flip_map[i] for i in names]
     flip_indices = [names.index(i) for i in flipped_names]

@@ -26,17 +26,45 @@ Each dataset is associated with some metadata, accessible through
 `MetadataCatalog.get(dataset_name).some_metadata`.
 Metadata is a key-value mapping that contains primitive information that helps interpret what's in the dataset, e.g.,
 names of classes, root of files, etc.
-This information will be useful for evaluation, visualization, logging, etc.
-The structure of metadata depends on the what is needed from the corresponding evaluation or
-visualization code.
+This information will be useful for augmentation, evaluation, visualization, logging, etc.
+The structure of metadata depends on the what is needed from the corresponding downstream code.
 
 If you register a new dataset through `DatasetRegistry.register`,
-you may also want to add its corresponding metadata through `MetadataCatalog.get(dataset).set(...)`
+you may also want to add its corresponding metadata through
+`MetadataCatalog.get(dataset).set(name, value)`
+
+Here are a list of metadata keys that's used by builtin features in Detectron2.
+If you add your own dataset without these metadata, some features may be
+unavailable to you.
+
+* `class_names`: Used by all instance detection/segmentation tasks.
+  A list of names for each instance category. Will be automatically set by the function `load_coco_json`.
+
+* `dataset_id_to_contiguous_id`: Used by all instance detection/segmentation tasks.
+  A mapping from instance class ids in the dataset to a contiguous ids in range [0, #class).
+  Will be automatically set by the function `load_coco_json`.
+
+* `stuff_class_names`: Used by semantic/panoptic segmentation.
+  A list of names for each stuff category.
+
+* `stuff_contiguous_id_to_dataset_id`: Used by semantic/panoptic segmentation.
+  A mapping from contiguous stuff class ids in [0, #class) to the id in dataset.
+
+* `keypoint_names`: Used by keypoint localization. A list of names for each keypoint.
+
+* `keypoint_flip_map`: Used by keypoint localization. A list of pairs of names,
+  where each pair are the two keypoints that should be flipped if the image is
+  flipped during augmentation.
+
+* `json_file`: Used by COCO evaluation.
+* `panoptic_root`, `panoptic_json`: Used by panoptic evaluation.
+* `evaluator_type`: Used by the builtin main training script to select
+   evaluator. No need to use it if you write your own main script.
 
 
 ## The Detectron2 Dataset Format for Annotations
 
-For tasks
+For standard tasks
 (instance detection, instance/semantic/panoptic segmentation, keypoint detection),
 we use a data structure similar to COCO's json annotation
 as the basic format to represent a dataset.
@@ -76,7 +104,7 @@ can read from "file_name" if "image" is not available.
 				The Xs and Ys are either relative coordinates in [0, 1], or absolute coordinates,
 				depend on whether "bbox_mode" is relative.
 + proposal_boxes (array): 2D numpy array with shape (K, 4). K precomputed proposal boxes for this image.
-+ proposal_objectness_logits (array): numpy array with shape (K, ), which corresponds to the objectness 
++ proposal_objectness_logits (array): numpy array with shape (K, ), which corresponds to the objectness
         logits of proposals in 'propopsal_boxes'.
 + proposal_bbox_mode (int): the format of the precomputed proposal bbox.
         It must be a member of [detectron2.structures.BoxMode](detectron2/structures/boxes.py).

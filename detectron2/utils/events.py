@@ -100,7 +100,8 @@ class TensorboardXWriter:
             self._writer.add_scalar(k, v, storage.iteration)
 
     def __del__(self):
-        self._writer.close()
+        if hasattr(self, "_writer"):  # doesn't exist when the code fails at import
+            self._writer.close()
 
 
 class EventStorage:
