@@ -56,7 +56,7 @@ def annotations_to_instances(annos, image_size):
     boxes.clip(image_size)
 
     classes = [obj["category_id"] for obj in annos]
-    classes = torch.tensor(classes)
+    classes = torch.tensor(classes, dtype=torch.int64)
     target.gt_classes = classes
 
     if len(annos) and "segmentation" in annos[0]:

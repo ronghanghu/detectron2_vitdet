@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from torch.nn import functional as F
 
-from detectron2.structures import Instances, pairwise_iou
+from detectron2.structures import Instances, pairwise_iou, Boxes
 from detectron2.utils.events import get_event_storage
 from detectron2.utils.registry import Registry
 
@@ -102,23 +102,26 @@ class ROIHeads(torch.nn.Module):
         num_bg_samples = []
         with torch.no_grad():
             for proposals_per_image, targets_per_image in zip(proposals, targets):
+                has_gt = len(targets_per_image) > 0
                 match_quality_matrix = pairwise_iou(
                     targets_per_image.gt_boxes, proposals_per_image.proposal_boxes
                 )
                 matched_idxs = self.proposal_matcher(match_quality_matrix)
-                # Fast RCNN only need "gt_classes" field for selecting the targets
-                # Get the targets corresponding GT for each proposal
-                # Need to clamp the indices because matched_idxs can be < 0
-                matched_idxs_clamped = matched_idxs.clamp(min=0)
 
-                gt_classes = targets_per_image.gt_classes[matched_idxs_clamped].to(
-                    dtype=torch.int64
-                )
+                # Get the corresponding GT for each proposal
+                if has_gt:
+                    # Need to clamp the indices because matched_idxs can be < 0
+                    # Note that clamping to 0 is assuming that there is
+                    # at least 1 gt, which may not be true.
+                    matched_idxs_clamped = matched_idxs.clamp(min=0)
 
-                # Label background (below the low threshold)
-                gt_classes[matched_idxs == Matcher.BELOW_LOW_THRESHOLD] = self.num_classes
-                # Label ignore proposals (between low and high thresholds)
-                gt_classes[matched_idxs == Matcher.BETWEEN_THRESHOLDS] = -1
+                    gt_classes = targets_per_image.gt_classes[matched_idxs_clamped]
+                    # Label background (below the low threshold)
+                    gt_classes[matched_idxs == Matcher.BELOW_LOW_THRESHOLD] = self.num_classes
+                    # Label ignore proposals (between low and high thresholds)
+                    gt_classes[matched_idxs == Matcher.BETWEEN_THRESHOLDS] = -1
+                else:
+                    gt_classes = torch.zeros_like(matched_idxs) + self.num_classes
 
                 sampled_fg_inds, sampled_bg_inds = subsample_labels(
                     gt_classes,
@@ -135,18 +138,22 @@ class ROIHeads(torch.nn.Module):
                 proposals_per_image = proposals_per_image[sampled_inds]
                 proposals_per_image.gt_classes = gt_classes[sampled_inds]
 
-                # Avoid indexing the Boxes targets_per_image directly, as in the
-                # commented-out row below. It is considerably slower.
-                # TODO: investigate and optimize this access pattern.
-                # gt_boxes = targets_per_image[matched_idxs_clamped[sampled_inds]].bbox  # slow!
-                gt_boxes = targets_per_image.gt_boxes[matched_idxs_clamped[sampled_inds]]
+                if has_gt:
+                    sampled_targets = matched_idxs_clamped[sampled_inds]
+                    # Avoid indexing the Boxes targets_per_image directly,
+                    # it is considerably slower.
+                    gt_boxes = targets_per_image.gt_boxes[sampled_targets]
+                else:
+                    gt_boxes = Boxes(
+                        targets_per_image.gt_boxes.tensor.new_zeros((len(sampled_inds), 4))
+                    )
                 proposals_per_image.gt_boxes = gt_boxes
 
-                if targets_per_image.has("gt_masks"):
+                if targets_per_image.has("gt_masks") and has_gt:
                     # See note above about not indexing the targets_per_image directly
                     gt_masks = targets_per_image.gt_masks[matched_idxs_clamped[sampled_inds]]
                     proposals_per_image.gt_masks = gt_masks
-                if targets_per_image.has("gt_keypoints"):
+                if targets_per_image.has("gt_keypoints") and has_gt:
                     gt_keypoints = targets_per_image.gt_keypoints[
                         matched_idxs_clamped[sampled_inds]
                     ]

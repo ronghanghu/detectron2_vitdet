@@ -258,8 +258,9 @@ class FastRCNNOutputs(object):
 
         storage = get_event_storage()
         storage.put_scalar("fast_rcnn/cls_accuracy", num_accurate / num_instances)
-        storage.put_scalar("fast_rcnn/fg_cls_accuracy", fg_num_accurate / num_fg)
-        storage.put_scalar("fast_rcnn/false_negative", num_false_negative / num_fg)
+        if num_fg > 0:
+            storage.put_scalar("fast_rcnn/fg_cls_accuracy", fg_num_accurate / num_fg)
+            storage.put_scalar("fast_rcnn/false_negative", num_false_negative / num_fg)
 
     def losses(self):
         """
@@ -349,7 +350,7 @@ class FastRCNNOutputHead(nn.Module):
             nn.init.constant_(l.bias, 0)
 
     def forward(self, x):
-        x = x.view(x.size(0), -1)
+        x = x.view(x.shape[0], np.prod(x.shape[1:]))
         scores = self.cls_score(x)
         proposal_deltas = self.bbox_pred(x)
         return scores, proposal_deltas

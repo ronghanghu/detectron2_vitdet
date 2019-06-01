@@ -39,6 +39,8 @@ def keypoint_rcnn_loss(pred_keypoint_logits, instances, normalizer):
 
     keypoint_side_len = pred_keypoint_logits.shape[2]
     for instances_per_image in instances:
+        if len(instances_per_image) == 0:
+            continue
         keypoints = instances_per_image.gt_keypoints
         heatmaps_per_image, valid_per_image = keypoints.to_heatmap(
             instances_per_image.proposal_boxes.tensor, keypoint_side_len
@@ -46,13 +48,14 @@ def keypoint_rcnn_loss(pred_keypoint_logits, instances, normalizer):
         heatmaps.append(heatmaps_per_image.view(-1))
         valid.append(valid_per_image.view(-1))
 
-    keypoint_targets = cat(heatmaps, dim=0)
-    valid = cat(valid, dim=0).to(dtype=torch.uint8)
-    valid = torch.nonzero(valid).squeeze(1)
+    if len(heatmaps):
+        keypoint_targets = cat(heatmaps, dim=0)
+        valid = cat(valid, dim=0).to(dtype=torch.uint8)
+        valid = torch.nonzero(valid).squeeze(1)
 
     # torch.mean (in binary_cross_entropy_with_logits) doesn't
     # accept empty tensors, so handle it separately
-    if keypoint_targets.numel() == 0 or valid.numel() == 0:
+    if len(heatmaps) == 0 or valid.numel() == 0:
         global _TOTAL_SKIPPED
         _TOTAL_SKIPPED += 1
         storage = get_event_storage()

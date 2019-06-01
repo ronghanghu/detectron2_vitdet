@@ -70,6 +70,8 @@ def mask_rcnn_loss(pred_mask_logits, instances):
     gt_classes = []
     gt_mask_logits = []
     for instances_per_image in instances:
+        if len(instances_per_image) == 0:
+            continue
         if not cls_agnostic_mask:
             gt_classes_per_image = instances_per_image.gt_classes.to(dtype=torch.int64)
             gt_classes.append(gt_classes_per_image)
@@ -80,12 +82,11 @@ def mask_rcnn_loss(pred_mask_logits, instances):
         )
         gt_mask_logits.append(gt_mask_logits_per_image)
 
-    gt_mask_logits = cat(gt_mask_logits, dim=0)
-
-    # torch.mean (in binary_cross_entropy_with_logits) doesn't
-    # accept empty tensors, so handle it separately
-    if gt_mask_logits.numel() == 0:
+    if len(gt_mask_logits) == 0:
         return pred_mask_logits.sum() * 0
+
+    gt_mask_logits = cat(gt_mask_logits, dim=0)
+    assert gt_mask_logits.numel() > 0, gt_mask_logits.shape
 
     if cls_agnostic_mask:
         pred_mask_logits = pred_mask_logits[:, 0]

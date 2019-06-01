@@ -64,7 +64,10 @@ class Matcher(object):
                 high_threshold.
         """
         assert match_quality_matrix.dim() == 2
-        assert match_quality_matrix.numel() > 0
+        if match_quality_matrix.numel() == 0:
+            return match_quality_matrix.new_full(
+                (match_quality_matrix.size(1),), self.BELOW_LOW_THRESHOLD, dtype=torch.int64
+            )
         assert torch.all(match_quality_matrix >= 0)
 
         # match_quality_matrix is M (gt) x N (predicted)

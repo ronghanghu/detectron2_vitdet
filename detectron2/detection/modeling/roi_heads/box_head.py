@@ -71,7 +71,7 @@ class FastRCNNConvFCHead(nn.Module):
         for layer in self.conv_norm_relus:
             x = layer(x)
         if len(self.fcs):
-            x = x.view(x.shape[0], -1)
+            x = x.view(x.shape[0], np.prod(x.shape[1:]))
             for layer in self.fcs:
                 x = F.relu(layer(x))
         return x

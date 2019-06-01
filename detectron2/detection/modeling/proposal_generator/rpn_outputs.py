@@ -319,12 +319,16 @@ class RPNOutputs(object):
             # Discard indices that are neither foreground or background
             objectness_logits_gt_i[matched_idxs == Matcher.BETWEEN_THRESHOLDS] = -1
 
-            # TODO wasted computation for ignored boxes
-            # NB: need to clamp the indices because matched_idxs can be <0
-            matched_gt_boxes = gt_boxes_i[matched_idxs.clamp(min=0)]
-            anchor_deltas_gt_i = self.box2box_transform.get_deltas(
-                anchors_i.tensor, matched_gt_boxes.tensor
-            )
+            if len(gt_boxes_i) == 0:
+                # These values won't be used anyway since the anchor is labeled as background
+                anchor_deltas_gt_i = torch.zeros_like(anchors_i.tensor)
+            else:
+                # TODO wasted computation for ignored boxes
+                # NB: need to clamp the indices because matched_idxs can be <0
+                matched_gt_boxes = gt_boxes_i[matched_idxs.clamp(min=0)]
+                anchor_deltas_gt_i = self.box2box_transform.get_deltas(
+                    anchors_i.tensor, matched_gt_boxes.tensor
+                )
 
             objectness_logits_gt.append(objectness_logits_gt_i)
             anchor_deltas_gt.append(anchor_deltas_gt_i)
