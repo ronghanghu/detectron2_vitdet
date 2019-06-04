@@ -88,6 +88,15 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
     #  ...]
     anns = [coco_api.imgToAnns[img_id] for img_id in img_ids]
 
+    if "minival" not in json_file:
+        # The popular valminusminival & minival annotations for COCO2014 contain this bug.
+        # However the ratio of buggy annotations there is tiny and does not affect accuracy.
+        # Therefore we explicitly white-list them.
+        ann_ids = [ann["id"] for anns_per_image in anns for ann in anns_per_image]
+        assert len(set(ann_ids)) == len(ann_ids), "Annotation ids in '{}' are not unique!".format(
+            json_file
+        )
+
     imgs_anns = list(zip(imgs, anns))
 
     logger.info("Loaded {} images in COCO format from {}".format(len(imgs_anns), json_file))
