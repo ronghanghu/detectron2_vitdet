@@ -106,7 +106,8 @@ class DetectionTransform:
 
         self.mask_on = cfg.MODEL.MASK_ON
         self.keypoint_on = cfg.MODEL.KEYPOINT_ON
-        if self.keypoint_on:
+        if self.keypoint_on and is_train:
+            # Flip only makes sense in training
             self.keypoint_flip_indices = _create_flip_indices(cfg)
 
         self.is_train = is_train
