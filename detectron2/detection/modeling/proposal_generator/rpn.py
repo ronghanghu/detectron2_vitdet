@@ -8,7 +8,6 @@ from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher
 from .anchor_generator import build_anchor_generator
 from .build import PROPOSAL_GENERATOR_REGISTRY
-from .proposal_utils import add_ground_truth_to_proposals
 from .rpn_outputs import RPNOutputs, find_top_rpn_proposals
 
 RPN_HEAD_REGISTRY = Registry("RPN_HEAD")
@@ -193,19 +192,6 @@ class RPN(nn.Module):
                 self.min_box_side_len,
                 self.training,
             )
-
-            if self.training:
-                # Augment RPN proposals with ground-truth boxes.
-                # When training starts, RPN will produce low quality proposals due
-                # to random initialization. It's possible that none of these initial
-                # proposals have high enough overlap with the gt objects to be used
-                # as positive examples for the second stage components (box head,
-                # cls head, mask head). Adding the gt boxes to the set of proposals
-                # ensures that the second stage components will have some positive
-                # examples from the start of training. This augmentation improves
-                # convergence and empirically improves box AP on COCO by about 0.5
-                # points (under one tested configuration).
-                proposals = add_ground_truth_to_proposals(gt_boxes, proposals)
 
             if self.proposal_generator_only:
                 # We must be in testing mode

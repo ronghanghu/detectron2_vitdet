@@ -8,8 +8,6 @@ from detectron2.data import MetadataCatalog
 from detectron2.data.transforms import Flip, ImageTransformers, ResizeShortestEdge
 from detectron2.structures import Boxes, BoxMode, Instances, Keypoints, PolygonMasks
 
-from ..modeling.proposal_generator.proposal_utils import add_ground_truth_to_proposals_single_image
-
 __all__ = ["DetectionTransform"]
 
 
@@ -188,12 +186,6 @@ class DetectionTransform:
             sem_seg_gt = self.tfms.transform_segmentation(sem_seg_gt, tfm_params)
             sem_seg_gt = torch.as_tensor(sem_seg_gt.astype("long"))
             dataset_dict["sem_seg_gt"] = sem_seg_gt
-
-        if "proposals" in dataset_dict:
-            # Augment precomputed proposals with groundtruth boxes during training.
-            dataset_dict["proposals"] = add_ground_truth_to_proposals_single_image(
-                targets.gt_boxes, dataset_dict.pop("proposals")
-            )
         return dataset_dict
 
     def transform_annotations(self, annotation, tfm_params, image_size):

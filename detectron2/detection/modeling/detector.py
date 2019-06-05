@@ -21,7 +21,7 @@ class GeneralizedRCNN(nn.Module):
     """
 
     def __init__(self, cfg):
-        super(GeneralizedRCNN, self).__init__()
+        super().__init__()
 
         self.device = torch.device(cfg.MODEL.DEVICE)
 

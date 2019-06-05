@@ -15,6 +15,7 @@ from .box_head import build_box_head
 from .fast_rcnn import FastRCNNOutputHead, FastRCNNOutputs
 from .keypoint_head import build_keypoint_head, keypoint_rcnn_inference, keypoint_rcnn_loss
 from .mask_head import build_mask_head, mask_rcnn_inference, mask_rcnn_loss
+from ..proposal_generator.proposal_utils import add_ground_truth_to_proposals
 
 ROI_HEADS_REGISTRY = Registry("ROI_HEADS")
 
@@ -79,10 +80,11 @@ class ROIHeads(torch.nn.Module):
 
     def label_and_sample_proposals(self, proposals, targets):
         """
-        Perform box matching between `proposals` and `targets`, and label the
-        proposals with training labels. Return `self.batch_size_per_image`
-        random samples from `proposals` with a fraction of positives that is no
-        larger than `self.positive_sample_fraction.
+        Prepare some proposals to be used to train the ROI heads.
+        It performs box matching between `proposals` and `targets`, and assign
+        training labels to the lproposals.
+        It returns `self.batch_size_per_image` random samples from proposals and groundtruth boxes,
+        with a fraction of positives that is no larger than `self.positive_sample_fraction.
 
         Args:
             See :meth:`ROIHeads.forward`
@@ -96,6 +98,20 @@ class ROIHeads(torch.nn.Module):
                    then the ground-truth box is random)
                 Other fields such as "gt_classes", "gt_masks", that's included in `targets`.
         """
+        gt_boxes = [x.gt_boxes for x in targets]
+        # Augment proposals with ground-truth boxes.
+        # In the case of learned proposals (e.g., RPN), when training starts
+        # the proposals will be low quality due to random initialization.
+        # It's possible that none of these initial
+        # proposals have high enough overlap with the gt objects to be used
+        # as positive examples for the second stage components (box head,
+        # cls head, mask head). Adding the gt boxes to the set of proposals
+        # ensures that the second stage components will have some positive
+        # examples from the start of training. For RPN, this augmentation improves
+        # convergence and empirically improves box AP on COCO by about 0.5
+        # points (under one tested configuration).
+        proposals = add_ground_truth_to_proposals(gt_boxes, proposals)
+
         proposals_with_gt = []
 
         num_fg_samples = []
