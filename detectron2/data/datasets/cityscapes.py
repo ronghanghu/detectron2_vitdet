@@ -128,8 +128,15 @@ def cityscapes_files_to_dict(files, from_json, to_polygons):
             if label.id < 0:  # cityscapes data format
                 continue
 
-            poly_coord = np.asarray(obj["polygon"], dtype="f4")
-            poly = Polygon(poly_coord).buffer(0.0)
+            # Cityscapes's raw annotations uses integer coordinates
+            # Therefore +0.5 here
+            poly_coord = np.asarray(obj["polygon"], dtype="f4") + 0.5
+            # CityscapesScript uses PIL.ImageDraw.polygon to rasterize
+            # polygons for evaluation. This function operates in integer space
+            # and draws each pixel whose center falls into the polygon.
+            # Therefore it draws a polygon which is 0.5 "fatter" in expectation.
+            # We therefore dilate the input polygon by 0.5 as our input.
+            poly = Polygon(poly_coord).buffer(0.5, resolution=4)
 
             if not label.hasInstances or label.ignoreInEval:
                 # even if we won't store the polygon it still contributes to overlaps resolution

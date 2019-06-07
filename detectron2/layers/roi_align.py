@@ -59,6 +59,22 @@ class ROIAlign(nn.Module):
             rois: Bx5 boxes. First column is the index into N. The other 4 columns are xyxy.
         """
         assert rois.dim() == 2 and rois.size(1) == 5
+
+        # This ROIAlign implementation actually takes coordinates
+        # in the discrete coordinate frame as inputs.
+        # (likely because the two coordinate frames are not distinguished at the
+        # time of inventing ROIAlign).
+        # However they are different by 0.5 in our pixel model.
+
+        # The following three lines will make the ROIAlign op consistent with
+        # our pixel model.
+        # And lead to smaller reconstruction error under scaling operations.
+        # However since it's used among conv layers, it does not make a difference in accuracy.
+
+        # rois = rois.clone()
+        # rois[:, 1:] = rois[:, 1:] * self.spatial_scale - 0.5
+        # return roi_align(input, rois, self.output_size, 1.0, self.sampling_ratio)
+
         return roi_align(input, rois, self.output_size, self.spatial_scale, self.sampling_ratio)
 
     def __repr__(self):

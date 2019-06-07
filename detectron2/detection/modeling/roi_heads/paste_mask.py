@@ -1,9 +1,10 @@
 import numpy as np
 import torch
 from PIL import Image
+from torch.nn import functional as F
 
 
-def paste_masks_in_image(masks, boxes, image_shape, threshold=0.5, padding=1):
+def paste_masks_in_image(masks, boxes, image_shape, threshold=0.5):
     """
     Paste a set of masks that are of a fixed resolution (e.g., 28 x 28) into an image.
     The location, height, and width for pasting each mask is determined by their
@@ -18,10 +19,6 @@ def paste_masks_in_image(masks, boxes, image_shape, threshold=0.5, padding=1):
         image_shape (tuple): height, width
         threshold (float): A threshold in [0, 1] for converting the (soft) masks to
             binary masks.
-        padding (int): Amount of padding to apply to the masks before pasting them. Padding
-            is used to avoid "top hat" artifacts that can be caused by default non-zero padding
-            that is implemented in some low-level image resizing implementations (such as opencv's
-            cv2.resize function).
 
     Returns:
         img_masks (Tensor): A tensor of shape (Bimg, 1, Himage, Wimage), where Bimg is the
@@ -30,31 +27,119 @@ def paste_masks_in_image(masks, boxes, image_shape, threshold=0.5, padding=1):
     """
     assert masks.shape[-1] == masks.shape[-2], "Only square mask predictions are supported"
 
+    if len(masks) > 0:
+        img_masks = paste_masks_in_image_aligned(masks, boxes, image_shape, threshold)
+
+        # The below are the original paste function (from Detectron1) which has
+        # larger quantization error.
+        # It is faster on CPU, while the aligned one is faster on GPU.
+
+        # Our pixel modeling requires extrapolation for any continuous
+        # coordinate < 0.5 or > length - 0.5. When sampling pixels on the masks,
+        # we would like this extrapolation to be an interpolation between boundary values and zero,
+        # instead of using absolute zero or boundary values.
+        # Therefore we pad zero around the masks.
+        # masks, scale = pad_masks(masks[:, 0, :, :], 1)
+        # boxes = scale_boxes(boxes.tensor, scale)
+
+        # img_masks = [
+        #     paste_mask_in_image(mask, box, image_shape[0], image_shape[1], threshold)
+        #     for mask, box in zip(masks, boxes)
+        # ]
+        # img_masks = torch.stack(img_masks, dim=0)[:, None]
+    else:
+        img_masks = masks.new_empty((0, 1) + image_shape)
+    return img_masks
+
+
+def paste_masks_in_image_aligned(masks, boxes, image_shape, threshold):
+    """
+    An implementation of :func:`paste_masks_in_image` which uses the pixel modeling
+    described in
+    Heckbert 1990 ("What is the coordinate of a pixel?"),
+    with a continuous-discrete conversion like this:
+
+        d = truncate(c)
+        c = d + 0.5,
+
+    where d is a discrete coordinate and c is a continuous coordinate.
+
+    It has the same interface as :func:`paste_masks_in_image`.
+    """
+    boxes = boxes.tensor
+    masks = masks[:, 0, :, :]
+
+    device = boxes.device
+    N, mask_h, mask_w = masks.shape
+    assert len(boxes) == N, boxes.shape
+    x0, y0, x1, y1 = torch.split(boxes, 1, dim=1)  # each is Nx1
+
     img_h, img_w = image_shape
 
-    masks, scale = pad_masks(masks, padding)
-    scaled_boxes = scale_boxes(boxes.tensor, scale)
+    if device.type == "cpu":
+        # on CPU, paste the masks one by one, by sampling coordinates in the box
+        x0, y0 = x0[:, 0], y0[:, 0]
+        x1, y1 = x1[:, 0], y1[:, 0]
+        zero = torch.Tensor([0]).to(device=x0.device, dtype=torch.int32)
+        x0_int = torch.max(zero, x0.floor().to(dtype=torch.int32) - 1)
+        y0_int = torch.max(zero, y0.floor().to(dtype=torch.int32) - 1)
+        x1_int = torch.min(zero + img_w, x1.ceil().to(dtype=torch.int32) + 1)
+        y1_int = torch.min(zero + img_h, y1.ceil().to(dtype=torch.int32) + 1)
 
-    img_masks = [
-        paste_mask_in_image(mask[0], box, img_h, img_w, threshold)
-        for mask, box in zip(masks, scaled_boxes)
-    ]
-    if len(img_masks) > 0:
-        img_masks = torch.stack(img_masks, dim=0)[:, None]
+        img_masks = torch.zeros(N, 1, img_h, img_w, device=masks.device, dtype=torch.uint8)
+        for idx, mask in enumerate(masks):
+            img_y = torch.arange(y0_int[idx], y1_int[idx], dtype=torch.float32, device=device) + 0.5
+            img_x = torch.arange(x0_int[idx], x1_int[idx], dtype=torch.float32, device=device) + 0.5
+            img_y = (img_y - y0[idx]) / (y1[idx] - y0[idx]) * 2 - 1
+            img_x = (img_x - x0[idx]) / (x1[idx] - x0[idx]) * 2 - 1
+
+            # https://github.com/pytorch/pytorch/issues/20785
+            img_y = img_y * mask_h / (mask_h - 1)
+            img_x = img_x * mask_w / (mask_w - 1)
+
+            gy, gx = torch.meshgrid(img_y, img_x)
+            ind = torch.stack([gx, gy], dim=-1).to(dtype=torch.float32, device=masks.device)
+            res = F.grid_sample(mask[None, None, :, :].to(dtype=torch.float32), ind[None, :, :, :])
+            if threshold >= 0:
+                res = (res >= threshold).to(dtype=torch.uint8)
+            else:
+                res = (res * 255).to(dtype=torch.uint8)
+            img_masks[idx, 0, y0_int[idx] : y1_int[idx], x0_int[idx] : x1_int[idx]] = res
+        return img_masks
     else:
-        img_masks = masks.new_empty((0, 1, img_h, img_w))
+        # on GPU, paste all masks together
+        # by using the entire image to sample the masks
+        # Compared to pasting them one by one,
+        # this has more operations but is faster on COCO-scale dataset.
+        img_y = torch.arange(0.0, img_h).to(device=device) + 0.5
+        img_x = torch.arange(0.0, img_w).to(device=device) + 0.5
+        img_y = (img_y - y0) / (y1 - y0) * 2 - 1
+        img_x = (img_x - x0) / (x1 - x0) * 2 - 1
+        # img_x, img_y has shape Nximg_w, Nximg_h
+
+        # https://github.com/pytorch/pytorch/issues/20785
+        img_y = img_y * mask_h / (mask_h - 1)
+        img_x = img_x * mask_w / (mask_w - 1)
+
+        gx = img_x[:, None, :].expand(N, img_h, img_w)
+        gy = img_y[:, :, None].expand(N, img_h, img_w)
+        inds = torch.stack([gx, gy], dim=3)
+
+        img_masks = F.grid_sample(masks[:, None, :, :].to(dtype=torch.float32), inds)
+        if threshold >= 0:
+            img_masks = (img_masks >= threshold).to(dtype=torch.uint8)
+        else:
+            # for visualization and debugging
+            img_masks = (img_masks * 255).to(dtype=torch.uint8)
     return img_masks
 
 
 def paste_mask_in_image(mask, box, img_h, img_w, threshold):
     """
     Paste a single mask in an image.
-
-    Pasting uses the continuous-discrete conversion from Heckbert 1990 ("What is
-    the coordinate of a pixel?"):
-        d = truncate(c)
-        c = d + 0.5,
-    where d is a discrete coordinate and c is a continuous coordinate.
+    This is a per-box implementation of :func:`paste_masks_in_image`.
+    This function has larger quantization error due to incorrect pixel
+    modeling and is not used any more.
 
     Args:
         mask (Tensor): A tensor of shape (Hmask, Wmask) storing the mask of a single
@@ -116,8 +201,8 @@ def pad_masks(masks, padding):
     M = masks.shape[-1]
     pad2 = 2 * padding
     scale = float(M + pad2) / M
-    padded_masks = masks.new_zeros((B, 1, M + pad2, M + pad2))
-    padded_masks[:, :, padding:-padding, padding:-padding] = masks
+    padded_masks = masks.new_zeros((B, M + pad2, M + pad2))
+    padded_masks[:, padding:-padding, padding:-padding] = masks
     return padded_masks, scale
 
 

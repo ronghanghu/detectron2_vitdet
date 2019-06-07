@@ -3,46 +3,11 @@ from torch import nn
 from torch.nn import functional as F
 
 from detectron2.layers import Conv2d, ConvTranspose2d, cat, weight_init
-from detectron2.structures import rasterize_polygons_within_box
+from detectron2.structures import batch_rasterize_polygons_within_box
 from detectron2.utils.events import get_event_storage
 from detectron2.utils.registry import Registry
 
 ROI_MASK_HEAD_REGISTRY = Registry("ROI_MASK_HEAD")
-
-
-def get_mask_ground_truth(gt_masks, pred_boxes, mask_side_len):
-    """
-    Given original ground-truth masks for an image, construct new ground-truth masks
-    for a set of predicted boxes in that image. For each box, its ground-truth mask is
-    constructed by clipping the corresponding original mask to the box, scaling it to
-    the desired size and then rasterizing it into a tensor.
-
-    Args:
-        gt_masks (PolygonMasks): A `PolygonMasks` storing ground-truth masks for an image.
-        pred_boxes (Boxes): A Boxes storing the predicted boxes for which ground-truth
-            masks will be constructed.
-        mask_side_len (int): The side length of the rasterized ground-truth masks.
-
-    Returns:
-        gt_mask_logits (Tensor): A byte tensor of shape (Bimg, mask_side_len, mask_side_len), where
-            Bimg is the number of predicted boxes for this image. gt_mask_logits[i] stores the
-            ground-truth for the predicted mask logits for the i-th predicted box.
-    """
-    device = pred_boxes.device
-    # Put pred_boxes on the CPU, as the representation for masks is not efficient
-    # GPU-wise (possibly several small tensors for representing a single instance mask)
-    pred_boxes = pred_boxes.to(torch.device("cpu"))
-
-    gt_mask_logits = []
-    for gt_mask, pred_box in zip(gt_masks, pred_boxes):
-        """
-        gt_mask: list[list[float]], the polygons for one instance
-        pred_box: a tensor of shape (4,)
-        """
-        gt_mask_logits.append(rasterize_polygons_within_box(gt_mask, pred_box, mask_side_len))
-    if len(gt_mask_logits) == 0:
-        return torch.empty(0, dtype=torch.uint8, device=device)
-    return torch.stack(gt_mask_logits, dim=0).to(device=device)
 
 
 def mask_rcnn_loss(pred_mask_logits, instances):
@@ -77,9 +42,9 @@ def mask_rcnn_loss(pred_mask_logits, instances):
             gt_classes.append(gt_classes_per_image)
 
         gt_masks = instances_per_image.gt_masks
-        gt_mask_logits_per_image = get_mask_ground_truth(
-            gt_masks, instances_per_image.proposal_boxes, mask_side_len
-        )
+        gt_mask_logits_per_image = batch_rasterize_polygons_within_box(
+            gt_masks, instances_per_image.proposal_boxes.tensor, mask_side_len
+        ).to(device=pred_mask_logits.device)
         gt_mask_logits.append(gt_mask_logits_per_image)
 
     if len(gt_mask_logits) == 0:
@@ -96,7 +61,9 @@ def mask_rcnn_loss(pred_mask_logits, instances):
         pred_mask_logits = pred_mask_logits[indices, gt_classes]
 
     # Log the training accuracy (using gt classes and 0.5 threshold)
-    mask_accurate = (pred_mask_logits > 0.5) == gt_mask_logits
+    # Note that here we allow gt_mask_logits to be float as well
+    # (depend on the implementation of rasterize())
+    mask_accurate = (pred_mask_logits > 0.5) == (gt_mask_logits > 0.5)
     mask_accuracy = mask_accurate.nonzero().size(0) / mask_accurate.numel()
     get_event_storage().put_scalar("mask_rcnn/accuracy", mask_accuracy)
 

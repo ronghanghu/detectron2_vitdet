@@ -25,8 +25,6 @@ def detector_postprocess(results, output_height, output_width, mask_threshold=0.
     Returns:
         Instances: the postprocessed output from the model, based on the output resolution
     """
-    # Faster on CPU, probably because paste_masks contains many cpu operations
-    results = results.to(torch.device("cpu"))
     scale_x, scale_y = (output_width / results.image_size[1], output_height / results.image_size[0])
     results = Instances((output_height, output_width), **results.get_fields())
 
@@ -47,7 +45,6 @@ def detector_postprocess(results, output_height, output_width, mask_threshold=0.
             results.pred_boxes,
             results.image_size,
             threshold=mask_threshold,
-            padding=1,
         ).squeeze(1)
 
     if results.has("pred_keypoints"):
