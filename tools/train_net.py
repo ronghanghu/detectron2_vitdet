@@ -227,9 +227,6 @@ def do_train(cfg, model):
             iteration = iteration + 1
             storage.step()
 
-            scheduler.step()
-            storage.put_scalar("lr", optimizer.param_groups[0]["lr"], smoothing_hint=False)
-
             loss_dict = model(data)
 
             losses = sum(loss for loss in loss_dict.values())
@@ -244,6 +241,8 @@ def do_train(cfg, model):
             optimizer.zero_grad()
             losses.backward()
             optimizer.step()
+            storage.put_scalar("lr", optimizer.param_groups[0]["lr"], smoothing_hint=False)
+            scheduler.step()
 
             batch_time = time.time() - iter_end
             total_training_time += batch_time
