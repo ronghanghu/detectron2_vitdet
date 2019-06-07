@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from torch.nn import functional as F
 
-from detectron2.structures import Instances, pairwise_iou, Boxes
+from detectron2.structures import Boxes, Instances, pairwise_iou
 from detectron2.utils.events import get_event_storage
 from detectron2.utils.registry import Registry
 
@@ -10,12 +10,12 @@ from ..backbone import resnet
 from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher
 from ..poolers import ROIPooler
+from ..proposal_generator.proposal_utils import add_ground_truth_to_proposals
 from ..sampling import subsample_labels
 from .box_head import build_box_head
 from .fast_rcnn import FastRCNNOutputHead, FastRCNNOutputs
 from .keypoint_head import build_keypoint_head, keypoint_rcnn_inference, keypoint_rcnn_loss
 from .mask_head import build_mask_head, mask_rcnn_inference, mask_rcnn_loss
-from ..proposal_generator.proposal_utils import add_ground_truth_to_proposals
 
 ROI_HEADS_REGISTRY = Registry("ROI_HEADS")
 
