@@ -11,32 +11,6 @@ from detectron2.structures import Boxes, BoxMode, Instances, Keypoints, PolygonM
 __all__ = ["DetectionTransform"]
 
 
-def _read_image(file_name, format=None):
-    """
-    Read an image into the given format.
-
-    Args:
-        file_name (str):
-        format (str): one of the supported image modes in PIL, or "BGR"
-
-    Returns:
-        image (np.ndarray)
-    """
-    image = Image.open(file_name)
-
-    if format is not None:
-        # PIL only supports RGB, so convert to RGB and flip channels over below
-        conversion_format = format
-        if format == "BGR":
-            conversion_format = "RGB"
-        image = image.convert(conversion_format)
-    image = np.asarray(image)
-    if format == "BGR":
-        # flip channels if needed
-        image = image[:, :, ::-1]
-    return image
-
-
 def annotations_to_instances(annos, image_size):
     """
     Create an :class:`Instances` object used by the models, from annotations in the dataset dict.
@@ -133,7 +107,7 @@ class DetectionTransform:
                 3. Prepare the annotations to :class:`Instances`
         """
         dataset_dict = copy.deepcopy(dataset_dict)  # it will be modified by code below
-        image = _read_image(dataset_dict["file_name"], format=self.img_format)
+        image = self._read_image(dataset_dict["file_name"], format=self.img_format)
         image, tfm_params = self.tfms.transform_image_get_params(image)
 
         image_shape = image.shape[:2]  # h, w
@@ -187,6 +161,32 @@ class DetectionTransform:
             sem_seg_gt = torch.as_tensor(sem_seg_gt.astype("long"))
             dataset_dict["sem_seg_gt"] = sem_seg_gt
         return dataset_dict
+
+    @staticmethod
+    def _read_image(file_name, format=None):
+        """
+        Read an image into the given format.
+
+        Args:
+            file_name (str):
+            format (str): one of the supported image modes in PIL, or "BGR"
+
+        Returns:
+            image (np.ndarray)
+        """
+        image = Image.open(file_name)
+
+        if format is not None:
+            # PIL only supports RGB, so convert to RGB and flip channels over below
+            conversion_format = format
+            if format == "BGR":
+                conversion_format = "RGB"
+            image = image.convert(conversion_format)
+        image = np.asarray(image)
+        if format == "BGR":
+            # flip channels if needed
+            image = image[:, :, ::-1]
+        return image
 
     def transform_annotations(self, annotation, tfm_params, image_size):
         """
