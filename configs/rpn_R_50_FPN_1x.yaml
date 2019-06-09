@@ -1,10 +1,10 @@
 _BASE_: "Base-FPN.yaml"
 MODEL:
+  META_ARCHITECTURE: "ProposalNetwork"
   WEIGHT: "catalog://ImageNetPretrained/MSRA/R-50"
   MASK_ON: False
   RESNETS:
     DEPTH: 50
-  PROPOSAL_GENERATOR_ONLY: True
   RPN:
       POST_NMS_TOPK_TEST: 2000
 SOLVER:

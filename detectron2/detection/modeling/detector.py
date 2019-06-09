@@ -27,10 +27,7 @@ class GeneralizedRCNN(nn.Module):
 
         self.backbone = build_backbone(cfg)
         self.proposal_generator = build_proposal_generator(cfg)
-        if cfg.MODEL.PROPOSAL_GENERATOR_ONLY:
-            self.roi_heads = None
-        else:
-            self.roi_heads = build_roi_heads(cfg)
+        self.roi_heads = build_roi_heads(cfg)
 
         pixel_mean = torch.Tensor(cfg.INPUT.PIXEL_MEAN).to(self.device).view(3, 1, 1)
         pixel_std = torch.Tensor(cfg.INPUT.PIXEL_STD).to(self.device).view(3, 1, 1)
@@ -76,11 +73,7 @@ class GeneralizedRCNN(nn.Module):
             proposals = [x["proposals"].to(self.device) for x in batched_inputs]
             proposal_losses = {}
 
-        if self.roi_heads:
-            _, detector_losses = self.roi_heads(images, features, proposals, targets)
-        else:
-            # RPN-only models don't have roi_heads.
-            detector_losses = {}
+        _, detector_losses = self.roi_heads(images, features, proposals, targets)
 
         losses = {}
         losses.update(detector_losses)
@@ -116,11 +109,7 @@ class GeneralizedRCNN(nn.Module):
                 assert "proposals" in batched_inputs[0]
                 proposals = [x["proposals"].to(self.device) for x in batched_inputs]
 
-            if self.roi_heads:
-                results, _ = self.roi_heads(images, features, proposals, None)
-            else:
-                # RPN-only models don't have roi_heads.
-                results = proposals
+            results, _ = self.roi_heads(images, features, proposals, None)
         else:
             detected_instances = [x.to(self.device) for x in detected_instances]
             results = self.roi_heads.forward_with_given_boxes(features, detected_instances)
@@ -146,3 +135,53 @@ class GeneralizedRCNN(nn.Module):
         images = [self.normalizer(x) for x in images]
         images = ImageList.from_tensors(images, self.backbone.size_divisibility)
         return images
+
+
+@META_ARCH_REGISTRY.register()
+class ProposalNetwork(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.device = torch.device(cfg.MODEL.DEVICE)
+
+        self.backbone = build_backbone(cfg)
+        self.proposal_generator = build_proposal_generator(cfg)
+
+        pixel_mean = torch.Tensor(cfg.INPUT.PIXEL_MEAN).to(self.device).view(3, 1, 1)
+        pixel_std = torch.Tensor(cfg.INPUT.PIXEL_STD).to(self.device).view(3, 1, 1)
+        self.normalizer = lambda x: (x - pixel_mean) / pixel_std
+        self.to(self.device)
+
+    def forward(self, batched_inputs):
+        """
+        Args:
+            Same as in :class:`GeneralizedRCNN.forward`
+
+        Returns:
+            list[dict]: Each dict is the output for one input image.
+                The dict contains one key "detector" whose value is a
+                :class:`Instances` with keys "proposal_boxes" and "objectness_logits".
+        """
+        images = [x["image"].to(self.device) for x in batched_inputs]
+        images = [self.normalizer(x) for x in images]
+        images = ImageList.from_tensors(images, self.backbone.size_divisibility)
+        features = self.backbone(images.tensor)
+
+        if "targets" in batched_inputs[0]:
+            targets = [x["targets"].to(self.device) for x in batched_inputs]
+        else:
+            targets = None
+        proposals, proposal_losses = self.proposal_generator(images, features, targets)
+        # In training, the proposals are not useful at all but we generate them anyway.
+        # This makes RPN-only models about 5% slower.
+        if self.training:
+            return proposal_losses
+
+        processed_results = []
+        for results_per_image, input_per_image, image_size in zip(
+            proposals, batched_inputs, images.image_sizes
+        ):
+            height = input_per_image.get("height", image_size[0])
+            width = input_per_image.get("width", image_size[1])
+            r = detector_postprocess(results_per_image, height, width)
+            processed_results.append({"proposals": r})
+        return processed_results

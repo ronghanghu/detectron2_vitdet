@@ -55,14 +55,11 @@ class COCOEvaluator(DatasetEvaluator):
         Returns:
             tuple[str]: tasks that can be evaluated under the given configuration.
         """
-        if cfg.MODEL.PROPOSAL_GENERATOR_ONLY:
-            tasks = ("box_proposals",)
-        else:
-            tasks = ("bbox",)
-            if cfg.MODEL.MASK_ON:
-                tasks = tasks + ("segm",)
-            if cfg.MODEL.KEYPOINT_ON:
-                tasks = tasks + ("keypoints",)
+        tasks = ("bbox",)
+        if cfg.MODEL.MASK_ON:
+            tasks = tasks + ("segm",)
+        if cfg.MODEL.KEYPOINT_ON:
+            tasks = tasks + ("keypoints",)
         return tasks
 
     def process(self, inputs, outputs):
@@ -75,24 +72,29 @@ class COCOEvaluator(DatasetEvaluator):
                 list of dicts with key "detector" that contains :class:`Instances`.
         """
         for input, output in zip(inputs, outputs):
-            output = output["detector"].to(self._cpu_device)
-            if output.has("pred_masks"):
-                # use RLE to encode the masks, because they are too large and takes memory
-                # since this evaluator stores outputs of the entire dataset
-                rles = [
-                    mask_util.encode(np.array(mask[:, :, None], order="F"))[0]
-                    for mask in output.pred_masks
-                ]
-                for rle in rles:
-                    # "counts" is an array encoded by mask_util as a byte-stream. Python3's
-                    # json writer which always produces strings cannot serialize a bytestream
-                    # unless you decode it. Thankfully, utf-8 works out (which is also what
-                    # the pycocotools/_mask.pyx does).
-                    rle["counts"] = rle["counts"].decode("utf-8")
-                output.pred_masks_rle = rles
-                output.remove("pred_masks")
+            prediction = {"image_id": input["image_id"]}
 
-            prediction = {"image_id": input["image_id"], "instances": output}
+            if "detector" in output:
+                instances = output["detector"].to(self._cpu_device)
+
+                if instances.has("pred_masks"):
+                    # use RLE to encode the masks, because they are too large and takes memory
+                    # since this evaluator stores outputs of the entire dataset
+                    rles = [
+                        mask_util.encode(np.array(mask[:, :, None], order="F"))[0]
+                        for mask in instances.pred_masks
+                    ]
+                    for rle in rles:
+                        # "counts" is an array encoded by mask_util as a byte-stream. Python3's
+                        # json writer which always produces strings cannot serialize a bytestream
+                        # unless you decode it. Thankfully, utf-8 works out (which is also what
+                        # the pycocotools/_mask.pyx does).
+                        rle["counts"] = rle["counts"].decode("utf-8")
+                    instances.pred_masks_rle = rles
+                    instances.remove("pred_masks")
+                prediction["instances"] = instances
+            if "proposals" in output:
+                prediction["proposals"] = output["proposals"].to(self._cpu_device)
             self._predictions.append(prediction)
 
     def evaluate(self):
@@ -109,9 +111,8 @@ class COCOEvaluator(DatasetEvaluator):
                 self._predictions, os.path.join(self._output_dir, "instances_predictions.pth")
             )
 
-        tasks = set(self._tasks)
         self._results = OrderedDict()
-        if "box_proposals" in tasks:
+        if "proposals" in self._predictions[0]:
             if self._output_dir:
                 # Saving generated box proposals to file.
                 # Predicted box_proposals are in XYXY_ABS mode.
@@ -119,8 +120,8 @@ class COCOEvaluator(DatasetEvaluator):
                 ids, boxes, objectness_logits = [], [], []
                 for prediction in self._predictions:
                     ids.append(prediction["image_id"])
-                    boxes.append(prediction["instances"].proposal_boxes.tensor.numpy())
-                    objectness_logits.append(prediction["instances"].objectness_logits.numpy())
+                    boxes.append(prediction["proposals"].proposal_boxes.tensor.numpy())
+                    objectness_logits.append(prediction["proposals"].objectness_logits.numpy())
 
                 proposal_data = {
                     "boxes": boxes,
@@ -132,9 +133,9 @@ class COCOEvaluator(DatasetEvaluator):
                     pickle.dump(proposal_data, f)
 
             self._eval_box_proposals()
-            tasks.remove("box_proposals")
 
-        if len(tasks) != 0:
+        if "instances" in self._predictions[0]:
+            tasks = set(self._tasks)
             self._eval_predictions(tasks)
 
         self._logger.info(self._results)
@@ -279,7 +280,7 @@ def evaluate_box_proposals(dataset_predictions, coco_api, thresholds=None, area=
     num_pos = 0
 
     for prediction_dict in dataset_predictions:
-        predictions = prediction_dict["instances"]
+        predictions = prediction_dict["proposals"]
 
         # sort predictions in descending order
         # TODO maybe remove this and make it explicit in the documentation

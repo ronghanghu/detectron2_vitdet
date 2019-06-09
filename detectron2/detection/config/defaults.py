@@ -17,8 +17,6 @@ from detectron2.utils.config import CfgNode as CN
 _C = CN()
 
 _C.MODEL = CN()
-# If only have the subnetwork of proposal generation, e.g. RPN
-_C.MODEL.PROPOSAL_GENERATOR_ONLY = False
 _C.MODEL.LOAD_PROPOSALS = False
 _C.MODEL.MASK_ON = False
 _C.MODEL.KEYPOINT_ON = False

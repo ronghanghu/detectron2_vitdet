@@ -1,10 +1,10 @@
 _BASE_: "Base-C4.yaml"
 MODEL:
+  META_ARCHITECTURE: "ProposalNetwork"
   WEIGHT: "catalog://ImageNetPretrained/MSRA/R-50"
   MASK_ON: False
   RESNETS:
     DEPTH: 50
-  PROPOSAL_GENERATOR_ONLY: True
   RPN:
     PRE_NMS_TOPK_TEST: 12000
     POST_NMS_TOPK_TEST: 2000

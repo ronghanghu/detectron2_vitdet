@@ -105,7 +105,6 @@ class RPN(nn.Module):
 
         # fmt: off
         self.min_box_side_len        = cfg.MODEL.PROPOSAL_GENERATOR.MIN_SIZE
-        self.proposal_generator_only = cfg.MODEL.PROPOSAL_GENERATOR_ONLY
         self.in_features             = cfg.MODEL.RPN.IN_FEATURES
         self.nms_thresh              = cfg.MODEL.RPN.NMS_THRESH
         self.batch_size_per_image    = cfg.MODEL.RPN.BATCH_SIZE_PER_IMAGE
@@ -143,6 +142,10 @@ class RPN(nn.Module):
                 vary between feature maps (e.g., if a feature pyramid is used).
             gt_instances (list[Instances], optional): a length `N` list of `Instances`s.
                 Each `Instances` stores ground-truth instances for the corresponding image.
+
+        Returns:
+            proposals: list[Instances] or None
+            loss: dict[Tensor]
         """
         gt_boxes = [x.gt_boxes for x in gt_instances] if gt_instances is not None else None
         del gt_instances
@@ -167,12 +170,6 @@ class RPN(nn.Module):
 
         if self.training:
             losses = outputs.losses()
-            if self.proposal_generator_only:
-                # When training an RPN-only model, the loss is determined by the
-                # objectness_logits_pred and anchor_deltas_pred values and there is
-                # no need to transform the anchors into predicted boxes; this is an
-                # optimization that avoids the unnecessary transformation.
-                return None, losses
         else:
             losses = {}
 
@@ -192,16 +189,11 @@ class RPN(nn.Module):
                 self.min_box_side_len,
                 self.training,
             )
-
-            if self.proposal_generator_only:
-                # We must be in testing mode
-                # (self.training and self.proposal_generator_only returns early)
-                assert not self.training
-                # For end-to-end models, the RPN proposals are an intermediate state
-                # and don't bother to sort them in decreasing score order. For RPN-only
-                # models, the proposals are the final output and we return them in
-                # high-to-low confidence order.
-                inds = [p.objectness_logits.sort(descending=True)[1] for p in proposals]
-                proposals = [p[ind] for p, ind in zip(proposals, inds)]
+            # For RPN-only models, the proposals are the final output and we return them in
+            # high-to-low confidence order.
+            # For end-to-end models, the RPN proposals are an intermediate state
+            # and this sorting is actually not needed. But the cost is negligible.
+            inds = [p.objectness_logits.sort(descending=True)[1] for p in proposals]
+            proposals = [p[ind] for p, ind in zip(proposals, inds)]
 
         return proposals, losses
