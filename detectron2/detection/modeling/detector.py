@@ -9,7 +9,7 @@ from .postprocessing import detector_postprocess
 from .proposal_generator import build_proposal_generator
 from .roi_heads.roi_heads import build_roi_heads
 
-__all__ = ["GeneralizedRCNN"]
+__all__ = ["GeneralizedRCNN", "ProposalNetwork"]
 
 
 @META_ARCH_REGISTRY.register()
@@ -50,8 +50,7 @@ class GeneralizedRCNN(nn.Module):
 
         Returns:
             list[dict]: Each dict is the output for one input image.
-                The dict contains one key "detector" whose value is a
-                :class:`Instances`.
+                The dict contains one key "instances" whose value is a :class:`Instances`.
                 The :class:`Instances` object has the following keys:
                     "pred_boxes", "pred_classes", "scores", "pred_masks", "pred_keypoints"
         """
@@ -122,7 +121,7 @@ class GeneralizedRCNN(nn.Module):
                 height = input_per_image.get("height", image_size[0])
                 width = input_per_image.get("width", image_size[1])
                 r = detector_postprocess(results_per_image, height, width)
-                processed_results.append({"detector": r})
+                processed_results.append({"instances": r})
             return processed_results
         else:
             return results
@@ -158,7 +157,7 @@ class ProposalNetwork(nn.Module):
 
         Returns:
             list[dict]: Each dict is the output for one input image.
-                The dict contains one key "detector" whose value is a
+                The dict contains one key "proposals" whose value is a
                 :class:`Instances` with keys "proposal_boxes" and "objectness_logits".
         """
         images = [x["image"].to(self.device) for x in batched_inputs]

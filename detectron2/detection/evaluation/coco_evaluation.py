@@ -69,13 +69,13 @@ class COCOEvaluator(DatasetEvaluator):
                 It is a list of dict. Each dict corresponds to an image and
                 contains keys like "height", "width", "file_name", "image_id".
             outputs: the outputs of a COCO model. It is either list of :class:`Instances` or
-                list of dicts with key "detector" that contains :class:`Instances`.
+                list of dicts with key "instances" that contains :class:`Instances`.
         """
         for input, output in zip(inputs, outputs):
             prediction = {"image_id": input["image_id"]}
 
-            if "detector" in output:
-                instances = output["detector"].to(self._cpu_device)
+            if "instances" in output:
+                instances = output["instances"].to(self._cpu_device)
 
                 if instances.has("pred_masks"):
                     # use RLE to encode the masks, because they are too large and takes memory

@@ -6,6 +6,7 @@ import numpy as np
 from collections import defaultdict
 import pycocotools.mask as mask_utils
 import torch
+import tqdm
 from pycocotools.coco import COCO
 from tabulate import tabulate
 from torch.nn import functional as F
@@ -22,8 +23,6 @@ from detectron2.structures.masks import (
     batch_rasterize_full_image_polygons_within_box,
     rasterize_polygons_within_box,
 )
-
-import tqdm
 
 
 """

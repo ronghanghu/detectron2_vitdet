@@ -95,16 +95,16 @@ class PanopticFPN(nn.Module):
         self.device = torch.device(cfg.MODEL.DEVICE)
 
         # weights for all losses
-        self.semantic_loss_scale = cfg.MODEL.PANOPTIC.SEMANTIC_LOSS_SCALE
-        self.instance_loss_scale = cfg.MODEL.PANOPTIC.INSTANCE_LOSS_SCALE
-        self.rpn_loss_scale = cfg.MODEL.PANOPTIC.RPN_LOSS_SCALE
+        self.semantic_loss_scale = cfg.MODEL.PANOPTIC_FPN.SEMANTIC_LOSS_SCALE
+        self.instance_loss_scale = cfg.MODEL.PANOPTIC_FPN.INSTANCE_LOSS_SCALE
+        self.rpn_loss_scale = cfg.MODEL.PANOPTIC_FPN.RPN_LOSS_SCALE
 
         # options when combining instance & semantic outputs
-        self.combine_on = cfg.MODEL.PANOPTIC.COMBINE_ON
-        self.combine_overlap_threshold = cfg.MODEL.PANOPTIC.COMBINE_OVERLAP_THRESHOLD
-        self.combine_stuff_area_limit = cfg.MODEL.PANOPTIC.COMBINE_STUFF_AREA_LIMIT
+        self.combine_on = cfg.MODEL.PANOPTIC_FPN.COMBINE_ON
+        self.combine_overlap_threshold = cfg.MODEL.PANOPTIC_FPN.COMBINE_OVERLAP_THRESHOLD
+        self.combine_stuff_area_limit = cfg.MODEL.PANOPTIC_FPN.COMBINE_STUFF_AREA_LIMIT
         self.combine_instances_confidence_threshold = (
-            cfg.MODEL.PANOPTIC.COMBINE_INSTANCES_CONFIDENCE_THRESHOLD
+            cfg.MODEL.PANOPTIC_FPN.COMBINE_INSTANCES_CONFIDENCE_THRESHOLD
         )
 
         self.backbone = build_backbone(cfg)
@@ -130,6 +130,15 @@ class PanopticFPN(nn.Module):
             Other information that's included in the original dicts, such as:
                 "height", "width" (int): the output resolution of the model, used in inference.
                     See :meth:`postprocess` for details.
+
+        Returns:
+            list[dict]: each dict is the results for one image. The dict
+                contains the following keys:
+                "instances": see :meth:`GeneralizedRCNN.forward` for its format.
+                "sem_seg": see :meth:`SemanticSegmentator.forward` for its format.
+                "panoptic_seg": available when `PANOPTIC_FPN.COMBINE_ON`.
+                    See the return value of
+                    :func:`combine_semantic_and_instance_outputs` for its format.
         """
         images = [x["image"].to(self.device) for x in batched_inputs]
         images = [self.normalizer(x) for x in images]
@@ -175,7 +184,7 @@ class PanopticFPN(nn.Module):
             sem_seg_r = sem_seg_postprocess(sem_seg_result, image_size, height, width)
             detector_r = detector_postprocess(detector_result, height, width)
 
-            processed_results.append({"sem_seg": sem_seg_r, "detector": detector_r})  # TODO rename
+            processed_results.append({"sem_seg": sem_seg_r, "instances": detector_r})
 
             if self.combine_on:
                 panoptic_r = combine_semantic_and_instance_outputs(

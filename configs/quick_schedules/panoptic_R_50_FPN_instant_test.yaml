@@ -5,7 +5,7 @@ MODEL:
   MASK_ON: True
   RESNETS:
     DEPTH: 50
-  PANOPTIC:
+  PANOPTIC_FPN:
     SEMANTIC_LOSS_SCALE: 0.5
 DATASETS:
   TRAIN: ("coco_2017_val_100_panoptic_separated",)

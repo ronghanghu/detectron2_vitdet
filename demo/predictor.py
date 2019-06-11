@@ -66,9 +66,9 @@ class COCODemo(object):
                 self.stuff_names,
                 self.stuff_area_threshold,
             )
-        if "detector" in predictions:
+        if "instances" in predictions:
             top_predictions = self.select_top_predictions(
-                predictions["detector"].to(self.cpu_device)
+                predictions["instances"].to(self.cpu_device)
             )
             result, color_idx = draw_instance_predictions(
                 result, top_predictions, color_idx, self.things_names
