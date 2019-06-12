@@ -14,6 +14,7 @@ def build_resnet_head(cfg):
     bottleneck_channels     = num_groups * width_per_group * stage_channel_factor
     out_channels            = cfg.MODEL.RESNETS.RES2_OUT_CHANNELS * stage_channel_factor
     stride_in_1x1           = cfg.MODEL.RESNETS.STRIDE_IN_1X1
+    norm                    = cfg.MODEL.RESNETS.NORM
     # fmt: on
 
     blocks = make_stage(
@@ -24,7 +25,7 @@ def build_resnet_head(cfg):
         bottleneck_channels=bottleneck_channels,
         out_channels=out_channels,
         num_groups=num_groups,
-        norm="FrozenBN",
+        norm=norm,
         stride_in_1x1=stride_in_1x1,
     )
     return nn.Sequential(*blocks)
