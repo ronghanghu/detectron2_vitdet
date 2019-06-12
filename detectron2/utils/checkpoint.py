@@ -174,15 +174,15 @@ class PeriodicCheckpointer(object):
         Perform the appropriate action at the given iteration.
 
         Args:
-            iteration (int): the current iteration
+            iteration (int): the current iteration, ranged in [0, max_iter-1]
             kwargs: extra data to save, same as in :meth:`Checkpointer.save`
         """
         iteration = int(iteration)
         additional_state = {"iteration": iteration}
         additional_state.update(kwargs)
-        if iteration % self.period == 0:
+        if (iteration + 1) % self.period == 0:
             self.checkpointer.save("model_{:07d}".format(iteration), **additional_state)
-        if iteration == self.max_iter:
+        if iteration >= self.max_iter - 1:
             self.checkpointer.save("model_final", **additional_state)
 
     def save(self, name, **kwargs):

@@ -11,7 +11,6 @@ import argparse
 import datetime
 import logging
 import os
-import time
 import torch
 from torch.nn.parallel import DistributedDataParallel
 
@@ -36,10 +35,10 @@ from detectron2.detection.evaluation import (
     SemSegEvaluator,
 )
 from detectron2.detection.modeling import DetectionTransformTTA, GeneralizedRCNNWithTTA
-from detectron2.engine.launch import launch
+from detectron2.engine import SimpleTrainer, hooks, launch
 from detectron2.utils.checkpoint import PeriodicCheckpointer
 from detectron2.utils.collect_env import collect_env_info
-from detectron2.utils.events import EventStorage, JSONWriter, TensorboardXWriter, get_event_storage
+from detectron2.utils.events import JSONWriter, TensorboardXWriter, get_event_storage
 from detectron2.utils.inference import (
     DatasetEvaluators,
     inference_context,
@@ -60,11 +59,18 @@ class MetricPrinter:
         eta_seconds = storage.history("time").median(1000) * (self._max_iter - iteration)
         eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
 
+        data_time, time = None, None
+        try:
+            data_time = storage.history("data_time").median(20)
+            time = storage.history("time").global_avg()
+        except KeyError:  # they may not exist in the first few iterations
+            pass
+
         # NOTE: max mem is parsed by grep
         self.logger.info(
             """\
 eta: {eta}  iter: {iter}  {losses}  \
-time: {time:.4f} data_time: {data_time:.4f}  \
+{time}  {data_time}  \
 lr: {lr:.6f}  max mem: {memory:.0f}M \
 """.format(
                 eta=eta_string,
@@ -76,8 +82,8 @@ lr: {lr:.6f}  max mem: {memory:.0f}M \
                         if "loss" in k
                     ]
                 ),
-                time=storage.history("time").global_avg(),
-                data_time=storage.history("data_time").median(20),
+                time="time: {:.4f}".format(time) if time is not None else "",
+                data_time="data_time: {:.4f}".format(data_time) if data_time is not None else "",
                 lr=storage.history("lr").latest(),
                 memory=torch.cuda.max_memory_allocated() / 1024.0 / 1024.0,
             )
@@ -186,6 +192,37 @@ def do_test(cfg, model, is_final=True):
     return results
 
 
+def create_after_step_hook(cfg, model, optimizer, scheduler, periodic_checkpointer):
+    """
+    Create a hook that performs some pre-defined tasks used in this script
+    (evaluation, LR scheduling, checkpointing).
+    """
+    cfg_str = cfg.dump()
+
+    def after_step_callback(trainer):
+        if (
+            cfg.TEST.EVAL_PERIOD > 0
+            and trainer.iter % cfg.TEST.EVAL_PERIOD == 0
+            and trainer.iter != trainer.max_iter - 1
+        ):
+            results = do_test(cfg, model, is_final=False)
+
+            for dataset_name, results_per_dataset in zip(cfg.DATASETS.TEST, results):
+                for task, metrics_per_task in results_per_dataset.items():
+                    for metric, value in metrics_per_task.items():
+                        key = "{}/{}/{}".format(dataset_name, task, metric)
+                        trainer.storage.put_scalar(key, value, smoothing_hint=False)
+            # Evaluation may take different time among workers.
+            # A barrier make them start the next iteration together.
+            comm.synchronize()
+
+        trainer.storage.put_scalar("lr", optimizer.param_groups[0]["lr"], smoothing_hint=False)
+        scheduler.step()
+        periodic_checkpointer.step(trainer.iter, cfg=cfg_str)
+
+    return hooks.CallbackHook(after_step=after_step_callback)
+
+
 def do_train(cfg, model):
     optimizer = build_optimizer(cfg, model)
     scheduler = build_lr_scheduler(cfg, optimizer)
@@ -204,90 +241,28 @@ def do_train(cfg, model):
 
     data_loader = build_detection_train_loader(cfg, start_iter=start_iter)
 
-    logger = logging.getLogger("detectron2.trainer")
-    logger.info("Starting training from iteration {}".format(start_iter))
     model.train()
 
-    total_training_time = 0
-    start_training_time = time.time()
-    iter_end = time.time()
-
-    writers = (
-        [
+    """
+    Here we use a pre-defined training loop (the trainer) with hooks to run the training.
+    This makes it easier to reuse existing utilities.
+    If you'd like to do anything fancier than the standard training loop,
+    consider writing your own loop or subclassing the trainer.
+    """
+    trainer = SimpleTrainer(model, data_loader, optimizer)
+    trainer_hooks = [
+        hooks.IterationTimer(),
+        create_after_step_hook(cfg, model, optimizer, scheduler, periodic_checkpointer),
+    ]
+    if comm.is_main_process():
+        writers = [
             MetricPrinter(max_iter),
             JSONWriter(os.path.join(cfg.OUTPUT_DIR, "metrics.json")),
             TensorboardXWriter(cfg.OUTPUT_DIR),
         ]
-        if comm.is_main_process()
-        else []
-    )
-    with EventStorage(start_iter) as storage:
-        for data, iteration in zip(data_loader, range(start_iter, max_iter)):
-            data_time = time.time() - iter_end
-            iteration = iteration + 1
-            storage.step()
-
-            loss_dict = model(data)
-
-            losses = sum(loss for loss in loss_dict.values())
-            if torch.isnan(losses).any():
-                raise FloatingPointError("Loss became NaN at iteration={}!".format(iteration))
-
-            # reduce losses over all GPUs for logging purposes
-            loss_dict_reduced = {k: v.item() for k, v in comm.reduce_dict(loss_dict).items()}
-            losses_reduced = sum(loss for loss in loss_dict_reduced.values())
-            storage.put_scalars(loss=losses_reduced, **loss_dict_reduced)
-
-            optimizer.zero_grad()
-            losses.backward()
-            optimizer.step()
-            storage.put_scalar("lr", optimizer.param_groups[0]["lr"], smoothing_hint=False)
-            scheduler.step()
-
-            batch_time = time.time() - iter_end
-            total_training_time += batch_time
-            # Consider the first several iteration as warmup and don't time it.
-            if iteration <= 3:
-                total_training_time = 0
-            else:
-                storage.put_scalars(time=batch_time, data_time=data_time)
-
-            if (
-                cfg.TEST.EVAL_PERIOD > 0
-                and iteration % cfg.TEST.EVAL_PERIOD == 0
-                and iteration != max_iter
-            ):
-                results = do_test(cfg, model, is_final=False)
-
-                for dataset_name, results_per_dataset in zip(cfg.DATASETS.TEST, results):
-                    for task, metrics_per_task in results_per_dataset.items():
-                        for metric, value in metrics_per_task.items():
-                            key = "{}/{}/{}".format(dataset_name, task, metric)
-                            storage.put_scalar(key, value, smoothing_hint=False)
-                # Evaluation may take different time among workers.
-                # A barrier make them start the next iteration together.
-                comm.synchronize()
-
-            if iteration - start_iter > 5 and (iteration % 20 == 0 or iteration == max_iter):
-                for writer in writers:
-                    writer.write()
-            periodic_checkpointer.step(iteration, cfg=cfg.dump())
-            iter_end = time.time()
-
-    total_training_time_str = str(datetime.timedelta(seconds=total_training_time))
-    # NOTE this format is parsed by grep
-    logger.info(
-        "Overall training speed: {} iterations in {} ({:.4f} s / it)".format(
-            max_iter - start_iter,
-            total_training_time_str,
-            total_training_time / (max_iter - start_iter),
-        )
-    )
-
-    total_time_spent = str(
-        datetime.timedelta(seconds=time.time() - start_training_time)
-    )  # This includes time for checkpointing, evaluation, etc.
-    logger.info("Total training time: {}".format(total_time_spent))
+        trainer_hooks.append(hooks.PeriodicWriter(writers))
+    trainer.register_hooks(trainer_hooks)
+    trainer.train(start_iter, max_iter)
 
 
 def setup(args):
