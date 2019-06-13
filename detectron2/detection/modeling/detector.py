@@ -29,8 +29,10 @@ class GeneralizedRCNN(nn.Module):
         self.proposal_generator = build_proposal_generator(cfg)
         self.roi_heads = build_roi_heads(cfg)
 
-        pixel_mean = torch.Tensor(cfg.INPUT.PIXEL_MEAN).to(self.device).view(3, 1, 1)
-        pixel_std = torch.Tensor(cfg.INPUT.PIXEL_STD).to(self.device).view(3, 1, 1)
+        assert len(cfg.INPUT.PIXEL_MEAN) == len(cfg.INPUT.PIXEL_STD)
+        num_channels = len(cfg.INPUT.PIXEL_MEAN)
+        pixel_mean = torch.Tensor(cfg.INPUT.PIXEL_MEAN).to(self.device).view(num_channels, 1, 1)
+        pixel_std = torch.Tensor(cfg.INPUT.PIXEL_STD).to(self.device).view(num_channels, 1, 1)
         self.normalizer = lambda x: (x - pixel_mean) / pixel_std
         self.to(self.device)
 

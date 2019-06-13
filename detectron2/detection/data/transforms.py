@@ -110,6 +110,10 @@ class DetectionTransform:
         image = self._read_image(dataset_dict["file_name"], format=self.img_format)
         image, tfm_params = self.tfms.transform_image_get_params(image)
 
+        # PIL squeezes out the channel dimension for "L", so make it HWC
+        if self.img_format == "L":
+            image = np.expand_dims(image, -1)
+
         image_shape = image.shape[:2]  # h, w
 
         # Pytorch's dataloader is efficient on torch.Tensor due to shared-memory,
