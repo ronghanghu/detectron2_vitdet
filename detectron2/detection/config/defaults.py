@@ -28,6 +28,14 @@ _C.MODEL.META_ARCHITECTURE = "GeneralizedRCNN"
 # path
 _C.MODEL.WEIGHT = ""
 
+# Values to be used for image normalization (BGR order)
+# Default values are the mean pixel value from ImageNet: [103.53, 116.28, 123.675]
+_C.MODEL.PIXEL_MEAN = [103.530, 116.280, 123.675]
+# When using the C2 pre-trained models, std has been absorbed into its conv1 weights,
+# so the std needs to be set 1.
+# Otherwise, you can use [57.375, 57.120, 58.395] (ImageNet std)
+_C.MODEL.PIXEL_STD = [1.0, 1.0, 1.0]
+
 
 # -----------------------------------------------------------------------------
 # INPUT
@@ -44,14 +52,6 @@ _C.INPUT.MAX_SIZE_TRAIN = 1333
 _C.INPUT.MIN_SIZE_TEST = 800
 # Maximum size of the side of the image during testing
 _C.INPUT.MAX_SIZE_TEST = 1333
-
-# Values to be used for image normalization (BGR order)
-# Default values are the mean pixel value from ImageNet: [103.53, 116.28, 123.675]
-_C.INPUT.PIXEL_MEAN = [103.530, 116.280, 123.675]
-# When using the C2 pre-trained models, std has been abosbed into its conv1 weights,
-# so the std needs to be set 1.
-# Otherwise, you can use [57.375, 57.120, 58.395] (ImageNet std)
-_C.INPUT.PIXEL_STD = [1.0, 1.0, 1.0]
 
 # Whether the model needs RGB, YUV, HSV etc.
 # Should be one of the modes defined here, as we use PIL to read the image:

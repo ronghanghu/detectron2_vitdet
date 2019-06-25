@@ -35,7 +35,11 @@ def build_resnet_head(cfg):
 def build_resnet_backbone(cfg):
     # TODO registration of new blocks/stems
     norm = cfg.MODEL.RESNETS.NORM
-    stem = BasicStem(out_channels=cfg.MODEL.RESNETS.STEM_OUT_CHANNELS, norm=norm)
+    stem = BasicStem(
+        in_channels=len(cfg.MODEL.PIXEL_MEAN),
+        out_channels=cfg.MODEL.RESNETS.STEM_OUT_CHANNELS,
+        norm=norm,
+    )
     freeze_at = cfg.MODEL.BACKBONE.FREEZE_AT
 
     if freeze_at >= 1:
