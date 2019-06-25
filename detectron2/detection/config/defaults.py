@@ -462,12 +462,6 @@ _C.TEST.AUG_FLIP = True
 # ---------------------------------------------------------------------------- #
 # Directory where output files are written
 _C.OUTPUT_DIR = "./output"
-# Set to True in order to cache model files when they are loaded. The cache
-# location is deteremined as:
-#   1) $TORCH_MODEL_ZOO env variable, if set
-#   2) otherwise $TORCH_HOME, if set
-#   3) otherwise ~/.torch
-_C.CACHE_MODELS_ON_LOAD = False
 
 # global config is for quick hack purposes.
 # You can set them in command line or config files,

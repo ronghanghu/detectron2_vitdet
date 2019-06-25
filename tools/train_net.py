@@ -1,10 +1,21 @@
 """
 Detection Training Script.
-TODO rename the file.
+
+This scripts reads a given config file and runs the training.
+It is an entry point that is made to train all standard models in detectron2.
+
+In order to let one script support training of all the models,
+this script contains logic that are specific to these built-in models and therefore
+may not be suitable for your own project.
+For example, your research project perhaps only needs a fixed "evaluator",
+and doesn't need results verification.
+
+Therefore, we recommend you to use detectron2 as an library and take
+this file as an example of how to use the library.
+You may want to write your own script with your datasets and other customizations.
 """
 
-# Set up custom environment before nearly anything else is imported
-# NOTE: this should be the first import (no not reorder)
+# Set up custom environment before anything else is imported
 from detectron2.utils.env import setup_environment  # noqa F401 isort:skip
 
 import argparse
@@ -91,6 +102,12 @@ lr: {lr:.6f}  max mem: {memory:.0f}M \
 
 
 def get_evaluator(cfg, dataset_name, output_folder):
+    """
+    Create evaluator(s) for a given dataset.
+    This uses the special metadata "evaluator_type" associated with each builtin dataset.
+    For your own dataset, you can simply create an evaluator manually in your
+    script and do not have to worry about the logic here.
+    """
     evaluator_list = []
     evaluator_type = MetadataCatalog.get(dataset_name).evaluator_type
     if evaluator_type in ["semantic_seg", "coco_panoptic_seg"]:
@@ -227,9 +244,7 @@ def do_train(cfg, model):
     optimizer = build_optimizer(cfg, model)
     scheduler = build_lr_scheduler(cfg, optimizer)
 
-    checkpointer = DetectionCheckpointer(
-        model, optimizer, scheduler, cfg.OUTPUT_DIR, cache_on_load=cfg.CACHE_MODELS_ON_LOAD
-    )
+    checkpointer = DetectionCheckpointer(model, optimizer, scheduler, cfg.OUTPUT_DIR)
     file = checkpointer.get_checkpoint_file() if checkpointer.has_checkpoint() else cfg.MODEL.WEIGHT
     start_iter = checkpointer.load(file).get("iteration", 0)
     max_iter = cfg.SOLVER.MAX_ITER
@@ -266,6 +281,9 @@ def do_train(cfg, model):
 
 
 def setup(args):
+    """
+    Create configs and setup logger from arguments and the given config file.
+    """
     cfg = get_cfg()
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
@@ -306,9 +324,7 @@ def main(args):
     output_dir = cfg.OUTPUT_DIR
 
     if args.eval_only:
-        checkpointer = DetectionCheckpointer(
-            model, save_dir=output_dir, cache_on_load=cfg.CACHE_MODELS_ON_LOAD
-        )
+        checkpointer = DetectionCheckpointer(model, save_dir=output_dir)
         checkpointer.load(cfg.MODEL.WEIGHT)
         return do_test(cfg, model)
 
@@ -353,7 +369,8 @@ def parse_args(in_args=None):
     return parser.parse_args(in_args)
 
 
-def detectron2_launch(args):
+if __name__ == "__main__":
+    args = parse_args()
     launch(
         main,
         args.num_gpus,
@@ -362,7 +379,3 @@ def detectron2_launch(args):
         dist_url=args.dist_url,
         args=(args,),
     )
-
-
-if __name__ == "__main__":
-    detectron2_launch(parse_args())

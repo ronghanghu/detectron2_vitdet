@@ -21,17 +21,16 @@ def cache_url(url, model_dir=None, progress=True):
     ``filename-<sha256>.ext`` where ``<sha256>`` is the first eight or more
     digits of the SHA256 hash of the contents of the file. The hash is used to
     ensure unique names and to verify the contents of the file.
-    The default value of `model_dir` is ``$TORCH_HOME/models`` where
-    ``$TORCH_HOME`` defaults to ``~/.torch``. The default directory can be
-    overridden with the ``$TORCH_MODEL_ZOO`` environment variable.
+
     Args:
         url (string): URL of the object to download
-        model_dir (string, optional): directory in which to save the object
+        model_dir (string, optional): directory in which to save the object.
+            Defaults to :func:`get_cache_dir()`
         progress (bool, optional): whether or not to display a progress bar to stderr
     Example:
         >>> cached_file = detectron2.utils.model_zoo.cache_url('https://dl.fbaipublicfiles.com/detectron/pytorch/models/resnet18-5c106cde.pth')  # noqa
     """
-    model_dir = _get_model_dir(model_dir)
+    model_dir = get_cache_dir(model_dir)
     parts = urlparse(url)
     filename = os.path.basename(parts.path)
     if filename == "model_final.pkl":
@@ -58,8 +57,14 @@ def cache_url(url, model_dir=None, progress=True):
 
 
 def cache_file(file_name, model_dir=None):
-    """Caches a (presumably remote) file under model_dir."""
-    model_dir = _get_model_dir(model_dir)
+    """
+    Caches a (presumably remote) file under model_dir.
+
+    This function contains a barrier call. Therefore all processes must all
+    call this method to avoid deadlock. Only the main process will actually
+    perform the caching.
+    """
+    model_dir = get_cache_dir(model_dir)
     if file_name.startswith(model_dir):
         return file_name
     src_dir, base_name = os.path.split(file_name)
@@ -87,7 +92,15 @@ def cache_file(file_name, model_dir=None):
     return dst_file_name
 
 
-def _get_model_dir(model_dir):
+def get_cache_dir(model_dir=None):
+    """
+    Args:
+        model_dir (None or str): if None, returns the default cache directory as:
+
+        1) $TORCH_MODEL_ZOO env variable, if set
+        2) otherwise $TORCH_HOME, if set
+        3) otherwise ~/.torch
+    """
     if model_dir is None:
         torch_home = os.path.expanduser(os.getenv("TORCH_HOME", "~/.torch"))
         model_dir = os.getenv("TORCH_MODEL_ZOO", os.path.join(torch_home, "models"))
