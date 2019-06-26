@@ -290,7 +290,8 @@ _C.MODEL.ROI_KEYPOINT_HEAD.NUM_KEYPOINTS = 17  # 17 is the number of keypoints i
 # about the input size of the keypoint head.
 # _C.MODEL.ROI_KEYPOINT_HEAD.COMPUTED_INPUT_SIZE = (channel, height, width)
 
-_C.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE = 10
+# Images with too few (or no) keypoints are excluded from training.
+_C.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE = 1
 # Normalize by the total number of visible keypoints in the minibatch if True.
 # Otherwise, normalize by the total number of keypoints that could ever exist
 # in the minibatch.

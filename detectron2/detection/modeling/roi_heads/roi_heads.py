@@ -50,6 +50,47 @@ def select_foreground_proposals(proposals, bg_label):
     return fg_proposals, fg_selection_masks
 
 
+def select_proposals_with_visible_keypoints(proposals):
+    """
+    Args:
+        proposals (list[Instances]): a list of N Instances, where N is the
+            number of images.
+
+    Returns:
+        proposals: only contains proposals with at least one visible keypoint.
+
+    Note that this is still slightly different from Detectron.
+    In Detectron, proposals for training keypoint head are re-sampled from
+    all the proposals with IOU>threshold & >=1 visible keypoint.
+
+    Here, the proposals are first sampled from all proposals with
+    IOU>threshold, then proposals with no visible keypoint are filtered out.
+    This strategy seems to make no difference on Detectron and is easier to implement.
+    """
+    ret = []
+    all_num_fg = []
+    for proposals_per_image in proposals:
+        gt_keypoints = proposals_per_image.gt_keypoints.tensor
+        # #fg x K x 3
+        vis_mask = gt_keypoints[:, :, 2] >= 1
+        xs, ys = gt_keypoints[:, :, 0], gt_keypoints[:, :, 1]
+        proposal_boxes = proposals_per_image.proposal_boxes.tensor.unsqueeze(dim=1)  # #fg x 1 x 4
+        kp_in_box = (
+            (xs >= proposal_boxes[:, :, 0])
+            & (xs <= proposal_boxes[:, :, 2])
+            & (ys >= proposal_boxes[:, :, 1])
+            & (ys <= proposal_boxes[:, :, 3])
+        )
+        selection = (kp_in_box & vis_mask).any(dim=1)
+        selection_idxs = torch.nonzero(selection).squeeze(1)
+        all_num_fg.append(selection_idxs.numel())
+        ret.append(proposals_per_image[selection_idxs])
+
+    storage = get_event_storage()
+    storage.put_scalar("keypoint_head/num_fg_samples", np.mean(all_num_fg))
+    return ret
+
+
 class ROIHeads(torch.nn.Module):
     def __init__(self, cfg):
         super(ROIHeads, self).__init__()
@@ -428,14 +469,17 @@ class StandardROIHeads(ROIHeads):
             losses = outputs.losses()
             if self.mask_on or self.keypoint_on:
                 proposals, _ = select_foreground_proposals(proposals, self.num_classes)
-            proposal_boxes = [x.proposal_boxes for x in proposals]
             # During training the same proposals used by the box head are used by
             # the mask and keypoint heads. The loss is only defined on positive proposals.
             if self.mask_on:
+                proposal_boxes = [x.proposal_boxes for x in proposals]
                 mask_features = self.mask_pooler(features_list, proposal_boxes)
                 mask_logits = self.mask_head(mask_features)
                 losses["loss_mask"] = mask_rcnn_loss(mask_logits, proposals)
             if self.keypoint_on:
+                proposals = select_proposals_with_visible_keypoints(proposals)
+                proposal_boxes = [x.proposal_boxes for x in proposals]
+
                 keypoint_features = self.keypoint_pooler(features_list, proposal_boxes)
                 keypoint_logits = self.keypoint_head(keypoint_features)
 
