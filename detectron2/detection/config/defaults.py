@@ -132,14 +132,20 @@ _C.MODEL.PROPOSAL_GENERATOR.MIN_SIZE = 0
 
 
 # ---------------------------------------------------------------------------- #
+# Anchor generator options
+# ---------------------------------------------------------------------------- #
+_C.MODEL.ANCHOR_GENERATOR = CN()
+# The generator can be any name in the ANCHOR_GENERATOR registry
+_C.MODEL.ANCHOR_GENERATOR.NAME = "DefaultAnchorGenerator"
+
+
+# ---------------------------------------------------------------------------- #
 # RPN options
 # ---------------------------------------------------------------------------- #
 _C.MODEL.RPN = CN()
 # Names of the input feature maps to be used by RPN
 # e.g., ["p2", "p3", "p4", "p5", "p6"] for FPN
 _C.MODEL.RPN.IN_FEATURES = ["res4"]
-# The generator can be any name in the ANCHOR_GENERATOR registry
-_C.MODEL.RPN.ANCHOR_GENERATOR_NAME = "DefaultAnchorGenerator"
 # RPN anchor sizes given in absolute pixels w.r.t. the scaled network input.
 # Format: list of lists of sizes. ANCHOR_SIZES[i] specifies the list of sizes
 # to use for IN_FEATURES[i]; len(ANCHOR_SIZES) == len(IN_FEATURES) must be true,
@@ -352,13 +358,14 @@ _C.MODEL.PANOPTIC_FPN.COMBINE_INSTANCES_CONFIDENCE_THRESHOLD = 0.5
 _C.MODEL.RETINANET = CN()
 
 # This is the number of foreground classes and background.
-_C.MODEL.RETINANET.NUM_CLASSES = 81
+_C.MODEL.RETINANET.NUM_CLASSES = 80
 
 # Anchor aspect ratios to use
-_C.MODEL.RETINANET.ANCHOR_SIZES = [[32, 64, 128, 256, 512]]
 _C.MODEL.RETINANET.ANCHOR_ASPECT_RATIOS = [[0.5, 1.0, 2.0]]
-_C.MODEL.RETINANET.ANCHOR_STRIDES = (8, 16, 32, 64, 128)
+_C.MODEL.RETINANET.ANCHOR_STRIDES = [[8, 16, 32, 64, 128]]
+_C.MODEL.RETINANET.ANCHOR_SIZES = [[32], [64], [128], [256], [512]]
 _C.MODEL.RETINANET.STRADDLE_THRESH = 0
+_C.MODEL.RETINANET.IN_FEATURES = ["p3", "p4", "p5", "p6", "p7"]
 
 # Anchor scales per octave
 _C.MODEL.RETINANET.OCTAVE = 2.0
@@ -384,6 +391,14 @@ _C.MODEL.RETINANET.PRIOR_PROB = 0.01
 # Inference cls score threshold, only anchors with score > INFERENCE_TH are
 # considered for inference (to improve speed)
 _C.MODEL.RETINANET.INFERENCE_TH = 0.05
+
+# Weights on (dx, dy, dw, dh) for normalizing Retinanet anchor regression targets
+_C.MODEL.RETINANET.BBOX_REG_WEIGHTS = (1.0, 1.0, 1.0, 1.0)
+
+# Loss parameters
+_C.MODEL.RETINANET.FOCAL_LOSS_GAMMA = 2.0
+_C.MODEL.RETINANET.FOCAL_LOSS_ALPHA = 0.25
+_C.MODEL.RETINANET.SMOOTH_L1_LOSS_BETA = 0.1
 
 
 # ---------------------------------------------------------------------------- #

@@ -1,5 +1,6 @@
 MODEL:
   META_ARCHITECTURE: "RetinaNet"
+  WEIGHT: "catalog://ImageNetPretrained/MSRA/R-50"
   BACKBONE:
     NAME: "build_retinanet_resnet_fpn_backbone"
   RESNETS:
@@ -7,6 +8,8 @@ MODEL:
     OUT_FEATURES: ["res3", "res4", "res5"]
   FPN:
     IN_FEATURES: ["res3", "res4", "res5"]
+  ANCHOR_GENERATOR:
+    NAME: "RetinaNetAnchorGenerator"
   RETINANET:
     SCALES_PER_OCTAVE: 3
     STRADDLE_THRESH: -1

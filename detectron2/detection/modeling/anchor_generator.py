@@ -41,7 +41,9 @@ class DefaultAnchorGenerator(nn.Module):
 
     def __init__(self, cfg):
         super().__init__()
+        self.strides, self.cell_anchors = self.calculate_strides_and_anchors(cfg)
 
+    def calculate_strides_and_anchors(self, cfg):
         # fmt: off
         sizes           = cfg.MODEL.RPN.ANCHOR_SIZES
         aspect_ratios   = cfg.MODEL.RPN.ANCHOR_ASPECT_RATIOS
@@ -77,8 +79,8 @@ class DefaultAnchorGenerator(nn.Module):
             self.generate_cell_anchors(s, a, stride).float()
             for s, a, stride in zip(sizes, aspect_ratios, feature_strides)
         ]
-        self.strides = feature_strides
-        self.cell_anchors = BufferList(cell_anchors)
+
+        return feature_strides, BufferList(cell_anchors)
 
     @property
     def num_cell_anchors(self):
@@ -182,8 +184,44 @@ class OriginalRPNAnchorGenerator(DefaultAnchorGenerator):
         return _original_rpn_generate_anchors(sizes, aspect_ratios, stride)
 
 
+@ANCHOR_GENERATOR_REGISTRY.register()
+class RetinaNetAnchorGenerator(DefaultAnchorGenerator):
+    """
+    For a set of image sizes and feature maps, computes a set of anchors for RetinaNet.
+    """
+
+    def calculate_strides_and_anchors(self, cfg):
+        # fmt: off
+        sizes           = _compute_retinanet_anchor_sizes(cfg)
+        aspect_ratios   = cfg.MODEL.RETINANET.ANCHOR_ASPECT_RATIOS
+        feature_strides = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_STRIDES)
+        feature_strides = [feature_strides[f] for f in cfg.MODEL.RETINANET.IN_FEATURES]
+        """
+        Refer to :meth:`calculate_strides_and_anchors()` in :class:`DefaultAnchorGenerator`.
+        """
+        # fmt: on
+
+        # If one size (or aspect ratio) is specified and there are multiple feature
+        # maps, then we "broadcast" anchors of that single size (or aspect ratio)
+        # over all feature maps.
+        num_feature_maps = len(feature_strides)
+        if len(sizes) == 1:
+            sizes *= num_feature_maps
+        if len(aspect_ratios) == 1:
+            aspect_ratios *= num_feature_maps
+        assert num_feature_maps == len(sizes)
+        assert num_feature_maps == len(aspect_ratios)
+
+        cell_anchors = [
+            self.generate_cell_anchors(s, a, stride).float()
+            for s, a, stride in zip(sizes, aspect_ratios, feature_strides)
+        ]
+
+        return feature_strides, BufferList(cell_anchors)
+
+
 def build_anchor_generator(cfg):
-    anchor_generator = cfg.MODEL.RPN.ANCHOR_GENERATOR_NAME
+    anchor_generator = cfg.MODEL.ANCHOR_GENERATOR.NAME
     return ANCHOR_GENERATOR_REGISTRY.get(anchor_generator)(cfg)
 
 
@@ -315,3 +353,19 @@ def _scale_enum(anchor, scales):
     hs = h * scales
     anchors = _mkanchors(ws, hs, x_ctr, y_ctr)
     return anchors
+
+
+def _compute_retinanet_anchor_sizes(cfg):
+    anchor_sizes = [x[0] for x in cfg.MODEL.RETINANET.ANCHOR_SIZES]
+    octave = cfg.MODEL.RETINANET.OCTAVE
+    scales_per_octave = cfg.MODEL.RETINANET.SCALES_PER_OCTAVE
+
+    new_anchor_sizes = []
+    for size in anchor_sizes:
+        per_layer_anchor_sizes = []
+        for scale_per_octave in range(scales_per_octave):
+            octave_scale = octave ** (scale_per_octave / float(scales_per_octave))
+            per_layer_anchor_sizes.append(octave_scale * size)
+        new_anchor_sizes.append(per_layer_anchor_sizes)
+
+    return new_anchor_sizes
