@@ -3,6 +3,7 @@
 from .backbone import BACKBONE_REGISTRY
 from .detector import *
 from .model_builder import META_ARCH_REGISTRY, build_model
+from .one_stage_detectors import *
 from .postprocessing import detector_postprocess, sem_seg_postprocess
 from .roi_heads.box_head import ROI_BOX_HEAD_REGISTRY, build_box_head
 from .roi_heads.keypoint_head import ROI_KEYPOINT_HEAD_REGISTRY, build_keypoint_head

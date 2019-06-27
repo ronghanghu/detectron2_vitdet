@@ -6,7 +6,7 @@ from detectron2.utils.registry import Registry
 
 from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher
-from .anchor_generator import build_anchor_generator
+from ..anchor_generator import build_anchor_generator
 from .build import PROPOSAL_GENERATOR_REGISTRY
 from .rpn_outputs import RPNOutputs, find_top_rpn_proposals
 

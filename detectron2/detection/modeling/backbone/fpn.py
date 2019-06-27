@@ -3,8 +3,9 @@ import torch.nn.functional as F
 from torch import nn
 
 from detectron2.layers import Backbone, Conv2d, weight_init
-
 from . import BACKBONE_REGISTRY, resnet
+
+__all__ = ["build_resnet_fpn_backbone", "build_retinanet_resnet_fpn_backbone"]
 
 
 class FPN(Backbone):
@@ -12,7 +13,7 @@ class FPN(Backbone):
     Module that adds FPN on top of a list of feature maps.
     """
 
-    def __init__(self, bottom_up, in_features, out_channels, norm="", top_block=True):
+    def __init__(self, bottom_up, in_features, out_channels, norm="", top_block=None):
         """
         Args:
             bottom_up (Backbone): module representing the bottom up subnetwork.
@@ -25,9 +26,10 @@ class FPN(Backbone):
                 of these may be used; order must be from high to low resolution.
             out_channels (int): number of channels in the output feature maps.
             norm (str): either "" or "GN".
-            top_block (bool, optional): if provided, an extra 2x2 max pooling
-                is added on the output of the last (lowest resolution)
-                FPN output, and the result will extend the result list
+            top_block (nn.Module or None): if provided, an extra operation will
+                be performed on the output of the last (smallest resolution)
+                FPN output, and the result will extend the result list. The top_block
+                further downsamples the feature map.
         """
         super(FPN, self).__init__()
         assert isinstance(bottom_up, Backbone)
@@ -41,7 +43,6 @@ class FPN(Backbone):
         output_convs = []
 
         use_bias = norm == ""
-
         for idx, in_channels in enumerate(in_channels):
             lateral_norm = nn.GroupNorm(32, out_channels) if norm == "GN" else None
             output_norm = nn.GroupNorm(32, out_channels) if norm == "GN" else None
@@ -75,8 +76,9 @@ class FPN(Backbone):
         self.bottom_up = bottom_up
         # Return feature names are "p<stage>", like ["p2", "p3", ..., "p6"]
         self._out_feature_strides = {"p{}".format(int(math.log2(s))): s for s in in_strides}
-        if self.top_block:
-            self._out_feature_strides["p{}".format(stage + 1)] = 2 ** (stage + 1)
+        # top block output feature maps.
+        for s in range(stage, stage + top_block.num_levels):
+            self._out_feature_strides["p{}".format(s + 1)] = 2 ** (s + 1)
         self._out_features = list(self._out_feature_strides.keys())
         self._out_feature_channels = {k: out_channels for k in self._out_features}
         self._size_divisibility = in_strides[-1]
@@ -99,6 +101,7 @@ class FPN(Backbone):
         """
         # Reverse feature maps into top-down order (from low to high resolution)
         x = self.bottom_up(x)
+        c5 = x['res5']
         x = [x[f] for f in self.in_features[::-1]]
         results = []
         prev_features = self.lateral_convs[0](x[0])
@@ -111,8 +114,13 @@ class FPN(Backbone):
             prev_features = lateral_features + top_down_features
             results.insert(0, output_conv(prev_features))
 
-        if self.top_block:
-            results.append(F.max_pool2d(results[-1], kernel_size=1, stride=2, padding=0))
+        # TODO: After achieving initial RetinaNet benchmark results with C5,
+        # check to see if AP can be maintained while using the P5 layer instead.
+        # If this is the case, remove if-statement and use P5 layer for top_block.
+        if isinstance(self.top_block, LastLevelP6P7):
+            results.extend(self.top_block(c5))
+        if isinstance(self.top_block, LastLevelMaxPool):
+            results.extend(self.top_block(results[-1]))
 
         return dict(zip(self._out_features, results))
 
@@ -125,6 +133,32 @@ def _assert_strides_are_log2_contiguous(strides):
         assert stride == 2 * strides[i - 1], "Stides {} {} are not log2 contiguous".format(
             stride, strides[i - 1]
         )
+
+
+class LastLevelMaxPool(nn.Module):
+    def __init__(self):
+        self.num_levels = 1
+
+    def forward(self, x):
+        return [F.max_pool2d(x, kernel_size=1, stride=2, padding=0)]
+
+
+class LastLevelP6P7(nn.Module):
+    """
+    This module is used in RetinaNet to generate extra layers, P6 and P7.
+    """
+    def __init__(self, in_channels, out_channels):
+        super(LastLevelP6P7, self).__init__()
+        self.num_levels = 2
+        self.p6 = nn.Conv2d(in_channels, out_channels, 3, 2, 1)
+        self.p7 = nn.Conv2d(out_channels, out_channels, 3, 2, 1)
+        for module in [self.p6, self.p7]:
+            weight_init.c2_xavier_fill(module)
+
+    def forward(self, c5):
+        p6 = self.p6(c5)
+        p7 = self.p7(F.relu(p6))
+        return [p6, p7]
 
 
 @BACKBONE_REGISTRY.register()
@@ -144,5 +178,29 @@ def build_resnet_fpn_backbone(cfg):
         in_features=in_features,
         out_channels=out_channels,
         norm=cfg.MODEL.FPN.NORM,
+        top_block=LastLevelMaxPool()
+    )
+    return backbone
+
+
+@BACKBONE_REGISTRY.register()
+def build_retinanet_resnet_fpn_backbone(cfg):
+    """
+    Args:
+        cfg: a detectron2 CfgNode
+
+    Returns:
+        backbone (Backbone): backbone module, must be a subclass of :class:`Backbone`.
+    """
+    bottom_up = resnet.build_resnet_backbone(cfg)
+    in_features = cfg.MODEL.FPN.IN_FEATURES
+    out_channels = cfg.MODEL.FPN.OUT_CHANNELS
+    in_channels_p6p7 = bottom_up.out_feature_channels['res5']
+    backbone = FPN(
+        bottom_up=bottom_up,
+        in_features=in_features,
+        out_channels=out_channels,
+        norm=cfg.MODEL.FPN.NORM,
+        top_block=LastLevelP6P7(in_channels_p6p7, out_channels),
     )
     return backbone

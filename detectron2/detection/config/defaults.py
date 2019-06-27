@@ -347,6 +347,46 @@ _C.MODEL.PANOPTIC_FPN.COMBINE_INSTANCES_CONFIDENCE_THRESHOLD = 0.5
 
 
 # ---------------------------------------------------------------------------- #
+# RetinaNet Head
+# ---------------------------------------------------------------------------- #
+_C.MODEL.RETINANET = CN()
+
+# This is the number of foreground classes and background.
+_C.MODEL.RETINANET.NUM_CLASSES = 81
+
+# Anchor aspect ratios to use
+_C.MODEL.RETINANET.ANCHOR_SIZES = [[32, 64, 128, 256, 512]]
+_C.MODEL.RETINANET.ANCHOR_ASPECT_RATIOS = [[0.5, 1.0, 2.0]]
+_C.MODEL.RETINANET.ANCHOR_STRIDES = (8, 16, 32, 64, 128)
+_C.MODEL.RETINANET.STRADDLE_THRESH = 0
+
+# Anchor scales per octave
+_C.MODEL.RETINANET.OCTAVE = 2.0
+_C.MODEL.RETINANET.SCALES_PER_OCTAVE = 3
+
+# Convolutions to use in the cls and bbox tower
+# NOTE: this doesn't include the last conv for logits
+_C.MODEL.RETINANET.NUM_CONVS = 4
+
+# IoU overlap ratio for labeling an anchor as positive
+# Anchors with >= iou overlap are labeled positive
+_C.MODEL.RETINANET.FG_IOU_THRESHOLD = 0.5
+
+# IoU overlap ratio for labeling an anchor as negative
+# Anchors with < iou overlap are labeled negative
+_C.MODEL.RETINANET.BG_IOU_THRESHOLD = 0.4
+
+# Prior prob for rare case (i.e. foreground) at the beginning of training.
+# This is used to set the bias for the logits layer of the classifier subnet.
+# This improves training stability in the case of heavy class imbalance.
+_C.MODEL.RETINANET.PRIOR_PROB = 0.01
+
+# Inference cls score threshold, only anchors with score > INFERENCE_TH are
+# considered for inference (to improve speed)
+_C.MODEL.RETINANET.INFERENCE_TH = 0.05
+
+
+# ---------------------------------------------------------------------------- #
 # ResNe[X]t options (ResNets = {ResNet, ResNeXt}
 # Note that parts of a resnet may be used for both the backbone and the head
 # These options apply to both
