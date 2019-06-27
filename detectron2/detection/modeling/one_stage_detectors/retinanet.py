@@ -1,12 +1,13 @@
+import math
 import torch
 from torch import nn
-import math
 
-from borc.nn.focal_loss import sigmoid_focal_loss_jit
-from detectron2.structures import Boxes, pairwise_iou
 from detectron2.detection.modeling.backbone import build_backbone
 from detectron2.layers import cat, smooth_l1_loss
-from detectron2.structures import ImageList
+from detectron2.structures import Boxes, ImageList, pairwise_iou
+
+from borc.nn.focal_loss import sigmoid_focal_loss_jit
+
 from ..anchor_generator import build_anchor_generator
 from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher
@@ -29,21 +30,15 @@ def _concat_box_prediction_layers(box_cls, box_regression):
     # same format as the labels. Note that the labels are computed for
     # all feature levels concatenated, so we keep the same representation
     # for the objectness and the box_regression
-    for box_cls_per_level, box_regression_per_level in zip(
-        box_cls, box_regression
-    ):
+    for box_cls_per_level, box_regression_per_level in zip(box_cls, box_regression):
         N, AxC, H, W = box_cls_per_level.shape
         Ax4 = box_regression_per_level.shape[1]
         A = Ax4 // 4
         C = AxC // A
-        box_cls_per_level = _permute_and_flatten(
-            box_cls_per_level, N, A, C, H, W
-        )
+        box_cls_per_level = _permute_and_flatten(box_cls_per_level, N, A, C, H, W)
         box_cls_flattened.append(box_cls_per_level)
 
-        box_regression_per_level = _permute_and_flatten(
-            box_regression_per_level, N, A, 4, H, W
-        )
+        box_regression_per_level = _permute_and_flatten(box_regression_per_level, N, A, 4, H, W)
         box_regression_flattened.append(box_regression_per_level)
     # concatenate on the first dimension (representing the feature levels), to
     # take into account the way the labels were generated (with all feature maps
@@ -118,16 +113,13 @@ class RetinaNet(nn.Module):
         anchors = self.anchor_generator(images, features)
 
         if self.training:
-            gt_classes, gt_anchors_reg_deltas = self.get_ground_truth(
-                anchors, targets)
+            gt_classes, gt_anchors_reg_deltas = self.get_ground_truth(anchors, targets)
             return self.losses(gt_classes, gt_anchors_reg_deltas, box_cls, box_regression)
 
         # TODO: Remove when inference is done.
         return None
 
-    def losses(
-            self, gt_classes, gt_anchors_deltas, pred_class_logits, pred_anchor_deltas
-    ):
+    def losses(self, gt_classes, gt_anchors_deltas, pred_class_logits, pred_anchor_deltas):
         """
         Args:
             For `gt_classes` and `gt_anchors_deltas` parameters, see
@@ -140,8 +132,9 @@ class RetinaNet(nn.Module):
                 storing the loss. Used during training only. The dict keys are:
                 "loss_cls" and "loss_box_reg"
         """
-        pred_class_logits, pred_anchor_deltas = \
-            _concat_box_prediction_layers(pred_class_logits, pred_anchor_deltas)
+        pred_class_logits, pred_anchor_deltas = _concat_box_prediction_layers(
+            pred_class_logits, pred_anchor_deltas
+        )
         gt_classes = cat(gt_classes)
         gt_anchors_deltas = cat(gt_anchors_deltas)
 
@@ -158,13 +151,15 @@ class RetinaNet(nn.Module):
             gt_classes_target[valid_idxs],
             alpha=self.focal_loss_alpha,
             gamma=self.focal_loss_gamma,
-            reduction="sum") / max(1, num_foreground)
+            reduction="sum",
+        ) / max(1, num_foreground)
 
         # regression loss
         loss_box_reg = smooth_l1_loss(
             pred_anchor_deltas[foreground_idxs],
             gt_anchors_deltas[foreground_idxs],
-            beta=self.smooth_l1_loss_beta) / max(1, num_foreground)
+            beta=self.smooth_l1_loss_beta,
+        ) / max(1, num_foreground)
 
         return {"loss_cls": loss_cls, "loss_box_reg": loss_box_reg}
 
@@ -194,15 +189,14 @@ class RetinaNet(nn.Module):
         gt_anchors_deltas = []
         anchors = [Boxes.cat(anchors_i) for anchors_i in anchors]  # list of boxes for each image
         for anchors_per_image, targets_per_image in zip(anchors, targets):
-            match_quality_matrix = pairwise_iou(
-                targets_per_image.gt_boxes,
-                anchors_per_image)
+            match_quality_matrix = pairwise_iou(targets_per_image.gt_boxes, anchors_per_image)
             gt_matched_idxs = self.matcher(match_quality_matrix)
 
             # ground truth box regression
             matched_gt_boxes = targets_per_image[gt_matched_idxs.clamp(min=0)].gt_boxes
             gt_anchors_reg_deltas_i = self.box2box_transform.get_deltas(
-                anchors_per_image.tensor, matched_gt_boxes.tensor)
+                anchors_per_image.tensor, matched_gt_boxes.tensor
+            )
 
             # ground truth classes
             has_gt = len(targets_per_image) > 0
@@ -246,48 +240,34 @@ class RetinaNetClassifierRegressionHead(nn.Module):
         in_channels = cfg.MODEL.FPN.OUT_CHANNELS
         num_classes = cfg.MODEL.RETINANET.NUM_CLASSES
         # aspect ratio list ANCHOR_ASPECT_RATIOS[0] is used for all IN_FEATURES.
-        assert len(cfg.MODEL.RETINANET.ANCHOR_ASPECT_RATIOS) == 1,  \
-            "Using different aspect ratios between levels is not currently supported!"
-        num_anchors = len(cfg.MODEL.RETINANET.ANCHOR_ASPECT_RATIOS[0]) \
-            * cfg.MODEL.RETINANET.SCALES_PER_OCTAVE
+        assert (
+            len(cfg.MODEL.RETINANET.ANCHOR_ASPECT_RATIOS) == 1
+        ), "Using different aspect ratios between levels is not currently supported!"
+        num_anchors = (
+            len(cfg.MODEL.RETINANET.ANCHOR_ASPECT_RATIOS[0]) * cfg.MODEL.RETINANET.SCALES_PER_OCTAVE
+        )
 
         cls_subnet = []
         bbox_subnet = []
         for _ in range(cfg.MODEL.RETINANET.NUM_CONVS):
             cls_subnet.append(
-                nn.Conv2d(
-                    in_channels,
-                    in_channels,
-                    kernel_size=3,
-                    stride=1,
-                    padding=1
-                )
+                nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1)
             )
             cls_subnet.append(nn.ReLU())
             bbox_subnet.append(
-                nn.Conv2d(
-                    in_channels,
-                    in_channels,
-                    kernel_size=3,
-                    stride=1,
-                    padding=1
-                )
+                nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1)
             )
             bbox_subnet.append(nn.ReLU())
 
-        self.add_module('cls_subnet', nn.Sequential(*cls_subnet))
-        self.add_module('bbox_subnet', nn.Sequential(*bbox_subnet))
+        self.add_module("cls_subnet", nn.Sequential(*cls_subnet))
+        self.add_module("bbox_subnet", nn.Sequential(*bbox_subnet))
         self.cls_logits = nn.Conv2d(
-            in_channels, num_anchors * num_classes, kernel_size=3, stride=1,
-            padding=1
+            in_channels, num_anchors * num_classes, kernel_size=3, stride=1, padding=1
         )
-        self.bbox_pred = nn.Conv2d(
-            in_channels, num_anchors * 4, kernel_size=3, stride=1, padding=1
-        )
+        self.bbox_pred = nn.Conv2d(in_channels, num_anchors * 4, kernel_size=3, stride=1, padding=1)
 
         # Initialization
-        for modules in [self.cls_subnet, self.bbox_subnet, self.cls_logits,
-                        self.bbox_pred]:
+        for modules in [self.cls_subnet, self.bbox_subnet, self.cls_logits, self.bbox_pred]:
             for layer in modules.modules():
                 if isinstance(layer, nn.Conv2d):
                     torch.nn.init.normal_(layer.weight, mean=0, std=0.01)

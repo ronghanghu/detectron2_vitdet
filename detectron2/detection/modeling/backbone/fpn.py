@@ -3,6 +3,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from detectron2.layers import Backbone, Conv2d, weight_init
+
 from . import BACKBONE_REGISTRY, resnet
 
 __all__ = ["build_resnet_fpn_backbone", "build_retinanet_resnet_fpn_backbone"]
@@ -29,7 +30,9 @@ class FPN(Backbone):
             top_block (nn.Module or None): if provided, an extra operation will
                 be performed on the output of the last (smallest resolution)
                 FPN output, and the result will extend the result list. The top_block
-                further downsamples the feature map.
+                further downsamples the feature map. It must have an attribute
+                "num_levels", meaning the number of extra FPN levels added by
+                this block.
         """
         super(FPN, self).__init__()
         assert isinstance(bottom_up, Backbone)
@@ -101,7 +104,7 @@ class FPN(Backbone):
         """
         # Reverse feature maps into top-down order (from low to high resolution)
         x = self.bottom_up(x)
-        c5 = x['res5']
+        c5 = x["res5"]
         x = [x[f] for f in self.in_features[::-1]]
         results = []
         prev_features = self.lateral_convs[0](x[0])
@@ -119,7 +122,7 @@ class FPN(Backbone):
         # If this is the case, remove if-statement and use P5 layer for top_block.
         if isinstance(self.top_block, LastLevelP6P7):
             results.extend(self.top_block(c5))
-        if isinstance(self.top_block, LastLevelMaxPool):
+        else:
             results.extend(self.top_block(results[-1]))
 
         return dict(zip(self._out_features, results))
@@ -137,6 +140,7 @@ def _assert_strides_are_log2_contiguous(strides):
 
 class LastLevelMaxPool(nn.Module):
     def __init__(self):
+        super().__init__()
         self.num_levels = 1
 
     def forward(self, x):
@@ -147,8 +151,9 @@ class LastLevelP6P7(nn.Module):
     """
     This module is used in RetinaNet to generate extra layers, P6 and P7.
     """
+
     def __init__(self, in_channels, out_channels):
-        super(LastLevelP6P7, self).__init__()
+        super().__init__()
         self.num_levels = 2
         self.p6 = nn.Conv2d(in_channels, out_channels, 3, 2, 1)
         self.p7 = nn.Conv2d(out_channels, out_channels, 3, 2, 1)
@@ -178,7 +183,7 @@ def build_resnet_fpn_backbone(cfg):
         in_features=in_features,
         out_channels=out_channels,
         norm=cfg.MODEL.FPN.NORM,
-        top_block=LastLevelMaxPool()
+        top_block=LastLevelMaxPool(),
     )
     return backbone
 
@@ -195,7 +200,7 @@ def build_retinanet_resnet_fpn_backbone(cfg):
     bottom_up = resnet.build_resnet_backbone(cfg)
     in_features = cfg.MODEL.FPN.IN_FEATURES
     out_channels = cfg.MODEL.FPN.OUT_CHANNELS
-    in_channels_p6p7 = bottom_up.out_feature_channels['res5']
+    in_channels_p6p7 = bottom_up.out_feature_channels["res5"]
     backbone = FPN(
         bottom_up=bottom_up,
         in_features=in_features,
