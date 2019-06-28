@@ -2,7 +2,9 @@ import math
 import torch.nn.functional as F
 from torch import nn
 
-from detectron2.layers import Backbone, Conv2d, weight_init
+from detectron2.layers import Backbone, Conv2d
+
+import borc.nn.weight_init as weight_init
 
 from . import BACKBONE_REGISTRY, resnet
 

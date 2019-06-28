@@ -2,10 +2,12 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from detectron2.layers import Conv2d, ConvTranspose2d, cat, weight_init
+from detectron2.layers import Conv2d, ConvTranspose2d, cat
 from detectron2.structures import batch_rasterize_polygons_within_box
 from detectron2.utils.events import get_event_storage
 from detectron2.utils.registry import Registry
+
+import borc.nn.weight_init as weight_init
 
 ROI_MASK_HEAD_REGISTRY = Registry("ROI_MASK_HEAD")
 

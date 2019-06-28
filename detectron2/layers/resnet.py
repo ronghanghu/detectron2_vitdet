@@ -4,6 +4,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 from torch.nn import GroupNorm
+import borc.nn.weight_init as weight_init
 
 from . import (
     Backbone,
@@ -12,7 +13,6 @@ from . import (
     DeformConv,
     FrozenBatchNorm2d,
     ModulatedDeformConv,
-    weight_init,
 )
 
 __all__ = [
@@ -23,7 +23,6 @@ __all__ = [
     "ResNet",
     "make_stage",
 ]
-
 
 def _get_norm(norm, out_channels):
     """
