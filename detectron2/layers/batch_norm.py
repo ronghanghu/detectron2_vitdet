@@ -22,6 +22,8 @@ class FrozenBatchNorm2d(nn.Module):
     The forward is implemented by `F.batch_norm(..., training=False)`.
     """
 
+    _version = 2
+
     def __init__(self, n):
         super(FrozenBatchNorm2d, self).__init__()
         self.register_buffer("weight", torch.ones(n))
@@ -35,3 +37,20 @@ class FrozenBatchNorm2d(nn.Module):
         scale = scale.reshape(1, -1, 1, 1)
         bias = bias.reshape(1, -1, 1, 1)
         return x * scale + bias
+
+    def _load_from_state_dict(
+        self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs
+    ):
+        version = local_metadata.get("version", None)
+
+        if version is None or version < 2:
+            # No running_mean/var in early versions
+            # This will silent the warnings
+            if prefix + "running_mean" not in state_dict:
+                state_dict[prefix + "running_mean"] = torch.zeros_like(self.running_mean)
+            if prefix + "running_var" not in state_dict:
+                state_dict[prefix + "running_var"] = torch.ones_like(self.running_var)
+
+        super()._load_from_state_dict(
+            state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs
+        )

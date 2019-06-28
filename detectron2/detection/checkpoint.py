@@ -6,6 +6,7 @@ import re
 
 from detectron2.utils.c2_model_loading import convert_basic_c2_names
 from detectron2.utils.checkpoint import Checkpointer
+from detectron2.utils.model_serialization import load_state_dict  # TODO rename
 
 
 # TODO make it support RetinaNet, etc
@@ -245,12 +246,16 @@ def _convert_rpn_name(model):
 
 
 class DetectionCheckpointer(Checkpointer):
+    """
+    A checkpointer that is able to handle models in detectron & detectron2 model zoo.
+    """
+
     def _load_file(self, f):
         if f.endswith(".pkl"):
             data = pickle.load(open(f, "rb"), encoding="latin1")
             if "model" in data and "__author__" in data:
                 # file is in Detectron2 model zoo format
-                self.logger.info("Reading a file from '{}'".format(data.pop("__author__")))
+                self.logger.info("Reading a file from '{}'".format(data["__author__"]))
                 data["model"] = _convert_rpn_name(data["model"])
                 return data
             else:
@@ -260,10 +265,19 @@ class DetectionCheckpointer(Checkpointer):
                     data = data["blobs"]
                 data = {k: v for k, v in data.items() if not k.endswith("_momentum")}
                 model = _convert_c2_detectron_names(data)
-            return {"model": model}
+                return {"model": model, "__author__": "Caffe2"}
+
         loaded = super()._load_file(f)  # load native pth checkpoint
         if "model" not in loaded:
             loaded = {"model": loaded}
         loaded["model"] = _convert_background_class(loaded["model"])
         loaded["model"] = _convert_rpn_name(loaded["model"])
         return loaded
+
+    def _load_model(self, checkpoint):
+        if checkpoint.get("__author__", None) != "Caffe2":
+            # for non-caffe2 models, use standard ways to load it
+            super()._load_model(checkpoint)
+            return
+        self._convert_ndarray_to_tensor(checkpoint["model"])
+        load_state_dict(self.model, checkpoint.pop("model"))

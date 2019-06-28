@@ -5,8 +5,9 @@ import torch
 
 import detectron2.utils.comm as comm
 from detectron2.utils.file_io import PathManager
-from detectron2.utils.model_serialization import load_state_dict
 from detectron2.utils.model_zoo import cache_file
+from detectron2.utils.model_serialization import strip_prefix_if_present
+from torch.nn.parallel import DistributedDataParallel
 
 
 class Checkpointer(object):
@@ -29,6 +30,8 @@ class Checkpointer(object):
                 processes will do loading, but only the master process will do
                 saving.
         """
+        if isinstance(model, DistributedDataParallel):
+            model = model.module
         self.model = model
         self.optimizer = optimizer
         self.scheduler = scheduler
@@ -134,18 +137,36 @@ class Checkpointer(object):
         return torch.load(f, map_location=torch.device("cpu"))
 
     def _load_model(self, checkpoint):
-        model = checkpoint.pop("model")
-        for k, v in model.items():
-            if not isinstance(v, np.ndarray) and not isinstance(v, torch.Tensor):
-                raise ValueError("Unsupported type found in checkpoint! {}: {}".format(k, type(v)))
+        model_state_dict = checkpoint.pop("model")
+        self._convert_ndarray_to_tensor(model_state_dict)
+        strip_prefix_if_present(model_state_dict, "module.")
+        incompatible = self.model.load_state_dict(model_state_dict, strict=False)
+        if incompatible.missing_keys:
+            self.logger.warning(
+                "Keys in the model but not found in the checkpoint: "
+                + ", ".join(incompatible.missing_keys)
+            )
+        if incompatible.unexpected_keys:
+            self.logger.warning(
+                "Keys in the checkpoint but not found in the model: "
+                + ", ".join(incompatible.unexpected_keys_keys)
+            )
+
+    def _convert_ndarray_to_tensor(self, state_dict):
+        """
+        In-place convert all numpy arrays in the state_dict to torch tensor.
+
+        Args:
+            state_dict: a state-dict to be loaded to the model
+        """
         # model could be an OrderedDict with _metadata attribute
         # (as returned by Pytorch's state_dict()). We should preserve these properties.
-        for k in list(model.keys()):
-            v = model[k]
+        for k in list(state_dict.keys()):
+            v = state_dict[k]
+            if not isinstance(v, np.ndarray) and not isinstance(v, torch.Tensor):
+                raise ValueError("Unsupported type found in checkpoint! {}: {}".format(k, type(v)))
             if not isinstance(v, torch.Tensor):
-                model[k] = torch.from_numpy(v)
-
-        load_state_dict(self.model, model)
+                state_dict[k] = torch.from_numpy(v)
 
 
 class PeriodicCheckpointer(object):
