@@ -229,7 +229,7 @@ def prepare_for_coco_evaluation(dataset_predictions):
 
         has_keypoints = predictions.has("pred_keypoints")
         if has_keypoints:
-            keypoints = predictions.pred_keypoints.flatten(1).tolist()
+            keypoints = predictions.pred_keypoints
 
         for k in range(num_instance):
             result = {
@@ -241,7 +241,12 @@ def prepare_for_coco_evaluation(dataset_predictions):
             if has_mask:
                 result["segmentation"] = rles[k]
             if has_keypoints:
-                result["keypoints"] = keypoints[k]
+                # In COCO annotations,
+                # keypoints coordinates are pixel indices.
+                # However our predictions are floating point coordinates.
+                # Therefore we subtract 0.5 to be consistent with the annotation format.
+                keypoints[k][:, :2] -= 0.5
+                result["keypoints"] = keypoints[k].flatten().tolist()
             coco_results.append(result)
     return coco_results
 

@@ -125,9 +125,7 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
             assert anno.get("ignore", 0) == 0
 
             obj = {
-                field: anno[field]
-                for field in ["iscrowd", "bbox", "keypoints", "category_id"]
-                if field in anno
+                field: anno[field] for field in ["iscrowd", "bbox", "category_id"] if field in anno
             }
 
             segm = anno.get("segmentation", None)
@@ -139,6 +137,17 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
                         num_instances_without_valid_segmentation += 1
                         continue  # ignore this instance
                 obj["segmentation"] = segm
+
+            keypts = anno.get("keypoints", None)
+            if keypts:  # list[int]
+                for idx, v in enumerate(keypts):
+                    if idx % 3 != 2:
+                        # COCO's segmentation coordinates are floating points in [0, H or W],
+                        # but keypoint coordinates are integers in [0, H-1 or W-1]
+                        # Therefore we assume the coordinates are "pixel indices" and
+                        # add 0.5 to convert to floating point coordinates.
+                        keypts[idx] = v + 0.5
+                obj["keypoints"] = keypts
 
             obj["bbox_mode"] = BoxMode.XYWH_ABS
             if id_map:

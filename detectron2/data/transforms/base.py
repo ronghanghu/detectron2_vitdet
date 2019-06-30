@@ -88,7 +88,7 @@ class ImageTransformer(metaclass=ABCMeta):
     def transform_image_with_params(self, img, param):
         """
         Transform the image with the given param.
-        The transform is allowed to modify image in-place.
+        The transform may modify img in-place for efficiency.
 
         Args:
             img: input image
@@ -121,6 +121,8 @@ class ImageTransformer(metaclass=ABCMeta):
         By default, a transformer keeps coordinates unchanged.
         If a subclass of :class:`ImageTransformer` changes coordinates
         but couldn't implement this method, it should ``raise NotImplementedError()``.
+
+        The transform may modify coords in-place for efficiency.
 
         Args:
             coords: Nx2 floating point numpy array where each row is (x, y)

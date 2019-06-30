@@ -245,8 +245,8 @@ class DetectionTransform:
 
     def _process_keypoints(self, keypoints, tfm_params, image_width):
         # (N*3,) -> (N, 3)
-        keypoints = np.asarray(keypoints).reshape(-1, 3)
-        self.tfms.transform_coords(keypoints[:, :2], tfm_params)
+        keypoints = np.asarray(keypoints, dtype="float64").reshape(-1, 3)
+        keypoints[:, :2] = self.tfms.transform_coords(keypoints[:, :2], tfm_params)
 
         # Check if the keypoints were horizontally flipped
         # If so, swap each keypoint with its opposite-handed equivalent
@@ -257,8 +257,7 @@ class DetectionTransform:
             keypoints = keypoints[self.keypoint_flip_indices, :]
 
         # Maintain COCO convention that if visibility == 0, then x, y = 0
-        inds = keypoints[:, 2] == 0
-        keypoints[inds] = 0
+        keypoints[keypoints[:, 2] == 0] = 0
         return keypoints
 
 

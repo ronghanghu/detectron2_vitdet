@@ -218,7 +218,7 @@ def create_after_step_hook(cfg, model, optimizer, scheduler, periodic_checkpoint
     def after_step_callback(trainer):
         if (
             cfg.TEST.EVAL_PERIOD > 0
-            and trainer.iter % cfg.TEST.EVAL_PERIOD == 0
+            and (trainer.iter + 1) % cfg.TEST.EVAL_PERIOD == 0
             and trainer.iter != trainer.max_iter - 1
         ):
             results = do_test(cfg, model, is_final=False)
