@@ -262,6 +262,7 @@ class Res5ROIHeads(ROIHeads):
 
         # fmt: off
         pooler_resolution          = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
+        box_pooler_type            = cfg.MODEL.ROI_BOX_HEAD.POOLER_TYPE
         pooler_scales              = (1.0 / self.feature_strides[self.in_features[0]], )
         sampling_ratio             = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
         self.mask_on               = cfg.MODEL.MASK_ON
@@ -269,7 +270,10 @@ class Res5ROIHeads(ROIHeads):
         assert not cfg.MODEL.KEYPOINT_ON
 
         self.pooler = ROIPooler(
-            output_size=pooler_resolution, scales=pooler_scales, sampling_ratio=sampling_ratio
+            output_size=pooler_resolution,
+            scales=pooler_scales,
+            sampling_ratio=sampling_ratio,
+            pooler_type=box_pooler_type,
         )
 
         self.res5 = resnet.build_resnet_head(cfg)
@@ -379,14 +383,17 @@ class StandardROIHeads(ROIHeads):
         pooler_resolution                        = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
         pooler_scales                            = tuple(1.0 / self.feature_strides[k] for k in self.in_features)  # noqa
         sampling_ratio                           = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
+        box_pooler_type                          = cfg.MODEL.ROI_BOX_HEAD.POOLER_TYPE
         self.mask_on                             = cfg.MODEL.MASK_ON
         mask_pooler_resolution                   = cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION
         mask_pooler_scales                       = pooler_scales
         mask_sampling_ratio                      = cfg.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO
+        mask_pooler_type                         = cfg.MODEL.ROI_MASK_HEAD.POOLER_TYPE
         self.keypoint_on                         = cfg.MODEL.KEYPOINT_ON
         keypoint_pooler_resolution               = cfg.MODEL.ROI_KEYPOINT_HEAD.POOLER_RESOLUTION
         keypoint_pooler_scales                   = pooler_scales
         keypoint_sampling_ratio                  = cfg.MODEL.ROI_KEYPOINT_HEAD.POOLER_SAMPLING_RATIO
+        keypoint_pooler_type                     = cfg.MODEL.ROI_KEYPOINT_HEAD.POOLER_TYPE
         self.normalize_loss_by_visible_keypoints = cfg.MODEL.ROI_KEYPOINT_HEAD.NORMALIZE_LOSS_BY_VISIBLE_KEYPOINTS  # noqa
         self.keypoint_loss_weight                = cfg.MODEL.ROI_KEYPOINT_HEAD.LOSS_WEIGHT
         # fmt: on
@@ -400,7 +407,10 @@ class StandardROIHeads(ROIHeads):
 
         cfg = cfg.clone()
         self.box_pooler = ROIPooler(
-            output_size=pooler_resolution, scales=pooler_scales, sampling_ratio=sampling_ratio
+            output_size=pooler_resolution,
+            scales=pooler_scales,
+            sampling_ratio=sampling_ratio,
+            pooler_type=box_pooler_type,
         )
         cfg.MODEL.ROI_BOX_HEAD.COMPUTED_INPUT_SIZE = (
             in_channels,
@@ -418,6 +428,7 @@ class StandardROIHeads(ROIHeads):
                 output_size=mask_pooler_resolution,
                 scales=mask_pooler_scales,
                 sampling_ratio=mask_sampling_ratio,
+                pooler_type=mask_pooler_type,
             )
             cfg.MODEL.ROI_MASK_HEAD.COMPUTED_INPUT_SIZE = (
                 in_channels,
@@ -431,6 +442,7 @@ class StandardROIHeads(ROIHeads):
                 output_size=keypoint_pooler_resolution,
                 scales=keypoint_pooler_scales,
                 sampling_ratio=keypoint_sampling_ratio,
+                pooler_type=keypoint_pooler_type,
             )
             cfg.MODEL.ROI_KEYPOINT_HEAD.COMPUTED_INPUT_SIZE = (
                 in_channels,

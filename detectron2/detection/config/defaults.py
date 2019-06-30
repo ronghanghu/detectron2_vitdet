@@ -263,6 +263,8 @@ _C.MODEL.ROI_BOX_HEAD.NORM = ""
 # _C.MODEL.ROI_BOX_HEAD.COMPUTED_INPUT_SIZE = (channel, height, width)
 # Whether to use class agnostic for bbox regression
 _C.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG = False
+# Type of pooling operation applied to the incoming feature map for each RoI
+_C.MODEL.ROI_BOX_HEAD.POOLER_TYPE = "ROIAlign"
 
 
 # ---------------------------------------------------------------------------- #
@@ -281,6 +283,8 @@ _C.MODEL.ROI_MASK_HEAD.NORM = ""
 # _C.MODEL.ROI_MASK_HEAD.COMPUTED_INPUT_SIZE = (channel, height, width)
 # Whether to use class agnostic for mask prediction
 _C.MODEL.ROI_MASK_HEAD.CLS_AGNOSTIC_MASK = False
+# Type of pooling operation applied to the incoming feature map for each RoI
+_C.MODEL.ROI_MASK_HEAD.POOLER_TYPE = "ROIAlign"
 
 
 # ---------------------------------------------------------------------------- #
@@ -318,6 +322,8 @@ _C.MODEL.ROI_KEYPOINT_HEAD.NORMALIZE_LOSS_BY_VISIBLE_KEYPOINTS = True
 #   - use 1.0 if NORMALIZE_LOSS_BY_VISIBLE_KEYPOINTS is True
 #   - use 4.0 if NORMALIZE_LOSS_BY_VISIBLE_KEYPOINTS is False
 _C.MODEL.ROI_KEYPOINT_HEAD.LOSS_WEIGHT = 1.0
+# Type of pooling operation applied to the incoming feature map for each RoI
+_C.MODEL.ROI_KEYPOINT_HEAD.POOLER_TYPE = "ROIAlign"
 
 # ---------------------------------------------------------------------------- #
 # Semantic Segmenation Head

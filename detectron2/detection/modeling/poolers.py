@@ -4,7 +4,7 @@ import sys
 import torch
 from torch import nn
 
-from detectron2.layers import ROIAlign, cat
+from detectron2.layers import ROIAlign, ROIPool, cat
 
 
 def assign_boxes_to_levels(box_lists, min_level, max_level, canonical_box_size, canonical_level):
@@ -75,7 +75,13 @@ class ROIPooler(nn.Module):
     """
 
     def __init__(
-        self, output_size, scales, sampling_ratio, canonical_box_size=224, canonical_level=4
+        self,
+        output_size,
+        scales,
+        sampling_ratio,
+        pooler_type,
+        canonical_box_size=224,
+        canonical_level=4,
     ):
         """
         Args:
@@ -86,6 +92,8 @@ class ROIPooler(nn.Module):
                 image, scale is defined as a 1 / s.
             sampling_ratio (int): The `sampling_ratio` parameter for the ROIAlign
                 pooling op.
+            pooler_type (string): Name of the type of pooling operation that should be applied.
+                For instance, "ROIPool" or "ROIAlign".
             canonical_box_size (int): A canonical box size in pixels (sqrt(box area)). The default
                 is heuristically defined as 224 pixels in the FPN paper (based on ImageNet
                 pre-training).
@@ -100,12 +108,17 @@ class ROIPooler(nn.Module):
         assert isinstance(output_size[0], int) and isinstance(output_size[1], int)
         self.output_size = output_size
 
-        # TODO: make the low-level pooling op configurable via cfg so user can
-        # specify choice of ROIAlign, ROIPool, etc.
-        self.level_poolers = nn.ModuleList(
-            ROIAlign(output_size, spatial_scale=scale, sampling_ratio=sampling_ratio)
-            for scale in scales
-        )
+        if pooler_type == "ROIAlign":
+            self.level_poolers = nn.ModuleList(
+                ROIAlign(output_size, spatial_scale=scale, sampling_ratio=sampling_ratio)
+                for scale in scales
+            )
+        elif pooler_type == "ROIPool":
+            self.level_poolers = nn.ModuleList(
+                ROIPool(output_size, spatial_scale=scale) for scale in scales
+            )
+        else:
+            raise ValueError("Unknown pooler type: {}".format(pooler_type))
 
         # Map scale (defined as 1 / stride) to its feature map level under the
         # assumption that stride is a power of 2.
