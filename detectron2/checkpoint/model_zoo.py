@@ -4,73 +4,24 @@ import shutil
 import tempfile
 
 from detectron2.utils.comm import is_main_process, synchronize
-
-try:
-    # TODO avoid these torch internals
-    from torch.hub import HASH_REGEX, _download_url_to_file, urlparse
-except ImportError:
-    from torch.utils.model_zoo import HASH_REGEX, _download_url_to_file, urlparse
+from detectron2.utils.file_io import PathHandler, PathManager, get_cache_dir
 
 
-# very similar to https://github.com/pytorch/pytorch/blob/master/torch/utils/model_zoo.py
-# but with a few improvements and modifications
-def cache_url(url, model_dir=None, progress=True):
-    r"""Loads the Torch serialized object at the given URL.
-    If the object is already present in `model_dir`, it's deserialized and
-    returned. The filename part of the URL should follow the naming convention
-    ``filename-<sha256>.ext`` where ``<sha256>`` is the first eight or more
-    digits of the SHA256 hash of the contents of the file. The hash is used to
-    ensure unique names and to verify the contents of the file.
-
-    Args:
-        url (string): URL of the object to download
-        model_dir (string, optional): directory in which to save the object.
-            Defaults to :func:`get_cache_dir()`
-        progress (bool, optional): whether or not to display a progress bar to stderr
-    Example:
-        >>> cached_file = detectron2.utils.model_zoo.cache_url('https://dl.fbaipublicfiles.com/detectron/pytorch/models/resnet18-5c106cde.pth')  # noqa
+def cache_file(file_name, cache_dir=None):
     """
-    model_dir = get_cache_dir(model_dir)
-    parts = urlparse(url)
-    filename = os.path.basename(parts.path)
-    if filename == "model_final.pkl":
-        # workaround as pre-trained Caffe2 models from Detectron have all the same filename
-        # so make the full path the filename by replacing / with _
-        filename = parts.path.replace("/", "_")
-    cached_file = os.path.join(model_dir, filename)
-    if not os.path.exists(cached_file) and is_main_process():
-        if not os.path.exists(model_dir):
-            os.makedirs(model_dir)
-        logger = logging.getLogger(__name__)
-        logger.info("Downloading: {} to {}".format(url, cached_file))
-        hash_prefix = HASH_REGEX.search(filename)
-        if hash_prefix is not None:
-            hash_prefix = hash_prefix.group(1)
-            # workaround: Caffe2 models don't have a hash, but follow the R-50 convention,
-            # which matches the hash PyTorch uses. So we skip the hash matching
-            # if the hash_prefix is less than 6 characters
-            if len(hash_prefix) < 6:
-                hash_prefix = None
-        _download_url_to_file(url, cached_file, hash_prefix, progress=progress)
-    synchronize()
-    return cached_file
-
-
-def cache_file(file_name, model_dir=None):
-    """
-    Caches a (presumably remote) file under model_dir.
+    Caches a (presumably remote) file under cache_dir.
 
     This function contains a barrier call. Therefore all processes must all
     call this method to avoid deadlock. Only the main process will actually
     perform the caching.
     """
-    model_dir = get_cache_dir(model_dir)
-    if file_name.startswith(model_dir):
+    cache_dir = get_cache_dir(cache_dir)
+    if file_name.startswith(cache_dir):
         return file_name
     src_dir, base_name = os.path.split(file_name)
     if src_dir[0].startswith(os.path.sep):
         src_dir = src_dir[len(os.path.sep) :]
-    dst_dir = os.path.join(model_dir, src_dir)
+    dst_dir = os.path.join(cache_dir, src_dir)
     dst_file_name = os.path.join(dst_dir, base_name)
     assert dst_file_name != file_name
 
@@ -90,21 +41,6 @@ def cache_file(file_name, model_dir=None):
                 os.remove(f.name)
     synchronize()
     return dst_file_name
-
-
-def get_cache_dir(model_dir=None):
-    """
-    Args:
-        model_dir (None or str): if None, returns the default cache directory as:
-
-        1) $TORCH_MODEL_ZOO env variable, if set
-        2) otherwise $TORCH_HOME, if set
-        3) otherwise ~/.torch
-    """
-    if model_dir is None:
-        torch_home = os.path.expanduser(os.getenv("TORCH_HOME", "~/.torch"))
-        model_dir = os.getenv("TORCH_MODEL_ZOO", os.path.join(torch_home, "models"))
-    return model_dir
 
 
 class ModelCatalog(object):
@@ -180,3 +116,42 @@ class ModelCatalog(object):
             prefix=ModelCatalog.S3_C2_DETECTRON_PREFIX, url=url, type=type, dataset=dataset
         )
         return url
+
+
+class ModelCatalogHandler(PathHandler):
+    """
+    Resolve URL like catalog:// by the model zoo.
+    """
+
+    def _support(self, path):
+        return self._has_protocol(path, "catalog")
+
+    def _get_file_name(self, path):
+        # TODO keep D2 model zoo handler for BC. Remove when release.
+        d2_prefix = "catalog://Detectron2/"
+        if path.startswith(d2_prefix):
+            return PathManager.get_file_name("detectron2://" + path[len(d2_prefix) :])
+
+        logger = logging.getLogger(__name__)
+        catalog_path = ModelCatalog.get(path[len("catalog://") :])
+        logger.info("Catalog entry {} points to {}".format(path, catalog_path))
+        return PathManager.get_file_name(catalog_path)
+
+
+class Detectron2Handler(PathHandler):
+    """
+    Resolve anything that's in Detectron2 model zoo.
+    """
+
+    S3_DETECTRON2_PREFIX = "https://dl.fbaipublicfiles.com/detectron2/"
+
+    def _support(self, path):
+        return self._has_protocol(path, "detectron2")
+
+    def _get_file_name(self, path):
+        name = path[len("detectron2://") :]
+        return PathManager.get_file_name(self.S3_DETECTRON2_PREFIX + name)
+
+
+PathManager.register_handler(ModelCatalogHandler())
+PathManager.register_handler(Detectron2Handler())

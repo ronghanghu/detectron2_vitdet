@@ -1,11 +1,10 @@
 import numpy as np
+import borc.nn.weight_init as weight_init
 from torch import nn
 from torch.nn import functional as F
 
 from detectron2.layers import Conv2d
 from detectron2.utils.registry import Registry
-
-import borc.nn.weight_init as weight_init
 
 ROI_BOX_HEAD_REGISTRY = Registry("ROI_BOX_HEAD")
 

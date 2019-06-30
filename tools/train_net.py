@@ -26,9 +26,9 @@ import torch
 from torch.nn.parallel import DistributedDataParallel
 
 import detectron2.utils.comm as comm
+from detectron2.checkpoint import DetectionCheckpointer, PeriodicCheckpointer
 from detectron2.data import MetadataCatalog
 from detectron2.detection import (
-    DetectionCheckpointer,
     DetectionTransform,
     build_detection_test_loader,
     build_detection_train_loader,
@@ -47,7 +47,6 @@ from detectron2.detection.evaluation import (
 )
 from detectron2.detection.modeling import DetectionTransformTTA, GeneralizedRCNNWithTTA
 from detectron2.engine import SimpleTrainer, hooks, launch
-from detectron2.utils.checkpoint import PeriodicCheckpointer
 from detectron2.utils.collect_env import collect_env_info
 from detectron2.utils.events import JSONWriter, TensorboardXWriter, get_event_storage
 from detectron2.utils.inference import (

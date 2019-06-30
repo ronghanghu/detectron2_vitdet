@@ -3,10 +3,29 @@
 import logging
 import os
 from abc import ABCMeta, abstractmethod
-
-from .model_zoo import ModelCatalog, cache_url
+from urllib.parse import urlparse
+from borc.common.download import download
 
 __all__ = ["PathManager"]
+
+
+def get_cache_dir(model_dir=None):
+    """
+    Returns a default directory to cache static files
+    (usually downloaded from Internet), if None is provided.
+
+    Args:
+        model_dir (None or str): if not None, will be returned as is.
+            If None, returns the default cache directory as:
+
+        1) $TORCH_MODEL_ZOO env variable, if set
+        2) otherwise $TORCH_HOME, if set
+        3) otherwise ~/.torch
+    """
+    if model_dir is None:
+        torch_home = os.path.expanduser(os.getenv("TORCH_HOME", "~/.torch"))
+        model_dir = os.getenv("TORCH_MODEL_ZOO", os.path.join(torch_home, "models"))
+    return model_dir
 
 
 class PathHandler(metaclass=ABCMeta):
@@ -65,44 +84,12 @@ class HTTPURLHandler(PathHandler):
 
     def _get_file_name(self, path):
         logger = logging.getLogger(__name__)
-        cached = cache_url(path)
+
+        url = urlparse(path)
+        dirname = os.path.join(get_cache_dir(), os.path.dirname(url.path.lstrip("/")))
+        cached = download(path, dirname)
         logger.info("URL {} cached in {}".format(path, cached))
         return cached
-
-
-class ModelCatalogHandler(PathHandler):
-    """
-    Resolve URL like catalog:// by the model zoo.
-    """
-
-    def _support(self, path):
-        return self._has_protocol(path, "catalog")
-
-    def _get_file_name(self, path):
-        # TODO keep D2 model zoo handler for BC. Remove when release.
-        d2_prefix = "catalog://Detectron2/"
-        if path.startswith(d2_prefix):
-            return PathManager.get_file_name("detectron2://" + path[len(d2_prefix) :])
-
-        logger = logging.getLogger(__name__)
-        catalog_path = ModelCatalog.get(path[len("catalog://") :])
-        logger.info("Catalog entry {} points to {}".format(path, catalog_path))
-        return PathManager.get_file_name(catalog_path)
-
-
-class Detectron2Handler(PathHandler):
-    """
-    Resolve anything that's in Detectron2 model zoo.
-    """
-
-    S3_DETECTRON2_PREFIX = "https://dl.fbaipublicfiles.com/detectron2/"
-
-    def _support(self, path):
-        return self._has_protocol(path, "detectron2")
-
-    def _get_file_name(self, path):
-        name = path[len("detectron2://") :]
-        return PathManager.get_file_name(self.S3_DETECTRON2_PREFIX + name)
 
 
 class PathManager:
@@ -110,12 +97,7 @@ class PathManager:
     A class for users to open generic paths or translate generic paths to file names.
     """
 
-    _PATH_HANDLERS = [
-        HTTPURLHandler(),
-        NativePathHandler(),
-        ModelCatalogHandler(),
-        Detectron2Handler(),
-    ]
+    _PATH_HANDLERS = [HTTPURLHandler(), NativePathHandler()]
 
     @staticmethod
     def open(path, mode="r"):
@@ -130,3 +112,14 @@ class PathManager:
             if h._support(path):
                 return h._get_file_name(path)
         raise OSError("Unable to lookup file name for {}".format(path))
+
+    @staticmethod
+    def register_handler(handler):
+        """
+        Add a handler to the end of the available handlers.
+
+        Args:
+            handler (PathHandler):
+        """
+        assert isinstance(handler, PathHandler), handler
+        PathManager._PATH_HANDLERS.append(handler)

@@ -1,7 +1,6 @@
 import json
 import os
 from collections import defaultdict
-
 from borc.common.history_buffer import HistoryBuffer
 
 _CURRENT_STORAGE = None

@@ -2,12 +2,11 @@ import logging
 import numpy as np
 import os
 import torch
+from torch.nn.parallel import DistributedDataParallel
 
 import detectron2.utils.comm as comm
+from detectron2.checkpoint.model_zoo import cache_file
 from detectron2.utils.file_io import PathManager
-from detectron2.utils.model_zoo import cache_file
-from detectron2.utils.model_serialization import strip_prefix_if_present
-from torch.nn.parallel import DistributedDataParallel
 
 
 class Checkpointer(object):
@@ -25,7 +24,7 @@ class Checkpointer(object):
             model (nn.Module):
             optimizer:
             scheduler:
-            save_dir (str): a directory to load and save checkpoint. TODO: renamed todir
+            save_dir (str): a directory to load and save checkpoint.
             save_to_disk (bool): whether to do saving or not. By default, all
                 processes will do loading, but only the master process will do
                 saving.
@@ -69,8 +68,11 @@ class Checkpointer(object):
 
     def load(self, f=None):
         """
-        Load from the specified checkpoint. If one is not provided,
-        load the latest available checkpoint.
+        Load from the specified checkpoint. If checkpoint is not provided,
+        try to load the latest available checkpoint.
+
+        Args:
+            f (str): path or url to the checkpoint
 
         Returns:
             dict: extra data loaded from the checkpoint, other than model, optimizer and scheduler.
@@ -84,6 +86,18 @@ class Checkpointer(object):
             return {}
         self.logger.info("Loading checkpoint from {}".format(f))
         if not os.path.isfile(f):
+            # In case the file does not exist, PathManager is responsible to
+            # looking for the file.
+            # We let the main process look for the file first, since the file
+            # may need to be downloaded/cached.
+
+            # If you run distributed training on non-shared filesystem,
+            # this logic may not work for you. But what else can we do?
+            # In that case it might be the best to just manually put the file
+            # somewhere to use.
+            if comm.is_main_process():
+                f = PathManager.get_file_name(f)
+            comm.synchronize()
             f = PathManager.get_file_name(f)
             assert os.path.isfile(f), "Checkpoint {} not found!".format(f)
         if os.path.isfile(f) and self.cache_on_load:
@@ -104,6 +118,10 @@ class Checkpointer(object):
         return checkpoint
 
     def has_checkpoint(self):
+        """
+        Returns:
+            bool: whether a checkpoint exists in the target directory
+        """
         save_file = os.path.join(self.save_dir, "last_checkpoint")
         return os.path.exists(save_file)
 
@@ -139,7 +157,11 @@ class Checkpointer(object):
     def _load_model(self, checkpoint):
         model_state_dict = checkpoint.pop("model")
         self._convert_ndarray_to_tensor(model_state_dict)
-        strip_prefix_if_present(model_state_dict, "module.")
+
+        # if the state_dict comes from a model that was wrapped in a
+        # DataParallel or DistributedDataParallel during serialization,
+        # remove the "module" prefix before performing the matching
+        _strip_prefix_if_present(model_state_dict, "module.")
         incompatible = self.model.load_state_dict(model_state_dict, strict=False)
         if incompatible.missing_keys:
             self.logger.warning(
@@ -212,3 +234,25 @@ class PeriodicCheckpointer(object):
         Use this method to manually save checkpoints outside the schedule.
         """
         return self.checkpointer.save(name, **kwargs)
+
+
+def _strip_prefix_if_present(state_dict, prefix):
+    def strip_ordered_dict(dic):
+        keys = sorted(dic.keys())
+        if not all(key.startswith(prefix) for key in keys):
+            return
+
+        for key in list(dic.keys()):
+            value = dic.pop(key)
+            newkey = key[len(prefix) :]
+            dic[newkey] = value
+
+    strip_ordered_dict(state_dict)
+
+    # also strip the prefix in metadata, if any
+    try:
+        metadata = state_dict._metadata
+    except AttributeError:
+        pass
+    else:
+        strip_ordered_dict(metadata)

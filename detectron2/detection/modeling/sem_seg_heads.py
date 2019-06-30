@@ -1,11 +1,10 @@
 import numpy as np
+import borc.nn.weight_init as weight_init
 import torch.nn as nn
 from torch.nn import functional as F
 
 from detectron2.layers import Conv2d
 from detectron2.utils.registry import Registry
-
-import borc.nn.weight_init as weight_init
 
 SEM_SEG_HEADS_REGISTRY = Registry("SEM_SEG_HEADS")
 

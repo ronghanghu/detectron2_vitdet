@@ -3,7 +3,6 @@
 import datetime
 import logging
 import time
-
 from borc.common.timer import Timer
 
 from .train_loop import HookBase

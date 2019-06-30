@@ -1,12 +1,11 @@
 import math
 import torch
+from borc.nn.focal_loss import sigmoid_focal_loss_jit
 from torch import nn
 
 from detectron2.detection.modeling.backbone import build_backbone
 from detectron2.layers import cat, smooth_l1_loss
 from detectron2.structures import Boxes, ImageList, pairwise_iou
-
-from borc.nn.focal_loss import sigmoid_focal_loss_jit
 
 from ..anchor_generator import build_anchor_generator
 from ..box_regression import Box2BoxTransform

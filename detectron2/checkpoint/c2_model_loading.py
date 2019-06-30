@@ -1,16 +1,55 @@
 import copy
 import logging
 import numpy as np
-import pickle
 import re
+import torch
 
-from detectron2.utils.c2_model_loading import convert_basic_c2_names
-from detectron2.utils.checkpoint import Checkpointer
-from detectron2.utils.model_serialization import load_state_dict  # TODO rename
+
+def convert_basic_c2_names(original_keys):
+    """
+    Apply some basic name conversion to names in C2 weights.
+    It only deals with typical backbone models.
+
+    Args:
+        original_keys (list[str]):
+    Returns:
+        list[str]: The same number of strings matching those in original_keys.
+    """
+    layer_keys = copy.deepcopy(original_keys)
+    layer_keys = [
+        {"pred_b": "linear_b", "pred_w": "linear_w"}.get(k, k) for k in layer_keys
+    ]  # some hard-coded mappings
+
+    layer_keys = [k.replace("_", ".") for k in layer_keys]
+    layer_keys = [re.sub("\\.b$", ".bias", k) for k in layer_keys]
+    layer_keys = [re.sub("\\.w$", ".weight", k) for k in layer_keys]
+    # Uniform both bn and gn names to "norm"
+    layer_keys = [re.sub("bn\\.s$", "norm.weight", k) for k in layer_keys]
+    layer_keys = [re.sub("bn\\.bias$", "norm.bias", k) for k in layer_keys]
+    layer_keys = [re.sub("gn\\.s$", "norm.weight", k) for k in layer_keys]
+    layer_keys = [re.sub("gn\\.bias$", "norm.bias", k) for k in layer_keys]
+
+    # stem
+    layer_keys = [re.sub("^res\\.conv1\\.norm\\.", "conv1.norm.", k) for k in layer_keys]
+    # to avoid mis-matching with "conv1" in other components (e.g. detection head)
+    layer_keys = [re.sub("^conv1\\.", "stem.conv1.", k) for k in layer_keys]
+
+    # layer1-4 is used by torchvision, however we follow the C2 naming strategy (res2-5)
+    # layer_keys = [re.sub("^res2.", "layer1.", k) for k in layer_keys]
+    # layer_keys = [re.sub("^res3.", "layer2.", k) for k in layer_keys]
+    # layer_keys = [re.sub("^res4.", "layer3.", k) for k in layer_keys]
+    # layer_keys = [re.sub("^res5.", "layer4.", k) for k in layer_keys]
+
+    # blocks
+    layer_keys = [k.replace(".branch1.", ".shortcut.") for k in layer_keys]
+    layer_keys = [k.replace(".branch2a.", ".conv1.") for k in layer_keys]
+    layer_keys = [k.replace(".branch2b.", ".conv2.") for k in layer_keys]
+    layer_keys = [k.replace(".branch2c.", ".conv3.") for k in layer_keys]
+    return layer_keys
 
 
 # TODO make it support RetinaNet, etc
-def _convert_c2_detectron_names(weights):
+def convert_c2_detectron_names(weights):
     """
     Map Caffe2 Detectron weight names to Detectron2 names.
 
@@ -149,135 +188,97 @@ def _convert_c2_detectron_names(weights):
     return new_weights
 
 
-def _convert_background_class(model):
+# Note the current matching is not symmetric.
+# it assumes model_state_dict will have longer names.
+def align_and_update_state_dicts(model_state_dict, loaded_state_dict):
     """
-    Automatically convert the model for breakage in D14880072.
+    Match names between the two state-dict, and update the values of model_state_dict in-place to
+    the matched tensor in loaded_state_dict.
+
+    Strategy: suppose that the models that we will create will have prefixes appended
+    to each of its keys, for example due to an extra level of nesting that the original
+    pre-trained weights from ImageNet won't contain. For example, model.state_dict()
+    might return backbone[0].body.res2.conv1.weight, while the pre-trained model contains
+    res2.conv1.weight. We thus want to match both parameters together.
+    For that, we look for each model weight, look among all loaded keys if there is one
+    that is a suffix of the current weight name, and use it if that's the case.
+    If multiple matches exist, take the one with longest size
+    of the corresponding name. For example, for the same model as before, the pretrained
+    weight file can contain both res2.conv1.weight, as well as conv1.weight. In this case,
+    we want to match backbone[0].body.conv1.weight to conv1.weight, and
+    backbone[0].body.res2.conv1.weight to res2.conv1.weight.
     """
-    # TODO This is temporary. Remove this function after a while
+    model_keys = sorted(list(model_state_dict.keys()))
+    loaded_keys = sorted(list(loaded_state_dict.keys()))
 
-    keys = model.keys()
-    bbox_pred = [k for k in keys if "box_predictor.bbox_pred.weight" in k]
-    cls_score = [k for k in keys if "box_predictor.cls_score.weight" in k]
+    def match(a, b):
+        # Matched loaded_key should be a complete (starts with '.') suffix.
+        # For example, roi_heads.mesh_head.whatever_conv1 does not match conv1,
+        # but matches whatever_conv1 or mesh_head.whatever_conv1.
+        return a == b or a.endswith("." + b)
 
-    if len(bbox_pred) == 0:
-        return model
+    # get a matrix of string matches, where each (i, j) entry correspond to the size of the
+    # loaded_key string, if it matches
+    match_matrix = [len(j) if match(i, j) else 0 for i in model_keys for j in loaded_keys]
+    match_matrix = torch.as_tensor(match_matrix).view(len(model_keys), len(loaded_keys))
+    # use the matched one with longest size in case of multiple matches
+    max_match_size, idxs = match_matrix.max(1)
+    # remove indices that correspond to no-match
+    idxs[max_match_size == 0] = -1
 
-    # assume you only have one mask r-cnn ..
-    assert len(bbox_pred) == len(cls_score) and len(bbox_pred) == 1
-    bbox_pred, cls_score = bbox_pred[0], cls_score[0]
-
-    num_class_bbox = model[bbox_pred].shape[0] / 4
-    num_class_cls = model[cls_score].shape[0]
-
-    if num_class_bbox == num_class_cls:
-        need_conversion = True  # this model is trained before D14880072.
-    else:
-        assert num_class_cls == num_class_bbox + 1
-        need_conversion = False
-
-    if not need_conversion:
-        return model
-
+    # used for logging
+    max_size = max(len(key) for key in model_keys) if model_keys else 1
+    max_size_loaded = max(len(key) for key in loaded_keys) if loaded_keys else 1
+    log_str_template = "{: <{}} loaded from {: <{}} of shape {}"
     logger = logging.getLogger(__name__)
-    logger.warning(
-        "Your weights are in an old format! Please see D14880072 and convert your weights!"
-    )
-    logger.warning("Now attempting to automatically convert the weights for you ...")
-
-    for k in keys:
-        if "roi_heads.box_predictor.bbox_pred." in k:
-            # remove bbox regression weights/bias for bg class
-            old_weight = model[k]
-            new_weight = old_weight[4:]
-            logger.warning(
-                "Change {} from shape {} to {}.".format(
-                    k, tuple(old_weight.shape), tuple(new_weight.shape)
-                )
-            )
-        elif "roi_heads.mask_head.predictor." in k:
-            # remove mask prediction weights for bg class
-            old_weight = model[k]
-            new_weight = old_weight[1:]
-            logger.warning(
-                "Change {} from shape {} to {}.".format(
-                    k, tuple(old_weight.shape), tuple(new_weight.shape)
-                )
-            )
-        elif "roi_heads.box_predictor.cls_score." in k:
-            # move classification weights for bg class from the first index to the last index
-            old_weight = model[k]
-            new_weight = np.concatenate((old_weight[1:], old_weight[:1]))
-            logger.warning(
-                "Change BG in {} from index 0 to index {}.".format(k, new_weight.shape[0] - 1)
-            )
-        else:
+    # matched_pairs (matched loaded key --> matched model key)
+    matched_keys = {}
+    for idx_new, idx_old in enumerate(idxs.tolist()):
+        if idx_old == -1:
             continue
-        model[k] = new_weight
-    return model
+        key = model_keys[idx_new]
+        key_old = loaded_keys[idx_old]
+        loaded_value = loaded_state_dict[key_old]
+        shape_in_model = model_state_dict[key].shape
 
+        if shape_in_model != loaded_value.shape:
+            logger.warning(
+                "Shape of {} in checkpoint is {}, while shape of {} in model is {}.".format(
+                    key_old, loaded_value.shape, key, shape_in_model
+                )
+            )
+            logger.warning(
+                "{} will not be loaded. Please double check and see if this is desired.".format(
+                    key_old
+                )
+            )
+            continue
 
-def _convert_rpn_name(model):
-    """
-    Automatically convert the model for breakage in D15084700.
-    """
-    # TODO This is temporary. Remove this function after a while
+        model_state_dict[key] = loaded_value
+        if key_old in matched_keys:
+            logger.error(
+                "Ambiguity found for {} in checkpoint!"
+                "It matches at least two keys in the model ({} and {}).".format(
+                    key_old, key, matched_keys[key_old]
+                )
+            )
+            raise ValueError("Cannot match one checkpoint key to multiple keys in the model.")
 
-    keys = model.keys()
-    rpn_keys = [k for k in keys if "rpn.head." in k or "rpn.anchor_generator" in k]
-
-    if len(rpn_keys) == 0:
-        return model
-
-    logger = logging.getLogger(__name__)
-    logger.warning(
-        "Your rpn weight names are in an old format! Please see D15084700 "
-        "and convert your weight names!"
-    )
-    logger.warning("Now attempting to automatically convert the weight names for you ...")
-
-    for old_key in rpn_keys:
-        new_key = old_key.replace("rpn.head.", "proposal_generator.rpn_head.").replace(
-            "rpn.anchor_", "proposal_generator.anchor_"
+        matched_keys[key_old] = key
+        logger.info(
+            log_str_template.format(key, max_size, key_old, max_size_loaded, tuple(shape_in_model))
         )
-        logger.warning("Change origin rpn weight name {} to {}.".format(old_key, new_key))
-        model[new_key] = model.pop(old_key)
+    matched_model_keys = matched_keys.values()
+    matched_loaded_keys = matched_keys.keys()
+    # print warnings about unmatched keys on both side
+    unmatched_model_keys = [k for k in model_keys if k not in matched_model_keys]
+    if len(unmatched_model_keys):
+        logger.warning(
+            "Keys in the model but not loaded from checkpoint: " + ", ".join(unmatched_model_keys)
+        )
 
-    return model
-
-
-class DetectionCheckpointer(Checkpointer):
-    """
-    A checkpointer that is able to handle models in detectron & detectron2 model zoo.
-    """
-
-    def _load_file(self, f):
-        if f.endswith(".pkl"):
-            data = pickle.load(open(f, "rb"), encoding="latin1")
-            if "model" in data and "__author__" in data:
-                # file is in Detectron2 model zoo format
-                self.logger.info("Reading a file from '{}'".format(data["__author__"]))
-                data["model"] = _convert_rpn_name(data["model"])
-                return data
-            else:
-                # assume file is from Caffe2
-                if "blobs" in data:
-                    # Detection models have "blobs", but ImageNet models don't
-                    data = data["blobs"]
-                data = {k: v for k, v in data.items() if not k.endswith("_momentum")}
-                model = _convert_c2_detectron_names(data)
-                return {"model": model, "__author__": "Caffe2"}
-
-        loaded = super()._load_file(f)  # load native pth checkpoint
-        if "model" not in loaded:
-            loaded = {"model": loaded}
-        loaded["model"] = _convert_background_class(loaded["model"])
-        loaded["model"] = _convert_rpn_name(loaded["model"])
-        return loaded
-
-    def _load_model(self, checkpoint):
-        if checkpoint.get("__author__", None) != "Caffe2":
-            # for non-caffe2 models, use standard ways to load it
-            super()._load_model(checkpoint)
-            return
-        self._convert_ndarray_to_tensor(checkpoint["model"])
-        load_state_dict(self.model, checkpoint.pop("model"))
+    unmatched_loaded_keys = [k for k in loaded_keys if k not in matched_loaded_keys]
+    if len(unmatched_loaded_keys):
+        logger.warning(
+            "Keys in the checkpoint but not found in the model: " + ", ".join(unmatched_loaded_keys)
+        )

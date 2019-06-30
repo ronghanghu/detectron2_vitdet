@@ -1,19 +1,12 @@
 import numpy as np
 from abc import ABCMeta, abstractmethod
+import borc.nn.weight_init as weight_init
 import torch
 import torch.nn.functional as F
 from torch import nn
 from torch.nn import GroupNorm
-import borc.nn.weight_init as weight_init
 
-from . import (
-    Backbone,
-    BatchNorm2d,
-    Conv2d,
-    DeformConv,
-    FrozenBatchNorm2d,
-    ModulatedDeformConv,
-)
+from . import Backbone, BatchNorm2d, Conv2d, DeformConv, FrozenBatchNorm2d, ModulatedDeformConv
 
 __all__ = [
     "ResNetBlockBase",
@@ -23,6 +16,7 @@ __all__ = [
     "ResNet",
     "make_stage",
 ]
+
 
 def _get_norm(norm, out_channels):
     """

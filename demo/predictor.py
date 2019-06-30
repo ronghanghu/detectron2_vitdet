@@ -1,7 +1,7 @@
 import torch
 
+from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.data.transforms import ImageTransformers, ResizeShortestEdge
-from detectron2.detection.checkpoint import DetectionCheckpointer
 
 # import the hard-coded metadata
 from detectron2.detection.data.builtin import COCO_CATEGORIES
