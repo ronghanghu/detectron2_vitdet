@@ -14,7 +14,8 @@ from pycocotools.cocoeval import COCOeval
 from detectron2.data import MetadataCatalog
 from detectron2.structures import Boxes, BoxMode, pairwise_iou
 from detectron2.utils.comm import all_gather, is_main_process, synchronize
-from detectron2.utils.inference import DatasetEvaluator
+
+from .evaluator import DatasetEvaluator
 
 
 class COCOEvaluator(DatasetEvaluator):

@@ -8,7 +8,8 @@ from PIL import Image
 
 from detectron2.data import MetadataCatalog
 from detectron2.utils import comm
-from detectron2.utils.inference import DatasetEvaluator
+
+from .evaluator import DatasetEvaluator
 
 
 class CityscapesEvaluator(DatasetEvaluator):

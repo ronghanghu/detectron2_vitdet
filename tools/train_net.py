@@ -37,24 +37,22 @@ from detectron2.detection import (
     build_optimizer,
     get_cfg,
     set_global_cfg,
-    verify_results,
-)
-from detectron2.detection.evaluation import (
-    CityscapesEvaluator,
-    COCOEvaluator,
-    COCOPanopticEvaluator,
-    SemSegEvaluator,
 )
 from detectron2.detection.modeling import DetectionTransformTTA, GeneralizedRCNNWithTTA
 from detectron2.engine import SimpleTrainer, hooks, launch
-from detectron2.utils.collect_env import collect_env_info
-from detectron2.utils.events import JSONWriter, TensorboardXWriter, get_event_storage
-from detectron2.utils.inference import (
+from detectron2.evaluation import (
+    CityscapesEvaluator,
+    COCOEvaluator,
+    COCOPanopticEvaluator,
     DatasetEvaluators,
+    SemSegEvaluator,
     inference_context,
     inference_on_dataset,
     print_csv_format,
+    verify_results,
 )
+from detectron2.utils.collect_env import collect_env_info
+from detectron2.utils.events import JSONWriter, TensorboardXWriter, get_event_storage
 from detectron2.utils.logger import setup_logger
 
 

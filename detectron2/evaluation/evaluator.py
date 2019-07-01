@@ -142,21 +142,3 @@ def inference_context(model):
     model.eval()
     yield
     model.train(training_mode)
-
-
-def print_csv_format(results):
-    """
-    Print results in a format that's easy to copypaste into a spreadsheet.
-
-    Args:
-        results: OrderedDict
-    """
-    assert isinstance(results, OrderedDict), results  # unordered results cannot be properly printed
-    logger = logging.getLogger(__name__)
-    for task in ["bbox", "segm", "keypoints", "box_proposals", "semantic_seg", "panoptic_seg"]:
-        if task not in results:
-            continue
-        res = results[task]
-        logger.info("copypaste: Task: {}".format(task))
-        logger.info("copypaste: " + ",".join([n for n in res.keys()]))
-        logger.info("copypaste: " + ",".join(["{0:.4f}".format(v) for v in res.values()]))

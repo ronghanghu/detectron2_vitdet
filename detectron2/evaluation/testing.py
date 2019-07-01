@@ -2,12 +2,28 @@ import logging
 import numpy as np
 import pprint
 import sys
+from collections import OrderedDict
+
+
+def print_csv_format(results):
+    """
+    Print results in a format that's easy to copypaste into a spreadsheet.
+
+    Args:
+        results (OrderedDict[dict]): task_name -> {metric -> score}
+    """
+    assert isinstance(results, OrderedDict), results  # unordered results cannot be properly printed
+    logger = logging.getLogger(__name__)
+    for task, res in results.items():
+        logger.info("copypaste: Task: {}".format(task))
+        logger.info("copypaste: " + ",".join([n for n in res.keys()]))
+        logger.info("copypaste: " + ",".join(["{0:.4f}".format(v) for v in res.values()]))
 
 
 def verify_results(cfg, results):
     """
     Args:
-        results(dict of dict)
+        results (OrderedDict[dict]): task_name -> {metric -> score}
 
     Returns:
         bool: whether the verification succeeds or not
