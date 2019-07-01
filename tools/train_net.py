@@ -66,14 +66,15 @@ class MetricPrinter:
     def write(self):
         storage = get_event_storage()
         iteration = storage.iteration
-        eta_seconds = storage.history("time").median(1000) * (self._max_iter - iteration)
-        eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
 
         data_time, time = None, None
+        eta_string = "N/A"
         try:
             data_time = storage.history("data_time").median(20)
             time = storage.history("time").global_avg()
-        except KeyError:  # they may not exist in the first few iterations
+            eta_seconds = storage.history("time").median(1000) * (self._max_iter - iteration)
+            eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
+        except KeyError: # they may not exist in the first few iterations (due to warmup)
             pass
 
         # NOTE: max mem is parsed by grep
