@@ -25,4 +25,4 @@ SOLVER:
   STEPS: (5500, 5800)
   MAX_ITER: 6000
 TEST:
-  EXPECTED_RESULTS: [["bbox", "AP", 56.1, 0.7], ["keypoints", "AP", 74.5, 0.7]]
+  EXPECTED_RESULTS: [["bbox", "AP", 54.2, 0.7], ["keypoints", "AP", 72.9, 0.7]]

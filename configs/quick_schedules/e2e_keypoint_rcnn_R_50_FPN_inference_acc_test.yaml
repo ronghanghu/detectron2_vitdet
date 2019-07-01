@@ -1,8 +1,8 @@
 _BASE_: "../e2e_keypoint_rcnn_R_50_FPN_1x.yaml"
 MODEL:
-  WEIGHT: "detectron2://e2e_keypoint_rcnn_R_50_FPN_1x/111802035/model_final_71819d611aa7d5b23bf693fc453ca7f2.pkl"
+  WEIGHT: "detectron2://e2e_keypoint_rcnn_R_50_FPN_1x/123575517/model_final_ffbe15387579c09891d9ba15e7b3786f.pkl"
 DATASETS:
   TRAIN: ()
   TEST: ("keypoints_coco_2014_minival_100",)
 TEST:
-  EXPECTED_RESULTS: [["bbox", "AP", 51.17, 0.02], ["keypoints", "AP", 64.90, 0.02]]
+  EXPECTED_RESULTS: [["bbox", "AP", 52.82, 0.02], ["keypoints", "AP", 65.63, 0.02]]
