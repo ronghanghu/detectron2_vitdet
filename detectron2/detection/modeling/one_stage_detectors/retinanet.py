@@ -1,16 +1,18 @@
 import math
+from collections import defaultdict
 import torch
 from borc.nn.focal_loss import sigmoid_focal_loss_jit
 from torch import nn
 
 from detectron2.detection.modeling.backbone import build_backbone
-from detectron2.layers import cat, smooth_l1_loss
-from detectron2.structures import Boxes, ImageList, pairwise_iou
+from detectron2.layers import cat, nms, smooth_l1_loss
+from detectron2.structures import Boxes, ImageList, Instances, pairwise_iou
 
 from ..anchor_generator import build_anchor_generator
 from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher
 from ..model_builder import META_ARCH_REGISTRY
+from ..postprocessing import detector_postprocess
 
 __all__ = ["RetinaNet"]
 
@@ -80,6 +82,12 @@ class RetinaNet(nn.Module):
         self.num_classes = cfg.MODEL.RETINANET.NUM_CLASSES
         self.in_features = cfg.MODEL.RETINANET.IN_FEATURES
 
+        # Inference parameters
+        self.score_threshold = cfg.MODEL.RETINANET.INFERENCE_SCORE_THRESHOLD
+        self.topk_candidates = cfg.MODEL.RETINANET.INFERENCE_TOPK_CANDIDATES
+        self.nms_threshold = cfg.MODEL.RETINANET.INFERENCE_NMS_THRESHOLD
+        self.max_detections_per_image = cfg.TEST.DETECTIONS_PER_IMG
+
         pixel_mean = torch.Tensor(cfg.MODEL.PIXEL_MEAN).to(self.device).view(3, 1, 1)
         pixel_std = torch.Tensor(cfg.MODEL.PIXEL_STD).to(self.device).view(3, 1, 1)
         self.normalizer = lambda x: (x - pixel_mean) / pixel_std
@@ -115,8 +123,7 @@ class RetinaNet(nn.Module):
             gt_classes, gt_anchors_reg_deltas = self.get_ground_truth(anchors, targets)
             return self.losses(gt_classes, gt_anchors_reg_deltas, box_cls, box_regression)
 
-        # TODO: Remove when inference is done.
-        return None
+        return self.inference(box_cls, box_regression, anchors, images, batched_inputs)
 
     def losses(self, gt_classes, gt_anchors_deltas, pred_class_logits, pred_anchor_deltas):
         """
@@ -162,13 +169,13 @@ class RetinaNet(nn.Module):
 
         return {"loss_cls": loss_cls, "loss_box_reg": loss_box_reg}
 
-    def get_ground_truth(self, anchors, targets=None):
+    def get_ground_truth(self, anchors, targets):
         """
         Args:
             anchors (list[list[Boxes]]): a list of #image elements. Each is a
                 list of #feature level Boxes. The Boxes contains anchors of
                 this image on the specific feature level.
-            targets (list[Instances], optional): length `N` list of `Instances`s. The i-th
+            targets (list[Instances]): length `N` list of `Instances`s. The i-th
                 `Instances` contains the ground-truth per-instance annotations
                 for the i-th input image.  Specify `targets` during training only.
 
@@ -214,6 +221,140 @@ class RetinaNet(nn.Module):
             gt_anchors_deltas.append(gt_anchors_reg_deltas_i)
 
         return gt_classes, gt_anchors_deltas
+
+    def inference(
+        self, box_cls, box_regression, anchors, images, batched_inputs, do_postprocess=True
+    ):
+        """
+        Arguments:
+            box_cls (list[Tensor]): list of #feature levels. Each entry contains
+                a tensor of size N, A * C, H, W. Here, N is the number of images,
+                A is the number of anchors at every pixel per level (= # of
+                aspect ratios * # of anchor sizes), C is the number of classes,
+                H is the image height and W is the image width.
+            box_regression (list[Tensor]): Same as `box_cls` parameter above.
+                C is 4 since it contains dx, dy, dw, dh values.
+            anchors (list[list[Boxes]]): a list of #images elements. Each is a
+                list of #feature level Boxes. The Boxes contain anchors of this
+                image on the specific feature level.
+            images (Tensor): image in (C, H, W) format.
+            batched_inputs (list[dict]): same as in :meth:`forward`
+            do_postprocess (bool): whether to apply post-processing on the outputs.
+
+        Returns:
+            results (List[Instances]): a list of #images elements.
+        """
+        predicted_boxes = []
+        for img_idx, anchors_per_image in enumerate(anchors):
+            image_size = images.image_sizes[img_idx]
+            box_cls_per_image = [box_cls_per_layer[img_idx] for box_cls_per_layer in box_cls]
+            box_reg_per_image = [box_reg_per_layer[img_idx] for box_reg_per_layer in box_regression]
+            predicted_boxes_per_image = self.inference_single_image(
+                box_cls_per_image, box_reg_per_image, anchors_per_image, tuple(image_size)
+            )
+
+            # post-process the output boxes per image
+            if do_postprocess:
+                height = batched_inputs[img_idx].get("height", image_size[0])
+                width = batched_inputs[img_idx].get("width", image_size[1])
+                postprocessed_predicted_boxes_per_image = detector_postprocess(
+                    predicted_boxes_per_image, height, width
+                )
+                predicted_boxes.append({"instances": postprocessed_predicted_boxes_per_image})
+            else:
+                predicted_boxes.append({"instances": predicted_boxes_per_image})
+        return predicted_boxes
+
+    def inference_single_image(self, box_cls, box_regression, anchors, image_size):
+        """
+        Single-image inference. Return bounding-box detection results by thresholding
+        on scores and applying non-maximum suppression (NMS).
+
+        Arguments:
+            box_cls (list[Tensor]): list of #feature levels. Each entry contains
+                tensor of size A * C, H, W.
+            box_regression (list[Tensor]): Same as 'box_cls' parameter. C is 4.
+            anchors (list[Boxes]): list of #feature levels. Each entry contains
+                a Boxes object, which contains all the anchors for that
+                image in that feature level.
+            image_size (tuple(H, W)): a tuple of the image height and width.
+
+        Returns:
+            Same as `inference`, but for only one image.
+        """
+        boxes_all = defaultdict(list)  # will contain (tensor([x,y,w,h]), tensor([score]))
+
+        # Iterate over every feature level
+        for box_cls_i, box_reg_i, anchors_i in zip(box_cls, box_regression, anchors):
+            _, H, W = box_cls_i.shape
+            A = box_reg_i.size(0) // 4
+            C = box_cls_i.size(0) // A
+
+            box_cls_i = _permute_and_flatten(box_cls_i, 1, A, C, H, W).flatten()
+            box_reg_i = _permute_and_flatten(box_reg_i, 1, A, 4, H, W).reshape(-1, 4)
+
+            # predict scores
+            predicted_prob = box_cls_i.sigmoid()
+            zeros = torch.zeros(predicted_prob.shape).cuda()
+            predicted_prob = torch.where(
+                predicted_prob > self.score_threshold, predicted_prob, zeros
+            )
+
+            # Keep top k top scoring indices only.
+            num_anchors = A * H * W
+            k = min(self.topk_candidates, num_anchors)
+            predicted_prob, topk_idxs = predicted_prob.topk(k, sorted=True, dim=0)
+
+            anchor_idxs = topk_idxs // self.num_classes
+            classes_idxs = topk_idxs % self.num_classes
+
+            box_reg_i = box_reg_i[anchor_idxs]
+            anchors_i = anchors_i[anchor_idxs]
+            # predict boxes
+            predicted_boxes = self.box2box_transform.apply_deltas(box_reg_i, anchors_i.tensor)
+
+            # iterate over topk anchor (with unique class) that passed thresholding
+            for anchor_class, box, score in zip(classes_idxs, predicted_boxes, predicted_prob):
+                device = box.device if isinstance(score, torch.Tensor) else torch.device("cpu")
+                score = torch.tensor([score], device=device)
+                anchor_class = int(anchor_class)
+                if anchor_class in boxes_all.keys():
+                    boxes_all[anchor_class].append((box, score))
+                else:
+                    boxes_all[anchor_class] = [(box, score)]
+
+        # Combine predictions across all levels and retain the top scoring by class
+        results_per_anchor = []
+        for anchor_classes, boxes_and_scores in boxes_all.items():
+            # All Instance values need to be a Tensor or a `Box` object.
+            boxes, scores = zip(*boxes_and_scores)
+            boxes = torch.cat(boxes, 0).reshape(-1, 4)
+            scores = torch.cat(scores)
+            anchor_classes = torch.tensor(
+                [anchor_classes for _ in range(scores.shape[0])], device=scores.device
+            )
+
+            keep_idxs = nms(boxes, scores, self.nms_threshold)
+
+            result = Instances(image_size)
+            result.pred_boxes = Boxes(boxes[keep_idxs])
+            result.scores = scores[keep_idxs]
+            result.pred_classes = anchor_classes[keep_idxs]
+            results_per_anchor.append(result)
+
+        results = Instances.cat(results_per_anchor)
+
+        # Limit to max_detections_per_image detections **over all object classes**
+        num_detections = len(results)
+        if num_detections > self.max_detections_per_image > 0:
+            cls_scores = results.scores
+            image_thresh, _ = torch.kthvalue(
+                cls_scores.cpu(), num_detections - self.max_detections_per_image + 1
+            )
+            keep = cls_scores >= image_thresh.item()
+            keep = torch.nonzero(keep).squeeze(1)
+            results = results[keep]
+        return results
 
     def preprocess_image(self, batched_inputs):
         """

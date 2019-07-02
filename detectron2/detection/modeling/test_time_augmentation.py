@@ -191,7 +191,7 @@ class GeneralizedRCNNWithTTA:
             (height, width),
             1e-8,
             self.cfg.MODEL.ROI_HEADS.NMS,
-            self.cfg.MODEL.ROI_HEADS.DETECTIONS_PER_IMG,
+            self.cfg.TEST.DETECTIONS_PER_IMG,
         )
 
         if not self.cfg.MODEL.MASK_ON:

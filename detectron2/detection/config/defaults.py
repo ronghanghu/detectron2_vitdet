@@ -231,9 +231,6 @@ _C.MODEL.ROI_HEADS.SCORE_THRESH = 0.05
 # Overlap threshold used for non-maximum suppression (suppress boxes with
 # IoU >= this threshold)
 _C.MODEL.ROI_HEADS.NMS = 0.5
-# Maximum number of detections to return per image (100 is based on the limit
-# established for the COCO dataset)
-_C.MODEL.ROI_HEADS.DETECTIONS_PER_IMG = 100
 
 
 # ---------------------------------------------------------------------------- #
@@ -363,7 +360,7 @@ _C.MODEL.PANOPTIC_FPN.COMBINE_INSTANCES_CONFIDENCE_THRESHOLD = 0.5
 # ---------------------------------------------------------------------------- #
 _C.MODEL.RETINANET = CN()
 
-# This is the number of foreground classes and background.
+# This is the number of foreground classes.
 _C.MODEL.RETINANET.NUM_CLASSES = 80
 
 # Anchor aspect ratios to use
@@ -396,7 +393,9 @@ _C.MODEL.RETINANET.PRIOR_PROB = 0.01
 
 # Inference cls score threshold, only anchors with score > INFERENCE_TH are
 # considered for inference (to improve speed)
-_C.MODEL.RETINANET.INFERENCE_TH = 0.05
+_C.MODEL.RETINANET.INFERENCE_SCORE_THRESHOLD = 0.05
+_C.MODEL.RETINANET.INFERENCE_TOPK_CANDIDATES = 1000
+_C.MODEL.RETINANET.INFERENCE_NMS_THRESHOLD = 0.5
 
 # Weights on (dx, dy, dw, dh) for normalizing Retinanet anchor regression targets
 _C.MODEL.RETINANET.BBOX_REG_WEIGHTS = (1.0, 1.0, 1.0, 1.0)
@@ -513,6 +512,9 @@ _C.TEST.KEYPOINT_OKS_SIGMAS = [
     0.089,
     0.089,
 ]
+# Maximum number of detections to return per image during inference (100 is
+# based on the limit established for the COCO dataset).
+_C.TEST.DETECTIONS_PER_IMG = 100
 
 _C.TEST.AUG_ON = False
 _C.TEST.AUG_MIN_SIZES = (400, 500, 600, 700, 800, 900, 1000, 1100, 1200)
