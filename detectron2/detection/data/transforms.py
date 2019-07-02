@@ -11,6 +11,12 @@ from detectron2.structures import Boxes, BoxMode, Instances, Keypoints, PolygonM
 __all__ = ["DetectionTransform"]
 
 
+class SizeMismatchError(ValueError):
+    """
+    When loaded image has difference width/height compared with annoation.
+    """
+
+
 def annotations_to_instances(annos, image_size):
     """
     Create an :class:`Instances` object used by the models, from annotations in the dataset dict.
@@ -107,7 +113,15 @@ class DetectionTransform:
                 3. Prepare the annotations to :class:`Instances`
         """
         dataset_dict = copy.deepcopy(dataset_dict)  # it will be modified by code below
-        image = self._read_image(dataset_dict["file_name"], format=self.img_format)
+        image = self._read_image(dataset_dict, format=self.img_format)
+        if "width" in dataset_dict or "height" in dataset_dict:
+            image_wh = (image.shape[1], image.shape[0])
+            expected_wh = (dataset_dict["width"], dataset_dict["height"])
+            if not image_wh == expected_wh:
+                raise SizeMismatchError(
+                    "mismatch (W,H), got {}, expect {}"
+                    .format(image_wh, expected_wh)
+                )
         image, tfm_params = self.tfms.transform_image_get_params(image)
 
         # PIL squeezes out the channel dimension for "L", so make it HWC
@@ -166,19 +180,18 @@ class DetectionTransform:
             dataset_dict["sem_seg_gt"] = sem_seg_gt
         return dataset_dict
 
-    @staticmethod
-    def _read_image(file_name, format=None):
+    def _read_image(self, dataset_dict, format=None):
         """
         Read an image into the given format.
 
         Args:
-            file_name (str):
-            format (str): one of the supported image modes in PIL, or "BGR"
+            dataset_dict (dict): Metadata of one image, in Detectron2 Dataset format.
+            format (dict): one of the supported image modes in PIL, or "BGR"
 
         Returns:
             image (np.ndarray)
         """
-        image = Image.open(file_name)
+        image = Image.open(dataset_dict["file_name"])
 
         if format is not None:
             # PIL only supports RGB, so convert to RGB and flip channels over below
