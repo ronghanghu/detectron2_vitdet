@@ -166,7 +166,9 @@ def do_test(cfg, model, is_final=True):
         for dataset_name, proposal_file in zip(cfg.DATASETS.TEST, proposal_files_test):
             if cfg.OUTPUT_DIR:
                 output_folder = os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
-                os.makedirs(output_folder, exist_ok=True)
+                if comm.is_main_process():
+                    os.makedirs(output_folder, exist_ok=True)
+                comm.synchronize()
             else:
                 output_folder = None
 
@@ -182,7 +184,9 @@ def do_test(cfg, model, is_final=True):
             if is_final and cfg.TEST.AUG_ON:
                 # In the end of training, run an evaluation with TTA
                 output_folder = os.path.join(cfg.OUTPUT_DIR, "inference_TTA", dataset_name)
-                os.makedirs(output_folder, exist_ok=True)
+                if comm.is_main_process():
+                    os.makedirs(output_folder, exist_ok=True)
+                comm.synchronize()
                 assert proposal_file is None, "TTA with pre-computed proposal is not supported now."
 
                 newcfg = cfg.clone()
@@ -290,8 +294,9 @@ def setup(args):
 
     colorful_logging = not args.no_color
     output_dir = cfg.OUTPUT_DIR
-    if output_dir:
+    if comm.is_main_process() and output_dir:
         os.makedirs(output_dir, exist_ok=True)
+    comm.synchronize()
 
     logger = setup_logger(output_dir, color=colorful_logging, distributed_rank=comm.get_rank())
     logger.info(
@@ -306,7 +311,7 @@ def setup(args):
         "Loaded config file {}:\n{}".format(args.config_file, open(args.config_file, "r").read())
     )
     logger.info("Running with full config:\n{}".format(cfg))
-    if comm.get_rank() == 0 and output_dir:
+    if comm.is_main_process() and output_dir:
         path = os.path.join(output_dir, "config.yaml")
         with open(path, "w") as f:
             f.write(cfg.dump())
