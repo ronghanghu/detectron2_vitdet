@@ -27,6 +27,7 @@ from torch.nn.parallel import DistributedDataParallel
 
 import detectron2.utils.comm as comm
 from detectron2.checkpoint import DetectionCheckpointer, PeriodicCheckpointer
+from detectron2.config import get_cfg, set_global_cfg
 from detectron2.data import MetadataCatalog
 from detectron2.detection import (
     DetectionTransform,
@@ -35,8 +36,6 @@ from detectron2.detection import (
     build_lr_scheduler,
     build_model,
     build_optimizer,
-    get_cfg,
-    set_global_cfg,
 )
 from detectron2.detection.modeling import DetectionTransformTTA, GeneralizedRCNNWithTTA
 from detectron2.engine import SimpleTrainer, hooks, launch
@@ -72,7 +71,7 @@ class MetricPrinter:
             time = storage.history("time").global_avg()
             eta_seconds = storage.history("time").median(1000) * (self._max_iter - iteration)
             eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
-        except KeyError: # they may not exist in the first few iterations (due to warmup)
+        except KeyError:  # they may not exist in the first few iterations (due to warmup)
             pass
 
         # NOTE: max mem is parsed by grep
@@ -104,7 +103,7 @@ def get_evaluator(cfg, dataset_name, output_folder):
     Create evaluator(s) for a given dataset.
     This uses the special metadata "evaluator_type" associated with each builtin dataset.
     For your own dataset, you can simply create an evaluator manually in your
-    script and do not have to worry about the logic here.
+    script and do not have to worry about the hacky if-else logic here.
     """
     evaluator_list = []
     evaluator_type = MetadataCatalog.get(dataset_name).evaluator_type

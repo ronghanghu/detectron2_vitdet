@@ -1,4 +1,4 @@
-from detectron2.utils.config import CfgNode as CN
+from detectron2.config import CfgNode as CN
 
 # -----------------------------------------------------------------------------
 # Convention about Training / Test specific parameters

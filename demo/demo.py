@@ -5,7 +5,7 @@ import os
 import time
 import cv2
 
-from detectron2.detection import get_cfg, set_global_cfg
+from detectron2.config import get_cfg, set_global_cfg
 
 from predictor import COCODemo
 
