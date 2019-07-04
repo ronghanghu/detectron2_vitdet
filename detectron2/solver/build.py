@@ -1,9 +1,12 @@
 import torch
 
-from detectron2.solver import WarmupMultiStepLR
+from .lr_scheduler import WarmupMultiStepLR
 
 
 def build_optimizer(cfg, model):
+    """
+    Build an optimizer from config.
+    """
     params = []
     for key, value in model.named_parameters():
         if not value.requires_grad:
@@ -26,6 +29,9 @@ def build_optimizer(cfg, model):
 
 
 def build_lr_scheduler(cfg, optimizer):
+    """
+    Build a LR scheduler from config.
+    """
     return WarmupMultiStepLR(
         optimizer,
         cfg.SOLVER.STEPS,

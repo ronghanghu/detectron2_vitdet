@@ -33,11 +33,8 @@ from detectron2.detection import (
     DetectionTransform,
     build_detection_test_loader,
     build_detection_train_loader,
-    build_lr_scheduler,
-    build_model,
-    build_optimizer,
 )
-from detectron2.detection.modeling import DetectionTransformTTA, GeneralizedRCNNWithTTA
+from detectron2.detection.modeling import DetectionTransformTTA, GeneralizedRCNNWithTTA, build_model
 from detectron2.engine import SimpleTrainer, hooks, launch
 from detectron2.evaluation import (
     CityscapesEvaluator,
@@ -50,6 +47,7 @@ from detectron2.evaluation import (
     print_csv_format,
     verify_results,
 )
+from detectron2.solver import build_lr_scheduler, build_optimizer
 from detectron2.utils.collect_env import collect_env_info
 from detectron2.utils.events import JSONWriter, TensorboardXWriter, get_event_storage
 from detectron2.utils.logger import setup_logger
