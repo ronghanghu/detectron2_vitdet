@@ -20,9 +20,8 @@ class VisualizedImageOutput:
         ax.imshow(img)
         return fig, ax
 
-    def save_output_file(self, output_dir, img_name, output_suffix="pdf"):
-        plt.show()
-        plt.savefig(output_dir + img_name + "." + output_suffix)
+    def save_output_file(self, filepath):
+        self.fig.savefig(filepath)
         plt.close()
 
 
@@ -42,6 +41,7 @@ class Visualizer:
         self.metadata = metadata
         self.output = VisualizedImageOutput(self.img)
 
+    # TODO: Choose color based on heuristics.
     def overlay_instances(self, masks=None, boxes=None, labels=None):
         """
         Args:
@@ -78,9 +78,10 @@ class Visualizer:
 
         if masks is not None:
             for mask in masks:
+                mask_color = self._get_color()
                 for segment in mask:
                     segment = segment.numpy().reshape(-1, 2)
-                    self.draw_polygon(segment)
+                    self.draw_polygon(segment, mask_color)
 
         return self.output
 
@@ -140,7 +141,7 @@ class Visualizer:
         )
         return self.output
 
-    def draw_polygon(self, segment, color=None, alpha=0.5):
+    def draw_polygon(self, segment, color, alpha=0.5):
         """
         Args:
             segment: numpy array of shape Nx2, containing all the points in the polygon.
@@ -151,9 +152,6 @@ class Visualizer:
         Returns:
             output (VisualizedImageOutput): image object with polygon drawn.
         """
-        # If no color provided, pick a RGB color randomly.
-        if not color:
-            color = self._get_color()
         polygon = Polygon(
             segment, fill=True, facecolor=color, edgecolor=color, linewidth=3, alpha=alpha
         )
