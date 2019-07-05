@@ -8,12 +8,18 @@ import torch.utils.data
 from tabulate import tabulate
 from termcolor import colored
 
-from detectron2.data import DatasetCatalog, DatasetFromList, MapDataset, MetadataCatalog, samplers
 from detectron2.structures import BoxMode
 from detectron2.utils.comm import get_world_size
 from detectron2.utils.file_io import PathManager
 
-from .transforms import DetectionTransform
+from . import samplers
+from .catalog import DatasetCatalog, MetadataCatalog
+from .common import DatasetFromList, MapDataset
+from .detection_transforms import DetectionTransform
+
+"""
+This file contains the default logic to build a dataloader for training or testing.
+"""
 
 __all__ = ["build_detection_train_loader", "build_detection_test_loader"]
 

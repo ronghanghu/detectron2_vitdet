@@ -4,9 +4,15 @@ import numpy as np
 import torch
 from PIL import Image
 
-from detectron2.data import MetadataCatalog
-from detectron2.data.transforms import Flip, ImageTransformers, ResizeShortestEdge
 from detectron2.structures import Boxes, BoxMode, Instances, Keypoints, PolygonMasks
+
+from .catalog import MetadataCatalog
+from .transforms import Flip, ImageTransformers, ResizeShortestEdge
+
+"""
+This file contains the default transformation that's applied to "dataset dicts".
+It needs to be made easier to customize.
+"""
 
 __all__ = ["DetectionTransform"]
 

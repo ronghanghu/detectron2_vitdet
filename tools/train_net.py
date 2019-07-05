@@ -28,9 +28,9 @@ from torch.nn.parallel import DistributedDataParallel
 import detectron2.utils.comm as comm
 from detectron2.checkpoint import DetectionCheckpointer, PeriodicCheckpointer
 from detectron2.config import get_cfg, set_global_cfg
-from detectron2.data import MetadataCatalog
-from detectron2.detection import (
+from detectron2.data import (
     DetectionTransform,
+    MetadataCatalog,
     build_detection_test_loader,
     build_detection_train_loader,
 )
