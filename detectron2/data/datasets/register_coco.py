@@ -1,10 +1,12 @@
-"""Centralized catalog of paths."""
-
 import copy
 import logging
 
 from detectron2.data import DatasetCatalog, MetadataCatalog
-from detectron2.data.datasets import load_coco_json, load_sem_seg
+from .coco import load_coco_json, load_sem_seg
+
+"""
+This file contains functions to register a COCO-format dataset to the DatasetCatalog.
+"""
 
 __all__ = ["register_coco_instances", "register_coco_panoptic_separated"]
 

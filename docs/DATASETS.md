@@ -103,6 +103,9 @@ can read from "file_name" if "image" is not available.
 				`n` must be equal to the number of keypoint categories.
 				The Xs and Ys are either relative coordinates in [0, 1], or absolute coordinates,
 				depend on whether "bbox_mode" is relative.
+
+				Note that the coordinate annotations in COCO are integers in range [0, H-1 or W-1].
+				They are added by 0.5 to become absolute coordinates.
 + proposal_boxes (array): 2D numpy array with shape (K, 4). K precomputed proposal boxes for this image.
 + proposal_objectness_logits (array): numpy array with shape (K, ), which corresponds to the objectness
         logits of proposals in 'propopsal_boxes'.

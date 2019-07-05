@@ -7,7 +7,14 @@ from detectron2.structures import BoxMode
 
 from .. import MetadataCatalog
 
+"""
+This file contains functions to parse COCO-format annotations into dicts in "Detectron2 format".
+"""
+
+
 logger = logging.getLogger(__name__)
+
+__all__ = ["load_coco_json", "load_sem_seg"]
 
 
 def load_coco_json(json_file, image_root, dataset_name=None):
@@ -166,6 +173,7 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
     return dataset_dicts
 
 
+# TODO this function is not specific to COCO, except for the "image_id" logic.
 def load_sem_seg(gt_root, image_root, gt_ext="png", image_ext="jpg"):
     """
     Load semantic segmenation datasets. All files under "gt_root" with "gt_ext" extension are

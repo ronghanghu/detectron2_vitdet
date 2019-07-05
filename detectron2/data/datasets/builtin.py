@@ -2,11 +2,13 @@
 
 
 """
-We hard-code some metadata for common datasets. This will enable:
+This file registers pre-defined datasets at hard-coded paths, and their metadata.
+
+We hard-code metadata for common datasets. This will enable:
 1. Consistency check when loading the datasets
 2. Use models on these standard datasets directly without having the dataset annotations
 
-We also hard-code some paths to the dataset that's assumed to
+We hard-code some paths to the dataset that's assumed to
 exist in "./datasets/".
 
 Users SHOULD NOT use this file to create new dataset / metadata for new dataset.
@@ -15,7 +17,7 @@ To add new dataset, refer to the tutorial "docs/DATASETS.md".
 
 import os
 
-from .datasets import register_coco_instances
+from .register_coco import register_coco_instances
 
 # All coco categories, together with their nice-looking visualization colors
 # fmt: off
