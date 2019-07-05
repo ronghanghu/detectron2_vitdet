@@ -92,6 +92,15 @@ def select_proposals_with_visible_keypoints(proposals):
 
 
 class ROIHeads(torch.nn.Module):
+    """
+    ROIHeads perform all per-region computation in an R-CNN.
+
+    It contains logic of cropping the regions, extract per-region features,
+    and make per-region predictions.
+
+    It can have many variants, implemented as subclasses of this class.
+    """
+
     def __init__(self, cfg):
         super(ROIHeads, self).__init__()
 
@@ -255,17 +264,23 @@ class ROIHeads(torch.nn.Module):
 
 @ROI_HEADS_REGISTRY.register()
 class Res5ROIHeads(ROIHeads):
+    """
+    The ROIHeads in a typical "C4" R-CNN model, where
+    the box and mask head share the cropping and
+    the per-region feature computation by a Res5 block.
+    """
+
     def __init__(self, cfg):
         super(Res5ROIHeads, self).__init__(cfg)
 
         assert len(self.in_features) == 1
 
         # fmt: off
-        pooler_resolution          = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
-        box_pooler_type            = cfg.MODEL.ROI_BOX_HEAD.POOLER_TYPE
-        pooler_scales              = (1.0 / self.feature_strides[self.in_features[0]], )
-        sampling_ratio             = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
-        self.mask_on               = cfg.MODEL.MASK_ON
+        pooler_resolution = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
+        box_pooler_type   = cfg.MODEL.ROI_BOX_HEAD.POOLER_TYPE
+        pooler_scales     = (1.0 / self.feature_strides[self.in_features[0]], )
+        sampling_ratio    = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
+        self.mask_on      = cfg.MODEL.MASK_ON
         # fmt: on
         assert not cfg.MODEL.KEYPOINT_ON
 
@@ -371,31 +386,25 @@ class Res5ROIHeads(ROIHeads):
 @ROI_HEADS_REGISTRY.register()
 class StandardROIHeads(ROIHeads):
     """
-    Standard in a sense that no ROI transform sharing or feature sharing.
-    The rois go to separate branches (boxes and masks) directly.
-    This is used by FPN, C5 models, etc.
+    It's "standard" in a sense that there is no ROI transform sharing
+    or feature sharing between tasks.
+    The cropped rois go to separate branches (boxes and masks) directly.
+
+    This class is used by FPN, C5 models, etc, and can be subclassed to implement more models.
     """
 
     def __init__(self, cfg):
         super(StandardROIHeads, self).__init__(cfg)
+        self._init_box_head(cfg)
+        self._init_mask_head(cfg)
+        self._init_keypoint_head(cfg)
 
+    def _init_box_head(self, cfg):
         # fmt: off
-        pooler_resolution                        = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
-        pooler_scales                            = tuple(1.0 / self.feature_strides[k] for k in self.in_features)  # noqa
-        sampling_ratio                           = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
-        box_pooler_type                          = cfg.MODEL.ROI_BOX_HEAD.POOLER_TYPE
-        self.mask_on                             = cfg.MODEL.MASK_ON
-        mask_pooler_resolution                   = cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION
-        mask_pooler_scales                       = pooler_scales
-        mask_sampling_ratio                      = cfg.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO
-        mask_pooler_type                         = cfg.MODEL.ROI_MASK_HEAD.POOLER_TYPE
-        self.keypoint_on                         = cfg.MODEL.KEYPOINT_ON
-        keypoint_pooler_resolution               = cfg.MODEL.ROI_KEYPOINT_HEAD.POOLER_RESOLUTION
-        keypoint_pooler_scales                   = pooler_scales
-        keypoint_sampling_ratio                  = cfg.MODEL.ROI_KEYPOINT_HEAD.POOLER_SAMPLING_RATIO
-        keypoint_pooler_type                     = cfg.MODEL.ROI_KEYPOINT_HEAD.POOLER_TYPE
-        self.normalize_loss_by_visible_keypoints = cfg.MODEL.ROI_KEYPOINT_HEAD.NORMALIZE_LOSS_BY_VISIBLE_KEYPOINTS  # noqa
-        self.keypoint_loss_weight                = cfg.MODEL.ROI_KEYPOINT_HEAD.LOSS_WEIGHT
+        pooler_resolution = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
+        pooler_scales     = tuple(1.0 / self.feature_strides[k] for k in self.in_features)
+        sampling_ratio    = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
+        box_pooler_type   = cfg.MODEL.ROI_BOX_HEAD.POOLER_TYPE
         # fmt: on
 
         # If StandardROIHeads is applied on multiple feature maps (as in FPN),
@@ -423,39 +432,65 @@ class StandardROIHeads(ROIHeads):
             self.box_head.output_size, self.num_classes, self.cls_agnostic_bbox_reg
         )
 
-        if self.mask_on:
-            self.mask_pooler = ROIPooler(
-                output_size=mask_pooler_resolution,
-                scales=mask_pooler_scales,
-                sampling_ratio=mask_sampling_ratio,
-                pooler_type=mask_pooler_type,
-            )
-            cfg.MODEL.ROI_MASK_HEAD.COMPUTED_INPUT_SIZE = (
-                in_channels,
-                mask_pooler_resolution,
-                mask_pooler_resolution,
-            )
-            self.mask_head = build_mask_head(cfg)
+    def _init_mask_head(self, cfg):
+        # fmt: off
+        self.mask_on           = cfg.MODEL.MASK_ON
+        if not self.mask_on:
+            return
+        mask_pooler_resolution = cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION
+        mask_pooler_scales     = tuple(1.0 / self.feature_strides[k] for k in self.in_features)
+        mask_sampling_ratio    = cfg.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO
+        mask_pooler_type       = cfg.MODEL.ROI_MASK_HEAD.POOLER_TYPE
+        # fmt: on
 
-        if self.keypoint_on:
-            self.keypoint_pooler = ROIPooler(
-                output_size=keypoint_pooler_resolution,
-                scales=keypoint_pooler_scales,
-                sampling_ratio=keypoint_sampling_ratio,
-                pooler_type=keypoint_pooler_type,
-            )
-            cfg.MODEL.ROI_KEYPOINT_HEAD.COMPUTED_INPUT_SIZE = (
-                in_channels,
-                keypoint_pooler_resolution,
-                keypoint_pooler_resolution,
-            )
-            self.keypoint_head = build_keypoint_head(cfg)
+        in_channels = [self.feature_channels[f] for f in self.in_features][0]
+
+        self.mask_pooler = ROIPooler(
+            output_size=mask_pooler_resolution,
+            scales=mask_pooler_scales,
+            sampling_ratio=mask_sampling_ratio,
+            pooler_type=mask_pooler_type,
+        )
+        cfg = cfg.clone()
+        cfg.MODEL.ROI_MASK_HEAD.COMPUTED_INPUT_SIZE = (
+            in_channels,
+            mask_pooler_resolution,
+            mask_pooler_resolution,
+        )
+        self.mask_head = build_mask_head(cfg)
+
+    def _init_keypoint_head(self, cfg):
+        # fmt: off
+        self.keypoint_on                         = cfg.MODEL.KEYPOINT_ON
+        if not self.keypoint_on:
+            return
+        keypoint_pooler_resolution               = cfg.MODEL.ROI_KEYPOINT_HEAD.POOLER_RESOLUTION
+        keypoint_pooler_scales                   = tuple(1.0 / self.feature_strides[k] for k in self.in_features)  # noqa
+        keypoint_sampling_ratio                  = cfg.MODEL.ROI_KEYPOINT_HEAD.POOLER_SAMPLING_RATIO
+        keypoint_pooler_type                     = cfg.MODEL.ROI_KEYPOINT_HEAD.POOLER_TYPE
+        self.normalize_loss_by_visible_keypoints = cfg.MODEL.ROI_KEYPOINT_HEAD.NORMALIZE_LOSS_BY_VISIBLE_KEYPOINTS  # noqa
+        self.keypoint_loss_weight                = cfg.MODEL.ROI_KEYPOINT_HEAD.LOSS_WEIGHT
+        # fmt: on
+
+        in_channels = [self.feature_channels[f] for f in self.in_features][0]
+
+        self.keypoint_pooler = ROIPooler(
+            output_size=keypoint_pooler_resolution,
+            scales=keypoint_pooler_scales,
+            sampling_ratio=keypoint_sampling_ratio,
+            pooler_type=keypoint_pooler_type,
+        )
+        cfg.MODEL.ROI_KEYPOINT_HEAD.COMPUTED_INPUT_SIZE = (
+            in_channels,
+            keypoint_pooler_resolution,
+            keypoint_pooler_resolution,
+        )
+        self.keypoint_head = build_keypoint_head(cfg)
 
     def forward(self, images, features, proposals, targets=None):
         """
         See :class:`ROIHeads.forward`.
         """
-        num_images = len(images)
         del images
 
         if self.training:
@@ -479,34 +514,10 @@ class StandardROIHeads(ROIHeads):
 
         if self.training:
             losses = outputs.losses()
-            if self.mask_on or self.keypoint_on:
-                proposals, _ = select_foreground_proposals(proposals, self.num_classes)
-            # During training the same proposals used by the box head are used by
-            # the mask and keypoint heads. The loss is only defined on positive proposals.
-            if self.mask_on:
-                proposal_boxes = [x.proposal_boxes for x in proposals]
-                mask_features = self.mask_pooler(features_list, proposal_boxes)
-                mask_logits = self.mask_head(mask_features)
-                losses["loss_mask"] = mask_rcnn_loss(mask_logits, proposals)
-            if self.keypoint_on:
-                proposals = select_proposals_with_visible_keypoints(proposals)
-                proposal_boxes = [x.proposal_boxes for x in proposals]
-
-                keypoint_features = self.keypoint_pooler(features_list, proposal_boxes)
-                keypoint_logits = self.keypoint_head(keypoint_features)
-
-                normalizer = (
-                    num_images
-                    * self.batch_size_per_image
-                    * self.positive_sample_fraction
-                    * keypoint_logits.shape[1]
-                )
-                losses["loss_keypoint"] = keypoint_rcnn_loss(
-                    keypoint_logits,
-                    proposals,
-                    normalizer=None if self.normalize_loss_by_visible_keypoints else normalizer,
-                )
-                losses["loss_keypoint"] *= self.keypoint_loss_weight
+            # During training the proposals used by the box head are
+            # used by the mask and keypoint heads.
+            losses.update(self._forward_mask(features_list, proposals))
+            losses.update(self._forward_keypoint(features_list, proposals))
             return [], losses
         else:
             pred_instances = outputs.inference(
@@ -534,13 +545,84 @@ class StandardROIHeads(ROIHeads):
         assert instances[0].has("pred_boxes") and instances[0].has("pred_classes")
         features = [features[f] for f in self.in_features]
 
-        pred_boxes = [x.pred_boxes for x in instances]
-        if self.mask_on:
+        instances = self._forward_mask(features, instances)
+        instances = self._forward_keypoint(features, instances)
+        return instances
+
+    def _forward_mask(self, features, instances):
+        """
+        Forward logic of the mask prediction branch.
+
+        Args:
+            features (list[Tensor]): #level input features for mask prediction
+            instances (list[Instances]): the per-image instances to train/predict masks.
+                In training, they can be the proposals.
+                In inference, they can be the predicted boxes.
+
+        Returns:
+            In training, a dict of losses.
+            In inference, update `instances` with new fields "pred_masks" and return it.
+        """
+        if not self.mask_on:
+            return {} if self.training else instances
+
+        if self.training:
+            # The loss is only defined on positive proposals.
+            proposals, _ = select_foreground_proposals(instances, self.num_classes)
+            proposal_boxes = [x.proposal_boxes for x in proposals]
+            mask_features = self.mask_pooler(features, proposal_boxes)
+            mask_logits = self.mask_head(mask_features)
+            return {"loss_mask": mask_rcnn_loss(mask_logits, proposals)}
+        else:
+            pred_boxes = [x.pred_boxes for x in instances]
             mask_features = self.mask_pooler(features, pred_boxes)
             mask_logits = self.mask_head(mask_features)
             mask_rcnn_inference(mask_logits, instances)
-        if self.keypoint_on:
+            return instances
+
+    def _forward_keypoint(self, features, instances):
+        """
+        Forward logic of the keypoint prediction branch.
+
+        Args:
+            features (list[Tensor]): #level input features for keypoint prediction
+            instances (list[Instances]): the per-image instances to train/predict keypoints.
+                In training, they can be the proposals.
+                In inference, they can be the predicted boxes.
+
+        Returns:
+            In training, a dict of losses.
+            In inference, update `instances` with new fields "pred_keypoints" and return it.
+        """
+        if not self.keypoint_on:
+            return {} if self.training else instances
+
+        num_images = len(instances)
+
+        if self.training:
+            # The loss is defined on positive proposals with at >=1 visible keypoints.
+            proposals, _ = select_foreground_proposals(instances, self.num_classes)
+            proposals = select_proposals_with_visible_keypoints(proposals)
+            proposal_boxes = [x.proposal_boxes for x in proposals]
+
+            keypoint_features = self.keypoint_pooler(features, proposal_boxes)
+            keypoint_logits = self.keypoint_head(keypoint_features)
+
+            normalizer = (
+                num_images
+                * self.batch_size_per_image
+                * self.positive_sample_fraction
+                * keypoint_logits.shape[1]
+            )
+            loss = keypoint_rcnn_loss(
+                keypoint_logits,
+                proposals,
+                normalizer=None if self.normalize_loss_by_visible_keypoints else normalizer,
+            )
+            return {"loss_keypoint": loss * self.keypoint_loss_weight}
+        else:
+            pred_boxes = [x.pred_boxes for x in instances]
             keypoint_features = self.keypoint_pooler(features, pred_boxes)
             keypoint_logits = self.keypoint_head(keypoint_features)
             keypoint_rcnn_inference(keypoint_logits, instances)
-        return instances
+            return instances

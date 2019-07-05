@@ -125,8 +125,7 @@ class DetectionTransform:
             expected_wh = (dataset_dict["width"], dataset_dict["height"])
             if not image_wh == expected_wh:
                 raise SizeMismatchError(
-                    "mismatch (W,H), got {}, expect {}"
-                    .format(image_wh, expected_wh)
+                    "mismatch (W,H), got {}, expect {}".format(image_wh, expected_wh)
                 )
         image, tfm_params = self.tfms.transform_image_get_params(image)
 
