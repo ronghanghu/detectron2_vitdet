@@ -10,9 +10,12 @@ MODEL:
     POOLER_RESOLUTION: 14
     POOLER_SAMPLING_RATIO: 2
   ROI_BOX_HEAD:
-    SMOOTH_L1_BETA: 1.0  # Keypoint AP degrades when using plain L1 loss
+    SMOOTH_L1_BETA: 0.5  # Keypoint AP degrades (though box AP improves) when using plain L1 loss
   RPN:
-    SMOOTH_L1_BETA: 0.2  # Keypoint AP degrades when using plain L1 loss
+    # Detectron1 uses 2000 proposals per-batch, but we don't use per-batch configuration.
+    # 1000 proposals per-image is found to hurt box AP.
+    # Therefore we increase it to 1500 per-image.
+    POST_NMS_TOPK_TRAIN: 1500
 DATASETS:
   TRAIN: ("keypoints_coco_2014_train", "keypoints_coco_2014_valminusminival",)
   TEST: ("keypoints_coco_2014_minival",)

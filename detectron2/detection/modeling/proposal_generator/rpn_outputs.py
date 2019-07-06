@@ -107,29 +107,18 @@ def find_top_rpn_proposals(
     proposals = [Instances.cat(instances) for instances in proposals]  # cat to (N, ) Instances
     num_images = len(proposals)
 
-    # NB: Legacy bug to address -- there's different behavior during training vs. testing.
-    # During training, topk is over *all* the proposals combined over all images.
+    # In Detectron1, there was different behavior during training vs. testing.
+    # (https://github.com/facebookresearch/Detectron/issues/459)
+    # During training, topk is over the proposals from *all* images in the training batch.
     # During testing, it is over the proposals for each image separately.
-    # TODO: resolve this difference and make it consistent. It should be per image,
-    # and not per batch, see: https://github.com/facebookresearch/Detectron/issues/459.
-    if training:
-        objectness_logits_pred = torch.cat(
-            [instances.objectness_logits for instances in proposals], dim=0
-        )
-        num_instances = [len(instances) for instances in proposals]
+    # As a result, the training behavior becomes batch-dependent,
+    # and the configuration "POST_NMS_TOPK_TRAIN" end up relying on the batch size.
+    # This bug is addressed in Detectron2 to make the behavior independent of batch size.
+    for i in range(num_images):
+        objectness_logits_pred = proposals[i].objectness_logits
         topk = min(post_nms_topk, len(objectness_logits_pred))
         _, inds_sorted = torch.topk(objectness_logits_pred, topk, dim=0, sorted=True)
-        inds_mask = torch.zeros_like(objectness_logits_pred, dtype=torch.uint8)
-        inds_mask[inds_sorted] = 1
-        inds_mask = inds_mask.split(num_instances)
-        for i in range(num_images):
-            proposals[i] = proposals[i][inds_mask[i]]
-    else:
-        for i in range(num_images):
-            objectness_logits_pred = proposals[i].objectness_logits
-            topk = min(post_nms_topk, len(objectness_logits_pred))
-            _, inds_sorted = torch.topk(objectness_logits_pred, topk, dim=0, sorted=True)
-            proposals[i] = proposals[i][inds_sorted]
+        proposals[i] = proposals[i][inds_sorted]
     return proposals
 
 

@@ -184,6 +184,9 @@ _C.MODEL.RPN.PRE_NMS_TOPK_TEST = 6000
 # Number of top scoring RPN proposals to keep after applying NMS
 # When FPN is used, this limit is applied per level and then again to the union
 # of proposals from all levels
+# NOTE: When FPN is used, the meaning of this config is different from Detectron1.
+# It means per-batch topk in Detectron1, but per-image topk here.
+# See "modeling/rpn/rpn_outputs.py" for details.
 _C.MODEL.RPN.POST_NMS_TOPK_TRAIN = 2000
 _C.MODEL.RPN.POST_NMS_TOPK_TEST = 1000
 # NMS threshold used on RPN proposals
