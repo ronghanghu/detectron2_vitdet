@@ -3,6 +3,11 @@ import torch
 from PIL import Image
 from torch.nn import functional as F
 
+BYTES_PER_FLOAT = 4
+# TODO: This memory limit may be too much or too little. It would be better to
+# determine it based on available resources.
+GPU_MEM_LIMIT = 1024 ** 3  # 1 GB memory limit
+
 
 def paste_masks_in_image(masks, boxes, image_shape, threshold=0.5):
     """
@@ -107,30 +112,43 @@ def paste_masks_in_image_aligned(masks, boxes, image_shape, threshold):
             img_masks[idx, 0, y0_int[idx] : y1_int[idx], x0_int[idx] : x1_int[idx]] = res
         return img_masks
     else:
-        # on GPU, paste all masks together
-        # by using the entire image to sample the masks
-        # Compared to pasting them one by one,
-        # this has more operations but is faster on COCO-scale dataset.
-        img_y = torch.arange(0.0, img_h).to(device=device) + 0.5
-        img_x = torch.arange(0.0, img_w).to(device=device) + 0.5
-        img_y = (img_y - y0) / (y1 - y0) * 2 - 1
-        img_x = (img_x - x0) / (x1 - x0) * 2 - 1
-        # img_x, img_y has shape Nximg_w, Nximg_h
 
-        # https://github.com/pytorch/pytorch/issues/20785
-        img_y = img_y * mask_h / (mask_h - 1)
-        img_x = img_x * mask_w / (mask_w - 1)
+        def process_chunk(masks_chunk, y0_chunk, y1_chunk, x0_chunk, x1_chunk):
+            # On GPU, paste all masks together (up to chunk size)
+            # by using the entire image to sample the masks
+            # Compared to pasting them one by one,
+            # this has more operations but is faster on COCO-scale dataset.
+            N_chunk = masks_chunk.shape[0]
+            img_y = torch.arange(0.0, img_h).to(device=device) + 0.5
+            img_x = torch.arange(0.0, img_w).to(device=device) + 0.5
+            img_y = (img_y - y0_chunk) / (y1_chunk - y0_chunk) * 2 - 1
+            img_x = (img_x - x0_chunk) / (x1_chunk - x0_chunk) * 2 - 1
+            # img_x, img_y have shapes (N_chunk, img_w), (N_chunk, img_h)
 
-        gx = img_x[:, None, :].expand(N, img_h, img_w)
-        gy = img_y[:, :, None].expand(N, img_h, img_w)
-        inds = torch.stack([gx, gy], dim=3)
+            # https://github.com/pytorch/pytorch/issues/20785
+            img_y = img_y * mask_h / (mask_h - 1)
+            img_x = img_x * mask_w / (mask_w - 1)
+            gx = img_x[:, None, :].expand(N_chunk, img_h, img_w)
+            gy = img_y[:, :, None].expand(N_chunk, img_h, img_w)
+            grid = torch.stack([gx, gy], dim=3)
 
-        img_masks = F.grid_sample(masks[:, None, :, :].to(dtype=torch.float32), inds)
-        if threshold >= 0:
-            img_masks = (img_masks >= threshold).to(dtype=torch.uint8)
-        else:
-            # for visualization and debugging
-            img_masks = (img_masks * 255).to(dtype=torch.uint8)
+            img_masks = F.grid_sample(masks_chunk.to(dtype=torch.float32), grid)
+            if threshold >= 0:
+                img_masks = (img_masks >= threshold).to(dtype=torch.uint8)
+            else:
+                # for visualization and debugging
+                img_masks = (img_masks * 255).to(dtype=torch.uint8)
+            return img_masks
+
+        num_chunks = int(np.ceil(N * img_h * img_w * BYTES_PER_FLOAT / GPU_MEM_LIMIT))
+        assert num_chunks <= N, "Insufficient GPU memory; try increasing GPU_MEM_LIMIT"
+        chunks = torch.chunk(torch.arange(N), num_chunks)
+        img_masks = []
+        for inds in chunks:
+            img_masks.append(
+                process_chunk(masks[inds, None, :, :], y0[inds], y1[inds], x0[inds], x1[inds])
+            )
+        img_masks = torch.cat(img_masks)
     return img_masks
 
 
