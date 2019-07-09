@@ -1,7 +1,6 @@
 from detectron2.utils.registry import Registry
 
 META_ARCH_REGISTRY = Registry("META_ARCH")  # noqa F401 isort:skip
-from . import detector, segmentator  # noqa F401 isort:skip
 
 
 def build_model(cfg):

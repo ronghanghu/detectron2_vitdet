@@ -4,15 +4,15 @@ import torch
 from borc.nn.focal_loss import sigmoid_focal_loss_jit
 from torch import nn
 
-from detectron2.detection.modeling.backbone import build_backbone
 from detectron2.layers import cat, nms, smooth_l1_loss
 from detectron2.structures import Boxes, ImageList, Instances, pairwise_iou
 
 from ..anchor_generator import build_anchor_generator
+from ..backbone import build_backbone
 from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher
-from ..model_builder import META_ARCH_REGISTRY
 from ..postprocessing import detector_postprocess
+from .model_builder import META_ARCH_REGISTRY
 
 __all__ = ["RetinaNet"]
 

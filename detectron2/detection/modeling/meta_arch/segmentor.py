@@ -3,28 +3,28 @@ from torch import nn
 
 from detectron2.structures import ImageList
 
-from .backbone import build_backbone
-from .model_builder import META_ARCH_REGISTRY
-from .postprocessing import (
+from ..backbone import build_backbone
+from ..postprocessing import (
     combine_semantic_and_instance_outputs,
     detector_postprocess,
     sem_seg_postprocess,
 )
-from .proposal_generator import build_proposal_generator
-from .roi_heads.roi_heads import build_roi_heads
-from .sem_seg_heads import build_sem_seg_head
+from ..proposal_generator import build_proposal_generator
+from ..roi_heads import build_roi_heads
+from ..sem_seg_heads import build_sem_seg_head
+from .model_builder import META_ARCH_REGISTRY
 
-__all__ = ["SemanticSegmentator", "PanopticFPN"]
+__all__ = ["SemanticSegmentor", "PanopticFPN"]
 
 
 @META_ARCH_REGISTRY.register()
-class SemanticSegmentator(nn.Module):
+class SemanticSegmentor(nn.Module):
     """
     Main class for semantic segmentation architectures.
     """
 
     def __init__(self, cfg):
-        super(SemanticSegmentator, self).__init__()
+        super().__init__()
 
         self.device = torch.device(cfg.MODEL.DEVICE)
 
@@ -135,7 +135,7 @@ class PanopticFPN(nn.Module):
             list[dict]: each dict is the results for one image. The dict
                 contains the following keys:
                 "instances": see :meth:`GeneralizedRCNN.forward` for its format.
-                "sem_seg": see :meth:`SemanticSegmentator.forward` for its format.
+                "sem_seg": see :meth:`SemanticSegmentor.forward` for its format.
                 "panoptic_seg": available when `PANOPTIC_FPN.COMBINE_ON`.
                     See the return value of
                     :func:`combine_semantic_and_instance_outputs` for its format.

@@ -1,6 +1,6 @@
 _BASE_: "../Base-FPN.yaml"
 MODEL:
-  META_ARCHITECTURE: "SemanticSegmentator"
+  META_ARCHITECTURE: "SemanticSegmentor"
   WEIGHT: "catalog://ImageNetPretrained/MSRA/R-50"
   RESNETS:
     DEPTH: 50

@@ -59,9 +59,9 @@ def sem_seg_postprocess(result, img_size, output_height, output_width):
     Postprocess the output semantic segmentation logit predictions. Return semantic segmentation
     labels predicted for each pixel in the original resolution.
 
-    The input images are often resized when entering semantic segmentator. Moreover, in same
-    cases, they also padded inside segmentator to be divisible by maximum network stride.
-    As a result, we often need the predictions of the segmentator in a different
+    The input images are often resized when entering semantic segmentor. Moreover, in same
+    cases, they also padded inside segmentor to be divisible by maximum network stride.
+    As a result, we often need the predictions of the segmentor in a different
     resolution from its inputs.
 
     After resizing the logits to the desired resolutions, argmax is applied to return semnantic
@@ -70,7 +70,7 @@ def sem_seg_postprocess(result, img_size, output_height, output_width):
     Args:
         result (Tensor): semantic segmentation prediction logits. A tensor of shape (C, H, W),
             where C is the number of classes, and H, W are the height and width of the prediction.
-        img_size (tuple): image size that segmentator is taking as input.
+        img_size (tuple): image size that segmentor is taking as input.
         output_height, output_width: the desired output resolution.
 
     Returns:

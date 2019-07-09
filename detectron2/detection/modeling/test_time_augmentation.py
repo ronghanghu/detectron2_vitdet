@@ -7,7 +7,7 @@ import torch
 from detectron2.data.transforms import ResizeShortestEdge
 from detectron2.structures import Instances
 
-from .detector import GeneralizedRCNN
+from .meta_arch import GeneralizedRCNN
 from .postprocessing import detector_postprocess
 from .roi_heads.fast_rcnn import fast_rcnn_inference_single_image
 

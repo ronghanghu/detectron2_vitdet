@@ -3,11 +3,11 @@ from torch import nn
 
 from detectron2.structures import ImageList
 
-from .backbone import build_backbone
+from ..backbone import build_backbone
+from ..postprocessing import detector_postprocess
+from ..proposal_generator import build_proposal_generator
+from ..roi_heads import build_roi_heads
 from .model_builder import META_ARCH_REGISTRY
-from .postprocessing import detector_postprocess
-from .proposal_generator import build_proposal_generator
-from .roi_heads.roi_heads import build_roi_heads
 
 __all__ = ["GeneralizedRCNN", "ProposalNetwork"]
 
