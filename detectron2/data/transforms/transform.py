@@ -10,7 +10,10 @@ __all__ = []
 
 class ImageTransform(metaclass=ABCMeta):
     """
-    Base class for image transformation ops.
+    Base class for implementations of deterministic image transformations.
+
+    "Deterministic" requires that the output of all methods
+    of this class are deterministic w.r.t their input arguments.
     """
 
     def _init(self, params=None):

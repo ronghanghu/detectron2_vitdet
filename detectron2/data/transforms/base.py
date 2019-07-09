@@ -23,9 +23,13 @@ class ImageTransformer(metaclass=ABCMeta):
     """
     ImageTransformer takes an image of type uint8 in range [0, 255], or
     floating point in range [0, 1] or [0, 255] as input.
-    It applies image transformation on the image, and optionally
-    returns the "transformation parameters" which can be used
-    to transform another image, or transform the coordinates in the image.
+
+    It applies (possibly random) image transformation on the image,
+    and optionally returns the "transformation parameters" which contains
+    an opaque representation about the actual deterministic transformation
+    that was applied.
+    The "transformation parameters" can then be used to transform another
+    image, or coordinates in the image, with the same transformations.
 
     The implementation may choose to modify the input image or coordinates
     in-place for efficient transformation.

@@ -25,14 +25,16 @@ class SizeMismatchError(ValueError):
 
 def annotations_to_instances(annos, image_size):
     """
-    Create an :class:`Instances` object used by the models, from annotations in the dataset dict.
+    Create an :class:`Instances` object used by the models,
+    from instance annotations in the dataset dict.
 
     Args:
         annos (list[dict]): a list of annotations, one per instance.
         image_size (tuple): height, width
 
     Returns:
-        Instances:
+        Instances: It will contains fields "gt_boxes", "gt_classes",
+            "gt_masks", "gt_keypoints", if they can be obtained from `annos`.
     """
     boxes = [BoxMode.convert(obj["bbox"], obj["bbox_mode"], BoxMode.XYXY_ABS) for obj in annos]
     target = Instances(image_size)
@@ -120,18 +122,8 @@ class DetectionTransform:
         """
         dataset_dict = copy.deepcopy(dataset_dict)  # it will be modified by code below
         image = self._read_image(dataset_dict, format=self.img_format)
-        if "width" in dataset_dict or "height" in dataset_dict:
-            image_wh = (image.shape[1], image.shape[0])
-            expected_wh = (dataset_dict["width"], dataset_dict["height"])
-            if not image_wh == expected_wh:
-                raise SizeMismatchError(
-                    "mismatch (W,H), got {}, expect {}".format(image_wh, expected_wh)
-                )
+        DetectionTransform.check_image_size(dataset_dict, image)
         image, tfm_params = self.tfms.transform_image_get_params(image)
-
-        # PIL squeezes out the channel dimension for "L", so make it HWC
-        if self.img_format == "L":
-            image = np.expand_dims(image, -1)
 
         image_shape = image.shape[:2]  # h, w
 
@@ -142,12 +134,49 @@ class DetectionTransform:
         # Can use uint8 if it turns out to be slow some day
         dataset_dict["image"] = image
 
+        self.transform_precomputed_proposals(dataset_dict, image_shape, tfm_params)
+
+        if not self.is_train:
+            dataset_dict.pop("annotations", None)
+            dataset_dict.pop("sem_seg_file_name", None)
+            return dataset_dict
+
+        if "annotations" in dataset_dict:
+            annos = [
+                self.transform_annotations(obj, tfm_params, image_shape)
+                for obj in dataset_dict.pop("annotations")
+                if obj.get("iscrowd", 0) == 0
+            ]
+            # Should not be empty during training
+            dataset_dict["targets"] = annotations_to_instances(annos, image_shape)
+        if "sem_seg_file_name" in dataset_dict:
+            sem_seg_gt = Image.open(dataset_dict.pop("sem_seg_file_name"))
+            sem_seg_gt = np.asarray(sem_seg_gt, dtype="uint8")
+            sem_seg_gt = self.tfms.transform_segmentation(sem_seg_gt, tfm_params)
+            sem_seg_gt = torch.as_tensor(sem_seg_gt.astype("long"))
+            dataset_dict["sem_seg_gt"] = sem_seg_gt
+        return dataset_dict
+
+    def transform_precomputed_proposals(self, dataset_dict, image_shape, tfm_params):
+        """
+        Apply transformations to the precomputed proposals in dataset_dict.
+
+        Args:
+            dataset_dict (dict): a dict read from the dataset, possibly
+                contains fields "proposal_boxes", "proposal_objectness_logits", "proposal_bbox_mode"
+
+        The input dict is modified in-place, with abovementioned keys removed. A new
+        key "proposals" will be added. Its value is an `Instances`
+        object which contains the transformed proposals in its field
+        "proposal_boxes" and "objectness_logits".
+        """
         if "proposal_boxes" in dataset_dict:
             # Tranform proposal boxes
             boxes = self.transform_bbox(
-                dataset_dict.pop("proposal_boxes"), dataset_dict["proposal_bbox_mode"], tfm_params
+                dataset_dict.pop("proposal_boxes"),
+                dataset_dict.pop("proposal_bbox_mode", BoxMode.XYXY_ABS),
+                tfm_params,
             )
-            dataset_dict["proposal_bbox_mode"] = BoxMode.XYXY_ABS
             boxes = Boxes(boxes)
             objectness_logits = torch.as_tensor(
                 dataset_dict.pop("proposal_objectness_logits").astype("float32")
@@ -163,27 +192,15 @@ class DetectionTransform:
             proposals.objectness_logits = objectness_logits[: self.proposal_topk]
             dataset_dict["proposals"] = proposals
 
-        if not self.is_train:
-            dataset_dict.pop("annotations", None)
-            dataset_dict.pop("sem_seg_file_name", None)
-            return dataset_dict
-
-        if "annotations" in dataset_dict:
-            annos = [
-                self.transform_annotations(obj, tfm_params, image_shape)
-                for obj in dataset_dict.pop("annotations")
-                if obj.get("iscrowd", 0) == 0
-            ]
-            targets = annotations_to_instances(annos, image_shape)
-            # Should not be empty during training
-            dataset_dict["targets"] = targets
-        if "sem_seg_file_name" in dataset_dict:
-            sem_seg_gt = Image.open(dataset_dict.pop("sem_seg_file_name"))
-            sem_seg_gt = np.asarray(sem_seg_gt, dtype="uint8")
-            sem_seg_gt = self.tfms.transform_segmentation(sem_seg_gt, tfm_params)
-            sem_seg_gt = torch.as_tensor(sem_seg_gt.astype("long"))
-            dataset_dict["sem_seg_gt"] = sem_seg_gt
-        return dataset_dict
+    @staticmethod
+    def check_image_size(dataset_dict, image):
+        if "width" in dataset_dict or "height" in dataset_dict:
+            image_wh = (image.shape[1], image.shape[0])
+            expected_wh = (dataset_dict["width"], dataset_dict["height"])
+            if not image_wh == expected_wh:
+                raise SizeMismatchError(
+                    "mismatch (W,H), got {}, expect {}".format(image_wh, expected_wh)
+                )
 
     def _read_image(self, dataset_dict, format=None):
         """
@@ -194,7 +211,7 @@ class DetectionTransform:
             format (dict): one of the supported image modes in PIL, or "BGR"
 
         Returns:
-            image (np.ndarray)
+            image (np.ndarray): an HWC image
         """
         image = Image.open(dataset_dict["file_name"])
 
@@ -208,6 +225,9 @@ class DetectionTransform:
         if format == "BGR":
             # flip channels if needed
             image = image[:, :, ::-1]
+        # PIL squeezes out the channel dimension for "L", so make it HWC
+        if format == "L":
+            image = np.expand_dims(image, -1)
         return image
 
     def transform_annotations(self, annotation, tfm_params, image_size):
@@ -243,6 +263,13 @@ class DetectionTransform:
         """
         Apply image transformations to the boxes.
         The box modes of output boxes would be XYXY_ABS.
+
+        Args:
+            boxes (ndarray): Nx4
+            box_mode (BoxMode):
+
+        Returns:
+            ndarray: Nx4 transformed boxes
         """
         # First convert input boxes to XXXY_ABS mode.
         convert_boxes = BoxMode.convert(boxes, box_mode, BoxMode.XYXY_ABS)
