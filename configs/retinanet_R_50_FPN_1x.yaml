@@ -1,0 +1,12 @@
+_BASE_: "Base-RetinaNet.yaml"
+MODEL:
+  WEIGHT: "catalog://ImageNetPretrained/MSRA/R-50"
+  RESNETS:
+    DEPTH: 50
+SOLVER:
+  IMS_PER_BATCH: 16
+  BASE_LR: 0.01  # 0.02
+  STEPS: (60000, 80000)
+  MAX_ITER: 90000
+  WEIGHT_DECAY: 0.0001
+  MOMENTUM: 0.9
