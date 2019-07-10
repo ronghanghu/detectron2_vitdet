@@ -187,15 +187,10 @@ def fast_rcnn_inference_single_image(
     results = Instances.cat(results)
     number_of_detections = len(results)
 
-    # Limit to max_per_image detections **over all classes**
+    # Only keep the top-scoring K boxes per image **over all classes**
     if number_of_detections > topk_per_image > 0:
-        cls_scores = results.scores
-        image_thresh, _ = torch.kthvalue(
-            cls_scores.cpu(), number_of_detections - topk_per_image + 1
-        )
-        keep = cls_scores >= image_thresh.item()
-        keep = torch.nonzero(keep).squeeze(1)
-        results = results[keep]
+        _, sorted_score_indices = torch.sort(results.scores)
+        results = results[sorted_score_indices[-topk_per_image:]]
     return results
 
 
