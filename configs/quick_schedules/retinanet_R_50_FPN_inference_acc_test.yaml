@@ -3,5 +3,6 @@ MODEL:
   WEIGHT: "detectron2://retinanet_R_50_FPN_1x/123923855/model_final_ec4d676194bc88966c119f0f1975c30e.pkl"
 DATASETS:
   TEST: ("coco_2014_minival_100",)
-TEST:
-  EXPECTED_RESULTS: [["bbox", "AP", 44.67, 0.02]]
+#TODO: fill it with f125341437
+#TEST:
+#  EXPECTED_RESULTS: [["bbox", "AP", 44.67, 0.02]]

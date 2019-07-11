@@ -133,6 +133,9 @@ def batch_rasterize_full_image_polygons_within_box(masks, boxes, mask_size):
 class PolygonMasks(object):
     """
     This class stores the segmentation masks for all objects in one image, in the form of polygons.
+
+    Attributes:
+        polygons: list[list[Tensor]]. Each Tensor is a float64 vector representing a polygon.
     """
 
     def __init__(self, polygons):
@@ -151,8 +154,11 @@ class PolygonMasks(object):
             assert isinstance(polygons_per_instance, list), type(polygons_per_instance)
             # transform the polygon to a tensor
             polygons_per_instance = [
-                # use float64 for higher precision, because why not?
-                torch.as_tensor(p, dtype=torch.float64)
+                # Use float64 for higher precision, because why not?
+                # Always put polygons on CPU (self.to is a no-op) since they
+                # are supposed to be small tensors.
+                # May need to change this assumption if GPU placement becomes useful
+                torch.as_tensor(p, dtype=torch.float64).cpu()
                 for p in polygons_per_instance
             ]
             for polygon in polygons_per_instance:
@@ -190,6 +196,11 @@ class PolygonMasks(object):
         return PolygonMasks(selected_polygons)
 
     def __iter__(self):
+        """
+        Yields:
+            list[Tensor]: the polygons for one instance. Each Tensor is a
+                float64 vector representing a polygon.
+        """
         return iter(self.polygons)
 
     def __repr__(self):

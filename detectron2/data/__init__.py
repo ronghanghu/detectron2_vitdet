@@ -7,3 +7,6 @@ from .build import (
 from .catalog import DatasetCatalog, MetadataCatalog
 from .common import DatasetFromList, MapDataset
 from .detection_transforms import DetectionTransform
+
+# ensure the builtin datasets are registered
+from . import datasets  # isort:skip

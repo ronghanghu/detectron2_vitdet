@@ -171,7 +171,7 @@ class Checkpointer(object):
         if incompatible.unexpected_keys:
             self.logger.warning(
                 "Keys in the checkpoint but not found in the model: "
-                + ", ".join(incompatible.unexpected_keys_keys)
+                + ", ".join(incompatible.unexpected_keys)
             )
 
     def _convert_ndarray_to_tensor(self, state_dict):

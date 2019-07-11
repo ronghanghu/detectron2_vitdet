@@ -58,13 +58,27 @@ class RetinaNet(nn.Module):
     """
 
     def __init__(self, cfg):
-        super(RetinaNet, self).__init__()
+        super().__init__()
 
         self.device = torch.device(cfg.MODEL.DEVICE)
 
         self.backbone = build_backbone(cfg)
-        self.box_cls_and_regression = RetinaNetClassifierRegressionHead(cfg)
+        self.head = RetinaNetHead(cfg)
         self.anchor_generator = build_anchor_generator(cfg)
+
+        # fmt: off
+        self.num_classes              = cfg.MODEL.RETINANET.NUM_CLASSES
+        self.in_features              = cfg.MODEL.RETINANET.IN_FEATURES
+        # Loss parameters:
+        self.focal_loss_alpha         = cfg.MODEL.RETINANET.FOCAL_LOSS_ALPHA
+        self.focal_loss_gamma         = cfg.MODEL.RETINANET.FOCAL_LOSS_GAMMA
+        self.smooth_l1_loss_beta      = cfg.MODEL.RETINANET.SMOOTH_L1_LOSS_BETA
+        # Inference parameters:
+        self.score_threshold          = cfg.MODEL.RETINANET.INFERENCE_SCORE_THRESHOLD
+        self.topk_candidates          = cfg.MODEL.RETINANET.INFERENCE_TOPK_CANDIDATES
+        self.nms_threshold            = cfg.MODEL.RETINANET.INFERENCE_NMS_THRESHOLD
+        self.max_detections_per_image = cfg.TEST.DETECTIONS_PER_IMG
+        # fmt: on
 
         # Matching and loss
         self.box2box_transform = Box2BoxTransform(weights=cfg.MODEL.RPN.BBOX_REG_WEIGHTS)
@@ -73,20 +87,6 @@ class RetinaNet(nn.Module):
             cfg.MODEL.RETINANET.BG_IOU_THRESHOLD,
             allow_low_quality_matches=True,
         )
-
-        # Loss parameters
-        self.focal_loss_alpha = cfg.MODEL.RETINANET.FOCAL_LOSS_ALPHA
-        self.focal_loss_gamma = cfg.MODEL.RETINANET.FOCAL_LOSS_GAMMA
-        self.smooth_l1_loss_beta = cfg.MODEL.RETINANET.SMOOTH_L1_LOSS_BETA
-
-        self.num_classes = cfg.MODEL.RETINANET.NUM_CLASSES
-        self.in_features = cfg.MODEL.RETINANET.IN_FEATURES
-
-        # Inference parameters
-        self.score_threshold = cfg.MODEL.RETINANET.INFERENCE_SCORE_THRESHOLD
-        self.topk_candidates = cfg.MODEL.RETINANET.INFERENCE_TOPK_CANDIDATES
-        self.nms_threshold = cfg.MODEL.RETINANET.INFERENCE_NMS_THRESHOLD
-        self.max_detections_per_image = cfg.TEST.DETECTIONS_PER_IMG
 
         pixel_mean = torch.Tensor(cfg.MODEL.PIXEL_MEAN).to(self.device).view(3, 1, 1)
         pixel_std = torch.Tensor(cfg.MODEL.PIXEL_STD).to(self.device).view(3, 1, 1)
@@ -116,14 +116,14 @@ class RetinaNet(nn.Module):
 
         features = self.backbone(images.tensor)
         features = [features[f] for f in self.in_features]
-        box_cls, box_regression = self.box_cls_and_regression(features)
+        box_cls, box_regression = self.head(features)
         anchors = self.anchor_generator(images, features)
 
         if self.training:
             gt_classes, gt_anchors_reg_deltas = self.get_ground_truth(anchors, targets)
             return self.losses(gt_classes, gt_anchors_reg_deltas, box_cls, box_regression)
-
-        return self.inference(box_cls, box_regression, anchors, images, batched_inputs)
+        else:
+            return self.inference(box_cls, box_regression, anchors, images, batched_inputs)
 
     def losses(self, gt_classes, gt_anchors_deltas, pred_class_logits, pred_anchor_deltas):
         """
@@ -131,7 +131,7 @@ class RetinaNet(nn.Module):
             For `gt_classes` and `gt_anchors_deltas` parameters, see
                 :meth:`RetinaNet.get_ground_truth`.
             For `pred_class_logits` and `pred_anchor_deltas`, see
-                :meth:`RetinaNetClassifierRegressionHead.forward`.
+                :meth:`RetinaNetHead.forward`.
 
         Returns:
             losses (dict[str: Tensor]): mapping from a named loss to a scalar tensor
@@ -366,30 +366,31 @@ class RetinaNet(nn.Module):
         return images
 
 
-@META_ARCH_REGISTRY.register()
-class RetinaNetClassifierRegressionHead(nn.Module):
+class RetinaNetHead(nn.Module):
     def __init__(self, cfg):
         """
         Creates a head for object classification subnet and box regression
         subnet. Although the two subnets share a common structure, they use
         separate parameters (unlike RPN).
         """
-        super(RetinaNetClassifierRegressionHead, self).__init__()
-
-        self.in_features = ["p3", "p4", "p5", "p6", "p7"]
-        in_channels = cfg.MODEL.FPN.OUT_CHANNELS
-        num_classes = cfg.MODEL.RETINANET.NUM_CLASSES
+        super().__init__()
+        # fmt: off
+        self.in_features = cfg.MODEL.RETINANET.IN_FEATURES
+        in_channels      = cfg.MODEL.FPN.OUT_CHANNELS
+        num_classes      = cfg.MODEL.RETINANET.NUM_CLASSES
+        num_convs        = cfg.MODEL.RETINANET.NUM_CONVS
+        prior_prob       = cfg.MODEL.RETINANET.PRIOR_PROB
+        num_anchors      = len(cfg.MODEL.RETINANET.ANCHOR_ASPECT_RATIOS[0]) * \
+            cfg.MODEL.RETINANET.SCALES_PER_OCTAVE
+        # fmt: on
         # aspect ratio list ANCHOR_ASPECT_RATIOS[0] is used for all IN_FEATURES.
         assert (
             len(cfg.MODEL.RETINANET.ANCHOR_ASPECT_RATIOS) == 1
         ), "Using different aspect ratios between levels is not currently supported!"
-        num_anchors = (
-            len(cfg.MODEL.RETINANET.ANCHOR_ASPECT_RATIOS[0]) * cfg.MODEL.RETINANET.SCALES_PER_OCTAVE
-        )
 
         cls_subnet = []
         bbox_subnet = []
-        for _ in range(cfg.MODEL.RETINANET.NUM_CONVS):
+        for _ in range(num_convs):
             cls_subnet.append(
                 nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1)
             )
@@ -399,24 +400,23 @@ class RetinaNetClassifierRegressionHead(nn.Module):
             )
             bbox_subnet.append(nn.ReLU())
 
-        self.add_module("cls_subnet", nn.Sequential(*cls_subnet))
-        self.add_module("bbox_subnet", nn.Sequential(*bbox_subnet))
-        self.cls_logits = nn.Conv2d(
+        self.cls_subnet = nn.Sequential(*cls_subnet)
+        self.bbox_subnet = nn.Sequential(*bbox_subnet)
+        self.cls_score = nn.Conv2d(
             in_channels, num_anchors * num_classes, kernel_size=3, stride=1, padding=1
         )
         self.bbox_pred = nn.Conv2d(in_channels, num_anchors * 4, kernel_size=3, stride=1, padding=1)
 
         # Initialization
-        for modules in [self.cls_subnet, self.bbox_subnet, self.cls_logits, self.bbox_pred]:
+        for modules in [self.cls_subnet, self.bbox_subnet, self.cls_score, self.bbox_pred]:
             for layer in modules.modules():
                 if isinstance(layer, nn.Conv2d):
                     torch.nn.init.normal_(layer.weight, mean=0, std=0.01)
                     torch.nn.init.constant_(layer.bias, 0)
 
         # Use prior in model initialization to improve stability
-        prior_prob = cfg.MODEL.RETINANET.PRIOR_PROB
         bias_value = -math.log((1 - prior_prob) / prior_prob)
-        torch.nn.init.constant_(self.cls_logits.bias, bias_value)
+        torch.nn.init.constant_(self.cls_score.bias, bias_value)
 
     def forward(self, features):
         """
@@ -435,6 +435,6 @@ class RetinaNetClassifierRegressionHead(nn.Module):
         logits = []
         bbox_reg = []
         for feature in features:
-            logits.append(self.cls_logits(self.cls_subnet(feature)))
+            logits.append(self.cls_score(self.cls_subnet(feature)))
             bbox_reg.append(self.bbox_pred(self.bbox_subnet(feature)))
         return logits, bbox_reg
