@@ -17,14 +17,25 @@ from .model_builder import META_ARCH_REGISTRY
 __all__ = ["RetinaNet"]
 
 
-def _permute_and_flatten(layer, N, A, C, H, W):
-    layer = layer.view(N, -1, C, H, W)
-    layer = layer.permute(0, 3, 4, 1, 2)
-    layer = layer.reshape(N, -1, C)  # Size=(N,HWA,C)
-    return layer
+def _permute_to_N_HWA_K(tensor, K):
+    """
+    Transpose/reshape a tensor from (N, (A x K), H, W) to (N, (HxWxA), K)
+    """
+    assert tensor.dim() == 4, tensor.shape
+    N, _, H, W = tensor.shape
+    tensor = tensor.view(N, -1, K, H, W)
+    tensor = tensor.permute(0, 3, 4, 1, 2)
+    tensor = tensor.reshape(N, -1, K)  # Size=(N,HWA,K)
+    return tensor
 
 
-def _concat_box_prediction_layers(box_cls, box_regression):
+def _reshape_predictions(box_cls, box_regression):
+    """
+    Rearrange the tensor layout from the network output, i.e.:
+    list[Tensor]: #lvl tensors of shape (N, A x K, Hi, Wi)
+    to per-image predictions, i.e.:
+    Tensor: of shape (N x sum(Hi x Wi x A), K)
+    """
     box_cls_flattened = []
     box_regression_flattened = []
     # for each feature level, permute the outputs to make them be in the
@@ -32,20 +43,19 @@ def _concat_box_prediction_layers(box_cls, box_regression):
     # all feature levels concatenated, so we keep the same representation
     # for the objectness and the box_regression
     for box_cls_per_level, box_regression_per_level in zip(box_cls, box_regression):
-        N, AxC, H, W = box_cls_per_level.shape
-        Ax4 = box_regression_per_level.shape[1]
-        A = Ax4 // 4
-        C = AxC // A
-        box_cls_per_level = _permute_and_flatten(box_cls_per_level, N, A, C, H, W)
+        N, AxK, H, W = box_cls_per_level.shape
+        A = box_regression_per_level.shape[1] // 4
+        K = AxK // A
+        box_cls_per_level = _permute_to_N_HWA_K(box_cls_per_level, K)
         box_cls_flattened.append(box_cls_per_level)
 
-        box_regression_per_level = _permute_and_flatten(box_regression_per_level, N, A, 4, H, W)
+        box_regression_per_level = _permute_to_N_HWA_K(box_regression_per_level, 4)
         box_regression_flattened.append(box_regression_per_level)
     # concatenate on the first dimension (representing the feature levels), to
     # take into account the way the labels were generated (with all feature maps
     # being concatenated as well)
-    box_cls = cat(box_cls_flattened, dim=1).reshape(-1, C)
-    box_regression = cat(box_regression_flattened, dim=1).reshape(-1, 4)
+    box_cls = cat(box_cls_flattened, dim=1).view(-1, K)
+    box_regression = cat(box_regression_flattened, dim=1).view(-1, 4)
     return box_cls, box_regression
 
 
@@ -123,13 +133,24 @@ class RetinaNet(nn.Module):
             gt_classes, gt_anchors_reg_deltas = self.get_ground_truth(anchors, targets)
             return self.losses(gt_classes, gt_anchors_reg_deltas, box_cls, box_regression)
         else:
-            return self.inference(box_cls, box_regression, anchors, images, batched_inputs)
+            results = self.inference(box_cls, box_regression, anchors, images)
+            processed_results = []
+            for results_per_image, input_per_image, image_size in zip(
+                results, batched_inputs, images.image_sizes
+            ):
+                height = input_per_image.get("height", image_size[0])
+                width = input_per_image.get("width", image_size[1])
+                r = detector_postprocess(results_per_image, height, width)
+                processed_results.append({"instances": r})
+            return processed_results
 
     def losses(self, gt_classes, gt_anchors_deltas, pred_class_logits, pred_anchor_deltas):
         """
         Args:
             For `gt_classes` and `gt_anchors_deltas` parameters, see
                 :meth:`RetinaNet.get_ground_truth`.
+            Their shapes are (N, R) and (N, R, 4), respectively, where R is
+            the total number of anchors across levels, i.e. sum(Hi x Wi x A)
             For `pred_class_logits` and `pred_anchor_deltas`, see
                 :meth:`RetinaNetHead.forward`.
 
@@ -138,11 +159,12 @@ class RetinaNet(nn.Module):
                 storing the loss. Used during training only. The dict keys are:
                 "loss_cls" and "loss_box_reg"
         """
-        pred_class_logits, pred_anchor_deltas = _concat_box_prediction_layers(
+        pred_class_logits, pred_anchor_deltas = _reshape_predictions(
             pred_class_logits, pred_anchor_deltas
-        )
-        gt_classes = cat(gt_classes)
-        gt_anchors_deltas = cat(gt_anchors_deltas)
+        )  # Shapes: (N x R, K) and (N x R, 4), respectively.
+
+        gt_classes = gt_classes.flatten()
+        gt_anchors_deltas = gt_anchors_deltas.view(-1, 4)
 
         valid_idxs = gt_classes >= 0
         foreground_idxs = (gt_classes >= 0) & (gt_classes != self.num_classes)
@@ -169,31 +191,37 @@ class RetinaNet(nn.Module):
 
         return {"loss_cls": loss_cls, "loss_box_reg": loss_box_reg}
 
+    @torch.no_grad()
     def get_ground_truth(self, anchors, targets):
         """
         Args:
-            anchors (list[list[Boxes]]): a list of #image elements. Each is a
+            anchors (list[list[Boxes]]): a list of N=#image elements. Each is a
                 list of #feature level Boxes. The Boxes contains anchors of
                 this image on the specific feature level.
-            targets (list[Instances]): length `N` list of `Instances`s. The i-th
+            targets (list[Instances]): a list of N `Instances`s. The i-th
                 `Instances` contains the ground-truth per-instance annotations
                 for the i-th input image.  Specify `targets` during training only.
 
         Returns:
-            gt_classes (list[Tensor]): A tensor of shape (R,) storing ground-truth classification
-                labels. R is the number of anchors. Anchors that are assigned one of the
-                C labels with a intersection-over-union (IoU) i.e. a metric of confidence that is
-                higher than the foreground threshold are assigned their corresponding label in the
-                [0, C-1] range. Anchors whose IoU are below the background threshold are assigned
-                the label "C". Anchors whose IoU are between the foreground and background
-                thresholds are assigned a label "-1".
-            gt_anchors_deltas (list[Tensor]): shape (R, 4), row i represents ground-truth box2box
-                transform targets (dx, dy, dw, dh) that map object instance i to its matched
-                ground-truth box.
+            gt_classes (Tensor): An integer tensor of shape (N, R) storing ground-truth
+                labels for each anchor.
+                R is the total number of anchors, i.e. the sum of Hi x Wi x A for all levels.
+                Anchors with an IoU with some target higher than the foreground threshold
+                are assigned their corresponding label in the [0, K-1] range.
+                Anchors whose IoU are below the background threshold are assigned
+                the label "K". Anchors whose IoU are between the foreground and background
+                thresholds are assigned a label "-1", i.e. ignore.
+            gt_anchors_deltas (Tensor): Shape (N, R, 4).
+                The last dimension represents ground-truth box2box transform
+                targets (dx, dy, dw, dh) that map each anchor to its matched ground-truth box.
+                The values in the tensor are meaningful only when the corresponding
+                anchor is labeled as foreground.
         """
         gt_classes = []
         gt_anchors_deltas = []
-        anchors = [Boxes.cat(anchors_i) for anchors_i in anchors]  # list of boxes for each image
+        anchors = [Boxes.cat(anchors_i) for anchors_i in anchors]
+        # list[Tensor(R, 4)], one for each image
+
         for anchors_per_image, targets_per_image in zip(anchors, targets):
             match_quality_matrix = pairwise_iou(targets_per_image.gt_boxes, anchors_per_image)
             gt_matched_idxs = self.matcher(match_quality_matrix)
@@ -220,50 +248,36 @@ class RetinaNet(nn.Module):
             gt_classes.append(gt_classes_i)
             gt_anchors_deltas.append(gt_anchors_reg_deltas_i)
 
-        return gt_classes, gt_anchors_deltas
+        return torch.stack(gt_classes), torch.stack(gt_anchors_deltas)
 
-    def inference(
-        self, box_cls, box_regression, anchors, images, batched_inputs, do_postprocess=True
-    ):
+    def inference(self, box_cls, box_regression, anchors, images):
         """
         Arguments:
-            box_cls (list[Tensor]): list of #feature levels. Each entry contains
-                a tensor of size N, A * C, H, W. Here, N is the number of images,
-                A is the number of anchors at every pixel per level (= # of
-                aspect ratios * # of anchor sizes), C is the number of classes,
-                H is the image height and W is the image width.
-            box_regression (list[Tensor]): Same as `box_cls` parameter above.
-                C is 4 since it contains dx, dy, dw, dh values.
+            box_cls, box_regression: Same as the output of :meth:`RetinaNetHead.forward`
             anchors (list[list[Boxes]]): a list of #images elements. Each is a
                 list of #feature level Boxes. The Boxes contain anchors of this
                 image on the specific feature level.
-            images (Tensor): image in (C, H, W) format.
-            batched_inputs (list[dict]): same as in :meth:`forward`
-            do_postprocess (bool): whether to apply post-processing on the outputs.
+            images (ImageList): the input images
 
         Returns:
             results (List[Instances]): a list of #images elements.
         """
-        predicted_boxes = []
+        assert len(anchors) == len(images)
+        results = []
+
+        box_cls = [_permute_to_N_HWA_K(x, self.num_classes) for x in box_cls]
+        box_regression = [_permute_to_N_HWA_K(x, 4) for x in box_regression]
+        # list[Tensor], one per level, each has shape (N, Hi x Wi x A, K or 4)
+
         for img_idx, anchors_per_image in enumerate(anchors):
             image_size = images.image_sizes[img_idx]
-            box_cls_per_image = [box_cls_per_layer[img_idx] for box_cls_per_layer in box_cls]
-            box_reg_per_image = [box_reg_per_layer[img_idx] for box_reg_per_layer in box_regression]
-            predicted_boxes_per_image = self.inference_single_image(
+            box_cls_per_image = [box_cls_per_level[img_idx] for box_cls_per_level in box_cls]
+            box_reg_per_image = [box_reg_per_level[img_idx] for box_reg_per_level in box_regression]
+            results_per_image = self.inference_single_image(
                 box_cls_per_image, box_reg_per_image, anchors_per_image, tuple(image_size)
             )
-
-            # post-process the output boxes per image
-            if do_postprocess:
-                height = batched_inputs[img_idx].get("height", image_size[0])
-                width = batched_inputs[img_idx].get("width", image_size[1])
-                postprocessed_predicted_boxes_per_image = detector_postprocess(
-                    predicted_boxes_per_image, height, width
-                )
-                predicted_boxes.append({"instances": postprocessed_predicted_boxes_per_image})
-            else:
-                predicted_boxes.append({"instances": predicted_boxes_per_image})
-        return predicted_boxes
+            results.append(results_per_image)
+        return results
 
     def inference_single_image(self, box_cls, box_regression, anchors, image_size):
         """
@@ -272,8 +286,8 @@ class RetinaNet(nn.Module):
 
         Arguments:
             box_cls (list[Tensor]): list of #feature levels. Each entry contains
-                tensor of size A * C, H, W.
-            box_regression (list[Tensor]): Same as 'box_cls' parameter. C is 4.
+                tensor of size (H x W x A, K)
+            box_regression (list[Tensor]): Same shape as 'box_cls' except that K becomes 4.
             anchors (list[Boxes]): list of #feature levels. Each entry contains
                 a Boxes object, which contains all the anchors for that
                 image in that feature level.
@@ -282,28 +296,24 @@ class RetinaNet(nn.Module):
         Returns:
             Same as `inference`, but for only one image.
         """
-        boxes_all = defaultdict(list)  # will contain (tensor([x,y,w,h]), tensor([score]))
+        boxes_all = defaultdict(list)  # cls -> List[(tensor(k, 4), tensor(k))]
 
         # Iterate over every feature level
         for box_cls_i, box_reg_i, anchors_i in zip(box_cls, box_regression, anchors):
-            _, H, W = box_cls_i.shape
-            A = box_reg_i.size(0) // 4
-            C = box_cls_i.size(0) // A
-
-            box_cls_i = _permute_and_flatten(box_cls_i, 1, A, C, H, W).flatten()
-            box_reg_i = _permute_and_flatten(box_reg_i, 1, A, 4, H, W).reshape(-1, 4)
-
-            # predict scores
-            predicted_prob = box_cls_i.sigmoid()
-            zeros = torch.zeros(predicted_prob.shape).cuda()
-            predicted_prob = torch.where(
-                predicted_prob > self.score_threshold, predicted_prob, zeros
-            )
+            # (HxWxAxK,)
+            box_cls_i = box_cls_i.flatten().sigmoid_()
 
             # Keep top k top scoring indices only.
-            num_anchors = A * H * W
-            k = min(self.topk_candidates, num_anchors)
-            predicted_prob, topk_idxs = predicted_prob.topk(k, sorted=True, dim=0)
+            num_topk = min(self.topk_candidates, box_reg_i.size(0))
+            # torch.sort is actually faster than .topk (at least on GPUs)
+            predicted_prob, topk_idxs = box_cls_i.sort(descending=True)
+            predicted_prob = predicted_prob[:num_topk]
+            topk_idxs = topk_idxs[:num_topk]
+
+            # filter out the proposals with low confidence score
+            keep_idxs = predicted_prob > self.score_threshold
+            predicted_prob = predicted_prob[keep_idxs]
+            topk_idxs = topk_idxs[keep_idxs]
 
             anchor_idxs = topk_idxs // self.num_classes
             classes_idxs = topk_idxs % self.num_classes
@@ -313,47 +323,42 @@ class RetinaNet(nn.Module):
             # predict boxes
             predicted_boxes = self.box2box_transform.apply_deltas(box_reg_i, anchors_i.tensor)
 
-            # iterate over topk anchor (with unique class) that passed thresholding
-            for anchor_class, box, score in zip(classes_idxs, predicted_boxes, predicted_prob):
-                device = box.device if isinstance(score, torch.Tensor) else torch.device("cpu")
-                score = torch.tensor([score], device=device)
-                anchor_class = int(anchor_class)
-                if anchor_class in boxes_all.keys():
-                    boxes_all[anchor_class].append((box, score))
-                else:
-                    boxes_all[anchor_class] = [(box, score)]
+            # separately store predictions for each class in order to merge them later
+            for cls in torch.unique(classes_idxs):
+                cls = cls.item()
+                idxs = classes_idxs == cls
+                boxes = predicted_boxes[idxs]
+                probs = predicted_prob[idxs]
+                boxes_all[cls].append((boxes, probs))
 
         # Combine predictions across all levels and retain the top scoring by class
         results_per_anchor = []
-        for anchor_classes, boxes_and_scores in boxes_all.items():
+        for cls, boxes_and_scores in boxes_all.items():
             # All Instance values need to be a Tensor or a `Box` object.
             boxes, scores = zip(*boxes_and_scores)
             boxes = torch.cat(boxes, 0).reshape(-1, 4)
             scores = torch.cat(scores)
-            anchor_classes = torch.tensor(
-                [anchor_classes for _ in range(scores.shape[0])], device=scores.device
-            )
 
             keep_idxs = nms(boxes, scores, self.nms_threshold)
 
             result = Instances(image_size)
             result.pred_boxes = Boxes(boxes[keep_idxs])
             result.scores = scores[keep_idxs]
-            result.pred_classes = anchor_classes[keep_idxs]
+            result.pred_classes = torch.full_like(keep_idxs, cls)
             results_per_anchor.append(result)
 
-        results = Instances.cat(results_per_anchor)
+        if results_per_anchor:
+            results = Instances.cat(results_per_anchor)
+        else:
+            results = Instances(image_size)
+            results.pred_boxes = Boxes(torch.zeros(0, 4))
+            results.scores = torch.zeros(0)
+            results.pred_classes = torch.zeros(0, dtype=torch.int64)
 
         # Limit to max_detections_per_image detections **over all object classes**
-        num_detections = len(results)
-        if num_detections > self.max_detections_per_image > 0:
-            cls_scores = results.scores
-            image_thresh, _ = torch.kthvalue(
-                cls_scores.cpu(), num_detections - self.max_detections_per_image + 1
-            )
-            keep = cls_scores >= image_thresh.item()
-            keep = torch.nonzero(keep).squeeze(1)
-            results = results[keep]
+        if len(results) > self.max_detections_per_image > 0:
+            _, sorted_score_indices = torch.sort(results.scores)
+            results = results[sorted_score_indices[-self.max_detections_per_image :]]
         return results
 
     def preprocess_image(self, batched_inputs):
@@ -425,10 +430,12 @@ class RetinaNetHead(nn.Module):
                 Each tensor in the list correspond to different feature levels.
 
         Returns:
-            logits (list[Tensor]): predicted the probability of object presence
+            logits (list[Tensor]): #lvl tensors, each has shape (N, AxK, Hi, Wi).
+                The tensor predicts the classification probability
                 at each spatial position for each of the A anchors and K object
                 classes.
-            bbox_reg (list[Tensor]): predicted 4-vector (dx,dy,dw,dh) box
+            bbox_reg (list[Tensor]): #lvl tensors, each has shape (N, Ax4, Hi, Wi).
+                The tensor predicts 4-vector (dx,dy,dw,dh) box
                 regression values for every anchor. These values are the
                 relative offset between the anchor and the ground truth box.
         """
