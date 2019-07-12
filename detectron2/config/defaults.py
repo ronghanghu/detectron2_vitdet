@@ -534,7 +534,7 @@ _C.OUTPUT_DIR = "./output"
 # You can set them in command line or config files,
 # and access it with:
 #
-# from detectron2.detection import global_cfg
+# from detectron2.config import global_cfg
 # print(global_cfg.HACK)
 #
 # Do not commit any configs into it.

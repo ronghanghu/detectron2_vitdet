@@ -6,7 +6,7 @@ from detectron2.checkpoint import DetectionCheckpointer
 # TODO avoid import from builtin
 from detectron2.data.datasets.builtin import COCO_CATEGORIES
 from detectron2.data.transforms import ImageTransformers, ResizeShortestEdge
-from detectron2.detection.modeling import build_model
+from detectron2.modeling import build_model
 from detectron2.utils.vis import draw_instance_predictions, draw_stuff_predictions
 
 

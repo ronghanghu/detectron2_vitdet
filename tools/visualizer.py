@@ -1,8 +1,8 @@
 import argparse
 import os
 
-from detectron2.data import MetadataCatalog
-from detectron2.detection import build_detection_train_loader, get_cfg, set_global_cfg
+from detectron2.config import get_cfg, set_global_cfg
+from detectron2.data import MetadataCatalog, build_detection_train_loader
 from detectron2.utils.env import setup_environment
 from detectron2.utils.visualizer import Visualizer
 

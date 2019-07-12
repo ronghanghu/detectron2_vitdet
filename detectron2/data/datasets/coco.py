@@ -257,7 +257,7 @@ if __name__ == "__main__":
     """
     from detectron2.utils.logger import setup_logger
     from detectron2.utils.vis import draw_coco_dict
-    import detectron2.detection.data.datasets  # noqa # add pre-defined metadata
+    import detectron2.data.datasets  # noqa # add pre-defined metadata
     import cv2
     import sys
 

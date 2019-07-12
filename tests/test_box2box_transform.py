@@ -1,7 +1,7 @@
 import unittest
 import torch
 
-from detectron2.detection.modeling.box_regression import Box2BoxTransform
+from detectron2.modeling.box_regression import Box2BoxTransform
 from detectron2.structures.boxes import Boxes, pairwise_iou
 
 
