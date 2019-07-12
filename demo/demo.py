@@ -6,6 +6,7 @@ import time
 import cv2
 
 from detectron2.config import get_cfg, set_global_cfg
+from detectron2.data import MetadataCatalog
 
 from predictor import COCODemo
 
@@ -48,8 +49,9 @@ def main():
     cfg.freeze()
     set_global_cfg(cfg.GLOBAL)
 
+    metadata = MetadataCatalog.get(cfg.DATASETS.TRAIN[0])
     # prepare object that handles inference plus adds predictions on top of image
-    coco_demo = COCODemo(cfg, confidence_threshold=args.confidence_threshold)
+    coco_demo = COCODemo(cfg, metadata, confidence_threshold=args.confidence_threshold)
 
     if args.webcam:
         assert args.input is None, "Cannot have both --input and --webcam!"
@@ -58,10 +60,12 @@ def main():
         while True:
             start_time = time.time()
             ret_val, img = cam.read()
-            results, composite = coco_demo.run_on_opencv_image(img)
-            print("#instances: ", len(results))
+            top_predictions, visualized_output = coco_demo.run_on_image(img)
+            print("#instances: ", len(top_predictions))
             print("Time: {:.2f} s / img".format(time.time() - start_time))
-            cv2.imshow("COCO detections", composite)
+            if visualized_output:
+                # Converts Matplotlib RGB format to OpenCV BGR format before visualizing output.
+                cv2.imshow("COCO detections", visualized_output.get_image()[:, :, [2, 1, 0]])
             if cv2.waitKey(1) == 27:
                 break  # esc to quit
         cv2.destroyAllWindows()
@@ -69,16 +73,19 @@ def main():
         for path in args.input:
             img = cv2.imread(path)
             start_time = time.time()
-            results, composite = coco_demo.run_on_opencv_image(img)
-            print("#instances: ", len(results))
+            top_predictions, visualized_output = coco_demo.run_on_image(img)
+            print("#instances: ", len(top_predictions))
             print("Time: {:.2f} s / img".format(time.time() - start_time))
 
             if args.output:
                 assert os.path.isdir(args.output), args.output
                 out_filename = os.path.join(args.output, os.path.basename(path))
-                cv2.imwrite(out_filename, composite)
+                if visualized_output:
+                    visualized_output.save_output_file(out_filename)
             else:
-                cv2.imshow("COCO detections", composite)
+                if visualized_output:
+                    # Converts Matplotlib RGB format to OpenCV BGR format before visualizing output.
+                    cv2.imshow("COCO detections", visualized_output.get_image()[:, :, [2, 1, 0]])
                 if cv2.waitKey(0) == 27:
                     break  # esc to quit
 

@@ -141,12 +141,12 @@ class PolygonMasks(object):
     def __init__(self, polygons):
         """
         Arguments:
-            polygons (list[list[list[float]]]): The first
+            polygons (list[list[Tensor[float]]]): The first
                 level of the list correspond to individual instances,
                 the second level to all the polygons that compose the
                 instance, and the third level to the polygon coordinates.
-                The third level list should have the format of
-                [x0, y0, x1, y1, ..., xn, yn] (n >= 3).
+                The third level Tensor should have the format of
+                torch.Tensor([x0, y0, x1, y1, ..., xn, yn]) (n >= 3).
         """
         assert isinstance(polygons, list)
 
@@ -178,13 +178,17 @@ class PolygonMasks(object):
         `item` can be:
             1. An integer. It will return an object with only one instance.
             2. A slice. It will return an object with the selected instances.
-            3. A vector mask of type ByteTensor, whose length is num_instances.
+            3. A list[int]. It will return an object with the selected instances,
+                correpsonding to the indices in the list.
+            4. A vector mask of type ByteTensor, whose length is num_instances.
                It will return an object with the instances whose mask is nonzero.
         """
         if isinstance(item, int):
             selected_polygons = [self.polygons[item]]
         elif isinstance(item, slice):
             selected_polygons = self.polygons[item]
+        elif isinstance(item, list):
+            selected_polygons = [self.polygons[i] for i in item]
         else:
             # advanced indexing on a single dimension
             if isinstance(item, torch.Tensor) and item.dtype == torch.uint8:

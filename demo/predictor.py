@@ -1,22 +1,20 @@
+import cv2
 import torch
 
 from detectron2.checkpoint import DetectionCheckpointer
-
-# import the hard-coded metadata
-# TODO avoid import from builtin
-from detectron2.data.datasets.builtin import COCO_CATEGORIES
 from detectron2.data.transforms import ImageTransformers, ResizeShortestEdge
 from detectron2.modeling import build_model
-from detectron2.utils.vis import draw_instance_predictions, draw_stuff_predictions
+from detectron2.utils.visualizer import Visualizer
 
 
 class COCODemo(object):
-    def __init__(self, cfg, confidence_threshold=0.7, stuff_area_threshold=4096):
+    def __init__(self, cfg, metadata, confidence_threshold=0.7, stuff_area_threshold=4096):
         self.cfg = cfg.clone()
         self.model = build_model(self.cfg)  # cfg can be modified by model
         self.model.eval()
         self.device = torch.device(cfg.MODEL.DEVICE)
         self.model.to(self.device)
+        self.metadata = metadata
 
         checkpointer = DetectionCheckpointer(self.model)
         checkpointer.load(cfg.MODEL.WEIGHT)
@@ -26,15 +24,6 @@ class COCODemo(object):
         self.cpu_device = torch.device("cpu")
         self.confidence_threshold = confidence_threshold
         self.stuff_area_threshold = stuff_area_threshold
-
-        self.stuff_names = [
-            k["name"].replace("-other", "").replace("-merged", "")
-            for k in COCO_CATEGORIES
-            if k["isthing"] == 0
-        ]
-        self.things_names = [k["name"] for k in COCO_CATEGORIES if k["isthing"] == 1] + [
-            "__background"
-        ]
 
     def build_transform(self):
         """
@@ -46,7 +35,7 @@ class COCODemo(object):
         )
         return transforms
 
-    def run_on_opencv_image(self, image):
+    def run_on_image(self, image, dataset="coco_2017_train"):
         """
         Args:
             image (np.ndarray): an image of shape (H, W, C) (in BGR order).
@@ -54,27 +43,19 @@ class COCODemo(object):
 
         Returns:
             predictions (Instances): the detected objects.
-            viz (np.ndarray): the visualization
+            vis_output (VisualizedImageOutput): the visualized image output.
         """
+        vis_output = None
         predictions = self.compute_predictions(image)
-        result = image.copy()
-        color_idx = 0
-        if "sem_seg" in predictions:
-            result, color_idx = draw_stuff_predictions(
-                result,
-                predictions["sem_seg"].to(self.cpu_device),
-                color_idx,
-                self.stuff_names,
-                self.stuff_area_threshold,
-            )
+        # Convert image from OpenCV BGR format to Matplotlib RGB format.
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image = torch.tensor(image)
         if "instances" in predictions:
-            top_predictions = self.select_top_predictions(
-                predictions["instances"].to(self.cpu_device)
-            )
-            result, color_idx = draw_instance_predictions(
-                result, top_predictions, color_idx, self.things_names
-            )
-        return top_predictions, result
+            predictions = self.select_top_predictions(predictions["instances"].to(self.cpu_device))
+            visualizer = Visualizer(image, self.metadata)
+            vis_output = visualizer.draw_instance_predictions(predictions=predictions.to("cpu"))
+
+        return predictions, vis_output
 
     def compute_predictions(self, original_image):
         """
