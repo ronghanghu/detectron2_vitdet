@@ -12,7 +12,7 @@ from ..postprocessing import (
 from ..proposal_generator import build_proposal_generator
 from ..roi_heads import build_roi_heads
 from ..sem_seg_heads import build_sem_seg_head
-from .model_builder import META_ARCH_REGISTRY
+from .build import META_ARCH_REGISTRY
 
 __all__ = ["SemanticSegmentor", "PanopticFPN"]
 

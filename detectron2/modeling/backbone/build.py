@@ -1,6 +1,8 @@
-from detectron2.layers import Backbone
+from detectron2.utils.registry import Registry
 
-from . import BACKBONE_REGISTRY, fpn, resnet  # noqa
+from .backbone import Backbone
+
+BACKBONE_REGISTRY = Registry("BACKBONE")
 
 
 def build_backbone(cfg):

@@ -1,4 +1,13 @@
-from .backbone import BACKBONE_REGISTRY, build_backbone
+from .backbone import (
+    BACKBONE_REGISTRY,
+    FPN,
+    Backbone,
+    ResNet,
+    ResNetBlockBase,
+    build_backbone,
+    build_resnet_backbone,
+    make_stage,
+)
 from .meta_arch import (
     META_ARCH_REGISTRY,
     GeneralizedRCNN,

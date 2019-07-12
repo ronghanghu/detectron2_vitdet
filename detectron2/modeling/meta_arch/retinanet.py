@@ -12,7 +12,7 @@ from ..backbone import build_backbone
 from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher
 from ..postprocessing import detector_postprocess
-from .model_builder import META_ARCH_REGISTRY
+from .build import META_ARCH_REGISTRY
 
 __all__ = ["RetinaNet"]
 

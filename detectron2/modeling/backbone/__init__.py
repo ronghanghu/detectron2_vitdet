@@ -1,5 +1,7 @@
-from detectron2.utils.registry import Registry
+from .build import build_backbone, BACKBONE_REGISTRY  # noqa F401 isort:skip
 
-# BACKBONE_REGISTRY must be defined before importing build_backbone
-BACKBONE_REGISTRY = Registry("BACKBONE")
-from .build import build_backbone  # noqa F401 isort:skip
+from .backbone import Backbone
+from .fpn import FPN
+from .resnet import ResNet, ResNetBlockBase, build_resnet_backbone, make_stage
+
+# TODO can expose more resnet blocks after careful consideration

@@ -1,12 +1,13 @@
 import numpy as np
 import torch
+from torch import nn
 from torch.nn import functional as F
 
 from detectron2.structures import Boxes, Instances, pairwise_iou
 from detectron2.utils.events import get_event_storage
 from detectron2.utils.registry import Registry
 
-from ..backbone import resnet
+from ..backbone.resnet import BottleneckBlock, make_stage
 from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher
 from ..poolers import ROIPooler
@@ -291,7 +292,7 @@ class Res5ROIHeads(ROIHeads):
             pooler_type=box_pooler_type,
         )
 
-        self.res5 = resnet.build_resnet_head(cfg)
+        self.res5 = self.build_res5_block(cfg)
         out_channels = self.res5[-1].out_channels
         self.box_predictor = FastRCNNOutputHead(
             out_channels, self.num_classes, self.cls_agnostic_bbox_reg
@@ -305,6 +306,32 @@ class Res5ROIHeads(ROIHeads):
                 pooler_resolution,
             )
             self.mask_head = build_mask_head(cfg)
+
+    def build_res5_block(self, cfg):
+        # fmt: off
+        stage_channel_factor = 2 ** 3  # res5 is 8x res2
+        num_groups           = cfg.MODEL.RESNETS.NUM_GROUPS
+        width_per_group      = cfg.MODEL.RESNETS.WIDTH_PER_GROUP
+        bottleneck_channels  = num_groups * width_per_group * stage_channel_factor
+        out_channels         = cfg.MODEL.RESNETS.RES2_OUT_CHANNELS * stage_channel_factor
+        stride_in_1x1        = cfg.MODEL.RESNETS.STRIDE_IN_1X1
+        norm                 = cfg.MODEL.RESNETS.NORM
+        assert not cfg.MODEL.RESNETS.DEFORM_ON_PER_STAGE[-1], \
+            "Deformable conv is not yet supported in res5 head."
+        # fmt: on
+
+        blocks = make_stage(
+            BottleneckBlock,
+            3,
+            first_stride=2,
+            in_channels=out_channels // 2,
+            bottleneck_channels=bottleneck_channels,
+            out_channels=out_channels,
+            num_groups=num_groups,
+            norm=norm,
+            stride_in_1x1=stride_in_1x1,
+        )
+        return nn.Sequential(*blocks)
 
     def _shared_roi_transform(self, features, boxes):
         x = self.pooler(features, boxes)

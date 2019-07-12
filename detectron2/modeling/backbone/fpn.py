@@ -3,16 +3,19 @@ import borc.nn.weight_init as weight_init
 import torch.nn.functional as F
 from torch import nn
 
-from detectron2.layers import Backbone, Conv2d
+from detectron2.layers import Conv2d
 
-from . import BACKBONE_REGISTRY, resnet
+from .backbone import Backbone
+from .build import BACKBONE_REGISTRY
+from .resnet import build_resnet_backbone
 
-__all__ = ["build_resnet_fpn_backbone", "build_retinanet_resnet_fpn_backbone"]
+__all__ = ["build_resnet_fpn_backbone", "build_retinanet_resnet_fpn_backbone", "FPN"]
 
 
 class FPN(Backbone):
     """
-    Module that adds FPN on top of a list of feature maps.
+    This module implements Feature Pyramid Network.
+    It creates pyramid features built on top of some input feature maps.
     """
 
     def __init__(self, bottom_up, in_features, out_channels, norm="", top_block=None):
@@ -176,7 +179,7 @@ def build_resnet_fpn_backbone(cfg):
     Returns:
         backbone (Backbone): backbone module, must be a subclass of :class:`Backbone`.
     """
-    bottom_up = resnet.build_resnet_backbone(cfg)
+    bottom_up = build_resnet_backbone(cfg)
     in_features = cfg.MODEL.FPN.IN_FEATURES
     out_channels = cfg.MODEL.FPN.OUT_CHANNELS
     backbone = FPN(
@@ -198,7 +201,7 @@ def build_retinanet_resnet_fpn_backbone(cfg):
     Returns:
         backbone (Backbone): backbone module, must be a subclass of :class:`Backbone`.
     """
-    bottom_up = resnet.build_resnet_backbone(cfg)
+    bottom_up = build_resnet_backbone(cfg)
     in_features = cfg.MODEL.FPN.IN_FEATURES
     out_channels = cfg.MODEL.FPN.OUT_CHANNELS
     in_channels_p6p7 = bottom_up.out_feature_channels["res5"]
