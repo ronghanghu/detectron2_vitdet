@@ -244,13 +244,10 @@ def do_train(cfg, model):
     scheduler = build_lr_scheduler(cfg, optimizer)
 
     checkpointer = DetectionCheckpointer(model, optimizer, scheduler, cfg.OUTPUT_DIR)
-    file = checkpointer.get_checkpoint_file() if checkpointer.has_checkpoint() else cfg.MODEL.WEIGHT
-    start_iter = checkpointer.load(file).get("iteration", 0)
+    start_iter = checkpointer.resume_or_load(cfg.MODEL.WEIGHT).get("iteration", 0)
     max_iter = cfg.SOLVER.MAX_ITER
-    if start_iter == max_iter:
-        return
     periodic_checkpointer = PeriodicCheckpointer(
-        checkpointer, cfg.SOLVER.CHECKPOINT_PERIOD, max_iter=cfg.SOLVER.MAX_ITER
+        checkpointer, cfg.SOLVER.CHECKPOINT_PERIOD, max_iter=max_iter
     )
 
     data_loader = build_detection_train_loader(cfg, start_iter=start_iter)

@@ -420,7 +420,9 @@ def _evaluate_predictions_on_coco(
     N_COLS = 6
     results_flatten = list(itertools.chain(*results_per_category))
     results_2d = itertools.zip_longest(*[results_flatten[i::N_COLS] for i in range(N_COLS)])
-    table = tabulate(results_2d, tablefmt="pipe", floatfmt=".3f")
+    table = tabulate(
+        results_2d, tablefmt="pipe", floatfmt=".3f", headers=["category", "AP"] * (N_COLS // 2)
+    )
     logger.info("Per-category {} AP: \n".format(iou_type) + table)
 
     results.update(dict(results_per_category))
@@ -435,5 +437,5 @@ def _create_small_table(res):
     Since res is small, print keys as headers.
     """
     keys, values = tuple(zip(*res.items()))
-    table = tabulate([values], headers=keys, tablefmt="pipe", floatfmt=".3f")
+    table = tabulate([values], headers=keys, tablefmt="pipe", floatfmt=".3f", stralign="center")
     return table

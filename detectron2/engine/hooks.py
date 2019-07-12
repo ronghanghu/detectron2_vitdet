@@ -80,14 +80,17 @@ class IterationTimer(HookBase):
 
         num_iter = self.trainer.max_iter - self.trainer.start_iter - self._warmup_iter
 
-        # NOTE this format is parsed by grep
-        logger.info(
-            "Overall training speed: {} iterations in {} ({:.4f} s / it)".format(
-                num_iter,
-                str(datetime.timedelta(seconds=int(total_time_minus_hooks))),
-                total_time_minus_hooks / num_iter,
+        if num_iter > 0 and total_time_minus_hooks > 0:
+            # Speed is meaningful only after warmup
+            # NOTE this format is parsed by grep
+            logger.info(
+                "Overall training speed: {} iterations in {} ({:.4f} s / it)".format(
+                    num_iter,
+                    str(datetime.timedelta(seconds=int(total_time_minus_hooks))),
+                    total_time_minus_hooks / num_iter,
+                )
             )
-        )
+
         logger.info(
             "Total training time: {} ({} on hooks)".format(
                 str(datetime.timedelta(seconds=int(total_time))),
@@ -100,7 +103,9 @@ class IterationTimer(HookBase):
         self._total_timer.resume()
 
     def after_step(self):
-        if self.trainer.iter - self.trainer.start_iter >= self._warmup_iter:
+        # +1 because we're in after_step
+        iter_done = self.trainer.iter - self.trainer.start_iter + 1
+        if iter_done >= self._warmup_iter:
             sec = self._step_timer.seconds()
             self.trainer.storage.put_scalars(time=sec)
         else:

@@ -66,26 +66,22 @@ class Checkpointer(object):
         torch.save(data, save_file)
         self.tag_last_checkpoint(basename)
 
-    def load(self, f=None):
+    def load(self, path: str):
         """
-        Load from the specified checkpoint. If checkpoint is not provided,
-        try to load the latest available checkpoint.
+        Load from the given checkpoint.
 
         Args:
-            f (str): path or url to the checkpoint
+            path (str): path or url to the checkpoint. If empty, will not load anything.
 
         Returns:
             dict: extra data loaded from the checkpoint, other than model, optimizer and scheduler.
         """
-        if not f and self.has_checkpoint():
-            # override argument with existing checkpoint
-            f = self.get_checkpoint_file()
-        if not f:
-            # no checkpoint could be found
+        if not path:
+            # no checkpoint provided
             self.logger.info("No checkpoint found. Initializing model from scratch")
             return {}
-        self.logger.info("Loading checkpoint from {}".format(f))
-        if not os.path.isfile(f):
+        self.logger.info("Loading checkpoint from {}".format(path))
+        if not os.path.isfile(path):
             # In case the file does not exist, PathManager is responsible to
             # looking for the file.
             # We let the main process look for the file first, since the file
@@ -96,22 +92,22 @@ class Checkpointer(object):
             # In that case it might be the best to just manually put the file
             # somewhere to use.
             if comm.is_main_process():
-                f = PathManager.get_file_name(f)
+                path = PathManager.get_file_name(path)
             comm.synchronize()
-            f = PathManager.get_file_name(f)
-            assert os.path.isfile(f), "Checkpoint {} not found!".format(f)
-        if os.path.isfile(f) and self.cache_on_load:
-            cached_f = cache_file(f)
-            self.logger.info("File {} cached in {}".format(f, cached_f))
-            f = cached_f
+            path = PathManager.get_file_name(path)
+            assert os.path.isfile(path), "Checkpoint {} not found!".format(path)
+        if os.path.isfile(path) and self.cache_on_load:
+            cached_f = cache_file(path)
+            self.logger.info("File {} cached in {}".format(path, cached_f))
+            path = cached_f
 
-        checkpoint = self._load_file(f)
+        checkpoint = self._load_file(path)
         self._load_model(checkpoint)
         if "optimizer" in checkpoint and self.optimizer:
-            self.logger.info("Loading optimizer from {}".format(f))
+            self.logger.info("Loading optimizer from {}".format(path))
             self.optimizer.load_state_dict(checkpoint.pop("optimizer"))
         if "scheduler" in checkpoint and self.scheduler:
-            self.logger.info("Loading scheduler from {}".format(f))
+            self.logger.info("Loading scheduler from {}".format(path))
             self.scheduler.load_state_dict(checkpoint.pop("scheduler"))
 
         # return any further checkpoint data
@@ -135,6 +131,19 @@ class Checkpointer(object):
             # deleted by a separate process
             last_saved = ""
         return os.path.join(self.save_dir, last_saved)
+
+    def resume_or_load(self, path: str):
+        """
+        Resume from the last checkpoint, if exists.
+        Otherwise, load checkpoint from the given path.
+
+        This is useful when restarting an interrupted training job.
+
+        Argument and return values are the same as :meth:`load()`.
+        """
+        if self.has_checkpoint():
+            path = self.get_checkpoint_file()
+        return self.load(path)
 
     def tag_last_checkpoint(self, last_filename_basename):
         save_file = os.path.join(self.save_dir, "last_checkpoint")

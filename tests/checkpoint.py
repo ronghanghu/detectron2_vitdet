@@ -50,7 +50,7 @@ class TestCheckpointer(unittest.TestCase):
                 self.assertEqual(
                     fresh_checkpointer.get_checkpoint_file(), os.path.join(f, "checkpoint_file.pth")
                 )
-                fresh_checkpointer.load()
+                fresh_checkpointer.load(fresh_checkpointer.get_checkpoint_file())
 
             for trained_p, loaded_p in zip(trained_model.parameters(), fresh_model.parameters()):
                 # different tensor references

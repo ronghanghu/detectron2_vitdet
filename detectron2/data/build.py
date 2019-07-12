@@ -160,12 +160,24 @@ def print_instances_class_histogram(dataset_dicts, class_names):
         annos = entry["annotations"]
         classes = [x["category_id"] for x in annos if not x["iscrowd"]]
         histogram += np.histogram(classes, bins=hist_bins)[0]
-    data = [[class_names[i], v] for i, v in enumerate(histogram)]
-    data.append(["total ({} categories)".format(num_classes), sum(x[1] for x in data)])
-    table = tabulate(data, headers=["category", "#instances"], tablefmt="pipe")
+
+    N_COLS = 6
+    data = list(itertools.chain(*[[class_names[i], int(v)] for i, v in enumerate(histogram)]))
+    total_num_instances = sum(data[1::2])
+    data.extend([None] * (N_COLS - (len(data) % N_COLS)))
+    data.extend(["total", total_num_instances])
+    data = itertools.zip_longest(*[data[i::N_COLS] for i in range(N_COLS)])
+    table = tabulate(
+        data,
+        headers=["category", "#instances"] * (N_COLS // 2),
+        tablefmt="pipe",
+        numalign="left",
+        stralign="center",
+    )
     logger = logging.getLogger(__name__)
     logger.info(
-        "Distribution of categories among all training instances:\n" + colored(table, "cyan")
+        "Distribution of training instances among all {} categories:\n".format(num_classes)
+        + colored(table, "cyan")
     )
 
 
