@@ -96,7 +96,7 @@ def _convert_rpn_name(model):
         new_key = old_key.replace("rpn.head.", "proposal_generator.rpn_head.").replace(
             "rpn.anchor_", "proposal_generator.anchor_"
         )
-        logger.warning("Change origin rpn weight name {} to {}.".format(old_key, new_key))
+        logger.warning("Rename parameter '{}' in checkpoint to '{}'.".format(old_key, new_key))
         model[new_key] = model.pop(old_key)
 
     return model

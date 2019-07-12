@@ -87,10 +87,20 @@ class Metadata(types.SimpleNamespace):
 
     def set(self, **kwargs):
         """
-        Set multiple metadata from kwargs.
+        Set multiple metadata with kwargs.
         """
         for k, v in kwargs.items():
             setattr(self, k, v)
+
+    def get(self, key, default=None):
+        """
+        Access an attribute and return its value if exists.
+        Otherwise return default.
+        """
+        try:
+            return getattr(self, key)
+        except AttributeError:
+            return default
 
 
 class MetadataCatalog:

@@ -38,6 +38,14 @@ class DatasetEvaluator:
     def evaluate(self):
         """
         Evaluate/summarize the performance, after processing all input/output pairs.
+
+        Returns:
+            dict: A new evaluator class can return a dict of arbitrary format
+                as long as the user can process the results.
+
+                In our train_net.py, we expect the following format:
+                key: the name of the task (e.g., bbox)
+                value: a dict of {metric name: score}, e.g.: {"AP50": 80}
         """
         pass
 

@@ -1,15 +1,16 @@
+import copy
 import itertools
 import json
 import logging
 import numpy as np
 import os
 import pickle
-import tempfile
 from collections import OrderedDict
 import pycocotools.mask as mask_util
 import torch
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
+from tabulate import tabulate
 
 from detectron2.data import MetadataCatalog
 from detectron2.structures import Boxes, BoxMode, pairwise_iou
@@ -138,16 +139,15 @@ class COCOEvaluator(DatasetEvaluator):
         if "instances" in self._predictions[0]:
             tasks = set(self._tasks)
             self._eval_predictions(tasks)
-
-        self._logger.info(self._results)
-        return self._results
+        # Copy so the caller can do whatever with results
+        return copy.deepcopy(self._results)
 
     def _eval_predictions(self, tasks):
         """
         Evaluate self._predictions on the given tasks.
         Fill self._results with the metrics of the tasks.
         """
-        self._logger.info("Preparing results for COCO format")
+        self._logger.info("Preparing results for COCO format ...")
         self._coco_results = prepare_for_coco_evaluation(self._predictions)
 
         # unmap the category ids for COCO
@@ -160,37 +160,38 @@ class COCOEvaluator(DatasetEvaluator):
 
         if self._output_dir:
             file_path = os.path.join(self._output_dir, "coco_instances_results.json")
-            f = open(file_path, "w")
-        else:
-            f = tempfile.NamedTemporaryFile(suffix=".json")
-            file_path = f.name
-        with f:
-            json.dump(self._coco_results, f)
-            f.flush()
-            os.fsync(f.fileno())
+            with open(file_path, "w") as f:
+                json.dump(self._coco_results, f)
+                f.flush()
+                os.fsync(f.fileno())
 
-            self._logger.info("Evaluating predictions")
-            for task in sorted(tasks):
-                res = evaluate_predictions_on_coco(
-                    self._coco_api, self._coco_results, file_path, self.kpt_oks_sigmas, task
-                )
-                self._results[task] = res
+        self._logger.info("Evaluating predictions ...")
+        for task in sorted(tasks):
+            res = _evaluate_predictions_on_coco(
+                self._coco_api,
+                self._coco_results,
+                task,
+                kpt_oks_sigmas=self.kpt_oks_sigmas,
+                class_names=self._metadata.get("class_names"),
+            )
+            self._results[task] = res
 
     def _eval_box_proposals(self):
         """
         Evaluate the box proposals in self._predictions.
         Fill self._results with the metrics for "box_proposals" task.
         """
-        self._logger.info("Evaluating bbox proposals")
+        self._logger.info("Evaluating bbox proposals ...")
         res = {}
         areas = {"all": "", "small": "s", "medium": "m", "large": "l"}
         for limit in [100, 1000]:
             for area, suffix in areas.items():
-                stats = evaluate_box_proposals(
+                stats = _evaluate_box_proposals(
                     self._predictions, self._coco_api, area=area, limit=limit
                 )
                 key = "AR{}@{:d}".format(suffix, limit)
-                res[key] = stats["ar"].item() * 100
+                res[key] = float(stats["ar"].item() * 100)
+        self._logger.info("Proposal metrics: \n" + _create_small_table(res))
         self._results["box_proposals"] = res
 
 
@@ -202,7 +203,6 @@ def prepare_for_coco_evaluation(dataset_predictions):
     Returns:
         list[dict]: the format used by COCO evaluation.
     """
-
     coco_results = []
     processed_ids = {}
     for prediction_dict in dataset_predictions:
@@ -253,8 +253,9 @@ def prepare_for_coco_evaluation(dataset_predictions):
 
 
 # inspired from Detectron
-def evaluate_box_proposals(dataset_predictions, coco_api, thresholds=None, area="all", limit=None):
-    """Evaluate detection proposal recall metrics. This function is a much
+def _evaluate_box_proposals(dataset_predictions, coco_api, thresholds=None, area="all", limit=None):
+    """
+    Evaluate detection proposal recall metrics. This function is a much
     faster alternative to the official COCO API recall evaluation code. However,
     it produces slightly different results.
     """
@@ -364,24 +365,75 @@ def evaluate_box_proposals(dataset_predictions, coco_api, thresholds=None, area=
     }
 
 
-def evaluate_predictions_on_coco(
-    coco_gt, coco_results, json_result_file, kpt_oks_sigmas, iou_type="bbox"
+def _evaluate_predictions_on_coco(
+    coco_gt, coco_results, iou_type, kpt_oks_sigmas=None, class_names=None
 ):
+    """
+    Returns:
+        a dict of {metric name: score}
+    """
     metrics = {
         "bbox": ["AP", "AP50", "AP75", "APs", "APm", "APl"],
         "segm": ["AP", "AP50", "AP75", "APs", "APm", "APl"],
         "keypoints": ["AP", "AP50", "AP75", "APm", "APl"],
     }[iou_type]
 
+    logger = logging.getLogger(__name__)
+
     if len(coco_results) == 0:  # cocoapi does not handle empty results very well
+        logger.warn("No predictions from the model! Set scores to -1")
         return {metric: -1 for metric in metrics}
 
-    coco_dt = coco_gt.loadRes(str(json_result_file))
-    # coco_dt = coco_gt.loadRes(coco_results)
+    # TODO: remove this hack (https://github.com/cocodataset/cocoapi/issues/49)
+    from pycocotools import coco
+
+    coco.unicode = str
+
+    coco_dt = coco_gt.loadRes(coco_results)
     coco_eval = COCOeval(coco_gt, coco_dt, iou_type)
     coco_eval.params.kpt_oks_sigmas = np.array(kpt_oks_sigmas)
     coco_eval.evaluate()
     coco_eval.accumulate()
     coco_eval.summarize()
 
-    return {metric: coco_eval.stats[idx] * 100 for idx, metric in enumerate(metrics)}
+    # the standard metrics
+    results = {metric: float(coco_eval.stats[idx] * 100) for idx, metric in enumerate(metrics)}
+    logger.info("Evaluation results for {}: \n".format(iou_type) + _create_small_table(results))
+
+    if class_names is None:
+        return results
+    # Compute per-category AP
+    # from https://github.com/facebookresearch/Detectron/blob/a6a835f5b8208c45d0dce217ce9bbda915f44df7/detectron/datasets/json_dataset_evaluator.py#L222-L252 # noqa
+    precisions = coco_eval.eval["precision"]
+    # precision has dims (iou, recall, cls, area range, max dets)
+    assert len(class_names) == precisions.shape[2]
+
+    results_per_category = []
+    for idx, name in enumerate(class_names):
+        # area range index 0: all area ranges
+        # max dets index 2: 100 per image
+        precision = precisions[:, :, idx, 0, 2]
+        ap = np.mean(precision[precision > -1])
+        results_per_category.append(("AP-{}".format(name), float(ap * 100)))
+
+    # tabulate it
+    N_COLS = 6
+    results_flatten = list(itertools.chain(*results_per_category))
+    results_2d = itertools.zip_longest(*[results_flatten[i::N_COLS] for i in range(N_COLS)])
+    table = tabulate(results_2d, tablefmt="pipe", floatfmt=".3f")
+    logger.info("Per-category {} AP: \n".format(iou_type) + table)
+
+    results.update(dict(results_per_category))
+    return results
+
+
+def _create_small_table(res):
+    """
+    Args:
+        res (dict): a result dictionary of only a few items.
+
+    Since res is small, print keys as headers.
+    """
+    keys, values = tuple(zip(*res.items()))
+    table = tabulate([values], headers=keys, tablefmt="pipe", floatfmt=".3f")
+    return table
