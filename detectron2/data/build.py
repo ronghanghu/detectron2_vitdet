@@ -161,7 +161,7 @@ def print_instances_class_histogram(dataset_dicts, class_names):
         classes = [x["category_id"] for x in annos if not x["iscrowd"]]
         histogram += np.histogram(classes, bins=hist_bins)[0]
 
-    N_COLS = 6
+    N_COLS = min(6, len(class_names) * 2)
     data = list(itertools.chain(*[[class_names[i], int(v)] for i, v in enumerate(histogram)]))
     total_num_instances = sum(data[1::2])
     data.extend([None] * (N_COLS - (len(data) % N_COLS)))

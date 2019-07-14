@@ -29,12 +29,12 @@ class COCOEvaluator(DatasetEvaluator):
         """
         Args:
             dataset_name (str): name of the dataset to be evaluated.
-                It must has the following corresponding metadata:
+                It must have the following corresponding metadata:
                     "json_file": the path to the COCO format annotation
-            cfg (Config): config instance
+            cfg (CfgNode): config instance
             distributed (True): if True, will collect results from all ranks for evaluation.
                 Otherwise, will evaluate the results in the current process.
-            output_dir (str): an output directory to dump results.
+            output_dir (str): optional, an output directory to dump results.
         """
         self._tasks = self._tasks_from_config(cfg)
         self._distributed = distributed
@@ -46,7 +46,7 @@ class COCOEvaluator(DatasetEvaluator):
         self._metadata = MetadataCatalog.get(dataset_name)
         self._coco_api = COCO(self._metadata.json_file)
 
-        self.kpt_oks_sigmas = cfg.TEST.KEYPOINT_OKS_SIGMAS
+        self._kpt_oks_sigmas = cfg.TEST.KEYPOINT_OKS_SIGMAS
 
     def reset(self):
         self._predictions = []
@@ -70,12 +70,13 @@ class COCOEvaluator(DatasetEvaluator):
             inputs: the inputs to a COCO model (e.g., GeneralizedRCNN).
                 It is a list of dict. Each dict corresponds to an image and
                 contains keys like "height", "width", "file_name", "image_id".
-            outputs: the outputs of a COCO model. It is either list of :class:`Instances` or
-                list of dicts with key "instances" that contains :class:`Instances`.
+            outputs: the outputs of a COCO model. It is a list of dicts with key
+                "instances" that contains :class:`Instances`.
         """
         for input, output in zip(inputs, outputs):
             prediction = {"image_id": input["image_id"]}
 
+            # TODO this is ugly
             if "instances" in output:
                 instances = output["instances"].to(self._cpu_device)
 
@@ -115,30 +116,9 @@ class COCOEvaluator(DatasetEvaluator):
 
         self._results = OrderedDict()
         if "proposals" in self._predictions[0]:
-            if self._output_dir:
-                # Saving generated box proposals to file.
-                # Predicted box_proposals are in XYXY_ABS mode.
-                bbox_mode = BoxMode.XYXY_ABS.value
-                ids, boxes, objectness_logits = [], [], []
-                for prediction in self._predictions:
-                    ids.append(prediction["image_id"])
-                    boxes.append(prediction["proposals"].proposal_boxes.tensor.numpy())
-                    objectness_logits.append(prediction["proposals"].objectness_logits.numpy())
-
-                proposal_data = {
-                    "boxes": boxes,
-                    "objectness_logits": objectness_logits,
-                    "ids": ids,
-                    "bbox_mode": bbox_mode,
-                }
-                with open(os.path.join(self._output_dir, "box_proposals.pkl"), "wb") as f:
-                    pickle.dump(proposal_data, f)
-
             self._eval_box_proposals()
-
         if "instances" in self._predictions[0]:
-            tasks = set(self._tasks)
-            self._eval_predictions(tasks)
+            self._eval_predictions(set(self._tasks))
         # Copy so the caller can do whatever with results
         return copy.deepcopy(self._results)
 
@@ -171,7 +151,7 @@ class COCOEvaluator(DatasetEvaluator):
                 self._coco_api,
                 self._coco_results,
                 task,
-                kpt_oks_sigmas=self.kpt_oks_sigmas,
+                kpt_oks_sigmas=self._kpt_oks_sigmas,
                 class_names=self._metadata.get("class_names"),
             )
             self._results[task] = res
@@ -181,6 +161,25 @@ class COCOEvaluator(DatasetEvaluator):
         Evaluate the box proposals in self._predictions.
         Fill self._results with the metrics for "box_proposals" task.
         """
+        if self._output_dir:
+            # Saving generated box proposals to file.
+            # Predicted box_proposals are in XYXY_ABS mode.
+            bbox_mode = BoxMode.XYXY_ABS.value
+            ids, boxes, objectness_logits = [], [], []
+            for prediction in self._predictions:
+                ids.append(prediction["image_id"])
+                boxes.append(prediction["proposals"].proposal_boxes.tensor.numpy())
+                objectness_logits.append(prediction["proposals"].objectness_logits.numpy())
+
+            proposal_data = {
+                "boxes": boxes,
+                "objectness_logits": objectness_logits,
+                "ids": ids,
+                "bbox_mode": bbox_mode,
+            }
+            with open(os.path.join(self._output_dir, "box_proposals.pkl"), "wb") as f:
+                pickle.dump(proposal_data, f)
+
         self._logger.info("Evaluating bbox proposals ...")
         res = {}
         areas = {"all": "", "small": "s", "medium": "m", "large": "l"}
@@ -252,7 +251,8 @@ def prepare_for_coco_evaluation(dataset_predictions):
     return coco_results
 
 
-# inspired from Detectron
+# inspired from Detectron:
+# https://github.com/facebookresearch/Detectron/blob/a6a835f5b8208c45d0dce217ce9bbda915f44df7/detectron/datasets/json_dataset_evaluator.py#L255 # noqa
 def _evaluate_box_proposals(dataset_predictions, coco_api, thresholds=None, area="all", limit=None):
     """
     Evaluate detection proposal recall metrics. This function is a much
@@ -305,7 +305,7 @@ def _evaluate_box_proposals(dataset_predictions, coco_api, thresholds=None, area
         gt_boxes = Boxes(gt_boxes)
         gt_areas = torch.as_tensor([obj["area"] for obj in anno if obj["iscrowd"] == 0])
 
-        if len(gt_boxes) == 0:
+        if len(gt_boxes) == 0 or len(predictions) == 0:
             continue
 
         valid_gt_inds = (gt_areas >= area_range[0]) & (gt_areas <= area_range[1])
@@ -314,9 +314,6 @@ def _evaluate_box_proposals(dataset_predictions, coco_api, thresholds=None, area
         num_pos += len(gt_boxes)
 
         if len(gt_boxes) == 0:
-            continue
-
-        if len(predictions) == 0:
             continue
 
         if limit is not None and len(predictions) > limit:
@@ -369,6 +366,12 @@ def _evaluate_predictions_on_coco(
     coco_gt, coco_results, iou_type, kpt_oks_sigmas=None, class_names=None
 ):
     """
+    Args:
+        iou_type (str):
+        kpt_oks_sigmas (list[float]):
+        class_names (None or list[str]): if provided, will use it to predict
+            per-category AP.
+
     Returns:
         a dict of {metric name: score}
     """
@@ -400,7 +403,7 @@ def _evaluate_predictions_on_coco(
     results = {metric: float(coco_eval.stats[idx] * 100) for idx, metric in enumerate(metrics)}
     logger.info("Evaluation results for {}: \n".format(iou_type) + _create_small_table(results))
 
-    if class_names is None:
+    if class_names is None or len(class_names) <= 1:
         return results
     # Compute per-category AP
     # from https://github.com/facebookresearch/Detectron/blob/a6a835f5b8208c45d0dce217ce9bbda915f44df7/detectron/datasets/json_dataset_evaluator.py#L222-L252 # noqa
@@ -413,19 +416,24 @@ def _evaluate_predictions_on_coco(
         # area range index 0: all area ranges
         # max dets index 2: 100 per image
         precision = precisions[:, :, idx, 0, 2]
-        ap = np.mean(precision[precision > -1])
-        results_per_category.append(("AP-{}".format(name), float(ap * 100)))
+        precision = precision[precision > -1]
+        ap = np.mean(precision) if precision.size else float("nan")
+        results_per_category.append(("{}".format(name), float(ap * 100)))
 
     # tabulate it
-    N_COLS = 6
+    N_COLS = min(6, len(results_per_category) * 2)
     results_flatten = list(itertools.chain(*results_per_category))
     results_2d = itertools.zip_longest(*[results_flatten[i::N_COLS] for i in range(N_COLS)])
     table = tabulate(
-        results_2d, tablefmt="pipe", floatfmt=".3f", headers=["category", "AP"] * (N_COLS // 2)
+        results_2d,
+        tablefmt="pipe",
+        floatfmt=".3f",
+        headers=["category", "AP"] * (N_COLS // 2),
+        numalign="left",
     )
     logger.info("Per-category {} AP: \n".format(iou_type) + table)
 
-    results.update(dict(results_per_category))
+    results.update({"AP-" + name: ap for name, ap in results_per_category})
     return results
 
 
@@ -437,5 +445,12 @@ def _create_small_table(res):
     Since res is small, print keys as headers.
     """
     keys, values = tuple(zip(*res.items()))
-    table = tabulate([values], headers=keys, tablefmt="pipe", floatfmt=".3f", stralign="center")
+    table = tabulate(
+        [values],
+        headers=keys,
+        tablefmt="pipe",
+        floatfmt=".3f",
+        stralign="center",
+        numalign="center",
+    )
     return table

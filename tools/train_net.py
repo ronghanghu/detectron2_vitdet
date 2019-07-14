@@ -252,8 +252,6 @@ def do_train(cfg, model):
 
     data_loader = build_detection_train_loader(cfg, start_iter=start_iter)
 
-    model.train()
-
     """
     Here we use a pre-defined training loop (the trainer) with hooks to run the training.
     This makes it easier to reuse existing utilities.

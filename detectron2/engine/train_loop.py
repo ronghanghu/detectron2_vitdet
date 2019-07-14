@@ -153,12 +153,22 @@ class SimpleTrainer(TrainerBase):
             optimizer: a torch optimizer.
         """
         super().__init__()
+
+        """
+        We set the model to training mode in the trainer.
+        However it's valid to train a model that's in eval mode.
+        If you want your model (or a submodule of it) to behave
+        like evaluation during training, you can overwrite its train() method.
+        """
+        model.train()
+
         self.model = model
         self.data_loader = data_loader
         self._data_loader_iter = iter(data_loader)
         self.optimizer = optimizer
 
     def run_step(self):
+        assert self.model.training, "[SimpleTrainer] model was changed to eval mode!"
         start = time.perf_counter()
         data = next(self._data_loader_iter)
         self.storage.put_scalars(data_time=time.perf_counter() - start)
@@ -180,4 +190,9 @@ class SimpleTrainer(TrainerBase):
 
         self.optimizer.zero_grad()
         losses.backward()
+
+        """
+        Gradient clipping or other processing, if needed, can be done
+        by a custom optimizer which wraps another's step() method.
+        """
         self.optimizer.step()
