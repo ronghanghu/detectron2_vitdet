@@ -1,5 +1,6 @@
 import numpy as np
 import random
+from enum import Enum, unique
 import cv2
 import matplotlib.pyplot as plt
 import pycocotools.mask as mask_util
@@ -8,6 +9,23 @@ from matplotlib.patches import Polygon
 from detectron2.structures import PolygonMasks
 
 from .colormap import colormap
+
+_OFF_WHITE = [255, 255, 240]
+
+
+@unique
+class ColoringMode(Enum):
+    """
+    Enum of different coloring modes to use during visualizations.
+
+    IMAGE_FOCUSED: Visualizations with overlay. Each region picks a random color (or with some
+        rules) from the palette. Colors picked need to have high contrast.
+    SEGMENTATION_FOCUSED: Visualizations without overlay. Instances of the same category have
+        similar colors.
+    """
+
+    IMAGE_FOCUSED = 0
+    SEGMENTATION_FOCUSED = 1
 
 
 class VisualizedImageOutput:
@@ -89,6 +107,9 @@ class Visualizer:
             predictions (Instances): the output of an instance detection/segmentation
                 model. Following fields will be used to draw:
                 "pred_boxes", "pred_classes", "scores", "pred_masks" (or "pred_masks_rle").
+
+        Returns:
+            output (VisualizedImageOutput): image object with visualizations.
         """
         boxes = predictions.pred_boxes if predictions.has("pred_boxes") else None
         scores = predictions.scores if predictions.has("scores") else None
@@ -116,7 +137,54 @@ class Visualizer:
         self.overlay_instances(masks=all_mask_vertices, boxes=boxes, labels=labels, scores=scores)
         return self.output
 
-    # TODO: Choose color based on heuristics.
+    def draw_sem_seg_predictions(
+        self, predictions, area_limit=None, coloring_mode=ColoringMode.SEGMENTATION_FOCUSED
+    ):
+        """
+        Draw stuff prediction results on an image.
+
+        Args:
+            predictions (Tensor): the output of a semantic/panotic segmentation model. The tensor of
+                shape (H, W).
+            area_limit (int): segmenta with less than `area_limit` are not drawn.
+            coloring_mode (ColoringMode): mode to use while picking colors for masks.
+
+        Returns:
+            output (VisualizedImageOutput): image object with visualizations.
+        """
+        labels, areas = np.unique(predictions, return_counts=True)
+        sorted_idxs = np.argsort(-areas).tolist()
+        labels, areas = labels[sorted_idxs], areas[sorted_idxs]
+        for label, area in zip(labels, areas):
+            # do not draw segments that are too small
+            if area_limit and area < area_limit:
+                continue
+
+            # draw masks
+            if (
+                coloring_mode == ColoringMode.SEGMENTATION_FOCUSED
+                and self.metadata.stuff_class_names
+            ):
+                mask_color = self._get_color(class_name=self.metadata.stuff_class_names[label])
+                edge_color = [x / 255 for x in _OFF_WHITE]
+                alpha = 0.9
+            else:
+                mask_color = self._get_color()
+                edge_color = None
+                alpha = 0.5
+
+            binary_mask = (predictions == label).numpy().astype(np.uint8)
+            self.draw_binary_mask(binary_mask, color=mask_color, edge_color=edge_color, alpha=alpha)
+
+            # draw text in the center of object
+            if self.metadata.stuff_class_names:
+                _, _, stats, centroids = cv2.connectedComponentsWithStats(binary_mask, 8)
+                largest_component_id = np.argmax(stats[1:, -1]) + 1
+                center = centroids[largest_component_id]
+                self.draw_text(self.metadata.stuff_class_names[label], center)
+
+        return self.output
+
     def overlay_instances(self, masks=None, boxes=None, labels=None, scores=None):
         """
         Args:
@@ -145,16 +213,16 @@ class Visualizer:
         # Display in largest to smallest order to reduce occlusion.
         if boxes is not None:
             areas = boxes.area().numpy()
-            sorted_inds = np.argsort(-areas).tolist()
+            sorted_idxs = np.argsort(-areas).tolist()
             # Re-order overlaid instances in descending order.
-            boxes = boxes[sorted_inds]
-            labels = labels[sorted_inds] if labels is not None else labels
-            scores = scores[sorted_inds] if scores is not None else scores
+            boxes = boxes[sorted_idxs]
+            labels = labels[sorted_idxs] if labels is not None else labels
+            scores = scores[sorted_idxs] if scores is not None else scores
             if masks is not None:
                 if isinstance(masks, PolygonMasks):
-                    masks = masks[sorted_inds]
+                    masks = masks[sorted_idxs]
                 else:
-                    masks = [masks[idx] for idx in sorted_inds]
+                    masks = [masks[idx] for idx in sorted_idxs]
 
         if boxes is not None:
             for idx, box in enumerate(boxes):
@@ -236,34 +304,72 @@ class Visualizer:
         )
         return self.output
 
-    def draw_polygon(self, segment, color, alpha=0.5):
+    def draw_binary_mask(self, binary_mask, color, edge_color=None, alpha=0.5):
+        """
+        Args:
+            binary_mask (ndarray): numpy array of shape (H, W), where H is the image height and
+                W is the image width. Each value in the array is either a 0 or 1 value of uint8
+                type.
+            color: color of the mask. Refer to `matplotlib.colors` for a full list of
+                formats that are accepted.
+            edge_color: color of the polygon edges. Refer to `matplotlib.colors` for a
+                full list of formats that are accepted.
+            alpha (float): blending efficient. Smaller values lead to more transparent masks.
+
+        Returns:
+            output (VisualizedImageOutput): image object with mask drawn.
+        """
+        # cv2.RETR_CCOMP flag retrieves all the contours and arranges them to a 2-level
+        # hierarchy. External contours (boundary) of the object are placed in hierarchy-1.
+        # Internal contours (holes) are placed in hierarchy-2.
+        # cv2.CHAIN_APPROX_NONE flag gets vertices of polygons from countours.
+        mask_vertices = cv2.findContours(binary_mask.copy(), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)[
+            -2
+        ]
+        for segment in mask_vertices:
+            segment = segment.reshape(-1, 2)
+            self.draw_polygon(segment, color=color, edge_color=edge_color, alpha=alpha)
+        return self.output
+
+    def draw_polygon(self, segment, color, edge_color=None, alpha=0.5):
         """
         Args:
             segment: numpy array of shape Nx2, containing all the points in the polygon.
             color: color of the polygon. Refer to `matplotlib.colors` for a full list of
                 formats that are accepted.
+            edge_color: color of the polygon edges. Refer to `matplotlib.colors` for a
+                full list of formats that are accepted.
             alpha (float): blending efficient. Smaller values lead to more transparent masks.
 
         Returns:
             output (VisualizedImageOutput): image object with polygon drawn.
         """
+        edge_color = color if edge_color is None else edge_color
         polygon = Polygon(
-            segment, fill=True, facecolor=color, edgecolor=color, linewidth=3, alpha=alpha
+            segment, fill=True, facecolor=color, edgecolor=edge_color, linewidth=3, alpha=alpha
         )
         self.output.ax.add_patch(polygon)
         return self.output
 
-    def _get_color(self, idx=None):
+    def _get_color(self, class_name=None, idx=None):
         """
-        Picks a random color from the colormap, unless index specified.
+        Gives the color corresponding to the class name. If not specified, gives the color
+        corresponding to the index. Otherwise, picks a random color from the colormap.
 
         Args:
+            class_name (str, optional): the class of the object. This will be used to
+                pick the color assigned to this class.
             idx (int, optional): the index used to pick a color from the colormap list.
 
         Returns:
             color (list[double]): a list of 3 elements, containing the RGB values of the color
                 picked. The values in the list are in the range [0.0, 1.0].
         """
+        # pick pre-defined color based on class label.
+        if class_name:
+            for category in self.metadata.categories:
+                if category["name"] == class_name:
+                    return np.array(category["color"]).astype(np.float32) / 255
         color_list = colormap(rgb=True) / 255.0
         if idx is None:
             idx = random.randint(0, len(color_list) - 1)

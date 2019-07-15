@@ -12,8 +12,8 @@ from detectron2.layers import (
     ModulatedDeformConv,
 )
 
-from .build import BACKBONE_REGISTRY
 from .backbone import Backbone
+from .build import BACKBONE_REGISTRY
 
 __all__ = [
     "ResNetBlockBase",

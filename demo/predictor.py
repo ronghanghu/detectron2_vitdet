@@ -4,7 +4,7 @@ import torch
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.data.transforms import ImageTransformers, ResizeShortestEdge
 from detectron2.modeling import build_model
-from detectron2.utils.visualizer import Visualizer
+from detectron2.utils.visualizer import ColoringMode, Visualizer
 
 
 class COCODemo(object):
@@ -50,10 +50,18 @@ class COCODemo(object):
         # Convert image from OpenCV BGR format to Matplotlib RGB format.
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         image = torch.tensor(image)
+        visualizer = Visualizer(image, self.metadata)
+        if "sem_seg" in predictions:
+            vis_output = visualizer.draw_sem_seg_predictions(
+                predictions=predictions["sem_seg"].to("cpu"),
+                area_limit=self.stuff_area_threshold,
+                coloring_mode=ColoringMode.SEGMENTATION_FOCUSED,
+            )
         if "instances" in predictions:
             predictions = self.select_top_predictions(predictions["instances"].to(self.cpu_device))
-            visualizer = Visualizer(image, self.metadata)
-            vis_output = visualizer.draw_instance_predictions(predictions=predictions.to("cpu"))
+            vis_output = visualizer.draw_instance_predictions(
+                predictions=predictions.to("cpu"), coloring_mode=ColoringMode.IMAGE_FOCUSED
+            )
 
         return predictions, vis_output
 

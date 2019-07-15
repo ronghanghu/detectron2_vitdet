@@ -49,7 +49,7 @@ def main():
     cfg.freeze()
     set_global_cfg(cfg.GLOBAL)
 
-    metadata = MetadataCatalog.get(cfg.DATASETS.TRAIN[0])
+    metadata = MetadataCatalog.get(cfg.DATASETS.TEST[0])
     # prepare object that handles inference plus adds predictions on top of image
     coco_demo = COCODemo(cfg, metadata, confidence_threshold=args.confidence_threshold)
 
