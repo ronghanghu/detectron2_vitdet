@@ -394,7 +394,9 @@ def _evaluate_predictions_on_coco(
 
     coco_dt = coco_gt.loadRes(coco_results)
     coco_eval = COCOeval(coco_gt, coco_dt, iou_type)
-    coco_eval.params.kpt_oks_sigmas = np.array(kpt_oks_sigmas)
+    # Use the COCO default keypoint OKS sigmas unless overrides are specified
+    if kpt_oks_sigmas:
+        coco_eval.params.kpt_oks_sigmas = np.array(kpt_oks_sigmas)
     coco_eval.evaluate()
     coco_eval.accumulate()
     coco_eval.summarize()
