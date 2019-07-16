@@ -85,13 +85,13 @@ class StandardRPNHead(nn.Module):
         Args:
             features (list[Tensor]): list of feature maps
         """
-        objectness_logits_pred = []
-        anchor_deltas_pred = []
+        pred_objectness_logits = []
+        pred_anchor_deltas = []
         for x in features:
             t = F.relu(self.conv(x))
-            objectness_logits_pred.append(self.objectness_logits(t))
-            anchor_deltas_pred.append(self.anchor_deltas(t))
-        return objectness_logits_pred, anchor_deltas_pred
+            pred_objectness_logits.append(self.objectness_logits(t))
+            pred_anchor_deltas.append(self.anchor_deltas(t))
+        return pred_objectness_logits, pred_anchor_deltas
 
 
 @PROPOSAL_GENERATOR_REGISTRY.register()
@@ -150,7 +150,7 @@ class RPN(nn.Module):
         gt_boxes = [x.gt_boxes for x in gt_instances] if gt_instances is not None else None
         del gt_instances
         features = [features[f] for f in self.in_features]
-        objectness_logits_pred, anchor_deltas_pred = self.rpn_head(features)
+        pred_objectness_logits, pred_anchor_deltas = self.rpn_head(features)
         anchors = self.anchor_generator(images, features)
         # TODO: The anchors only depend on the feature map shape; there's probably
         # an opportunity for some optimizations (e.g., caching anchors).
@@ -160,8 +160,8 @@ class RPN(nn.Module):
             self.batch_size_per_image,
             self.positive_fraction,
             images,
-            objectness_logits_pred,
-            anchor_deltas_pred,
+            pred_objectness_logits,
+            pred_anchor_deltas,
             anchors,
             self.boundary_threshold,
             gt_boxes,

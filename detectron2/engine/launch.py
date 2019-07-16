@@ -1,3 +1,4 @@
+import logging
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
@@ -32,9 +33,14 @@ def _distributed_worker(
     local_rank, main_func, world_size, num_gpus_per_machine, machine_rank, dist_url, args
 ):
     global_rank = machine_rank * num_gpus_per_machine + local_rank
-    dist.init_process_group(
-        backend="NCCL", init_method=dist_url, world_size=world_size, rank=global_rank
-    )
+    try:
+        dist.init_process_group(
+            backend="NCCL", init_method=dist_url, world_size=world_size, rank=global_rank
+        )
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.error("Process group URL: {}".format(dist_url))
+        raise e
     # synchronize is needed here to prevent a possible timeout after calling init_process_group
     # See: https://github.com/facebookresearch/maskrcnn-benchmark/issues/172
     synchronize()

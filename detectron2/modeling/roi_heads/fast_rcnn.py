@@ -30,12 +30,12 @@ Naming convention:
     pred_proposal_deltas: predicted box2box transform deltas for transforming proposals
         to detection box predictions.
 
-    proposal_deltas_gt: ground-truth box2box transform deltas
+    gt_proposal_deltas: ground-truth box2box transform deltas
 """
 
 
 def fast_rcnn_losses(
-    gt_classes, proposal_deltas_gt, pred_class_logits, pred_proposal_deltas, smooth_l1_beta
+    gt_classes, gt_proposal_deltas, pred_class_logits, pred_proposal_deltas, smooth_l1_beta
 ):
     """
     Compute the classification and box delta losses defined in the Fast R-CNN paper.
@@ -43,7 +43,7 @@ def fast_rcnn_losses(
     Args:
         gt_classes (Tensor): A tensor of shape (R,) storing ground-truth classification
             labels in [0, K], including K fg class and 1 bg class.
-        proposal_deltas_gt (Tensor): shape (R, 4), row i represents ground-truth box2box
+        gt_proposal_deltas (Tensor): shape (R, 4), row i represents ground-truth box2box
             transform targets (dx, dy, dw, dh) that map object instance i to its matched
             ground-truth box.
         pred_class_logits (Tensor): A tensor for shape (R, K + 1) storing predicted classification
@@ -89,7 +89,7 @@ def fast_rcnn_losses(
 
     loss_box_reg = smooth_l1_loss(
         pred_proposal_deltas[fg_inds[:, None], gt_class_cols],
-        proposal_deltas_gt[fg_inds],
+        gt_proposal_deltas[fg_inds],
         smooth_l1_beta,
     )
     # The loss is normalized using the total number of regions (R), not the number
@@ -263,12 +263,12 @@ class FastRCNNOutputs(object):
             A dict of losses (scalar tensors) containing keys "loss_cls" and "loss_box_reg".
         """
         self._log_accuracy()
-        proposal_deltas_gt = self.box2box_transform.get_deltas(
+        gt_proposal_deltas = self.box2box_transform.get_deltas(
             self.proposals.tensor, self.gt_boxes.tensor
         )
         loss_cls, loss_box_reg = fast_rcnn_losses(
             self.gt_classes,
-            proposal_deltas_gt,
+            gt_proposal_deltas,
             self.pred_class_logits,
             self.pred_proposal_deltas,
             self.smooth_l1_beta,
