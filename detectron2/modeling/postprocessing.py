@@ -1,9 +1,8 @@
 import torch
 from torch.nn import functional as F
 
+from detectron2.layers import paste_masks_in_image
 from detectron2.structures import Instances
-
-from .roi_heads.paste_mask import paste_masks_in_image
 
 
 def detector_postprocess(results, output_height, output_width, mask_threshold=0.5):

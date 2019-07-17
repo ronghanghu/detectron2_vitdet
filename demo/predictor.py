@@ -59,9 +59,7 @@ class COCODemo(object):
             )
         if "instances" in predictions:
             predictions = self.select_top_predictions(predictions["instances"].to(self.cpu_device))
-            vis_output = visualizer.draw_instance_predictions(
-                predictions=predictions.to("cpu"), coloring_mode=ColoringMode.IMAGE_FOCUSED
-            )
+            vis_output = visualizer.draw_instance_predictions(predictions=predictions.to("cpu"))
 
         return predictions, vis_output
 

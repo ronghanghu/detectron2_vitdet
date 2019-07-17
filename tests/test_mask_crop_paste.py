@@ -12,7 +12,7 @@ from tabulate import tabulate
 from torch.nn import functional as F
 
 from detectron2.data import MetadataCatalog
-from detectron2.modeling.roi_heads.paste_mask import (
+from detectron2.layers.paste_mask import (
     pad_masks,
     paste_mask_in_image,
     paste_masks_in_image_aligned,

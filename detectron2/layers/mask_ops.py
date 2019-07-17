@@ -3,6 +3,9 @@ import torch
 from PIL import Image
 from torch.nn import functional as F
 
+__all__ = ["paste_masks_in_image"]
+
+
 BYTES_PER_FLOAT = 4
 # TODO: This memory limit may be too much or too little. It would be better to
 # determine it based on available resources.
