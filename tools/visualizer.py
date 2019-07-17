@@ -50,6 +50,7 @@ if __name__ == "__main__":
                 labels=target_fields.get("gt_classes", None),
                 boxes=target_fields.get("gt_boxes", None),
                 masks=target_fields.get("gt_masks", None),
+                keypoints=target_fields.get("gt_keypoints", None),
             )
             filepath = os.path.join(dirname, str(per_image["image_id"]) + ".jpg")
             vis.save_output_file(filepath)

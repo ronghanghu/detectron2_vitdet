@@ -181,6 +181,28 @@ COCO_PERSON_KEYPOINT_FLIP_MAP = (
     ("left_ankle", "right_ankle"),
 )
 
+# rules for pairs of keypoints to draw a line between, and the line color to use.
+RULES_FOR_CONNECTING_KEYPOINTS = dict({
+    # face
+    (("left_ear", "left_eye"), (102, 204, 255)),
+    (("right_ear", "right_eye"), (51, 153, 255)),
+    (("left_eye", "nose"), (102, 0, 204)),
+    (("nose", "right_eye"), (51, 102, 255)),
+    (("left_eye", "right_eye"), (153, 0, 153)),
+    # upper-body
+    (("left_shoulder", "right_shoulder"), (255, 128, 0)),
+    (("left_shoulder", "left_elbow"), (153, 255, 204)),
+    (("right_shoulder", "right_elbow"), (128, 229, 255)),
+    (("left_elbow", "left_wrist"), (153, 255, 153)),
+    (("right_elbow", "right_wrist"), (102, 255, 224)),
+    # lower-body
+    (("left_hip", "right_hip"), (255, 102, 0)),
+    (("left_hip", "left_knee"), (255, 255, 77)),
+    (("right_hip", "right_knee"), (153, 255, 204)),
+    (("left_knee", "left_ankle"), (191, 255, 128)),
+    (("right_knee", "right_ankle"), (255, 195, 77)),
+})
+
 # fmt: on
 
 
@@ -231,6 +253,7 @@ def _get_builtin_metadata(dataset_name):
             "class_names": ["person"],
             "keypoint_names": COCO_PERSON_KEYPOINT_NAMES,
             "keypoint_flip_map": COCO_PERSON_KEYPOINT_FLIP_MAP,
+            "keypoint_connection_rules": RULES_FOR_CONNECTING_KEYPOINTS,
         }
     elif dataset_name == "cityscapes":
         # We choose this order because it is consistent with our old json annotation files

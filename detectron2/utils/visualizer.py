@@ -4,6 +4,7 @@ from enum import Enum, unique
 import cv2
 import matplotlib.pyplot as plt
 import pycocotools.mask as mask_util
+from matplotlib.lines import Line2D
 from matplotlib.patches import Polygon
 
 from detectron2.structures import PolygonMasks
@@ -11,6 +12,10 @@ from detectron2.structures import PolygonMasks
 from .colormap import colormap
 
 _OFF_WHITE = [255, 255, 240]
+_BLACK = [0, 0, 0]
+_RED = [255, 0, 0]
+
+_KEYPOINT_THRESHOLD = 0.01
 
 
 @unique
@@ -114,6 +119,7 @@ class Visualizer:
         boxes = predictions.pred_boxes if predictions.has("pred_boxes") else None
         scores = predictions.scores if predictions.has("scores") else None
         labels = predictions.pred_classes if predictions.has("pred_classes") else None
+        keypoints = predictions.pred_keypoints if predictions.has("pred_keypoints") else None
 
         masks, all_mask_vertices = None, None
         if predictions.has("pred_masks"):
@@ -134,7 +140,9 @@ class Visualizer:
                 )[-2]
                 all_mask_vertices.append(mask_vertices)
 
-        self.overlay_instances(masks=all_mask_vertices, boxes=boxes, labels=labels, scores=scores)
+        self.overlay_instances(
+            masks=all_mask_vertices, boxes=boxes, labels=labels, scores=scores, keypoints=keypoints
+        )
         return self.output
 
     def draw_sem_seg_predictions(
@@ -185,7 +193,7 @@ class Visualizer:
 
         return self.output
 
-    def overlay_instances(self, masks=None, boxes=None, labels=None, scores=None):
+    def overlay_instances(self, masks=None, boxes=None, labels=None, scores=None, keypoints=None):
         """
         Args:
             masks (PolygonMasks i.e. list[list[Tensor[float]]] or list[list[ndarray]]):
@@ -203,6 +211,9 @@ class Visualizer:
             scores (Tensor): a tensor of size N, where N is the number of objects in the image.
                 Each element in the tensor is a float in [0.0, 1.0] range, representing the
                 confidence of the object's class prediction.
+            keypoints (Tensor): a tensor of shape (N, K, 3), where the N is the number of instances
+                and K is the number of keypoints. The last dimension corresponds to
+                (x, y, probability).
 
         Returns:
             output (VisualizedImageOutput): image object with visualizations.
@@ -218,6 +229,7 @@ class Visualizer:
             boxes = boxes[sorted_idxs]
             labels = labels[sorted_idxs] if labels is not None else labels
             scores = scores[sorted_idxs] if scores is not None else scores
+            keypoints = keypoints[sorted_idxs] if keypoints is not None else keypoints
             if masks is not None:
                 if isinstance(masks, PolygonMasks):
                     masks = masks[sorted_idxs]
@@ -246,6 +258,10 @@ class Visualizer:
                     segment = np.asarray(segment).reshape(-1, 2)
                     self.draw_polygon(segment, mask_color)
 
+        if keypoints is not None:
+            for keypoints_per_instance in keypoints:
+                self.draw_and_connect_keypoints(keypoints_per_instance)
+
         return self.output
 
     def draw_text(self, text, position, font_size=15, color="g"):
@@ -273,21 +289,21 @@ class Visualizer:
         )
         return self.output
 
-    def draw_box(self, boxCoord, alpha=0.5, edgecolor="g", linestyle="--"):
+    def draw_box(self, box_coord, alpha=0.5, edge_color="g", line_style="--"):
         """
         Args:
-            boxCoord (tuple): a tuple containing x0, y0, x1, y1 coordinates, where x0 and y0
+            box_coord (tuple): a tuple containing x0, y0, x1, y1 coordinates, where x0 and y0
                 are the coordinates of the image's top left corner. x1 and y1 are the
                 coordinates of the image's bottom right corner.
             alpha (float): blending efficient. Smaller values lead to more transparent masks.
-            edgecolor: color of the outline of the box. Refer to `matplotlib.colors`
+            edge_color: color of the outline of the box. Refer to `matplotlib.colors`
                 for full list of formats that are accepted.
-            linestyle (string): the string to use to create the outline of the boxes.
+            line_style (string): the string to use to create the outline of the boxes.
 
         Returns:
             output (VisualizedImageOutput): image object with box drawn.
         """
-        x0, y0, x1, y1 = boxCoord
+        x0, y0, x1, y1 = box_coord
         width = x1 - x0
         height = y1 - y0
         self.output.ax.add_patch(
@@ -296,12 +312,44 @@ class Visualizer:
                 width,
                 height,
                 fill=False,
-                edgecolor=edgecolor,
+                edgecolor=edge_color,
                 linewidth=2.5,
                 alpha=alpha,
-                linestyle=linestyle,
+                linestyle=line_style,
             )
         )
+        return self.output
+
+    def draw_circle(self, circle_coord, color, radius=5):
+        """
+        Args:
+            circle_coord (list(int) or tuple(int)): contains the x and y coordinates
+                of the center of the circle.
+            color: color of the polygon. Refer to `matplotlib.colors` for a full list of
+                formats that are accepted.
+            radius (int): radius of the circle.
+
+        Returns:
+            output (VisualizedImageOutput): image object with box drawn.
+        """
+        x, y = circle_coord
+        self.output.ax.add_patch(plt.Circle(circle_coord, radius=radius, color=color))
+        return self.output
+
+    def draw_line(self, x_data, y_data, color):
+        """
+        Args:
+            x_data (list[int]): a list containing x values of all the points being drawn.
+                Length of list should match the length of y_data.
+            y_data (list[int]): a list containing y values of all the points being drawn.
+                Length of list should match the length of x_data.
+            color: color of the line. Refer to `matplotlib.colors` for a full list of
+                formats that are accepted.
+
+        Returns:
+            output (VisualizedImageOutput): image object with line drawn.
+        """
+        self.output.ax.add_line(Line2D(x_data, y_data, color=color))
         return self.output
 
     def draw_binary_mask(self, binary_mask, color, edge_color=None, alpha=0.5):
@@ -349,6 +397,60 @@ class Visualizer:
             segment, fill=True, facecolor=color, edgecolor=edge_color, linewidth=3, alpha=alpha
         )
         self.output.ax.add_patch(polygon)
+        return self.output
+
+    def draw_and_connect_keypoints(self, keypoints):
+        """
+        Draws keypoints of an instance and follows the rules for keypoint connections
+        to draw lines between appropriate keypoints. This follows color heuristics for
+        line color.
+
+        Args:
+            keypoints (Tensor): a tensor of shape (K, 3), where K is the number of keypoints
+                and the last dimension corresponds to (x, y, probability).
+
+        Returns:
+            output (VisualizedImageOutput): image object with visualizations.
+        """
+        detected_keypoints_and_locations = {}
+        for idx, keypoint in enumerate(keypoints):
+            # draw keypoint
+            x, y, prob = keypoint
+            if prob > _KEYPOINT_THRESHOLD:
+                self.draw_circle((x, y), color=_BLACK)
+                keypoint_name = self.metadata.keypoint_names[idx]
+                detected_keypoints_and_locations[keypoint_name] = (x, y)
+
+        for kp_pairs, color in self.metadata.keypoint_connection_rules.items():
+            kp0, kp1 = kp_pairs
+            keypoints_present = detected_keypoints_and_locations.keys()
+            if kp0 in keypoints_present and kp1 in keypoints_present:
+                x0, y0 = detected_keypoints_and_locations[kp0]
+                x1, y1 = detected_keypoints_and_locations[kp1]
+                color = [x / 255 for x in color]
+                self.draw_line([x0, x1], [y0, y1], color=color)
+
+        # draw lines to mid-shoulder and mid-hip
+        # Note that this strategy is specific to COCO person keypoints.
+        # TODO: Refactor this when visualizer is extended to other datasets.
+        nose_x, nose_y, nose_prob = keypoints[self.metadata.keypoint_names.index("nose")]
+        ls_x, ls_y, ls_prob = keypoints[self.metadata.keypoint_names.index("left_shoulder")]
+        rs_x, rs_y, rs_prob = keypoints[self.metadata.keypoint_names.index("right_shoulder")]
+        if ls_prob > _KEYPOINT_THRESHOLD and rs_prob > _KEYPOINT_THRESHOLD:
+            color = [x / 255 for x in _RED]
+            # draw line from nose to mid-shoulder
+            mid_shoulder_x, mid_shoulder_y = (ls_x + rs_x) / 2, (ls_y + rs_y) / 2
+            if nose_prob > _KEYPOINT_THRESHOLD:
+                self.draw_line([nose_x, mid_shoulder_x], [nose_y, mid_shoulder_y], color=color)
+
+            # draw line from mid-shoulder to mid-hip
+            lh_x, lh_y, lh_prob = keypoints[self.metadata.keypoint_names.index("left_hip")]
+            rh_x, rh_y, rh_prob = keypoints[self.metadata.keypoint_names.index("right_hip")]
+            if lh_prob > _KEYPOINT_THRESHOLD and rh_prob > _KEYPOINT_THRESHOLD:
+                mid_hip_x, mid_hip_y = (lh_x + rh_x) / 2, (lh_y + rh_y) / 2
+                self.draw_line(
+                    [mid_hip_x, mid_shoulder_x], [mid_hip_y, mid_shoulder_y], color=color
+                )
         return self.output
 
     def _get_color(self, class_name=None, idx=None):
