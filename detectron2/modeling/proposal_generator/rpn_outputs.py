@@ -1,8 +1,9 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
+from borc.nn import smooth_l1_loss
 
-from detectron2.layers import cat, nms, smooth_l1_loss
+from detectron2.layers import cat, nms
 from detectron2.structures import Boxes, Instances, pairwise_iou
 from detectron2.utils.events import get_event_storage
 
@@ -210,7 +211,7 @@ def rpn_losses(
     """
     pos_masks = gt_objectness_logits == 1
     localization_loss = smooth_l1_loss(
-        pred_anchor_deltas[pos_masks], gt_anchor_deltas[pos_masks], smooth_l1_beta
+        pred_anchor_deltas[pos_masks], gt_anchor_deltas[pos_masks], smooth_l1_beta, reduction="sum"
     )
 
     valid_masks = gt_objectness_logits >= 0

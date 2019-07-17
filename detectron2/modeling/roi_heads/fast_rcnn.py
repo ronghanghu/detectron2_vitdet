@@ -1,9 +1,10 @@
 import numpy as np
 import torch
+from borc.nn import smooth_l1_loss
 from torch import nn
 from torch.nn import functional as F
 
-from detectron2.layers import cat, nms, smooth_l1_loss
+from detectron2.layers import cat, nms
 from detectron2.structures import Boxes, Instances
 from detectron2.utils.events import get_event_storage
 
@@ -91,6 +92,7 @@ def fast_rcnn_losses(
         pred_proposal_deltas[fg_inds[:, None], gt_class_cols],
         gt_proposal_deltas[fg_inds],
         smooth_l1_beta,
+        reduction="sum",
     )
     # The loss is normalized using the total number of regions (R), not the number
     # of foreground regions even though the box regression loss is only defined on

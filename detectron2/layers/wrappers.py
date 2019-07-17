@@ -1,10 +1,9 @@
 """
-helper class that supports empty tensors on some nn functions.
+Wrappers around on some nn functions, mainly to support empty tensors.
 
-Ideally, add support directly in PyTorch to empty tensors in
-those functions.
+Ideally, add support directly in PyTorch to empty tensors in those functions.
 
-This can be removed once https://github.com/pytorch/pytorch/issues/12013
+These can be removed once https://github.com/pytorch/pytorch/issues/12013
 is implemented
 """
 

@@ -8,7 +8,7 @@ from torch.nn.modules.utils import _pair
 
 from detectron2 import _C
 
-from .misc import _NewEmptyTensorOp
+from .wrappers import _NewEmptyTensorOp
 
 
 class _DeformConv(Function):

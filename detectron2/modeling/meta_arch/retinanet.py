@@ -1,10 +1,10 @@
 import math
 from collections import defaultdict
 import torch
-from borc.nn.focal_loss import sigmoid_focal_loss_jit
+from borc.nn import sigmoid_focal_loss_jit, smooth_l1_loss
 from torch import nn
 
-from detectron2.layers import cat, nms, smooth_l1_loss
+from detectron2.layers import cat, nms
 from detectron2.structures import Boxes, ImageList, Instances, pairwise_iou
 
 from ..anchor_generator import build_anchor_generator
@@ -187,6 +187,7 @@ class RetinaNet(nn.Module):
             pred_anchor_deltas[foreground_idxs],
             gt_anchors_deltas[foreground_idxs],
             beta=self.smooth_l1_loss_beta,
+            reduction="sum",
         ) / max(1, num_foreground)
 
         return {"loss_cls": loss_cls, "loss_box_reg": loss_box_reg}
