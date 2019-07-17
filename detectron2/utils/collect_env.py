@@ -49,3 +49,7 @@ def collect_env_info():
     env_str = tabulate(data) + "\n"
     env_str += collect_torch_env()
     return env_str
+
+
+if __name__ == "__main__":
+    print(collect_env_info())
