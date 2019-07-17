@@ -23,6 +23,8 @@ from .roi_heads import (
     ROI_HEADS_REGISTRY,
     ROI_KEYPOINT_HEAD_REGISTRY,
     ROI_MASK_HEAD_REGISTRY,
+    ROIHeads,
+    StandardROIHeads,
     build_box_head,
     build_keypoint_head,
     build_mask_head,
