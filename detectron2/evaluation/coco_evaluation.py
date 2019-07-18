@@ -416,8 +416,8 @@ def _evaluate_predictions_on_coco(
     results_per_category = []
     for idx, name in enumerate(class_names):
         # area range index 0: all area ranges
-        # max dets index 2: 100 per image
-        precision = precisions[:, :, idx, 0, 2]
+        # max dets index -1: typically 100 per image
+        precision = precisions[:, :, idx, 0, -1]
         precision = precision[precision > -1]
         ap = np.mean(precision) if precision.size else float("nan")
         results_per_category.append(("{}".format(name), float(ap * 100)))
