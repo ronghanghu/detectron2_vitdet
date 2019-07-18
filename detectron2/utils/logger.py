@@ -1,7 +1,6 @@
 import logging
 import os
 import sys
-import tempfile
 from termcolor import colored
 
 
@@ -26,17 +25,8 @@ def setup_logger(save_dir=None, distributed_rank=0, color=True, name="detectron2
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
     # don't log results to files for non-master processes
+    # TODO can create separate log files for subprocesses to facilitate debugging
     if distributed_rank > 0:
-        # Dependencies that do straight printing (instead of using the logging
-        # module) make for messy output (e.g., pycocotools printing the same
-        # information in each distributed worker). Instead we save stdout and
-        # stderr to log files for non-rank-zero processes.
-        path = os.path.join(
-            save_dir if save_dir else tempfile.gettempdir(),
-            "detectron2_pid{:d}_rank{:d}".format(os.getpid(), distributed_rank),
-        )
-        sys.stdout = open(path + ".stdout", "w")
-        sys.stderr = open(path + ".stderr", "w")
         return logger
     ch = logging.StreamHandler(stream=sys.stdout)
     ch.setLevel(logging.DEBUG)

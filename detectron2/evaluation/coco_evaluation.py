@@ -1,4 +1,6 @@
+import contextlib
 import copy
+import io
 import itertools
 import json
 import logging
@@ -44,7 +46,8 @@ class COCOEvaluator(DatasetEvaluator):
         self._logger = logging.getLogger(__name__)
 
         self._metadata = MetadataCatalog.get(dataset_name)
-        self._coco_api = COCO(self._metadata.json_file)
+        with contextlib.redirect_stdout(io.StringIO()):
+            self._coco_api = COCO(self._metadata.json_file)
 
         self._kpt_oks_sigmas = cfg.TEST.KEYPOINT_OKS_SIGMAS
 

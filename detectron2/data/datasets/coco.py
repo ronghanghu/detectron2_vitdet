@@ -1,8 +1,11 @@
 import glob
+import io
 import logging
+import contextlib
 import os
 from PIL import Image
 
+from borc.common.timer import Timer
 from detectron2.structures import BoxMode
 
 from .. import MetadataCatalog
@@ -38,7 +41,11 @@ def load_coco_json(json_file, image_root, dataset_name=None):
     """
     from pycocotools.coco import COCO
 
-    coco_api = COCO(json_file)
+    timer = Timer()
+    with contextlib.redirect_stdout(io.StringIO()):
+        coco_api = COCO(json_file)
+    if timer.seconds() > 1:
+        logger.info("Loading {} takes {:.2f} seconds.".format(json_file, timer.seconds()))
 
     id_map = None
     if dataset_name is not None:
