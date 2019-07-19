@@ -249,17 +249,7 @@ def build_detection_train_loader(cfg, transform=None, start_iter=0):
         images_per_batch, num_gpus
     )
     images_per_gpu = images_per_batch // num_gpus
-
-    if images_per_gpu > 1:
-        logger = logging.getLogger(__name__)
-        logger.warning(
-            "When training with more than one image per GPU you may encounter "
-            "an out-of-memory (OOM) error if your GPU does not have "
-            "sufficient memory. If this happens, you can reduce "
-            "SOLVER.IMS_PER_BATCH. You must also adjust the learning rate and "
-            "schedule length according to the linear scaling rule. See for "
-            "example: http://git.io/fhSc4"
-        )
+    logger = logging.getLogger(__name__)
 
     assert len(cfg.DATASETS.TRAIN)
     dataset_dicts = [DatasetCatalog.get(dataset_name) for dataset_name in cfg.DATASETS.TRAIN]
