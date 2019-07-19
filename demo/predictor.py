@@ -1,8 +1,8 @@
 import cv2
 import torch
 
+import detectron2.data.transforms as T
 from detectron2.checkpoint import DetectionCheckpointer
-from detectron2.data.transforms import ImageTransformers, ResizeShortestEdge
 from detectron2.modeling import build_model
 from detectron2.utils.visualizer import ColoringMode, Visualizer
 
@@ -19,21 +19,13 @@ class COCODemo(object):
         checkpointer = DetectionCheckpointer(self.model)
         checkpointer.load(cfg.MODEL.WEIGHT)
 
-        self.transforms = self.build_transform()
+        self.transform_gen = T.ResizeShortestEdge(
+            [cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST]
+        )
 
         self.cpu_device = torch.device("cpu")
         self.confidence_threshold = confidence_threshold
         self.stuff_area_threshold = stuff_area_threshold
-
-    def build_transform(self):
-        """
-        Creates a basic transformation that was used to train the models
-        """
-        cfg = self.cfg
-        transforms = ImageTransformers(
-            [ResizeShortestEdge([cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST])]
-        )
-        return transforms
 
     def run_on_image(self, image, dataset="coco_2017_train"):
         """
@@ -76,7 +68,7 @@ class COCODemo(object):
         if self.cfg.INPUT.FORMAT == "RGB":
             original_image = original_image[:, :, ::-1]
         height, width = original_image.shape[:2]
-        image = self.transforms.transform_image(original_image)
+        image = self.transform_gen.get_transform(original_image).apply_image(original_image)
         image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
 
         inputs = {"image": image, "height": height, "width": width}

@@ -6,8 +6,8 @@ from PIL import Image
 
 from detectron2.structures import Boxes, BoxMode, Instances, Keypoints, PolygonMasks
 
+from . import transforms as T
 from .catalog import MetadataCatalog
-from .transforms import Flip, ImageTransformers, ResizeShortestEdge
 
 """
 This file contains the default transformation that's applied to "dataset dicts".
@@ -83,12 +83,13 @@ class DetectionTransform:
 
         self.img_format = cfg.INPUT.FORMAT
 
-        tfms = []
+        logger = logging.getLogger(__name__)
+        self.tfm_gens = []
         if not min_size == 0:  # set to zero to disable resize
-            tfms.append(ResizeShortestEdge(min_size, max_size, sample_style))
+            self.tfm_gens.append(T.ResizeShortestEdge(min_size, max_size, sample_style))
         if is_train:
-            tfms.append(Flip(horiz=True))
-        self.tfms = ImageTransformers(tfms)
+            self.tfm_gens.append(T.RandomFlip())
+            logger.info("TransformGens used in training: " + str(self.tfm_gens))
 
         self.mask_on = cfg.MODEL.MASK_ON
         self.keypoint_on = cfg.MODEL.KEYPOINT_ON
@@ -123,7 +124,7 @@ class DetectionTransform:
         dataset_dict = copy.deepcopy(dataset_dict)  # it will be modified by code below
         image = self._read_image(dataset_dict, format=self.img_format)
         DetectionTransform.check_image_size(dataset_dict, image)
-        image, tfm_params = self.tfms.transform_image_get_params(image)
+        image, transforms = T.apply_transform_gens(self.tfm_gens, image)
 
         image_shape = image.shape[:2]  # h, w
 
@@ -134,7 +135,7 @@ class DetectionTransform:
         # Can use uint8 if it turns out to be slow some day
         dataset_dict["image"] = image
 
-        self.transform_precomputed_proposals(dataset_dict, image_shape, tfm_params)
+        self.transform_precomputed_proposals(dataset_dict, image_shape, transforms)
 
         if not self.is_train:
             dataset_dict.pop("annotations", None)
@@ -143,7 +144,7 @@ class DetectionTransform:
 
         if "annotations" in dataset_dict:
             annos = [
-                self.transform_annotations(obj, tfm_params, image_shape)
+                self.transform_annotations(obj, transforms, image_shape)
                 for obj in dataset_dict.pop("annotations")
                 if obj.get("iscrowd", 0) == 0
             ]
@@ -152,12 +153,12 @@ class DetectionTransform:
         if "sem_seg_file_name" in dataset_dict:
             sem_seg_gt = Image.open(dataset_dict.pop("sem_seg_file_name"))
             sem_seg_gt = np.asarray(sem_seg_gt, dtype="uint8")
-            sem_seg_gt = self.tfms.transform_segmentation(sem_seg_gt, tfm_params)
+            sem_seg_gt = transforms.apply_segmentation(sem_seg_gt)
             sem_seg_gt = torch.as_tensor(sem_seg_gt.astype("long"))
             dataset_dict["sem_seg_gt"] = sem_seg_gt
         return dataset_dict
 
-    def transform_precomputed_proposals(self, dataset_dict, image_shape, tfm_params):
+    def transform_precomputed_proposals(self, dataset_dict, image_shape, transforms):
         """
         Apply transformations to the precomputed proposals in dataset_dict.
 
@@ -172,10 +173,12 @@ class DetectionTransform:
         """
         if "proposal_boxes" in dataset_dict:
             # Tranform proposal boxes
-            boxes = self.transform_bbox(
-                dataset_dict.pop("proposal_boxes"),
-                dataset_dict.pop("proposal_bbox_mode", BoxMode.XYXY_ABS),
-                tfm_params,
+            boxes = transforms.apply_box(
+                BoxMode.convert(
+                    dataset_dict.pop("proposal_boxes"),
+                    dataset_dict.pop("proposal_bbox_mode"),
+                    BoxMode.XYXY_ABS,
+                )
             )
             boxes = Boxes(boxes)
             objectness_logits = torch.as_tensor(
@@ -230,21 +233,21 @@ class DetectionTransform:
             image = np.expand_dims(image, -1)
         return image
 
-    def transform_annotations(self, annotation, tfm_params, image_size):
+    def transform_annotations(self, annotation, transforms, image_size):
         """
-        Apply image transformations to the annotations.
+        Apply image transformations to the instance annotations.
 
         After this method, the box mode will be set to XYXY_ABS.
         """
-        annotation["bbox"] = self.transform_bbox(
-            annotation["bbox"], annotation["bbox_mode"], tfm_params
-        )
+        bbox = BoxMode.convert(annotation["bbox"], annotation["bbox_mode"], BoxMode.XYXY_ABS)
+        # Note that bbox is 1d (per-instance bounding box)
+        annotation["bbox"] = transforms.apply_box([bbox])[0]
         annotation["bbox_mode"] = BoxMode.XYXY_ABS
 
         # each instance contains 1 or more polygons
         if self.mask_on and "segmentation" in annotation:
             annotation["segmentation"] = [
-                self.tfms.transform_coords(np.asarray(p).reshape(-1, 2), tfm_params).reshape(-1)
+                transforms.apply_coords(np.asarray(p).reshape(-1, 2)).reshape(-1)
                 for p in annotation["segmentation"]
             ]
         else:
@@ -252,53 +255,28 @@ class DetectionTransform:
 
         if self.keypoint_on and "keypoints" in annotation:
             _, image_width = image_size
-            keypoints = self._process_keypoints(annotation["keypoints"], tfm_params, image_width)
+            keypoints = self._process_keypoints(annotation["keypoints"], transforms, image_width)
             annotation["keypoints"] = keypoints
         else:
             annotation.pop("keypoints", None)
 
         return annotation
 
-    def transform_bbox(self, boxes, box_mode, tfm_params):
-        """
-        Apply image transformations to the boxes.
-        The box modes of output boxes would be XYXY_ABS.
-
-        Args:
-            boxes (ndarray): Nx4
-            box_mode (BoxMode):
-
-        Returns:
-            ndarray: Nx4 transformed boxes
-        """
-        # First convert input boxes to XXXY_ABS mode.
-        convert_boxes = BoxMode.convert(boxes, box_mode, BoxMode.XYXY_ABS)
-        # Indexes of converting (x0, y0, x1, y1) box into 4 coordinates of
-        # ([x0, y0], [x1, y0], [x0, y1], [x1, y1])
-        idxs = np.array([(0, 1), (2, 1), (0, 3), (2, 3)]).flatten()
-        coords = np.array(convert_boxes).reshape(-1, 4)[:, idxs].reshape(-1, 2)
-        coords = self.tfms.transform_coords(coords, tfm_params)
-        coords = coords.reshape((-1, 4, 2))
-        minxy = coords.min(axis=1)
-        maxxy = coords.max(axis=1)
-        trans_boxes = np.concatenate((minxy, maxxy), axis=1)
-
-        if not isinstance(boxes, np.ndarray):
-            return type(boxes)(trans_boxes.flatten())
-
-        return trans_boxes
-
-    def _process_keypoints(self, keypoints, tfm_params, image_width):
+    def _process_keypoints(self, keypoints, transforms, image_width):
         # (N*3,) -> (N, 3)
         keypoints = np.asarray(keypoints, dtype="float64").reshape(-1, 3)
-        keypoints[:, :2] = self.tfms.transform_coords(keypoints[:, :2], tfm_params)
+        keypoints[:, :2] = transforms.apply_coords(keypoints[:, :2])
 
-        # Check if the keypoints were horizontally flipped
-        # If so, swap each keypoint with its opposite-handed equivalent
-        probe = np.asarray([[0.0, 0.0], [image_width, 0.0]])
-        probe_aug = self.tfms.transform_coords(probe.copy(), tfm_params)
+        # This assumes that HorizFlipTransform is the only one that does flip
+        do_hflip = sum(isinstance(t, T.HFlipTransform) for t in transforms.transforms) % 2 == 1
 
-        if np.sign(probe[1][0] - probe[0][0]) != np.sign(probe_aug[1][0] - probe_aug[0][0]):
+        # Alternative way: check if probe points was horizontally flipped.
+        # probe = np.asarray([[0.0, 0.0], [image_width, 0.0]])
+        # probe_aug = transforms.apply_coords(probe.copy())
+        # do_hflip = np.sign(probe[1][0] - probe[0][0]) != np.sign(probe_aug[1][0] - probe_aug[0][0])  # noqa
+
+        # If flipped, swap each keypoint with its opposite-handed equivalent
+        if do_hflip:
             keypoints = keypoints[self.keypoint_flip_indices, :]
 
         # Maintain COCO convention that if visibility == 0, then x, y = 0
