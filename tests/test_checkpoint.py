@@ -5,13 +5,17 @@ from tempfile import TemporaryDirectory
 import torch
 from torch import nn
 
-from detectron2.utils.checkpoint import Checkpointer
-from detectron2.utils.model_serialization import load_state_dict
+from detectron2.checkpoint import Checkpointer
+from detectron2.checkpoint.c2_model_loading import align_and_update_state_dicts
+from detectron2.utils.logger import setup_logger
 
 
 class TestCheckpointer(unittest.TestCase):
     def create_model(self):
         return nn.Sequential(nn.Linear(2, 3), nn.Linear(3, 1))
+
+    def setUp(self):
+        setup_logger()
 
     def create_complex_model(self):
         m = nn.Module()
@@ -88,9 +92,10 @@ class TestCheckpointer(unittest.TestCase):
             model, state_dict = self.create_complex_model()
             if add_data_parallel:
                 model = nn.DataParallel(model)
+            model_sd = model.state_dict()
 
-            load_state_dict(model, state_dict)
-            for loaded, stored in zip(model.state_dict().values(), state_dict.values()):
+            align_and_update_state_dicts(model_sd, state_dict)
+            for loaded, stored in zip(model_sd.values(), state_dict.values()):
                 # different tensor references
                 self.assertFalse(id(loaded) == id(stored))
                 # same content

@@ -2,7 +2,7 @@ import logging
 import numpy as np
 import os
 import torch
-from torch.nn.parallel import DistributedDataParallel
+from torch.nn.parallel import DataParallel, DistributedDataParallel
 
 import detectron2.utils.comm as comm
 from detectron2.checkpoint.model_zoo import cache_file
@@ -29,7 +29,7 @@ class Checkpointer(object):
                 processes will do loading, but only the master process will do
                 saving.
         """
-        if isinstance(model, DistributedDataParallel):
+        if isinstance(model, (DistributedDataParallel, DataParallel)):
             model = model.module
         self.model = model
         self.optimizer = optimizer
@@ -129,7 +129,7 @@ class Checkpointer(object):
         except IOError:
             # if file doesn't exist, maybe because it has just been
             # deleted by a separate process
-            last_saved = ""
+            return ""
         return os.path.join(self.save_dir, last_saved)
 
     def resume_or_load(self, path: str):
@@ -164,14 +164,14 @@ class Checkpointer(object):
         return torch.load(f, map_location=torch.device("cpu"))
 
     def _load_model(self, checkpoint):
-        model_state_dict = checkpoint.pop("model")
-        self._convert_ndarray_to_tensor(model_state_dict)
+        checkpoint_state_dict = checkpoint.pop("model")
+        self._convert_ndarray_to_tensor(checkpoint_state_dict)
 
         # if the state_dict comes from a model that was wrapped in a
         # DataParallel or DistributedDataParallel during serialization,
         # remove the "module" prefix before performing the matching
-        _strip_prefix_if_present(model_state_dict, "module.")
-        incompatible = self.model.load_state_dict(model_state_dict, strict=False)
+        _strip_prefix_if_present(checkpoint_state_dict, "module.")
+        incompatible = self.model.load_state_dict(checkpoint_state_dict, strict=False)
         if incompatible.missing_keys:
             self.logger.warning(
                 "Keys in the model but not found in the checkpoint: "

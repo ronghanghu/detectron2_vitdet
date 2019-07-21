@@ -192,8 +192,8 @@ def convert_c2_detectron_names(weights):
 # it assumes model_state_dict will have longer names.
 def align_and_update_state_dicts(model_state_dict, loaded_state_dict):
     """
-    Match names between the two state-dict, and update the values of model_state_dict in-place to
-    the matched tensor in loaded_state_dict.
+    Match names between the two state-dict, and update the values of model_state_dict in-place with
+    copies of the matched tensor in loaded_state_dict.
 
     Strategy: suppose that the models that we will create will have prefixes appended
     to each of its keys, for example due to an extra level of nesting that the original
@@ -254,7 +254,7 @@ def align_and_update_state_dicts(model_state_dict, loaded_state_dict):
             )
             continue
 
-        model_state_dict[key] = loaded_value
+        model_state_dict[key] = loaded_value.clone()
         if key_old in matched_keys:
             logger.error(
                 "Ambiguity found for {} in checkpoint!"
