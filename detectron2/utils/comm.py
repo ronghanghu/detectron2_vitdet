@@ -3,6 +3,8 @@ This file contains primitives for multi-gpu communication.
 This is useful when doing distributed training.
 """
 
+import functools
+import logging
 import pickle
 import torch
 import torch.distributed as dist
@@ -43,29 +45,56 @@ def synchronize():
     dist.barrier()
 
 
-def all_gather(data):
+@functools.lru_cache()
+def _get_global_gloo_group():
+    """
+    Return a process group based on gloo backend, containing all the ranks
+    The result is cached.
+    """
+    return dist.new_group(backend="gloo")
+
+
+def all_gather(data, device="cpu"):
     """
     Run all_gather on arbitrary picklable data (not necessarily tensors)
 
     Args:
         data: any picklable object
+        device (str): either "cpu" or "cuda"
 
     Returns:
         list[data]: list of data gathered from each rank
     """
+    assert device in ["cpu", "cuda"], device
+
     world_size = get_world_size()
     if world_size == 1:
         return [data]
 
+    # Assert that the default PG uses nccl backend.
+    assert dist.get_backend() == "nccl", dist.get_backend()
+    if device == "cpu":
+        group = _get_global_gloo_group()
+    else:
+        group = dist.group.WORLD
+    device = torch.device(device)
+
     # serialized to a Tensor
     buffer = pickle.dumps(data)
+    if len(buffer) > 1024 ** 3:
+        logger = logging.getLogger(__name__)
+        logger.warning(
+            "Rank {} trying to all-gather {:.2f} GB of data on device {}".format(
+                get_rank(), len(buffer) / (1024 ** 3), device
+            )
+        )
     storage = torch.ByteStorage.from_buffer(buffer)
-    tensor = torch.ByteTensor(storage).to("cuda")
+    tensor = torch.ByteTensor(storage).to(device=device)
 
     # obtain Tensor size of each rank
-    local_size = torch.IntTensor([tensor.numel()]).to("cuda")
-    size_list = [torch.IntTensor([0]).to("cuda") for _ in range(world_size)]
-    dist.all_gather(size_list, local_size)
+    local_size = torch.tensor([tensor.numel()], dtype=torch.int64, device=device)
+    size_list = [torch.zeros([1], dtype=torch.int64, device=device) for _ in range(world_size)]
+    dist.all_gather(size_list, local_size, group=group)
     size_list = [int(size.item()) for size in size_list]
     max_size = max(size_list)
 
@@ -74,11 +103,11 @@ def all_gather(data):
     # gathering tensors of different shapes
     tensor_list = []
     for _ in size_list:
-        tensor_list.append(torch.ByteTensor(size=(max_size,)).to("cuda"))
+        tensor_list.append(torch.empty((max_size,), dtype=torch.uint8, device=device))
     if local_size != max_size:
-        padding = torch.ByteTensor(size=(max_size - local_size,)).to("cuda")
+        padding = torch.zeros((max_size - local_size,), dtype=torch.uint8, device=device)
         tensor = torch.cat((tensor, padding), dim=0)
-    dist.all_gather(tensor_list, tensor)
+    dist.all_gather(tensor_list, tensor, group=group)
 
     data_list = []
     for size, tensor in zip(size_list, tensor_list):
