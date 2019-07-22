@@ -4,6 +4,7 @@ from enum import Enum, unique
 import cv2
 import matplotlib.pyplot as plt
 import pycocotools.mask as mask_util
+import torch
 from matplotlib.lines import Line2D
 from matplotlib.patches import Polygon
 
@@ -103,6 +104,7 @@ class Visualizer:
         self.img = img_rgb
         self.metadata = metadata
         self.output = VisualizedImageOutput(self.img)
+        self.cpu_device = torch.device("cpu")
 
     def draw_instance_predictions(self, predictions):
         """
@@ -190,6 +192,66 @@ class Visualizer:
                 largest_component_id = np.argmax(stats[1:, -1]) + 1
                 center = centroids[largest_component_id]
                 self.draw_text(self.metadata.stuff_class_names[label], center)
+
+        return self.output
+
+    def draw_panoptic_seg_predictions(self, panoptic_seg, segments_info, area_limit=None):
+        """
+        Draw panoptic prediction results on an image.
+
+        Args:
+            panoptic_seg (Tensor): of shape (height, width) where the values are ids for each
+                segment.
+            segments_info (list[dict]): Describe each segment in `panoptic_seg`.
+                Each dict contains keys "id", "category_id", "isthing".
+            area_limit (int): segments with less than `area_limit` are not drawn.
+
+        Returns:
+            output (VisualizedImageOutput): image object with visualizations.
+        """
+        segment_ids, areas = torch.unique(panoptic_seg, sorted=True, return_counts=True)
+        panoptic_seg = panoptic_seg.to(self.cpu_device)
+        segment_ids = segment_ids.to(self.cpu_device)
+        # Ignore first segment id (i.e. when id is 0), since that is used to indicate
+        # that the pixel has no instance or semantic assignment.
+        segment_ids = segment_ids[1:]
+        alpha = 0.98  # high opacity
+
+        # draw mask for all semantic segments first i.e. "stuff"
+        for segment_id, area, segment_info in zip(segment_ids, areas, segments_info):
+            if not segment_info["isthing"]:
+                # do not draw segments that are too small
+                if area_limit and area < area_limit:
+                    continue
+
+                # draw mask
+                binary_mask = (panoptic_seg == segment_id).numpy().astype(np.uint8)
+                category_idx = segment_info["category_id"]
+                mask_color = self._get_color(class_name=self.metadata.stuff_class_names[segment_id])
+                self.draw_binary_mask(binary_mask, color=mask_color, alpha=alpha)
+
+                # write label at the object's center of mass
+                label = self.metadata.stuff_class_names[category_idx]
+                _, _, stats, centroids = cv2.connectedComponentsWithStats(binary_mask, 8)
+                largest_component_id = np.argmax(stats[1:, -1]) + 1
+                center = centroids[largest_component_id]
+                self.draw_text(label, center)
+
+        # draw mask for all instances second
+        for segment_id, segment_info in zip(segment_ids, segments_info):
+            if segment_info["isthing"]:
+                # draw mask
+                category_idx = segment_info["category_id"]
+                binary_mask = (panoptic_seg == segment_id).numpy().astype(np.uint8)
+                mask_color = self._get_color()
+                self.draw_binary_mask(binary_mask, color=mask_color, alpha=alpha)
+
+                # write label at the object's center of mass
+                label = self.metadata.class_names[category_idx]
+                _, _, stats, centroids = cv2.connectedComponentsWithStats(binary_mask, 8)
+                largest_component_id = np.argmax(stats[1:, -1]) + 1
+                center = centroids[largest_component_id]
+                self.draw_text(label, center)
 
         return self.output
 

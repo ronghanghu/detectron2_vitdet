@@ -43,15 +43,23 @@ class COCODemo(object):
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         image = torch.tensor(image)
         visualizer = Visualizer(image, self.metadata)
-        if "sem_seg" in predictions:
-            vis_output = visualizer.draw_sem_seg_predictions(
-                predictions=predictions["sem_seg"].to("cpu"),
-                area_limit=self.stuff_area_threshold,
-                coloring_mode=ColoringMode.SEGMENTATION_FOCUSED,
+        if "panoptic_seg" in predictions:
+            panoptic_seg, segments_info = predictions["panoptic_seg"]
+            vis_output = visualizer.draw_panoptic_seg_predictions(
+                panoptic_seg, segments_info, area_limit=self.stuff_area_threshold
             )
-        if "instances" in predictions:
-            predictions = self.select_top_predictions(predictions["instances"].to(self.cpu_device))
-            vis_output = visualizer.draw_instance_predictions(predictions=predictions.to("cpu"))
+        else:
+            if "sem_seg" in predictions:
+                vis_output = visualizer.draw_sem_seg_predictions(
+                    predictions=predictions["sem_seg"].to("cpu"),
+                    area_limit=self.stuff_area_threshold,
+                    coloring_mode=ColoringMode.SEGMENTATION_FOCUSED,
+                )
+            if "instances" in predictions:
+                predictions = self.select_top_predictions(
+                    predictions["instances"].to(self.cpu_device)
+                )
+                vis_output = visualizer.draw_instance_predictions(predictions=predictions.to("cpu"))
 
         return predictions, vis_output
 
