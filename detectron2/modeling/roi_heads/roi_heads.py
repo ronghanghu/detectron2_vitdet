@@ -121,8 +121,8 @@ class ROIHeads(torch.nn.Module):
 
         # Matcher to assign box proposals to gt boxes
         self.proposal_matcher = Matcher(
-            cfg.MODEL.ROI_HEADS.FG_IOU_THRESHOLD,
-            cfg.MODEL.ROI_HEADS.BG_IOU_THRESHOLD,
+            cfg.MODEL.ROI_HEADS.IOU_THRESHOLDS,
+            cfg.MODEL.ROI_HEADS.IOU_LABELS,
             allow_low_quality_matches=False,
         )
 
@@ -173,20 +173,15 @@ class ROIHeads(torch.nn.Module):
                 match_quality_matrix = pairwise_iou(
                     targets_per_image.gt_boxes, proposals_per_image.proposal_boxes
                 )
-                matched_idxs = self.proposal_matcher(match_quality_matrix)
+                matched_idxs, proposals_labels = self.proposal_matcher(match_quality_matrix)
 
                 # Get the corresponding GT for each proposal
                 if has_gt:
-                    # Need to clamp the indices because matched_idxs can be < 0
-                    # Note that clamping to 0 is assuming that there is
-                    # at least 1 gt, which may not be true.
-                    matched_idxs_clamped = matched_idxs.clamp(min=0)
-
-                    gt_classes = targets_per_image.gt_classes[matched_idxs_clamped]
-                    # Label background (below the low threshold)
-                    gt_classes[matched_idxs == Matcher.BELOW_LOW_THRESHOLD] = self.num_classes
-                    # Label ignore proposals (between low and high thresholds)
-                    gt_classes[matched_idxs == Matcher.BETWEEN_THRESHOLDS] = -1
+                    gt_classes = targets_per_image.gt_classes[matched_idxs]
+                    # Label background (0 label)
+                    gt_classes[proposals_labels == 0] = self.num_classes
+                    # Label ignore proposals (-1 label)
+                    gt_classes[proposals_labels == -1] = -1
                 else:
                     gt_classes = torch.zeros_like(matched_idxs) + self.num_classes
 
@@ -206,7 +201,7 @@ class ROIHeads(torch.nn.Module):
                 proposals_per_image.gt_classes = gt_classes[sampled_inds]
 
                 if has_gt:
-                    sampled_targets = matched_idxs_clamped[sampled_inds]
+                    sampled_targets = matched_idxs[sampled_inds]
                     # Avoid indexing the Boxes targets_per_image directly,
                     # it is considerably slower.
                     gt_boxes = targets_per_image.gt_boxes[sampled_targets]
@@ -218,11 +213,11 @@ class ROIHeads(torch.nn.Module):
 
                 if targets_per_image.has("gt_masks") and has_gt:
                     # See note above about not indexing the targets_per_image directly
-                    gt_masks = targets_per_image.gt_masks[matched_idxs_clamped[sampled_inds]]
+                    gt_masks = targets_per_image.gt_masks[matched_idxs[sampled_inds]]
                     proposals_per_image.gt_masks = gt_masks
                 if targets_per_image.has("gt_keypoints") and has_gt:
                     gt_keypoints = targets_per_image.gt_keypoints[
-                        matched_idxs_clamped[sampled_inds]
+                        matched_idxs[sampled_inds]
                     ]
                     proposals_per_image.gt_keypoints = gt_keypoints
 

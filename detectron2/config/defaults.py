@@ -161,14 +161,17 @@ _C.MODEL.RPN.ANCHOR_ASPECT_RATIOS = [[0.5, 1.0, 2.0]]
 # Remove RPN anchors that go outside the image by BOUNDARY_THRESH pixels
 # Set to -1 or a large value, e.g. 100000, to disable pruning anchors
 _C.MODEL.RPN.BOUNDARY_THRESH = -1
+# IOU overlap ratios [BG_IOU_THRESHOLD, FG_IOU_THRESHOLD]
 # Minimum overlap required between an anchor and ground-truth box for the
 # (anchor, gt box) pair to be a positive example (IoU >= FG_IOU_THRESHOLD
-# ==> positive RPN example)
-_C.MODEL.RPN.FG_IOU_THRESHOLD = 0.7
+# ==> positive RPN example: 1)
 # Maximum overlap allowed between an anchor and ground-truth box for the
 # (anchor, gt box) pair to be a negative examples (IoU < BG_IOU_THRESHOLD
-# ==> negative RPN example)
-_C.MODEL.RPN.BG_IOU_THRESHOLD = 0.3
+# ==> negative RPN example: 0)
+# Anchors with overlap in between (BG_IOU_THRESHOLD <= IoU < FG_IOU_THRESHOLD)
+# are ignored (-1)
+_C.MODEL.RPN.IOU_THRESHOLDS = [0.3, 0.7]
+_C.MODEL.RPN.IOU_LABELS = [0, -1, 1]
 # Total number of RPN examples per image
 _C.MODEL.RPN.BATCH_SIZE_PER_IMAGE = 256
 # Target fraction of foreground (positive) examples per RPN minibatch
@@ -210,11 +213,11 @@ _C.MODEL.ROI_HEADS.NUM_CLASSES = 80
 # Currently all heads (box, mask, ...) use the same input feature map list
 # e.g., ["p2", "p3", "p4", "p5"] is commonly used for FPN
 _C.MODEL.ROI_HEADS.IN_FEATURES = ["res4"]
-# Overlap threshold for an RoI to be considered foreground (if >= FG_IOU_THRESHOLD)
-_C.MODEL.ROI_HEADS.FG_IOU_THRESHOLD = 0.5
-# Overlap threshold for an RoI to be considered background
-# (class = 0 if overlap in [0, BG_IOU_THRESHOLD))
-_C.MODEL.ROI_HEADS.BG_IOU_THRESHOLD = 0.5
+# IOU overlap ratios [IOU_THRESHOLD]
+# Overlap threshold for an RoI to be considered background (if < IOU_THRESHOLD)
+# Overlap threshold for an RoI to be considered foreground (if >= IOU_THRESHOLD)
+_C.MODEL.ROI_HEADS.IOU_THRESHOLDS = [0.5]
+_C.MODEL.ROI_HEADS.IOU_LABELS = [0, 1]
 # RoI minibatch size *per image* (number of regions of interest [ROIs])
 # Total number of RoIs per training minibatch =
 #   ROI_HEADS.BATCH_SIZE_PER_IMAGE * SOLVER.IMS_PER_BATCH
@@ -381,13 +384,12 @@ _C.MODEL.RETINANET.SCALES_PER_OCTAVE = 3
 # NOTE: this doesn't include the last conv for logits
 _C.MODEL.RETINANET.NUM_CONVS = 4
 
-# IoU overlap ratio for labeling an anchor as positive
-# Anchors with >= iou overlap are labeled positive
-_C.MODEL.RETINANET.FG_IOU_THRESHOLD = 0.5
-
-# IoU overlap ratio for labeling an anchor as negative
-# Anchors with < iou overlap are labeled negative
-_C.MODEL.RETINANET.BG_IOU_THRESHOLD = 0.4
+# IoU overlap ratio [bg, fg] for labeling anchors.
+# Anchors with < bg are labeled negative (0)
+# Anchors  with >= bg and < fg are ignored (-1)
+# Anchors with >= fg are labeled positive (1)
+_C.MODEL.RETINANET.IOU_THRESHOLDS = [0.4, 0.5]
+_C.MODEL.RETINANET.IOU_LABELS = [0, -1, 1]
 
 # Prior prob for rare case (i.e. foreground) at the beginning of training.
 # This is used to set the bias for the logits layer of the classifier subnet.

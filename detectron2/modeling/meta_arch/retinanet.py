@@ -93,8 +93,8 @@ class RetinaNet(nn.Module):
         # Matching and loss
         self.box2box_transform = Box2BoxTransform(weights=cfg.MODEL.RPN.BBOX_REG_WEIGHTS)
         self.matcher = Matcher(
-            cfg.MODEL.RETINANET.FG_IOU_THRESHOLD,
-            cfg.MODEL.RETINANET.BG_IOU_THRESHOLD,
+            cfg.MODEL.RETINANET.IOU_THRESHOLDS,
+            cfg.MODEL.RETINANET.IOU_LABELS,
             allow_low_quality_matches=True,
         )
 
@@ -225,10 +225,10 @@ class RetinaNet(nn.Module):
 
         for anchors_per_image, targets_per_image in zip(anchors, targets):
             match_quality_matrix = pairwise_iou(targets_per_image.gt_boxes, anchors_per_image)
-            gt_matched_idxs = self.matcher(match_quality_matrix)
+            gt_matched_idxs, anchor_labels = self.matcher(match_quality_matrix)
 
             # ground truth box regression
-            matched_gt_boxes = targets_per_image[gt_matched_idxs.clamp(min=0)].gt_boxes
+            matched_gt_boxes = targets_per_image[gt_matched_idxs].gt_boxes
             gt_anchors_reg_deltas_i = self.box2box_transform.get_deltas(
                 anchors_per_image.tensor, matched_gt_boxes.tensor
             )
@@ -236,13 +236,11 @@ class RetinaNet(nn.Module):
             # ground truth classes
             has_gt = len(targets_per_image) > 0
             if has_gt:
-                # Clamping assumes at least one ground truth, not necessarily true.
-                matched_idxs_clamped = gt_matched_idxs.clamp(min=0)
-                gt_classes_i = targets_per_image.gt_classes[matched_idxs_clamped]
-                # Anchors that are below the threshold are treated as background.
-                gt_classes_i[gt_matched_idxs == Matcher.BELOW_LOW_THRESHOLD] = self.num_classes
-                # Anchors that are between thresholds are ignored during training.
-                gt_classes_i[gt_matched_idxs == Matcher.BETWEEN_THRESHOLDS] = -1
+                gt_classes_i = targets_per_image.gt_classes[gt_matched_idxs]
+                # Anchors with label 0 are treated as background.
+                gt_classes_i[anchor_labels == 0] = self.num_classes
+                # Anchors with label -1 are ignored.
+                gt_classes_i[anchor_labels == -1] = -1
             else:
                 gt_classes_i = torch.zeros_like(gt_matched_idxs) + self.num_classes
 

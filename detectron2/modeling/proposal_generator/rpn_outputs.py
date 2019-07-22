@@ -298,24 +298,20 @@ class RPNOutputs(object):
             gt_boxes_i: ground-truth boxes for i-th image
             """
             match_quality_matrix = pairwise_iou(gt_boxes_i, anchors_i)
-            matched_idxs = self.anchor_matcher(match_quality_matrix)
+            matched_idxs, gt_objectness_logits_i = self.anchor_matcher(match_quality_matrix)
 
-            gt_objectness_logits_i = (matched_idxs >= 0).to(dtype=torch.int32)
             if self.boundary_threshold >= 0:
                 # Discard anchors that go out of the boundaries of the image
                 # NOTE: This is legacy functionality that is turned off by default in Detectron2
                 anchors_inside_image = anchors_i.inside_box(image_size_i, self.boundary_threshold)
                 gt_objectness_logits_i[~anchors_inside_image] = -1
-            # Discard indices that are neither foreground or background
-            gt_objectness_logits_i[matched_idxs == Matcher.BETWEEN_THRESHOLDS] = -1
 
             if len(gt_boxes_i) == 0:
                 # These values won't be used anyway since the anchor is labeled as background
                 gt_anchor_deltas_i = torch.zeros_like(anchors_i.tensor)
             else:
                 # TODO wasted computation for ignored boxes
-                # NB: need to clamp the indices because matched_idxs can be <0
-                matched_gt_boxes = gt_boxes_i[matched_idxs.clamp(min=0)]
+                matched_gt_boxes = gt_boxes_i[matched_idxs]
                 gt_anchor_deltas_i = self.box2box_transform.get_deltas(
                     anchors_i.tensor, matched_gt_boxes.tensor
                 )

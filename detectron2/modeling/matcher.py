@@ -12,38 +12,41 @@ class Matcher(object):
     if the elements are boxes, this matrix may contain box intersection-over-union
     overlap values.
 
-    The matcher returns a vector of length N containing the index of the ground-truth
-    element m in [0, M) that matches to prediction n in [0, N). If a prediction was
-    not matched to any ground-truth element, then a negative value is returned.
+    The matcher returns (a) a vector of length N containing the index of the
+    ground-truth element m in [0, M) that matches to prediction n in [0, N).
+    (b) a vector of length N containing the labels for each prediction.
     """
 
-    BELOW_LOW_THRESHOLD = -1
-    BETWEEN_THRESHOLDS = -2
-
-    def __init__(self, high_threshold, low_threshold, allow_low_quality_matches=False):
+    def __init__(self, thresholds, labels, allow_low_quality_matches=False):
         """
         Args:
-            high_threshold (float): to match with any ground-truth element, a prediction
-                must have a maximum match quality, over all ground-truth elements,
-                that is >= this threshold.
-            low_threshold (float): a lower maximum quality threshold that is used to
-                stratify predictions into three levels:
-                1) maximum match quality >= high_threshold
-                    These predictions will be matched to a ground-truth element with
-                    which they have maximum overlap.
-                2) BETWEEN_THRESHOLDS matches in [low_threshold, high_threshold)
-                    These "gray zone" predictions are not matched, but they are given
-                    a special value in case downstream code wishes to treat them specially
-                    (e.g., assign these predictions an ignore label).
-                3) BELOW_LOW_THRESHOLD matches in [0, low_threshold)
-                    These predictions are not matched.
+            thresholds (list): a list of thresholds used to stratify predictions
+                into levels.
+            labels (list): a list of values to label predictions belonging at
+                each level. A label can be one of {-1, 0, 1} signifying
+                {ignore, negative class, positive class}, respectively.
             allow_low_quality_matches (bool): if True, produce additional matches
                 for predictions with maximum match quality lower than high_threshold.
                 See set_low_quality_matches_ for more details.
+
+            For example,
+                thresholds = [0.3, 0.5]
+                labels = [0, -1, 1]
+                All predictions with iou < 0.3 will be marked with 0 and
+                thus will be considered as false positives while training.
+                All predictions with 0.3 <= iou < 0.5 will be marked with -1 and
+                thus will be ignored.
+                All predictions with 0.5 <= iou will be marked with 1 and
+                thus will be considered as true positives.
         """
-        assert low_threshold <= high_threshold
-        self.high_threshold = high_threshold
-        self.low_threshold = low_threshold
+        # Add -inf and +inf to first and last position in thresholds
+        thresholds.insert(0, -float('inf'))
+        thresholds.append(float('inf'))
+        assert all(low <= high for (low, high) in zip(thresholds[:-1], thresholds[1:]))
+        assert all(l in [-1, 0, 1] for l in labels)
+        assert len(labels) == len(thresholds) - 1
+        self.thresholds = thresholds
+        self.labels = labels
         self.allow_low_quality_matches = allow_low_quality_matches
 
     def __call__(self, match_quality_matrix):
@@ -56,40 +59,36 @@ class Matcher(object):
 
         Returns:
             matches (Tensor[int64]): a vector of length N, where matches[i] is a matched
-                ground-truth index in [0, M) or a negative value indicating that
-                prediction i could not be matched. A negative value of
-                Matcher.BELOW_LOW_THREHSOLD indicates that the highest quality ground-truth
-                was lower than the low_threshold. A negative value of Matcher.BETWEEN_THRESHOLDS
-                indicates that the highest quality match was between low_threshold and
-                high_threshold.
+                ground-truth index in [0, M)
+            match_labels (Tensor[int8]): a vector of length N, where pred_labels[i] indicates
+                whether a prediction is a true or false positive or ignored
         """
         assert match_quality_matrix.dim() == 2
         if match_quality_matrix.numel() == 0:
             return match_quality_matrix.new_full(
-                (match_quality_matrix.size(1),), self.BELOW_LOW_THRESHOLD, dtype=torch.int64
+                (match_quality_matrix.size(1),), 0, dtype=torch.int64
+            ),
+            match_quality_matrix.new_full(
+                (match_quality_matrix.size(1),), -1, dtype=torch.int8
             )
         assert torch.all(match_quality_matrix >= 0)
 
         # match_quality_matrix is M (gt) x N (predicted)
         # Max over gt elements (dim 0) to find best gt candidate for each prediction
         matched_vals, matches = match_quality_matrix.max(dim=0)
-        if self.allow_low_quality_matches:
-            all_matches = matches.clone()
 
-        # Assign candidate matches with low quality to negative (unassigned) values
-        below_low_threshold = matched_vals < self.low_threshold
-        between_thresholds = (matched_vals >= self.low_threshold) & (
-            matched_vals < self.high_threshold
-        )
-        matches[below_low_threshold] = Matcher.BELOW_LOW_THRESHOLD
-        matches[between_thresholds] = Matcher.BETWEEN_THRESHOLDS
+        match_labels = matches.new_full(matches.size(), 1, dtype=torch.int8)
+
+        for (l, low, high) in zip(self.labels, self.thresholds[:-1], self.thresholds[1:]):
+            low_high = (matched_vals >= low) & (matched_vals < high)
+            match_labels[low_high] = l
 
         if self.allow_low_quality_matches:
-            self.set_low_quality_matches_(matches, all_matches, match_quality_matrix)
+            self.set_low_quality_matches_(match_labels, match_quality_matrix)
 
-        return matches
+        return matches, match_labels
 
-    def set_low_quality_matches_(self, matches, all_matches, match_quality_matrix):
+    def set_low_quality_matches_(self, match_labels, match_quality_matrix):
         """
         Produce additional matches for predictions that have only low-quality matches.
         Specifically, for each ground-truth G find the set of predictions that have
@@ -122,4 +121,4 @@ class Matcher(object):
         # Note how gt items 1, 2, 3, and 5 each have two ties
 
         pred_inds_to_update = gt_pred_pairs_of_highest_quality[:, 1]
-        matches[pred_inds_to_update] = all_matches[pred_inds_to_update]
+        match_labels[pred_inds_to_update] = 1
