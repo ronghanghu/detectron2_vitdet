@@ -122,6 +122,10 @@ class Checkpointer(object):
         return os.path.exists(save_file)
 
     def get_checkpoint_file(self):
+        """
+        Returns:
+            str: The latest checkpoint file in target directory.
+        """
         save_file = os.path.join(self.save_dir, "last_checkpoint")
         try:
             with open(save_file, "r") as f:
@@ -131,6 +135,19 @@ class Checkpointer(object):
             # deleted by a separate process
             return ""
         return os.path.join(self.save_dir, last_saved)
+
+    def get_all_checkpoint_files(self):
+        """
+        Returns:
+            List: All available checkpoint files (*.pth) in target directory.
+        """
+        all_model_checkpoints = [
+            os.path.join(self.save_dir, file)
+            for file in os.listdir(self.save_dir)
+            if os.path.isfile(os.path.join(self.save_dir, file))
+            and file.endswith(".pth")
+        ]
+        return all_model_checkpoints
 
     def resume_or_load(self, path: str):
         """
