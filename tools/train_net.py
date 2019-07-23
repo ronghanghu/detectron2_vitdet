@@ -19,7 +19,6 @@ You may want to write your own script with your datasets and other customization
 from detectron2.utils.env import setup_environment  # noqa F401 isort:skip
 
 import argparse
-import datetime
 import logging
 import os
 import torch
@@ -49,51 +48,8 @@ from detectron2.evaluation import (
 from detectron2.modeling import DetectionTransformTTA, GeneralizedRCNNWithTTA, build_model
 from detectron2.solver import build_lr_scheduler, build_optimizer
 from detectron2.utils.collect_env import collect_env_info
-from detectron2.utils.events import JSONWriter, TensorboardXWriter, get_event_storage
+from detectron2.utils.events import CommonMetricPrinter, JSONWriter, TensorboardXWriter
 from detectron2.utils.logger import setup_logger
-
-
-class MetricPrinter:
-    def __init__(self, max_iter):
-        self.logger = logging.getLogger("detectron2.trainer")
-        self._max_iter = max_iter
-
-    def write(self):
-        storage = get_event_storage()
-        iteration = storage.iteration
-
-        data_time, time = None, None
-        eta_string = "N/A"
-        try:
-            data_time = storage.history("data_time").median(20)
-            time = storage.history("time").global_avg()
-            eta_seconds = storage.history("time").median(1000) * (self._max_iter - iteration)
-            eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
-        except KeyError:  # they may not exist in the first few iterations (due to warmup)
-            pass
-
-        # NOTE: max mem is parsed by grep
-        self.logger.info(
-            """\
-eta: {eta}  iter: {iter}  {losses}  \
-{time}  {data_time}  \
-lr: {lr:.6f}  max mem: {memory:.0f}M \
-""".format(
-                eta=eta_string,
-                iter=iteration,
-                losses="  ".join(
-                    [
-                        "{}: {:.3f}".format(k, v.median(20))
-                        for k, v in storage.histories().items()
-                        if "loss" in k
-                    ]
-                ),
-                time="time: {:.4f}".format(time) if time is not None else "",
-                data_time="data_time: {:.4f}".format(data_time) if data_time is not None else "",
-                lr=storage.history("lr").latest(),
-                memory=torch.cuda.max_memory_allocated() / 1024.0 / 1024.0,
-            )
-        )
 
 
 def get_evaluator(cfg, dataset_name, output_folder):
@@ -265,7 +221,7 @@ def do_train(cfg, model):
     ]
     if comm.is_main_process():
         writers = [
-            MetricPrinter(max_iter),
+            CommonMetricPrinter(max_iter),
             JSONWriter(os.path.join(cfg.OUTPUT_DIR, "metrics.json")),
             TensorboardXWriter(cfg.OUTPUT_DIR),
         ]
