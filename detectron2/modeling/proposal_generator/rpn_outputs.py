@@ -7,7 +7,6 @@ from detectron2.layers import cat, nms
 from detectron2.structures import Boxes, Instances, pairwise_iou
 from detectron2.utils.events import get_event_storage
 
-from ..matcher import Matcher
 from ..sampling import subsample_labels
 
 # TODO: comments for future refactoring of this module

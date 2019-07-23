@@ -216,9 +216,7 @@ class ROIHeads(torch.nn.Module):
                     gt_masks = targets_per_image.gt_masks[matched_idxs[sampled_inds]]
                     proposals_per_image.gt_masks = gt_masks
                 if targets_per_image.has("gt_keypoints") and has_gt:
-                    gt_keypoints = targets_per_image.gt_keypoints[
-                        matched_idxs[sampled_inds]
-                    ]
+                    gt_keypoints = targets_per_image.gt_keypoints[matched_idxs[sampled_inds]]
                     proposals_per_image.gt_keypoints = gt_keypoints
 
                 proposals_with_gt.append(proposals_per_image)

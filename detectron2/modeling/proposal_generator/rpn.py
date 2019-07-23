@@ -126,9 +126,7 @@ class RPN(nn.Module):
         self.anchor_generator = build_anchor_generator(cfg)
         self.box2box_transform = Box2BoxTransform(weights=cfg.MODEL.RPN.BBOX_REG_WEIGHTS)
         self.anchor_matcher = Matcher(
-            cfg.MODEL.RPN.IOU_THRESHOLDS,
-            cfg.MODEL.RPN.IOU_LABELS,
-            allow_low_quality_matches=True,
+            cfg.MODEL.RPN.IOU_THRESHOLDS, cfg.MODEL.RPN.IOU_LABELS, allow_low_quality_matches=True
         )
         self.rpn_head = build_rpn_head(cfg)
 

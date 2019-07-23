@@ -40,8 +40,8 @@ class Matcher(object):
                 thus will be considered as true positives.
         """
         # Add -inf and +inf to first and last position in thresholds
-        thresholds.insert(0, -float('inf'))
-        thresholds.append(float('inf'))
+        thresholds.insert(0, -float("inf"))
+        thresholds.append(float("inf"))
         assert all(low <= high for (low, high) in zip(thresholds[:-1], thresholds[1:]))
         assert all(l in [-1, 0, 1] for l in labels)
         assert len(labels) == len(thresholds) - 1
@@ -65,12 +65,12 @@ class Matcher(object):
         """
         assert match_quality_matrix.dim() == 2
         if match_quality_matrix.numel() == 0:
-            return match_quality_matrix.new_full(
-                (match_quality_matrix.size(1),), 0, dtype=torch.int64
-            ),
-            match_quality_matrix.new_full(
-                (match_quality_matrix.size(1),), -1, dtype=torch.int8
+            return (
+                match_quality_matrix.new_full(
+                    (match_quality_matrix.size(1),), 0, dtype=torch.int64
+                ),
             )
+            match_quality_matrix.new_full((match_quality_matrix.size(1),), -1, dtype=torch.int8)
         assert torch.all(match_quality_matrix >= 0)
 
         # match_quality_matrix is M (gt) x N (predicted)

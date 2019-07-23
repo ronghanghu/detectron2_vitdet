@@ -28,13 +28,8 @@ python /path_to_detectron2/tools/train_net.py --config-file "/path/to/config/fil
 
 - `DETECTRON2_ENV_MODULE`: Name of a module defining a function called `setup_environment` to call before running any detectron2 code. This function can be used to perform set up steps that are specific to different computing or cluster environments.
 
+
 ## Troubleshooting
 If you have issues running or compiling this code, we have compiled a list of common issues in
 [TROUBLESHOOTING.md](TROUBLESHOOTING.md). If your issue is not present there, please feel
 free to open a new issue.
-
-## Major Compatibility Differences Compared to Detectron (v1)
-
-- The height and width of a box with corners (x1, y1) and (x2, y2) is computed as width = x2 - x1 and height = y2 - y1; in Detectron v1 a "+ 1" was added both height and width. This makes detectron2 incompatible with models trained using Detectron v1.
-- For a dataset with K object categories, these categories are assigned labels [0, K - 1]. If a background category is used (e.g., with a classifier that uses softmax), the background category is assigned label K. In Detectron v1 background was assigned label 0 and the object classes labels [1, K].
-- RPN anchors are now center-aligned to feature grid points and they are not quantized. If one loads a model trained using the original RPN anchor definition, then `MODEL.ANCHOR_GENERATOR.NAME` must be set to `OriginalRPNAnchorGenerator`.
