@@ -385,7 +385,7 @@ class RetinaNetHead(nn.Module):
         num_convs        = cfg.MODEL.RETINANET.NUM_CONVS
         prior_prob       = cfg.MODEL.RETINANET.PRIOR_PROB
         num_anchors      = len(cfg.MODEL.RETINANET.ANCHOR_ASPECT_RATIOS[0]) * \
-            cfg.MODEL.RETINANET.SCALES_PER_OCTAVE
+            len(cfg.MODEL.RETINANET.ANCHOR_SIZES[0])
         # fmt: on
         # aspect ratio list ANCHOR_ASPECT_RATIOS[0] is used for all IN_FEATURES.
         assert (

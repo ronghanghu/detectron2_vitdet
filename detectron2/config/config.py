@@ -1,9 +1,22 @@
 # -*- coding: utf-8 -*-
 
-# import from borc directly.
-# In the future if we're to add any
-# new features into CfgNode, we can add them here (or in borc)
-from borc.common.config import CfgNode
+from borc.common.config import CfgNode as _CfgNode
+
+
+class CfgNode(_CfgNode):
+    """
+    The same as `borc.common.config.CfgNode`, but different in:
+
+    1. Use unsafe yaml loading by default.
+       Note that this may lead to arbitrary code execution: you must not
+       load a config file from untrusted sources before manually inspecting
+       the content of the file.
+    2. TODO: convert old version of config files.
+    """
+
+    def merge_from_file(self, cfg_filename: str, allow_unsafe=True):
+        super().merge_from_file(cfg_filename, allow_unsafe)
+
 
 global_cfg = CfgNode()
 

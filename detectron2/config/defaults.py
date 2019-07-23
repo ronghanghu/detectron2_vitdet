@@ -372,13 +372,13 @@ _C.MODEL.RETINANET.NUM_CLASSES = 80
 # Anchor aspect ratios to use
 _C.MODEL.RETINANET.ANCHOR_ASPECT_RATIOS = [[0.5, 1.0, 2.0]]
 _C.MODEL.RETINANET.ANCHOR_STRIDES = [[8, 16, 32, 64, 128]]
-_C.MODEL.RETINANET.ANCHOR_SIZES = [[32], [64], [128], [256], [512]]
+# In a yaml file, this can be written as:
+# ANCHOR_SIZES: !!python/object/apply:eval ["[[x, x * 2**(1.0/3), x * 2**(2.0/3) ] for x in [32, 64, 128, 256, 512 ]]"]  # noqa
+_C.MODEL.RETINANET.ANCHOR_SIZES = [
+    [x, x * 2 ** (1.0 / 3), x * 2 ** (2.0 / 3)] for x in [32, 64, 128, 256, 512]
+]
 _C.MODEL.RETINANET.STRADDLE_THRESH = 0
 _C.MODEL.RETINANET.IN_FEATURES = ["p3", "p4", "p5", "p6", "p7"]
-
-# Anchor scales per octave
-_C.MODEL.RETINANET.OCTAVE = 2.0
-_C.MODEL.RETINANET.SCALES_PER_OCTAVE = 3
 
 # Convolutions to use in the cls and bbox tower
 # NOTE: this doesn't include the last conv for logits
