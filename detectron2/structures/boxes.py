@@ -26,7 +26,7 @@ class BoxMode(Enum):
     def convert(box, from_mode, to_mode):
         """
         Args:
-            box: can be a 4-tuple, 4-list or a Nx4 array.
+            box: can be a 4-tuple, 4-list or a Nx4 array/tensor.
             from_mode, to_mode (BoxMode)
 
         Returns:
@@ -35,9 +35,17 @@ class BoxMode(Enum):
         if from_mode == to_mode:
             return box
 
+        original_type = type(box)
+        single_box = isinstance(box, (list, tuple))
+        if single_box:
+            box = np.array(box)
+            assert box.shape == (
+                4,
+            ), "BoxMode.convert takes either a 4-tuple/list or a Nx4 array/tensor"
+
         assert to_mode.value < 2 and from_mode.value < 2, "Relative mode not yet supported!"
 
-        arr = np.array(box).reshape(-1, 4)
+        arr = box.reshape(-1, 4)
         if to_mode == BoxMode.XYXY_ABS and from_mode == BoxMode.XYWH_ABS:
             arr[:, 2] += arr[:, 0]
             arr[:, 3] += arr[:, 1]
@@ -46,8 +54,8 @@ class BoxMode(Enum):
             arr[:, 3] -= arr[:, 1]
         else:
             raise RuntimeError("Cannot be here!")
-        if not isinstance(box, np.ndarray):
-            return type(box)(arr.flatten())
+        if single_box:
+            return original_type(arr.flatten())
         return arr
 
 
