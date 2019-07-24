@@ -243,6 +243,17 @@ def _get_coco_panoptic_separated_meta():
     return ret
 
 
+def _get_coco_densepose_meta():
+    meta = {
+        "class_names": ["person"],
+        "densepose_transform_src": "detectron2://densepose/UV_symmetry_transforms.mat",
+        "densepose_smpl_subdiv": "detectron2://densepose/SMPL_subdiv.mat",
+        "densepose_smpl_subdiv_transform": "detectron2://densepose/SMPL_SUBDIV_TRANSFORM.mat",
+        "densepose_pairwise_geod_dists": "detectron2://densepose/Pdist_matrix.mat",
+    }
+    return meta
+
+
 def _get_builtin_metadata(dataset_name):
     if dataset_name == "coco":
         return _get_coco_instances_meta()
@@ -255,6 +266,8 @@ def _get_builtin_metadata(dataset_name):
             "keypoint_flip_map": COCO_PERSON_KEYPOINT_FLIP_MAP,
             "keypoint_connection_rules": RULES_FOR_CONNECTING_KEYPOINTS,
         }
+    elif dataset_name == "coco_densepose":
+        return _get_coco_densepose_meta()
     elif dataset_name == "cityscapes":
         # We choose this order because it is consistent with our old json annotation files
         # TODO Perhaps switch to an order that's consistent with Cityscapes'
@@ -327,6 +340,14 @@ _PREDEFINED_SPLITS["coco_person"] = {
     ),
 }
 
+_PREDEFINED_SPLITS["coco_densepose"] = {
+    "densepose_coco_2014_train": ("coco/train2014", "coco/annotations/densepose_train2014.json"),
+    "densepose_coco_2014_minival": ("coco/val2014", "coco/annotations/densepose_minival2014.json"),
+    "densepose_coco_2014_valminusminival": (
+        "coco/val2014",
+        "coco/annotations/densepose_valminusminival2014.json",
+    ),
+}
 
 for dataset_name, splits_per_dataset in _PREDEFINED_SPLITS.items():
     for key, (image_root, json_file) in splits_per_dataset.items():

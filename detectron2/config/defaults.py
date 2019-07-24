@@ -20,6 +20,7 @@ _C.MODEL = CN()
 _C.MODEL.LOAD_PROPOSALS = False
 _C.MODEL.MASK_ON = False
 _C.MODEL.KEYPOINT_ON = False
+_C.MODEL.DENSEPOSE_ON = False
 _C.MODEL.DEVICE = "cuda"
 _C.MODEL.META_ARCHITECTURE = "GeneralizedRCNN"
 
@@ -327,6 +328,32 @@ _C.MODEL.ROI_KEYPOINT_HEAD.NORMALIZE_LOSS_BY_VISIBLE_KEYPOINTS = True
 _C.MODEL.ROI_KEYPOINT_HEAD.LOSS_WEIGHT = 1.0
 # Type of pooling operation applied to the incoming feature map for each RoI
 _C.MODEL.ROI_KEYPOINT_HEAD.POOLER_TYPE = "ROIAlign"
+
+# ---------------------------------------------------------------------------- #
+# DensePose Head
+# ---------------------------------------------------------------------------- #
+
+_C.MODEL.ROI_DENSEPOSE_HEAD = CN()
+_C.MODEL.ROI_DENSEPOSE_HEAD.NAME = ""
+_C.MODEL.ROI_DENSEPOSE_HEAD.NUM_STACKED_CONVS = 8
+# Number of parts used for point labels
+_C.MODEL.ROI_DENSEPOSE_HEAD.NUM_PATCHES = 24
+_C.MODEL.ROI_DENSEPOSE_HEAD.DECONV_KERNEL = 4
+_C.MODEL.ROI_DENSEPOSE_HEAD.CONV_HEAD_DIM = 512
+_C.MODEL.ROI_DENSEPOSE_HEAD.CONV_HEAD_KERNEL = 3
+_C.MODEL.ROI_DENSEPOSE_HEAD.UP_SCALE = 2
+_C.MODEL.ROI_DENSEPOSE_HEAD.HEATMAP_SIZE = 56
+_C.MODEL.ROI_DENSEPOSE_HEAD.POOLER_TYPE = "ROIAlign"
+_C.MODEL.ROI_DENSEPOSE_HEAD.POOLER_RESOLUTION = 14
+_C.MODEL.ROI_DENSEPOSE_HEAD.POOLER_SAMPLING_RATIO = 2
+# Overlap threshold for an RoI to be considered foreground (if >= FG_IOU_THRESHOLD)
+_C.MODEL.ROI_DENSEPOSE_HEAD.FG_IOU_THRESHOLD = 0.7
+# Loss weights for annotation masks.(14 Parts)
+_C.MODEL.ROI_DENSEPOSE_HEAD.INDEX_WEIGHTS = 2.0
+# Loss weights for surface parts. (24 Parts)
+_C.MODEL.ROI_DENSEPOSE_HEAD.PART_WEIGHTS = 0.3
+# Loss weights for UV regression.
+_C.MODEL.ROI_DENSEPOSE_HEAD.POINT_REGRESSION_WEIGHTS = 0.1
 
 # ---------------------------------------------------------------------------- #
 # Semantic Segmenation Head

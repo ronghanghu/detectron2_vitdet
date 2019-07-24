@@ -1,5 +1,6 @@
 import numpy as np
 from enum import Enum, unique
+
 import torch
 
 from detectron2.layers import cat
@@ -231,4 +232,30 @@ def pairwise_iou(boxes1, boxes2):
     inter = wh[:, :, 0] * wh[:, :, 1]  # [N,M]
 
     iou = inter / (area1[:, None] + area2 - inter)
+    return iou
+
+
+def matched_boxlist_iou(boxes1, boxes2):
+    """
+    Compute pairwise intersection over union (IOU) of two sets of matched
+    boxes. The box order must be (xmin, ymin, xmax, ymax).
+    Similar to boxlist_iou, but computes only diagonal elements of the matrix
+    Arguments:
+        boxes1: (Boxes) bounding boxes, sized [N,4].
+        boxes2: (Boxes) bounding boxes, sized [N,4].
+    Returns:
+        (tensor) iou, sized [N].
+    """
+    assert len(boxes1) == len(boxes2), (
+        "boxlists should have the same"
+        "number of entries, got {}, {}".format(len(boxes1), len(boxes2))
+    )
+    area1 = boxes1.area()  # [N]
+    area2 = boxes2.area()  # [N]
+    box1, box2 = boxes1.tensor, boxes2.tensor
+    lt = torch.max(box1[:, :2], box2[:, :2])  # [N,2]
+    rb = torch.min(box1[:, 2:], box2[:, 2:])  # [N,2]
+    wh = (rb - lt).clamp(min=0)  # [N,2]
+    inter = wh[:, 0] * wh[:, 1]  # [N]
+    iou = inter / (area1 + area2 - inter)  # [N]
     return iou

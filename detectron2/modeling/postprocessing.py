@@ -50,6 +50,14 @@ def detector_postprocess(results, output_height, output_width, mask_threshold=0.
         results.pred_keypoints[:, :, 0] *= scale_x
         results.pred_keypoints[:, :, 1] *= scale_y
 
+    if results.has("densepose"):
+        densepose_output = results.densepose
+        output_boxes_xywh = output_boxes.tensor.clone()
+        output_boxes_xywh[:, 2] -= output_boxes_xywh[:, 0]
+        output_boxes_xywh[:, 3] -= output_boxes_xywh[:, 1]
+        densepose_result = densepose_output.to_result(output_boxes_xywh)
+        results.densepose = densepose_result
+
     return results
 
 

@@ -8,6 +8,7 @@ import numpy as np
 import os
 import pickle
 from collections import OrderedDict
+
 import pycocotools.mask as mask_util
 import torch
 from pycocotools.coco import COCO
@@ -19,6 +20,8 @@ from detectron2.structures import Boxes, BoxMode, pairwise_iou
 from detectron2.utils.comm import all_gather, is_main_process, synchronize
 
 from .evaluator import DatasetEvaluator
+
+from .densepose_coco_evaluation import DensePoseCocoEval
 
 
 class COCOEvaluator(DatasetEvaluator):
@@ -65,6 +68,8 @@ class COCOEvaluator(DatasetEvaluator):
             tasks = tasks + ("segm",)
         if cfg.MODEL.KEYPOINT_ON:
             tasks = tasks + ("keypoints",)
+        if cfg.MODEL.DENSEPOSE_ON:
+            tasks = tasks + ("densepose",)
         return tasks
 
     def process(self, inputs, outputs):
@@ -234,6 +239,10 @@ def prepare_for_coco_evaluation(dataset_predictions):
         if has_keypoints:
             keypoints = predictions.pred_keypoints
 
+        has_densepose = predictions.has("densepose")
+        if has_densepose:
+            densepose = predictions.densepose
+
         for k in range(num_instance):
             result = {
                 "image_id": img_id,
@@ -250,6 +259,8 @@ def prepare_for_coco_evaluation(dataset_predictions):
                 # Therefore we subtract 0.5 to be consistent with the annotation format.
                 keypoints[k][:, :2] -= 0.5
                 result["keypoints"] = keypoints[k].flatten().tolist()
+            if has_densepose:
+                result["densepose"] = densepose[k]
             coco_results.append(result)
     return coco_results
 
@@ -382,6 +393,7 @@ def _evaluate_predictions_on_coco(
         "bbox": ["AP", "AP50", "AP75", "APs", "APm", "APl"],
         "segm": ["AP", "AP50", "AP75", "APs", "APm", "APl"],
         "keypoints": ["AP", "AP50", "AP75", "APm", "APl"],
+        "densepose": ["AP", "AP50", "AP75", "APm", "APl"],
     }[iou_type]
 
     logger = logging.getLogger(__name__)
@@ -396,7 +408,10 @@ def _evaluate_predictions_on_coco(
     coco.unicode = str
 
     coco_dt = coco_gt.loadRes(coco_results)
-    coco_eval = COCOeval(coco_gt, coco_dt, iou_type)
+    if iou_type == "densepose":
+        coco_eval = DensePoseCocoEval(coco_gt, coco_dt, iou_type)
+    else:
+        coco_eval = COCOeval(coco_gt, coco_dt, iou_type)
     # Use the COCO default keypoint OKS sigmas unless overrides are specified
     if kpt_oks_sigmas:
         coco_eval.params.kpt_oks_sigmas = np.array(kpt_oks_sigmas)

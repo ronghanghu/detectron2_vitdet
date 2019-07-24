@@ -1,4 +1,5 @@
 import numpy as np
+
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -14,6 +15,13 @@ from ..poolers import ROIPooler
 from ..proposal_generator.proposal_utils import add_ground_truth_to_proposals
 from ..sampling import subsample_labels
 from .box_head import build_box_head
+from .densepose_head import (
+    build_densepose_data_filter,
+    build_densepose_head,
+    build_densepose_losses,
+    build_densepose_predictor,
+    densepose_inference,
+)
 from .fast_rcnn import FastRCNNOutputHead, FastRCNNOutputs
 from .keypoint_head import build_keypoint_head, keypoint_rcnn_inference, keypoint_rcnn_loss
 from .mask_head import build_mask_head, mask_rcnn_inference, mask_rcnn_loss
@@ -218,6 +226,11 @@ class ROIHeads(torch.nn.Module):
                 if targets_per_image.has("gt_keypoints") and has_gt:
                     gt_keypoints = targets_per_image.gt_keypoints[matched_idxs[sampled_inds]]
                     proposals_per_image.gt_keypoints = gt_keypoints
+                if targets_per_image.has("gt_densepose") and has_gt:
+                    gt_densepose = targets_per_image.gt_densepose[
+                        matched_idxs[sampled_inds]
+                    ]
+                    proposals_per_image.gt_densepose = gt_densepose
 
                 proposals_with_gt.append(proposals_per_image)
 
@@ -418,6 +431,7 @@ class StandardROIHeads(ROIHeads):
         self._init_box_head(cfg)
         self._init_mask_head(cfg)
         self._init_keypoint_head(cfg)
+        self._init_densepose_head(cfg)
 
     def _init_box_head(self, cfg):
         # fmt: off
@@ -507,6 +521,30 @@ class StandardROIHeads(ROIHeads):
         )
         self.keypoint_head = build_keypoint_head(cfg)
 
+    def _init_densepose_head(self, cfg):
+        # fmt: off
+        self.densepose_on          = cfg.MODEL.DENSEPOSE_ON
+        if not self.densepose_on:
+            return
+        self.densepose_data_filter = build_densepose_data_filter(cfg)
+        dp_pooler_resolution       = cfg.MODEL.ROI_DENSEPOSE_HEAD.POOLER_RESOLUTION
+        dp_pooler_scales           = tuple(1.0 / self.feature_strides[k] for k in self.in_features)
+        dp_pooler_sampling_ratio   = cfg.MODEL.ROI_DENSEPOSE_HEAD.POOLER_SAMPLING_RATIO
+        dp_pooler_type             = cfg.MODEL.ROI_DENSEPOSE_HEAD.POOLER_TYPE
+        # fmt: on
+        in_channels = [self.feature_channels[f] for f in self.in_features][0]
+        self.densepose_pooler = ROIPooler(
+            output_size=dp_pooler_resolution,
+            scales=dp_pooler_scales,
+            sampling_ratio=dp_pooler_sampling_ratio,
+            pooler_type=dp_pooler_type,
+        )
+        self.densepose_head = build_densepose_head(cfg, in_channels)
+        self.densepose_predictor = build_densepose_predictor(
+            cfg, self.densepose_head.n_out_channels
+        )
+        self.densepose_losses = build_densepose_losses(cfg)
+
     def forward(self, images, features, proposals, targets=None):
         """
         See :class:`ROIHeads.forward`.
@@ -535,9 +573,10 @@ class StandardROIHeads(ROIHeads):
         if self.training:
             losses = outputs.losses()
             # During training the proposals used by the box head are
-            # used by the mask and keypoint heads.
+            # used by the mask, keypoint and densepose heads.
             losses.update(self._forward_mask(features_list, proposals))
             losses.update(self._forward_keypoint(features_list, proposals))
+            losses.update(self._forward_densepose(features_list, proposals))
             return [], losses
         else:
             pred_instances = outputs.inference(
@@ -567,6 +606,7 @@ class StandardROIHeads(ROIHeads):
 
         instances = self._forward_mask(features, instances)
         instances = self._forward_keypoint(features, instances)
+        instances = self._forward_densepose(features, instances)
         return instances
 
     def _forward_mask(self, features, instances):
@@ -645,4 +685,40 @@ class StandardROIHeads(ROIHeads):
             keypoint_features = self.keypoint_pooler(features, pred_boxes)
             keypoint_logits = self.keypoint_head(keypoint_features)
             keypoint_rcnn_inference(keypoint_logits, instances)
+            return instances
+
+    def _forward_densepose(self, features, instances):
+        """
+        Forward logic of the densepose prediction branch.
+
+        Args:
+            features (list[Tensor]): #level input features for densepose prediction
+            instances (list[Instances]): the per-image instances to train/predict densepose.
+                In training, they can be the proposals.
+                In inference, they can be the predicted boxes.
+
+        Returns:
+            In training, a dict of losses.
+            In inference, update `instances` with new fields "densepose" and return it.
+        """
+        if not self.densepose_on:
+            return {} if self.training else instances
+
+        if self.training:
+            proposals, _ = select_foreground_proposals(instances, self.num_classes)
+            proposals_dp = self.densepose_data_filter(proposals)
+            if len(proposals_dp) > 0:
+                proposal_boxes = [x.proposal_boxes for x in proposals_dp]
+                features_dp = self.densepose_pooler(features, proposal_boxes)
+                densepose_head_outputs = self.densepose_head(features_dp)
+                densepose_outputs, _ = self.densepose_predictor(densepose_head_outputs)
+                densepose_loss_dict = self.densepose_losses(proposals_dp, densepose_outputs)
+                return densepose_loss_dict
+        else:
+            pred_boxes = [x.pred_boxes for x in instances]
+            densepose_features = self.densepose_pooler(features, pred_boxes)
+            if len(densepose_features) > 0:
+                densepose_head_outputs = self.densepose_head(densepose_features)
+                densepose_outputs, _ = self.densepose_predictor(densepose_head_outputs)
+                densepose_inference(densepose_outputs, instances)
             return instances

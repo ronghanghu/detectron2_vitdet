@@ -21,6 +21,7 @@ from detectron2.utils.env import setup_environment  # noqa F401 isort:skip
 import argparse
 import logging
 import os
+
 import torch
 from torch.nn.parallel import DistributedDataParallel
 
@@ -73,6 +74,8 @@ def get_evaluator(cfg, dataset_name, output_folder):
         )
     if evaluator_type in ["coco", "coco_panoptic_seg"]:
         evaluator_list.append(COCOEvaluator(dataset_name, cfg, True, output_folder))
+    if evaluator_type == "coco_densepose":
+        evaluator_list.append()
     if evaluator_type == "coco_panoptic_seg":
         # TODO add per-machine primitives (https://github.com/fairinternal/detectron2/issues/138)
         assert (

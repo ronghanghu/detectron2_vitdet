@@ -117,6 +117,10 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
 
     dataset_dicts = []
 
+    # TODO: refactoring candidate, one should not have to alter DB reader
+    # every time new data type is added
+    DENSEPOSE_KEYS = ["dp_x", "dp_y", "dp_I", "dp_U", "dp_V", "dp_masks"]
+
     num_instances_without_valid_segmentation = 0
 
     for (img_dict, anno_dict_list) in imgs_anns:
@@ -139,7 +143,9 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
             assert anno.get("ignore", 0) == 0
 
             obj = {
-                field: anno[field] for field in ["iscrowd", "bbox", "category_id"] if field in anno
+                field: anno[field]
+                for field in ["iscrowd", "bbox", "keypoints", "category_id"] + DENSEPOSE_KEYS
+                if field in anno
             }
 
             segm = anno.get("segmentation", None)

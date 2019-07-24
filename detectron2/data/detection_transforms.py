@@ -4,7 +4,17 @@ import numpy as np
 import torch
 from PIL import Image
 
-from detectron2.structures import Boxes, BoxMode, Instances, Keypoints, PolygonMasks
+from detectron2.structures import (
+    Boxes,
+    BoxMode,
+    DensePoseDataRelative,
+    DensePoseList,
+    DensePoseTransformData,
+    Instances,
+    Keypoints,
+    PolygonMasks,
+)
+from detectron2.utils.file_io import PathManager
 
 from . import transforms as T
 from .catalog import MetadataCatalog
@@ -54,6 +64,10 @@ def annotations_to_instances(annos, image_size):
         kpts = [obj.get("keypoints", []) for obj in annos]
         target.gt_keypoints = Keypoints(kpts)
 
+    if len(annos) and "densepose" in annos[0]:
+        gt_densepose = [obj["densepose"] for obj in annos]
+        target.gt_densepose = DensePoseList(gt_densepose, boxes, image_size)
+
     target = target[boxes.nonempty()]
     return target
 
@@ -93,9 +107,25 @@ class DetectionTransform:
 
         self.mask_on = cfg.MODEL.MASK_ON
         self.keypoint_on = cfg.MODEL.KEYPOINT_ON
+        self.densepose_on = cfg.MODEL.DENSEPOSE_ON
         if self.keypoint_on and is_train:
             # Flip only makes sense in training
             self.keypoint_flip_indices = _create_flip_indices(cfg)
+        if self.densepose_on:
+            densepose_transform_srcs = [
+                MetadataCatalog.get(ds).densepose_transform_src
+                for ds in cfg.DATASETS.TRAIN + cfg.DATASETS.TEST
+            ]
+            assert len(densepose_transform_srcs) > 0
+            # TODO: check that DensePose transformation data is the same for
+            # all the datasets. Otherwise one would have to pass DB ID with
+            # each entry to select proper transformation data. For now, since
+            # all DensePose annotated data uses the same data semantics, we
+            # omit this check.
+            densepose_transform_data_fpath = PathManager.get_file_name(densepose_transform_srcs[0])
+            self.densepose_transform_data = DensePoseTransformData.load(
+                densepose_transform_data_fpath
+            )
 
         self.is_train = is_train
 
@@ -259,6 +289,19 @@ class DetectionTransform:
             annotation["keypoints"] = keypoints
         else:
             annotation.pop("keypoints", None)
+
+        if self.densepose_on:
+            is_valid, reason_not_valid = DensePoseDataRelative.validate_annotation(annotation)
+            if is_valid:
+                densepose_data = DensePoseDataRelative(annotation, cleanup=True)
+                densepose_data.apply_transform(
+                    self.tfm_gens, transforms, self.densepose_transform_data)
+                annotation["densepose"] = densepose_data
+            else:
+                # logger = logging.getLogger(__name__)
+                # logger.debug("Could not load DensePose annotation: {}".format(reason_not_valid))
+                DensePoseDataRelative.cleanup_annotation(annotation)
+                annotation["densepose"] = None
 
         return annotation
 
