@@ -117,6 +117,10 @@ class COCOEvaluator(DatasetEvaluator):
             if not is_main_process():
                 return
 
+        if len(self._predictions) == 0:
+            self._logger.warning("[COCOEvaluator] Did not receive valid predictions.")
+            return {}
+
         if self._output_dir:
             torch.save(
                 self._predictions, os.path.join(self._output_dir, "instances_predictions.pth")

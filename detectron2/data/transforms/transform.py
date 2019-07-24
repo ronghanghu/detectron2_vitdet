@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # File: transform.py
 
+import inspect
 import numpy as np
 from abc import ABCMeta, abstractmethod
 from PIL import Image
@@ -91,6 +92,35 @@ class Transform(metaclass=ABCMeta):
         trans_boxes = np.concatenate((minxy, maxxy), axis=1)
         return trans_boxes
 
+    @classmethod
+    def register_type(cls, data_type: str, func):
+        """
+        Register the given function as
+        a handler that this transform will use for a specific data type.
+
+        Args:
+            data_type (str): the name of the data type (e.g., box)
+            func (callable): takes a transform and a data, returns the transformed data.
+
+        Examples:
+            def func(flip_transform, voxel_data):
+                return transformed_voxel_data
+            HFlipTransform.register_handler("voxel", func)
+
+            # ...
+            transform = HFlipTransform(...)
+            transform.apply_voxel(voxel_data)  # func will be called
+        """
+        assert callable(
+            func
+        ), "You can only register a callable to a Transform. Got {} instead.".format(func)
+        argspec = inspect.getfullargspec(func)
+        assert len(argspec.args) == 2, (
+            "You can only register a function that takes two positional "
+            "arguments to a Transform! Got a function with spec {}".format(str(argspec))
+        )
+        setattr(cls, "apply_" + data_type, func)
+
 
 class TransformList:
     """
@@ -115,17 +145,10 @@ class TransformList:
             x = getattr(t, meth)(x)
         return x
 
-    def apply_image(self, x):
-        return self._apply(x, "apply_image")
-
-    def apply_coords(self, x):
-        return self._apply(x, "apply_coords")
-
-    def apply_segmentation(self, x):
-        return self._apply(x, "apply_segmentation")
-
-    def apply_box(self, x):
-        return self._apply(x, "apply_box")
+    def __getattr__(self, name):
+        if name.startswith("apply_"):
+            return lambda x: self._apply(x, name)
+        raise AttributeError("TransformList object has no attribute {}".format(name))
 
 
 class ResizeTransform(Transform):
