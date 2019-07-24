@@ -208,29 +208,18 @@ class ROIHeads(torch.nn.Module):
                 proposals_per_image = proposals_per_image[sampled_inds]
                 proposals_per_image.gt_classes = gt_classes[sampled_inds]
 
+                # We index all the attributes of targets that start with "gt_"
+                # and have not been added to proposals yet (="gt_classes").
                 if has_gt:
                     sampled_targets = matched_idxs[sampled_inds]
-                    # Avoid indexing the Boxes targets_per_image directly,
-                    # it is considerably slower.
-                    gt_boxes = targets_per_image.gt_boxes[sampled_targets]
+                    for (trg_name, trg_value) in targets_per_image.get_fields().items():
+                        if trg_name.startswith("gt_") and not proposals_per_image.has(trg_name):
+                            proposals_per_image.set(trg_name, trg_value[sampled_targets])
                 else:
                     gt_boxes = Boxes(
                         targets_per_image.gt_boxes.tensor.new_zeros((len(sampled_inds), 4))
                     )
-                proposals_per_image.gt_boxes = gt_boxes
-
-                if targets_per_image.has("gt_masks") and has_gt:
-                    # See note above about not indexing the targets_per_image directly
-                    gt_masks = targets_per_image.gt_masks[matched_idxs[sampled_inds]]
-                    proposals_per_image.gt_masks = gt_masks
-                if targets_per_image.has("gt_keypoints") and has_gt:
-                    gt_keypoints = targets_per_image.gt_keypoints[matched_idxs[sampled_inds]]
-                    proposals_per_image.gt_keypoints = gt_keypoints
-                if targets_per_image.has("gt_densepose") and has_gt:
-                    gt_densepose = targets_per_image.gt_densepose[
-                        matched_idxs[sampled_inds]
-                    ]
-                    proposals_per_image.gt_densepose = gt_densepose
+                    proposals_per_image.gt_boxes = gt_boxes
 
                 proposals_with_gt.append(proposals_per_image)
 
