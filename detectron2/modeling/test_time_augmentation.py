@@ -41,7 +41,8 @@ class DetectionTransformTTA:
         image = dataset_dict["image"]
         for min_size in self.min_sizes:
             image = np.copy(image)
-            resized = ResizeShortestEdge(min_size, self.max_size).transform_image(image)
+            tfm = ResizeShortestEdge(min_size, self.max_size).get_transform(image)
+            resized = tfm.apply_image(image)
             resized = torch.as_tensor(resized.transpose(2, 0, 1).astype("float32"))
 
             dic = copy.deepcopy(dataset_dict)
@@ -176,12 +177,12 @@ class GeneralizedRCNNWithTTA:
             all_boxes.append(pred_boxes)
             all_scores.extend(rescaled_output.scores)
             all_classes.extend(rescaled_output.pred_classes)
-        all_boxes = torch.cat(all_boxes, dim=0)
+        all_boxes = torch.cat(all_boxes, dim=0).cpu()
         num_boxes = len(all_boxes)
 
         # 1.3: select from the union of all results
         num_classes = self.cfg.MODEL.ROI_HEADS.NUM_CLASSES
-        all_scores_2d = torch.zeros(num_boxes, num_classes)
+        all_scores_2d = torch.zeros(num_boxes, num_classes, device=all_boxes.device)
         for idx, cls, score in zip(count(), all_classes, all_scores):
             all_scores_2d[idx, cls] = score
 
