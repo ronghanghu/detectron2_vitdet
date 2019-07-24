@@ -49,11 +49,16 @@ class ModelCatalog(object):
     """
 
     S3_C2_DETECTRON_PREFIX = "https://dl.fbaipublicfiles.com/detectron"
+
+    # MSRA models have STRIDE_IN_1X1=True. False otherwise.
     C2_IMAGENET_MODELS = {
         "MSRA/R-50": "ImageNetPretrained/MSRA/R-50.pkl",
         "MSRA/R-101": "ImageNetPretrained/MSRA/R-101.pkl",
         "FAIR/R-50-GN": "ImageNetPretrained/47261647/R-50-GN.pkl",
-        "FAIR/20171220/X-101-32x8d": "ImageNetPretrained/20171220/X-101-32x8d.pkl",
+        "FAIR/R-101-GN": "ImageNetPretrained/47592356/R-101-GN.pkl",
+        "FAIR/X-101-32x8d": "ImageNetPretrained/20171220/X-101-32x8d.pkl",
+        "FAIR/X-101-64x4d": "ImageNetPretrained/FBResNeXt/X-101-64x4d.pkl",
+        "FAIR/X-152-32x8d-IN5k": "ImageNetPretrained/25093814/X-152-32x8d-IN5k.pkl",
     }
 
     C2_DETECTRON_PATH_FORMAT = (
