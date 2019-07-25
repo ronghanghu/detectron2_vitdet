@@ -137,6 +137,7 @@ class ROIHeads(torch.nn.Module):
         # Box2BoxTransform for bounding box regression
         self.box2box_transform = Box2BoxTransform(weights=cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS)
 
+    @torch.no_grad()
     def label_and_sample_proposals(self, proposals, targets):
         """
         Prepare some proposals to be used to train the ROI heads.
@@ -175,53 +176,52 @@ class ROIHeads(torch.nn.Module):
 
         num_fg_samples = []
         num_bg_samples = []
-        with torch.no_grad():
-            for proposals_per_image, targets_per_image in zip(proposals, targets):
-                has_gt = len(targets_per_image) > 0
-                match_quality_matrix = pairwise_iou(
-                    targets_per_image.gt_boxes, proposals_per_image.proposal_boxes
+        for proposals_per_image, targets_per_image in zip(proposals, targets):
+            has_gt = len(targets_per_image) > 0
+            match_quality_matrix = pairwise_iou(
+                targets_per_image.gt_boxes, proposals_per_image.proposal_boxes
+            )
+            matched_idxs, proposals_labels = self.proposal_matcher(match_quality_matrix)
+
+            # Get the corresponding GT for each proposal
+            if has_gt:
+                gt_classes = targets_per_image.gt_classes[matched_idxs]
+                # Label background (0 label)
+                gt_classes[proposals_labels == 0] = self.num_classes
+                # Label ignore proposals (-1 label)
+                gt_classes[proposals_labels == -1] = -1
+            else:
+                gt_classes = torch.zeros_like(matched_idxs) + self.num_classes
+
+            sampled_fg_inds, sampled_bg_inds = subsample_labels(
+                gt_classes,
+                self.batch_size_per_image,
+                self.positive_sample_fraction,
+                self.num_classes,
+            )
+
+            num_fg_samples.append(sampled_fg_inds.numel())
+            num_bg_samples.append(sampled_bg_inds.numel())
+
+            sampled_inds = torch.cat([sampled_fg_inds, sampled_bg_inds], dim=0)
+
+            proposals_per_image = proposals_per_image[sampled_inds]
+            proposals_per_image.gt_classes = gt_classes[sampled_inds]
+
+            # We index all the attributes of targets that start with "gt_"
+            # and have not been added to proposals yet (="gt_classes").
+            if has_gt:
+                sampled_targets = matched_idxs[sampled_inds]
+                for (trg_name, trg_value) in targets_per_image.get_fields().items():
+                    if trg_name.startswith("gt_") and not proposals_per_image.has(trg_name):
+                        proposals_per_image.set(trg_name, trg_value[sampled_targets])
+            else:
+                gt_boxes = Boxes(
+                    targets_per_image.gt_boxes.tensor.new_zeros((len(sampled_inds), 4))
                 )
-                matched_idxs, proposals_labels = self.proposal_matcher(match_quality_matrix)
+                proposals_per_image.gt_boxes = gt_boxes
 
-                # Get the corresponding GT for each proposal
-                if has_gt:
-                    gt_classes = targets_per_image.gt_classes[matched_idxs]
-                    # Label background (0 label)
-                    gt_classes[proposals_labels == 0] = self.num_classes
-                    # Label ignore proposals (-1 label)
-                    gt_classes[proposals_labels == -1] = -1
-                else:
-                    gt_classes = torch.zeros_like(matched_idxs) + self.num_classes
-
-                sampled_fg_inds, sampled_bg_inds = subsample_labels(
-                    gt_classes,
-                    self.batch_size_per_image,
-                    self.positive_sample_fraction,
-                    self.num_classes,
-                )
-
-                num_fg_samples.append(sampled_fg_inds.numel())
-                num_bg_samples.append(sampled_bg_inds.numel())
-
-                sampled_inds = torch.cat([sampled_fg_inds, sampled_bg_inds], dim=0)
-
-                proposals_per_image = proposals_per_image[sampled_inds]
-                proposals_per_image.gt_classes = gt_classes[sampled_inds]
-
-                # We index all the attributes of targets that start with "gt_"
-                # and have not been added to proposals yet (="gt_classes").
-                if has_gt:
-                    sampled_targets = matched_idxs[sampled_inds]
-                    for (trg_name, trg_value) in targets_per_image.get_fields().items():
-                        if trg_name.startswith("gt_") and not proposals_per_image.has(trg_name):
-                            proposals_per_image.set(trg_name, trg_value[sampled_targets])
-                else:
-                    gt_boxes = Boxes(
-                        targets_per_image.gt_boxes.tensor.new_zeros((len(sampled_inds), 4))
-                    )
-                    proposals_per_image.gt_boxes = gt_boxes
-
-                proposals_with_gt.append(proposals_per_image)
+            proposals_with_gt.append(proposals_per_image)
 
         # Log the number of fg/bg samples that are selected for training ROI heads
         storage = get_event_storage()

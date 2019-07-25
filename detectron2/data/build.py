@@ -89,9 +89,9 @@ def filter_images_with_few_keypoints(dataset_dicts, min_keypoints_per_image):
     return dataset_dicts
 
 
-def load_proposals_into_dataset(dataset_dicts, proposal_file=None):
+def load_proposals_into_dataset(dataset_dicts, proposal_file):
     """
-    load precomputed proposals into the dataset.
+    Load precomputed proposals into the dataset.
 
     Args:
         dataset_dicts (list[dict]): annotations in Detectron2 Dataset format.
@@ -100,9 +100,6 @@ def load_proposals_into_dataset(dataset_dicts, proposal_file=None):
     Returns:
         list[dict]: the same format as dataset_dicts, but added proposal field.
     """
-    if proposal_file is None:
-        return dataset_dicts
-
     logger = logging.getLogger(__name__)
     logger.info("Loading proposals from: {}".format(proposal_file))
 
@@ -319,7 +316,7 @@ def build_detection_train_loader(cfg, transform=None, start_iter=0):
     return data_loader
 
 
-def build_detection_test_loader(cfg, dataset_name, proposal_file=None, transform=None):
+def build_detection_test_loader(cfg, dataset_name, transform=None):
     """
     Similar to `build_detection_train_loader`.
     But this function uses the given `dataset_name` argument (instead of the names in cfg),
@@ -328,7 +325,6 @@ def build_detection_test_loader(cfg, dataset_name, proposal_file=None, transform
     Args:
         cfg: a detectron2 CfgNode
         dataset_name (str): a name of the dataset that's available in the DatasetCatalog
-        proposal_file (str): a name of pre-computed proposal file path for this dataset
         transform (callable): a callable which takes a sample (dict) from dataset
             and returns a transformed dict.
             By default it will be `DetectionTransform(cfg, False)`.
@@ -338,9 +334,17 @@ def build_detection_test_loader(cfg, dataset_name, proposal_file=None, transform
             dataset, with test-time transformation and batching.
     """
     dataset_dicts = DatasetCatalog.get(dataset_name)
-    if proposal_file is not None:
+
+    if cfg.MODEL.LOAD_PROPOSALS:
+        assert len(cfg.DATASETS.PROPOSAL_FILES_TEST) == len(cfg.DATASETS.TEST)
+        assert dataset_name in cfg.DATASETS.TEST, "{} not in cfg.DATASETS.TEST!".format(
+            dataset_name
+        )
+        dataset_index = list(cfg.DATASETS.TEST).index(dataset_name)
+        proposal_file = cfg.DATASETS.PROPOSAL_FILES_TEST[dataset_index]
         # load precomputed proposals from proposal files
         dataset_dicts = load_proposals_into_dataset(dataset_dicts, proposal_file)
+
     dataset = DatasetFromList(dataset_dicts)
     if transform is None:
         transform = DetectionTransform(cfg, False)

@@ -78,6 +78,9 @@ class GeneralizedRCNNWithTTA:
         ), "TTA is only supported on GeneralizedRCNN. Got a model of type {}".format(type(model))
         self.cfg = cfg.clone()
         assert not self.cfg.MODEL.KEYPOINT_ON, "TTA for keypoint is not supported yet"
+        assert (
+            not self.cfg.MODEL.LOAD_PROPOSALS
+        ), "TTA for pre-computed proposals is not supported yet"
 
         self.model = model
         assert not model.training
