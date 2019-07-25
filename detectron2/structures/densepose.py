@@ -1,7 +1,6 @@
 import base64
 import numpy as np
 from io import BytesIO
-
 import torch
 from PIL import Image
 from torch.nn import functional as F
@@ -178,9 +177,7 @@ class DensePoseDataRelative(object):
             for i, transform_gen_i in enumerate(transform_gen):
                 transform_i = transform.transforms[i]
                 self._transform_pts(transform_gen_i, transform_i, dp_transform_data)
-        elif (
-            "HFlipTransform" == type(transform).__name__
-        ):
+        elif "HFlipTransform" == type(transform).__name__:
             self.x = self.segm.size(1) - self.x
             self._flip_iuv_semantics(dp_transform_data)
 
@@ -204,9 +201,7 @@ class DensePoseDataRelative(object):
             for i, transform_gen_i in enumerate(transform_gen):
                 transform_i = transform.transforms[i]
                 self._transform_segm(transform_gen_i, transform_i, dp_transform_data)
-        elif (
-            "HFlipTransform" == type(transform).__name__
-        ):
+        elif "HFlipTransform" == type(transform).__name__:
             self.segm = torch.flip(self.segm, [1])
             self._flip_segm_semantics(dp_transform_data)
 

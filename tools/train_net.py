@@ -21,7 +21,6 @@ from detectron2.utils.env import setup_environment  # noqa F401 isort:skip
 import argparse
 import logging
 import os
-
 import torch
 from torch.nn.parallel import DistributedDataParallel
 

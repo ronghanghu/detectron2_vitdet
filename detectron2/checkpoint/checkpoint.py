@@ -144,8 +144,7 @@ class Checkpointer(object):
         all_model_checkpoints = [
             os.path.join(self.save_dir, file)
             for file in os.listdir(self.save_dir)
-            if os.path.isfile(os.path.join(self.save_dir, file))
-            and file.endswith(".pth")
+            if os.path.isfile(os.path.join(self.save_dir, file)) and file.endswith(".pth")
         ]
         return all_model_checkpoints
 

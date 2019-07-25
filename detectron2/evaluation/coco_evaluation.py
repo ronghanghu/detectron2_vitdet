@@ -8,7 +8,6 @@ import numpy as np
 import os
 import pickle
 from collections import OrderedDict
-
 import pycocotools.mask as mask_util
 import torch
 from pycocotools.coco import COCO
@@ -19,9 +18,8 @@ from detectron2.data import MetadataCatalog
 from detectron2.structures import Boxes, BoxMode, pairwise_iou
 from detectron2.utils.comm import all_gather, is_main_process, synchronize
 
-from .evaluator import DatasetEvaluator
-
 from .densepose_coco_evaluation import DensePoseCocoEval
+from .evaluator import DatasetEvaluator
 
 
 class COCOEvaluator(DatasetEvaluator):
