@@ -12,9 +12,9 @@ from detectron2.structures import PolygonMasks
 
 from .colormap import colormap
 
-_OFF_WHITE = [255, 255, 240]
-_BLACK = [0, 0, 0]
-_RED = [255, 0, 0]
+_OFF_WHITE = (255, 255, 240)
+_BLACK = (0, 0, 0)
+_RED = (255, 0, 0)
 
 _KEYPOINT_THRESHOLD = 0.01
 
@@ -84,9 +84,10 @@ class VisualizedImageOutput:
         """
         canvas = self.fig.canvas
         canvas.draw()
-        buffer = np.fromstring(canvas.tostring_rgb(), dtype="uint8")
+        buffer = np.frombuffer(canvas.tostring_rgb(), dtype="uint8")
         num_cols, num_rows = canvas.get_width_height()
         visualized_image = buffer.reshape(num_rows, num_cols, 3)
+        plt.close()
         return visualized_image
 
 
@@ -344,14 +345,14 @@ class Visualizer:
             y,
             text,
             fontsize=font_size,
-            family="serif",
-            bbox={"facecolor": "none", "alpha": 0.4, "pad": 0, "edgecolor": "none"},
+            family="sans-serif",
+            bbox={"facecolor": "none", "alpha": 0.4, "pad": 0.5, "edgecolor": "none"},
             color=color,
             zorder=10,
         )
         return self.output
 
-    def draw_box(self, box_coord, alpha=0.5, edge_color="g", line_style="--"):
+    def draw_box(self, box_coord, alpha=0.5, edge_color="g", line_style="-"):
         """
         Args:
             box_coord (tuple): a tuple containing x0, y0, x1, y1 coordinates, where x0 and y0
@@ -489,7 +490,7 @@ class Visualizer:
             if kp0 in keypoints_present and kp1 in keypoints_present:
                 x0, y0 = detected_keypoints_and_locations[kp0]
                 x1, y1 = detected_keypoints_and_locations[kp1]
-                color = [x / 255 for x in color]
+                color = (x / 255 for x in color)
                 self.draw_line([x0, x1], [y0, y1], color=color)
 
         # draw lines to mid-shoulder and mid-hip
@@ -499,7 +500,7 @@ class Visualizer:
         ls_x, ls_y, ls_prob = keypoints[self.metadata.keypoint_names.index("left_shoulder")]
         rs_x, rs_y, rs_prob = keypoints[self.metadata.keypoint_names.index("right_shoulder")]
         if ls_prob > _KEYPOINT_THRESHOLD and rs_prob > _KEYPOINT_THRESHOLD:
-            color = [x / 255 for x in _RED]
+            color = (x / 255 for x in _RED)
             # draw line from nose to mid-shoulder
             mid_shoulder_x, mid_shoulder_y = (ls_x + rs_x) / 2, (ls_y + rs_y) / 2
             if nose_prob > _KEYPOINT_THRESHOLD:
@@ -526,7 +527,7 @@ class Visualizer:
             idx (int, optional): the index used to pick a color from the colormap list.
 
         Returns:
-            color (list[double]): a list of 3 elements, containing the RGB values of the color
+            color (tuple[double]): a tuple of 3 elements, containing the RGB values of the color
                 picked. The values in the list are in the range [0.0, 1.0].
         """
         # pick pre-defined color based on class label.
@@ -537,7 +538,7 @@ class Visualizer:
         color_list = colormap(rgb=True) / 255.0
         if idx is None:
             idx = random.randint(0, len(color_list) - 1)
-        return color_list[idx % len(color_list)]
+        return tuple(color_list[idx % len(color_list)])
 
     def get_output(self):
         """

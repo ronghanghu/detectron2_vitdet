@@ -20,6 +20,7 @@ def main():
         help="path to config file",
     )
     parser.add_argument("--webcam", action="store_true", help="Take inputs from webcam.")
+    parser.add_argument("--video-input", help="Path to video file.")
     parser.add_argument("--input", nargs="+", help="A list of space separated input images")
     parser.add_argument(
         "--output",
@@ -39,7 +40,6 @@ def main():
         default=None,
         nargs=argparse.REMAINDER,
     )
-
     args = parser.parse_args()
 
     # load config from file and command-line arguments
@@ -69,7 +69,8 @@ def main():
             if cv2.waitKey(1) == 27:
                 break  # esc to quit
         cv2.destroyAllWindows()
-    else:
+
+    elif args.input:
         for path in args.input:
             img = cv2.imread(path)
             start_time = time.time()
@@ -88,6 +89,14 @@ def main():
                     cv2.imshow("COCO detections", visualized_output.get_image()[:, :, [2, 1, 0]])
                 if cv2.waitKey(0) == 27:
                     break  # esc to quit
+
+    elif args.video_input:
+        if args.output:
+            video_output_filename = "visualized-" + os.path.basename(args.video_input)
+            video_output = os.path.join(args.output, video_output_filename)
+        else:
+            video_output = None
+        coco_demo.run_on_video(args.video_input, video_output)
 
 
 if __name__ == "__main__":

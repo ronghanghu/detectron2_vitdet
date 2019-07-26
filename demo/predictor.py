@@ -1,9 +1,11 @@
+import os
 import cv2
 import torch
 
 import detectron2.data.transforms as T
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.modeling import build_model
+from detectron2.utils.video_visualizer import VideoVisualizer
 from detectron2.utils.visualizer import ColoringMode, Visualizer
 
 
@@ -62,6 +64,72 @@ class COCODemo(object):
                 vis_output = visualizer.draw_instance_predictions(predictions=predictions.to("cpu"))
 
         return predictions, vis_output
+
+    def run_on_video(self, input_path, output_path=None):
+        """
+        Visualizes predictions on frames of the input video. Creates and saves the output
+        video to the output file path, if provided. Otherwise, displays the visualized
+        output video in a window.
+
+        Args:
+            input_path (str): file path for input video file.
+            output_path (str, optional): file path for visualized output video file.
+        """
+        assert os.path.isfile(input_path)
+        video = cv2.VideoCapture(input_path)
+
+        # frequency of frame capture
+        seconds = 0.03
+        frames_per_second = video.get(cv2.CAP_PROP_FPS)
+        frame_grab_frequency = int(round(seconds * frames_per_second))
+
+        if output_path:
+            width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            video_file = cv2.VideoWriter(
+                filename=output_path,
+                fourcc=cv2.VideoWriter_fourcc(*"x264"),
+                fps=float(frames_per_second),
+                frameSize=(width, height),
+                isColor=True,
+            )
+
+        video_visualizer = VideoVisualizer(self.metadata)
+        while video.isOpened():
+            success, frame = video.read()
+            if success:
+                frame_number = int(round(video.get(cv2.CAP_PROP_POS_FRAMES)))
+                if frame_number % frame_grab_frequency == 0:
+                    predictions = self.compute_predictions(frame)
+                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    frame = torch.tensor(frame)
+
+                    vis_frame = None
+                    if "instances" in predictions:
+                        predictions = self.select_top_predictions(
+                            predictions["instances"].to(self.cpu_device)
+                        )
+                        vis_frame = video_visualizer.draw_instance_predictions(
+                            frame=frame, predictions=predictions.to("cpu")
+                        )
+
+                    # Converts Matplotlib RGB format to OpenCV BGR format before visualizing
+                    # output in window.
+                    vis_frame = vis_frame.get_image()[:, :, [2, 1, 0]]
+                    vis_frame = cv2.resize(vis_frame, (width, height))
+                    if output_path:
+                        video_file.write(vis_frame)
+                    else:
+                        cv2.imshow("COCO detections", vis_frame)
+                        if cv2.waitKey(1) == 27:
+                            break  # esc to quit
+            else:
+                break
+
+        video.release()
+        if output_path:
+            video_file.release()
+        cv2.destroyAllWindows()
 
     def compute_predictions(self, original_image):
         """
