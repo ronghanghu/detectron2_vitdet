@@ -14,9 +14,9 @@ printenv | grep SLURM
 
 MASTER_NODE=$(scontrol show hostname "$SLURM_NODELIST" | head -n1)
 DIST_URL="tcp://$MASTER_NODE:12389"
+NUM_GPUS_PER_NODE=$(echo "$SLURM_STEP_GRES" | tr ',' '\n' | wc -l)
 
-# We assume 8 GPUs per node, because why not?
 python -u tools/train_net.py \
-	--num-gpus 8 \
+	--num-gpus "$NUM_GPUS_PER_NODE" \
 	--num-machines "$SLURM_NNODES" --machine-rank "$SLURM_NODEID" \
 	--dist-url "$DIST_URL" "$@"

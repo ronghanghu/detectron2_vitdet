@@ -9,8 +9,14 @@ import pickle
 import torch
 import torch.distributed as dist
 
+_LOCAL_PROCESS_GROUP = None
+"""
+A torch process group which only includes processes that on the same machine as the current process.
+This variable is set when processes are spawned by `launch()` in "engine/launch.py".
+"""
 
-def get_world_size():
+
+def get_world_size() -> int:
     if not dist.is_available():
         return 1
     if not dist.is_initialized():
@@ -18,7 +24,7 @@ def get_world_size():
     return dist.get_world_size()
 
 
-def get_rank():
+def get_rank() -> int:
     if not dist.is_available():
         return 0
     if not dist.is_initialized():
@@ -26,7 +32,32 @@ def get_rank():
     return dist.get_rank()
 
 
-def is_main_process():
+def get_local_rank() -> int:
+    """
+    Returns:
+        The rank of the current process within the local (per-machine) process group.
+    """
+    if not dist.is_available():
+        return 0
+    if not dist.is_initialized():
+        return 0
+    return dist.get_rank(group=_LOCAL_PROCESS_GROUP)
+
+
+def get_local_size() -> int:
+    """
+    Returns:
+        The size of the per-machine process group,
+        i.e. the number of processes per machine.
+    """
+    if not dist.is_available():
+        return 1
+    if not dist.is_initialized():
+        return 1
+    return dist.get_world_size(group=_LOCAL_PROCESS_GROUP)
+
+
+def is_main_process() -> bool:
     return get_rank() == 0
 
 

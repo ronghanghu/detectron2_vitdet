@@ -22,6 +22,10 @@ class _ColorfulFormatter(logging.Formatter):
 
 
 def setup_logger(save_dir=None, distributed_rank=0, color=True, name="detectron2"):
+    """
+    Args:
+        save_dir (str): a directory to save log. If None, will not save log file.
+    """
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
     # don't log results to files for non-master processes
