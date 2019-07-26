@@ -16,6 +16,9 @@ MASTER_NODE=$(scontrol show hostname "$SLURM_NODELIST" | head -n1)
 DIST_URL="tcp://$MASTER_NODE:12389"
 NUM_GPUS_PER_NODE=$(echo "$SLURM_STEP_GRES" | tr ',' '\n' | wc -l)
 
+# https://fb.workplace.com/groups/FAIRClusterUsers/permalink/1165512983605279/
+export GLOO_SOCKET_IFNAME=enp1s0f0
+
 python -u tools/train_net.py \
 	--num-gpus "$NUM_GPUS_PER_NODE" \
 	--num-machines "$SLURM_NNODES" --machine-rank "$SLURM_NODEID" \
