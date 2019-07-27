@@ -15,13 +15,12 @@ import numpy as np
 import pickle
 import time
 from collections import defaultdict
+import scipy.spatial.distance as ssd
 from pycocotools import mask as maskUtils
+from scipy.io import loadmat
 
 from detectron2.structures.densepose import DensePoseResult
 from detectron2.utils.file_io import PathManager
-
-import scipy.spatial.distance as ssd
-from scipy.io import loadmat
 
 logger = logging.getLogger(__name__)
 

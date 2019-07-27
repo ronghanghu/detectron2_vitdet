@@ -10,35 +10,11 @@ class DensePoseTransformData(object):
 
     # Horizontal symmetry label transforms used for horizontal flip
     MASK_LABEL_SYMMETRIES = [0, 1, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10, 13, 12, 14]
-    POINT_LABEL_SYMMETRIES = [
-        0,
-        1,
-        2,
-        4,
-        3,
-        6,
-        5,
-        8,
-        7,
-        10,
-        9,
-        12,
-        11,
-        14,
-        13,
-        16,
-        15,
-        18,
-        17,
-        20,
-        19,
-        22,
-        21,
-        24,
-        23,
-    ]
+    # fmt: off
+    POINT_LABEL_SYMMETRIES = [ 0, 1, 2, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15, 18, 17, 20, 19, 22, 21, 24, 23]  # noqa
+    # fmt: on
 
-    def __init__(self, mask_label_symmetries, point_label_symmetries, uv_symmetries):
+    def __init__(self, uv_symmetries):
         self.mask_label_symmetries = DensePoseTransformData.MASK_LABEL_SYMMETRIES
         self.point_label_symmetries = DensePoseTransformData.POINT_LABEL_SYMMETRIES
         self.uv_symmetries = uv_symmetries
@@ -56,11 +32,7 @@ class DensePoseTransformData(object):
                 uv_symmetry_map_torch[key].append(
                     torch.from_numpy(map_src[0, i]).to(dtype=torch.float)
                 )
-        transform_data = DensePoseTransformData(
-            DensePoseTransformData.MASK_LABEL_SYMMETRIES,
-            DensePoseTransformData.POINT_LABEL_SYMMETRIES,
-            uv_symmetry_map_torch,
-        )
+        transform_data = DensePoseTransformData(uv_symmetry_map_torch)
         return transform_data
 
 
@@ -166,18 +138,16 @@ class DensePoseDataRelative(object):
             if key in annotation:
                 del annotation[key]
 
-    def apply_transform(self, transform, transform_params, densepose_transform_data):
-        self._transform_pts(transform, transform_params, densepose_transform_data)
-        self._transform_segm(transform, transform_params, densepose_transform_data)
+    def apply_transform(self, transforms, densepose_transform_data):
+        self._transform_pts(transforms, densepose_transform_data)
+        self._transform_segm(transforms, densepose_transform_data)
 
-    def _transform_pts(self, transform_gen, transform, dp_transform_data):
-        # TODO: refactor transforms, ugly hacks for now
-        if isinstance(transform_gen, list):
-            assert hasattr(transform, "transforms")
-            for i, transform_gen_i in enumerate(transform_gen):
-                transform_i = transform.transforms[i]
-                self._transform_pts(transform_gen_i, transform_i, dp_transform_data)
-        elif "HFlipTransform" == type(transform).__name__:
+    def _transform_pts(self, transforms, dp_transform_data):
+        # NOTE: This assumes that HorizFlipTransform is the only one that does flip
+        import detectron2.data.transforms as T
+
+        do_hflip = sum(isinstance(t, T.HFlipTransform) for t in transforms.transforms) % 2 == 1
+        if do_hflip:
             self.x = self.segm.size(1) - self.x
             self._flip_iuv_semantics(dp_transform_data)
 
@@ -194,14 +164,12 @@ class DensePoseDataRelative(object):
                 self.u[annot_indices_i] = uv_symmetries["U_transforms"][i][v_loc, u_loc]
                 self.v[annot_indices_i] = uv_symmetries["V_transforms"][i][v_loc, u_loc]
 
-    def _transform_segm(self, transform_gen, transform, dp_transform_data):
-        # TODO: refactor transforms, ugly hacks for now
-        if isinstance(transform_gen, list):
-            assert hasattr(transform, "transforms")
-            for i, transform_gen_i in enumerate(transform_gen):
-                transform_i = transform.transforms[i]
-                self._transform_segm(transform_gen_i, transform_i, dp_transform_data)
-        elif "HFlipTransform" == type(transform).__name__:
+    def _transform_segm(self, transforms, dp_transform_data):
+        # NOTE: This assumes that HorizFlipTransform is the only one that does flip
+        import detectron2.data.transforms as T
+
+        do_hflip = sum(isinstance(t, T.HFlipTransform) for t in transforms.transforms) % 2 == 1
+        if do_hflip:
             self.segm = torch.flip(self.segm, [1])
             self._flip_segm_semantics(dp_transform_data)
 

@@ -294,9 +294,7 @@ class DetectionTransform:
             is_valid, reason_not_valid = DensePoseDataRelative.validate_annotation(annotation)
             if is_valid:
                 densepose_data = DensePoseDataRelative(annotation, cleanup=True)
-                densepose_data.apply_transform(
-                    self.tfm_gens, transforms, self.densepose_transform_data
-                )
+                densepose_data.apply_transform(transforms, self.densepose_transform_data)
                 annotation["densepose"] = densepose_data
             else:
                 # logger = logging.getLogger(__name__)

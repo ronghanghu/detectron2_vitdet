@@ -1,3 +1,5 @@
+from . import transforms  # isort:skip
+
 from .build import (
     build_detection_test_loader,
     build_detection_train_loader,
@@ -9,4 +11,4 @@ from .common import DatasetFromList, MapDataset
 from .detection_transforms import DetectionTransform
 
 # ensure the builtin datasets are registered
-from . import datasets  # isort:skip
+from . import datasets, samplers  # isort:skip

@@ -120,26 +120,17 @@ class DensePoseDataFilter(object):
             iou = matched_boxlist_iou(gt_boxes, est_boxes)
             iou_select = iou > self.iou_threshold
             proposals_per_image = proposals_per_image[iou_select]
-            assert len(proposals_per_image.gt_boxes) == len(
-                proposals_per_image.proposal_boxes
-            )
+            assert len(proposals_per_image.gt_boxes) == len(proposals_per_image.proposal_boxes)
             # filter out any target without densepose annotation
             gt_densepose = proposals_per_image.gt_densepose
-            assert len(proposals_per_image.gt_boxes) == len(
-                proposals_per_image.gt_densepose
-            )
+            assert len(proposals_per_image.gt_boxes) == len(proposals_per_image.gt_densepose)
             selected_indices = [
-                i for i, dp_target in enumerate(gt_densepose)
-                if dp_target is not None
+                i for i, dp_target in enumerate(gt_densepose) if dp_target is not None
             ]
             if len(selected_indices) != len(gt_densepose):
                 proposals_per_image = proposals_per_image[selected_indices]
-            assert len(proposals_per_image.gt_boxes) == len(
-                proposals_per_image.proposal_boxes
-            )
-            assert len(proposals_per_image.gt_boxes) == len(
-                proposals_per_image.gt_densepose
-            )
+            assert len(proposals_per_image.gt_boxes) == len(proposals_per_image.proposal_boxes)
+            assert len(proposals_per_image.gt_boxes) == len(proposals_per_image.gt_densepose)
             proposals_filtered.append(proposals_per_image)
         return proposals_filtered
 
@@ -243,7 +234,7 @@ def _linear_interpolation_utilities(v_norm, v0_src, size_src, v0_dst, size_dst, 
 
 
 def _grid_sampling_utilities(
-    zh, zw, bbox_xywh_est, bbox_xywh_gt, index_gt, x_norm, y_norm, index_bbox,
+    zh, zw, bbox_xywh_est, bbox_xywh_gt, index_gt, x_norm, y_norm, index_bbox
 ):
     """
     Prepare tensors used in grid sampling.
@@ -292,9 +283,11 @@ def _grid_sampling_utilities(
     x0_gt, y0_gt, w_gt, h_gt = bbox_xywh_gt[index_bbox].unbind(dim=1)
     x0_est, y0_est, w_est, h_est = bbox_xywh_est[index_bbox].unbind(dim=1)
     x_lo, x_hi, x_w, jx_valid = _linear_interpolation_utilities(
-        x_norm, x0_gt, w_gt, x0_est, w_est, zw)
+        x_norm, x0_gt, w_gt, x0_est, w_est, zw
+    )
     y_lo, y_hi, y_w, jy_valid = _linear_interpolation_utilities(
-        y_norm, y0_gt, h_gt, y0_est, h_est, zh)
+        y_norm, y0_gt, h_gt, y0_est, h_est, zh
+    )
     j_valid = jx_valid * jy_valid
 
     w_ylo_xlo = (1.0 - x_w) * (1.0 - y_w)
@@ -302,13 +295,21 @@ def _grid_sampling_utilities(
     w_yhi_xlo = (1.0 - x_w) * y_w
     w_yhi_xhi = x_w * y_w
 
-    return j_valid, y_lo, y_hi, x_lo, x_hi, \
-        w_ylo_xlo, w_ylo_xhi, w_yhi_xlo, w_yhi_xhi
+    return j_valid, y_lo, y_hi, x_lo, x_hi, w_ylo_xlo, w_ylo_xhi, w_yhi_xlo, w_yhi_xhi
 
 
 def _extract_at_points_packed(
-    z_est, index_bbox_valid, slice_index_uv,
-    y_lo, y_hi, x_lo, x_hi, w_ylo_xlo, w_ylo_xhi, w_yhi_xlo, w_yhi_xhi
+    z_est,
+    index_bbox_valid,
+    slice_index_uv,
+    y_lo,
+    y_hi,
+    x_lo,
+    x_hi,
+    w_ylo_xlo,
+    w_ylo_xhi,
+    w_yhi_xlo,
+    w_yhi_xhi,
 ):
     """
     Extract ground truth values z_gt for valid point indices and estimated
@@ -443,11 +444,9 @@ def _extract_single_tensors_from_matches(proposals_with_targets):
     n = 0
     for i, proposals_targets_per_image in enumerate(proposals_with_targets):
         n_i = proposals_targets_per_image.proposal_boxes.tensor.size(0)
-        i_gt_img, x_norm_img, y_norm_img, u_gt_img, v_gt_img, s_gt_img, \
-            bbox_xywh_gt_img, bbox_xywh_est_img, i_bbox_img, i_with_dp_img = \
-            _extract_single_tensors_from_matches_one_image(
-                proposals_targets_per_image, len(i_with_dp_all), n
-            )
+        i_gt_img, x_norm_img, y_norm_img, u_gt_img, v_gt_img, s_gt_img, bbox_xywh_gt_img, bbox_xywh_est_img, i_bbox_img, i_with_dp_img = _extract_single_tensors_from_matches_one_image(
+            proposals_targets_per_image, len(i_with_dp_all), n
+        )
         i_gt_all.extend(i_gt_img)
         x_norm_all.extend(x_norm_img)
         y_norm_all.extend(y_norm_img)
@@ -505,36 +504,66 @@ class DensePoseLosses(object):
         assert u.size(2) == index_uv.size(2)
         assert u.size(3) == index_uv.size(3)
 
-        index_uv_img, i_with_dp, bbox_xywh_est, bbox_xywh_gt, index_gt_all, \
-            x_norm, y_norm, u_gt_all, v_gt_all, s_gt, index_bbox = \
-            _extract_single_tensors_from_matches(proposals_with_gt)
+        index_uv_img, i_with_dp, bbox_xywh_est, bbox_xywh_gt, index_gt_all, x_norm, y_norm, u_gt_all, v_gt_all, s_gt, index_bbox = _extract_single_tensors_from_matches(
+            proposals_with_gt
+        )
         n_batch = len(i_with_dp)
 
         zh = u.size(2)
         zw = u.size(3)
 
-        j_valid, y_lo, y_hi, x_lo, x_hi, w_ylo_xlo, w_ylo_xhi, w_yhi_xlo, w_yhi_xhi = \
-            _grid_sampling_utilities(zh, zw, bbox_xywh_est, bbox_xywh_gt, index_gt_all,
-                                     x_norm, y_norm, index_bbox)
+        j_valid, y_lo, y_hi, x_lo, x_hi, w_ylo_xlo, w_ylo_xhi, w_yhi_xlo, w_yhi_xhi = _grid_sampling_utilities(
+            zh, zw, bbox_xywh_est, bbox_xywh_gt, index_gt_all, x_norm, y_norm, index_bbox
+        )
 
         j_valid_fg = j_valid * (index_gt_all > 0)
 
         u_gt = u_gt_all[j_valid_fg]
         u_est_all = _extract_at_points_packed(
-            u[i_with_dp], index_bbox, index_gt_all, y_lo, y_hi, x_lo, x_hi,
-            w_ylo_xlo, w_ylo_xhi, w_yhi_xlo, w_yhi_xhi)
+            u[i_with_dp],
+            index_bbox,
+            index_gt_all,
+            y_lo,
+            y_hi,
+            x_lo,
+            x_hi,
+            w_ylo_xlo,
+            w_ylo_xhi,
+            w_yhi_xlo,
+            w_yhi_xhi,
+        )
         u_est = u_est_all[j_valid_fg]
 
         v_gt = v_gt_all[j_valid_fg]
         v_est_all = _extract_at_points_packed(
-            v[i_with_dp], index_bbox, index_gt_all, y_lo, y_hi, x_lo, x_hi,
-            w_ylo_xlo, w_ylo_xhi, w_yhi_xlo, w_yhi_xhi)
+            v[i_with_dp],
+            index_bbox,
+            index_gt_all,
+            y_lo,
+            y_hi,
+            x_lo,
+            x_hi,
+            w_ylo_xlo,
+            w_ylo_xhi,
+            w_yhi_xlo,
+            w_yhi_xhi,
+        )
         v_est = v_est_all[j_valid_fg]
 
         index_uv_gt = index_gt_all[j_valid]
         index_uv_est_all = _extract_at_points_packed(
-            index_uv[i_with_dp], index_bbox, slice(None), y_lo, y_hi, x_lo, x_hi,
-            w_ylo_xlo[:, None], w_ylo_xhi[:, None], w_yhi_xlo[:, None], w_yhi_xhi[:, None])
+            index_uv[i_with_dp],
+            index_bbox,
+            slice(None),
+            y_lo,
+            y_hi,
+            x_lo,
+            x_hi,
+            w_ylo_xlo[:, None],
+            w_ylo_xhi[:, None],
+            w_yhi_xlo[:, None],
+            w_yhi_xhi[:, None],
+        )
         index_uv_est = index_uv_est_all[j_valid, :]
 
         # Resample everything to the estimated data size, no need to resample
