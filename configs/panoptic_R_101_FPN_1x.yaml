@@ -1,4 +1,4 @@
-_BASE_: "Base-FPN.yaml"
+_BASE_: "Base-RCNN-FPN.yaml"
 MODEL:
   META_ARCHITECTURE: "PanopticFPN"
   WEIGHT: "catalog://ImageNetPretrained/MSRA/R-101"

@@ -1,4 +1,4 @@
-_BASE_: "../Base-FPN.yaml"
+_BASE_: "../Base-RCNN-FPN.yaml"
 MODEL:
   META_ARCHITECTURE: "PanopticFPN"
   WEIGHT: "detectron2://panoptic_R_50_FPN_1x/111802095/model_final_b5e6e676227baeca42cc501b7221ec3a.pkl"

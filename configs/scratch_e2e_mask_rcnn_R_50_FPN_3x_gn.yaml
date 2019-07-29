@@ -1,4 +1,4 @@
-_BASE_: "Base-FPN.yaml"
+_BASE_: "Base-RCNN-FPN.yaml"
 # INPUT:
   # It makes sense to divide by STD when training from scratch
   # But it seems to make no difference on the results and C2's models did't do this.

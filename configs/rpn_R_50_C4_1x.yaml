@@ -1,4 +1,4 @@
-_BASE_: "Base-C4.yaml"
+_BASE_: "Base-RCNN-C4.yaml"
 MODEL:
   META_ARCHITECTURE: "ProposalNetwork"
   WEIGHT: "catalog://ImageNetPretrained/MSRA/R-50"

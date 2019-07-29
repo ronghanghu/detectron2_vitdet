@@ -1,4 +1,4 @@
-_BASE_: "Base-FPN.yaml"
+_BASE_: "Base-RCNN-FPN.yaml"
 MODEL:
   MASK_ON: True
   WEIGHT: "catalog://ImageNetPretrained/FAIR/X-101-32x8d"

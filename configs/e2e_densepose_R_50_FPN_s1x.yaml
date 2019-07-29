@@ -1,4 +1,4 @@
-_BASE_: "Base-FPN.yaml"
+_BASE_: "Base-RCNN-FPN.yaml"
 INPUT:
   MIN_SIZE_TRAIN: (640, 672, 704, 736, 768, 800)
 MODEL:
