@@ -69,8 +69,10 @@ class Matcher(object):
                 match_quality_matrix.new_full(
                     (match_quality_matrix.size(1),), 0, dtype=torch.int64
                 ),
+                match_quality_matrix.new_full(
+                    (match_quality_matrix.size(1),), -1, dtype=torch.int8
+                ),
             )
-            match_quality_matrix.new_full((match_quality_matrix.size(1),), -1, dtype=torch.int8)
         assert torch.all(match_quality_matrix >= 0)
 
         # match_quality_matrix is M (gt) x N (predicted)
