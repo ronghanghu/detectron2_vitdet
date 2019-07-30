@@ -22,6 +22,7 @@ import argparse
 import logging
 import os
 import torch
+from collections import OrderedDict
 from torch.nn.parallel import DistributedDataParallel
 
 import detectron2.utils.comm as comm
@@ -112,7 +113,7 @@ def do_test(cfg, model, is_final=True):
     logger = logging.getLogger("detectron2.trainer")
 
     with inference_context(model):
-        results = []
+        results = OrderedDict()
         for dataset_name in cfg.DATASETS.TEST:
             if cfg.OUTPUT_DIR:
                 output_folder = os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
@@ -127,7 +128,7 @@ def do_test(cfg, model, is_final=True):
             evaluator = get_evaluator(cfg, dataset_name, output_folder)
             results_per_dataset = inference_on_dataset(model, data_loader, evaluator)
             if comm.is_main_process():
-                results.append(results_per_dataset)
+                results[dataset_name] = results_per_dataset
                 if is_final:
                     print_csv_format(results_per_dataset)
 
@@ -156,7 +157,7 @@ def do_test(cfg, model, is_final=True):
 
     if is_final and cfg.TEST.EXPECTED_RESULTS and comm.is_main_process():
         assert len(results) == 1, "Results verification only supports one dataset!"
-        verify_results(cfg, results[0])
+        verify_results(cfg, results[cfg.DATASETS.TEST[0]])
     return results
 
 
@@ -174,7 +175,7 @@ def create_after_step_hook(cfg, model, optimizer, scheduler, periodic_checkpoint
         ):
             results = do_test(cfg, model, is_final=False)
 
-            for dataset_name, results_per_dataset in zip(cfg.DATASETS.TEST, results):
+            for dataset_name, results_per_dataset in results.items():
                 for task, metrics_per_task in results_per_dataset.items():
                     for metric, value in metrics_per_task.items():
                         key = "{}/{}/{}".format(dataset_name, task, metric)
@@ -286,7 +287,7 @@ def main(args):
         )
 
     do_train(cfg, model)
-    do_test(cfg, model)
+    return do_test(cfg, model)
 
 
 def parse_args(in_args=None):
