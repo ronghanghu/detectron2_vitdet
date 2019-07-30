@@ -695,13 +695,12 @@ class StandardROIHeads(ROIHeads):
         if self.training:
             proposals, _ = select_foreground_proposals(instances, self.num_classes)
             proposals_dp = self.densepose_data_filter(proposals)
-            if len(proposals_dp) > 0:
-                proposal_boxes = [x.proposal_boxes for x in proposals_dp]
-                features_dp = self.densepose_pooler(features, proposal_boxes)
-                densepose_head_outputs = self.densepose_head(features_dp)
-                densepose_outputs, _ = self.densepose_predictor(densepose_head_outputs)
-                densepose_loss_dict = self.densepose_losses(proposals_dp, densepose_outputs)
-                return densepose_loss_dict
+            proposal_boxes = [x.proposal_boxes for x in proposals_dp]
+            features_dp = self.densepose_pooler(features, proposal_boxes)
+            densepose_head_outputs = self.densepose_head(features_dp)
+            densepose_outputs, _ = self.densepose_predictor(densepose_head_outputs)
+            densepose_loss_dict = self.densepose_losses(proposals_dp, densepose_outputs)
+            return densepose_loss_dict
         else:
             pred_boxes = [x.pred_boxes for x in instances]
             densepose_features = self.densepose_pooler(features, pred_boxes)

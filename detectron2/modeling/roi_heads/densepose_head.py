@@ -391,30 +391,32 @@ def _extract_single_tensors_from_matches_one_image(
     i_with_dp = []
 
     boxes_xywh_est = proposals_targets.proposal_boxes.clone()
-    boxes_xywh_est.tensor[:, 2] -= boxes_xywh_est.tensor[:, 0]
-    boxes_xywh_est.tensor[:, 3] -= boxes_xywh_est.tensor[:, 1]
     boxes_xywh_gt = proposals_targets.gt_boxes.clone()
-    boxes_xywh_gt.tensor[:, 2] -= boxes_xywh_gt.tensor[:, 0]
-    boxes_xywh_gt.tensor[:, 3] -= boxes_xywh_gt.tensor[:, 1]
     n_i = len(boxes_xywh_est)
     assert n_i == len(boxes_xywh_gt)
-    if hasattr(proposals_targets, "gt_densepose"):
-        densepose_gt = proposals_targets.gt_densepose
-        for k, box_xywh_est, box_xywh_gt, dp_gt in zip(
-            range(n_i), boxes_xywh_est.tensor, boxes_xywh_gt.tensor, densepose_gt
-        ):
-            if (dp_gt is not None) and (len(dp_gt.x) > 0):
-                i_gt_all.append(dp_gt.i)
-                x_norm_all.append(dp_gt.x)
-                y_norm_all.append(dp_gt.y)
-                u_gt_all.append(dp_gt.u)
-                v_gt_all.append(dp_gt.v)
-                s_gt_all.append(dp_gt.segm.unsqueeze(0))
-                bbox_xywh_gt_all.append(box_xywh_gt.view(-1, 4))
-                bbox_xywh_est_all.append(box_xywh_est.view(-1, 4))
-                i_bbox_k = torch.full_like(dp_gt.i, bbox_with_dp_offset + len(i_with_dp))
-                i_bbox_all.append(i_bbox_k)
-                i_with_dp.append(bbox_global_offset + k)
+
+    if n_i:
+        boxes_xywh_est.tensor[:, 2] -= boxes_xywh_est.tensor[:, 0]
+        boxes_xywh_est.tensor[:, 3] -= boxes_xywh_est.tensor[:, 1]
+        boxes_xywh_gt.tensor[:, 2] -= boxes_xywh_gt.tensor[:, 0]
+        boxes_xywh_gt.tensor[:, 3] -= boxes_xywh_gt.tensor[:, 1]
+        if hasattr(proposals_targets, "gt_densepose"):
+            densepose_gt = proposals_targets.gt_densepose
+            for k, box_xywh_est, box_xywh_gt, dp_gt in zip(
+                range(n_i), boxes_xywh_est.tensor, boxes_xywh_gt.tensor, densepose_gt
+            ):
+                if (dp_gt is not None) and (len(dp_gt.x) > 0):
+                    i_gt_all.append(dp_gt.i)
+                    x_norm_all.append(dp_gt.x)
+                    y_norm_all.append(dp_gt.y)
+                    u_gt_all.append(dp_gt.u)
+                    v_gt_all.append(dp_gt.v)
+                    s_gt_all.append(dp_gt.segm.unsqueeze(0))
+                    bbox_xywh_gt_all.append(box_xywh_gt.view(-1, 4))
+                    bbox_xywh_est_all.append(box_xywh_est.view(-1, 4))
+                    i_bbox_k = torch.full_like(dp_gt.i, bbox_with_dp_offset + len(i_with_dp))
+                    i_bbox_all.append(i_bbox_k)
+                    i_with_dp.append(bbox_global_offset + k)
     return (
         i_gt_all,
         x_norm_all,
@@ -444,6 +446,8 @@ def _extract_single_tensors_from_matches(proposals_with_targets):
     n = 0
     for i, proposals_targets_per_image in enumerate(proposals_with_targets):
         n_i = proposals_targets_per_image.proposal_boxes.tensor.size(0)
+        if not n_i:
+            continue
         i_gt_img, x_norm_img, y_norm_img, u_gt_img, v_gt_img, s_gt_img, bbox_xywh_gt_img, bbox_xywh_est_img, i_bbox_img, i_with_dp_img = _extract_single_tensors_from_matches_one_image(
             proposals_targets_per_image, len(i_with_dp_all), n
         )
@@ -460,15 +464,26 @@ def _extract_single_tensors_from_matches(proposals_with_targets):
         i_img.extend([i] * len(i_with_dp_img))
         n += n_i
     # concatenate all data into a single tensor
-    i_gt = torch.cat(i_gt_all, 0).long()
-    x_norm = torch.cat(x_norm_all, 0)
-    y_norm = torch.cat(y_norm_all, 0)
-    u_gt = torch.cat(u_gt_all, 0)
-    v_gt = torch.cat(v_gt_all, 0)
-    s_gt = torch.cat(s_gt_all, 0)
-    bbox_xywh_gt = torch.cat(bbox_xywh_gt_all, 0)
-    bbox_xywh_est = torch.cat(bbox_xywh_est_all, 0)
-    i_bbox = torch.cat(i_bbox_all, 0).long()
+    if n:
+        i_gt = torch.cat(i_gt_all, 0).long()
+        x_norm = torch.cat(x_norm_all, 0)
+        y_norm = torch.cat(y_norm_all, 0)
+        u_gt = torch.cat(u_gt_all, 0)
+        v_gt = torch.cat(v_gt_all, 0)
+        s_gt = torch.cat(s_gt_all, 0)
+        bbox_xywh_gt = torch.cat(bbox_xywh_gt_all, 0)
+        bbox_xywh_est = torch.cat(bbox_xywh_est_all, 0)
+        i_bbox = torch.cat(i_bbox_all, 0).long()
+    else:
+        i_gt = None
+        x_norm = None
+        y_norm = None
+        u_gt = None
+        v_gt = None
+        s_gt = None
+        bbox_xywh_gt = None
+        bbox_xywh_est = None
+        i_bbox = None
     return (
         i_img,
         i_with_dp_all,
@@ -504,10 +519,22 @@ class DensePoseLosses(object):
         assert u.size(2) == index_uv.size(2)
         assert u.size(3) == index_uv.size(3)
 
-        index_uv_img, i_with_dp, bbox_xywh_est, bbox_xywh_gt, index_gt_all, x_norm, y_norm, u_gt_all, v_gt_all, s_gt, index_bbox = _extract_single_tensors_from_matches(
-            proposals_with_gt
-        )
+        with torch.no_grad():
+            index_uv_img, i_with_dp, bbox_xywh_est, bbox_xywh_gt, index_gt_all, x_norm, y_norm, u_gt_all, v_gt_all, s_gt, index_bbox = _extract_single_tensors_from_matches(
+                proposals_with_gt
+            )
         n_batch = len(i_with_dp)
+
+        # NOTE: we need to keep the same computation graph on all the GPUs to
+        # perform reduction properly. Hence even if we have no data on one
+        # of the GPUs, we still need to generate the computation graph.
+        # Add fake (zero) loss in the form Tensor.sum() * 0
+        if not n_batch:
+            losses["loss_densepose_U"] = u.sum() * 0
+            losses["loss_densepose_V"] = v.sum() * 0
+            losses["loss_densepose_I"] = index_uv.sum() * 0
+            losses["loss_densepose_S"] = s.sum() * 0
+            return losses
 
         zh = u.size(2)
         zw = u.size(3)
@@ -581,17 +608,6 @@ class DensePoseLosses(object):
             ).squeeze(1)
 
         # add point-based losses:
-        # NOTE: we need to keep the same computation graph on all the GPUs to
-        # perform reduction properly. Hence even if we have no data on one
-        # of the GPUs, we still need to generate the computation graph.
-        # Add fake (zero) loss in the form Tensor.sum() * 0
-        if n_batch == 0:
-            losses["loss_densepose_U"] = u.sum() * 0
-            losses["loss_densepose_V"] = v.sum() * 0
-            losses["loss_densepose_I"] = index_uv.sum() * 0
-            losses["loss_densepose_S"] = s.sum() * 0
-            return losses
-
         u_loss = F.smooth_l1_loss(u_est, u_gt, reduction="sum") * self.w_points
         losses["loss_densepose_U"] = u_loss
         v_loss = F.smooth_l1_loss(v_est, v_gt, reduction="sum") * self.w_points
