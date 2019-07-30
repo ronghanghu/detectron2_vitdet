@@ -148,16 +148,15 @@ class Checkpointer(object):
         ]
         return all_model_checkpoints
 
-    def resume_or_load(self, path: str):
+    def resume_or_load(self, path: str, *, resume: bool = True):
         """
-        Resume from the last checkpoint, if exists.
+        If `resume` is True, this method attempts to
+        resume from the last checkpoint, if exists.
         Otherwise, load checkpoint from the given path.
 
         This is useful when restarting an interrupted training job.
-
-        Argument and return values are the same as :meth:`load()`.
         """
-        if self.has_checkpoint():
+        if resume and self.has_checkpoint():
             path = self.get_checkpoint_file()
         return self.load(path)
 

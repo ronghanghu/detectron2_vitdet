@@ -191,12 +191,17 @@ def create_after_step_hook(cfg, model, optimizer, scheduler, periodic_checkpoint
     return hooks.CallbackHook(after_step=after_step_callback)
 
 
-def do_train(cfg, model):
+def do_train(cfg, model, resume=True):
+    """
+    Args:
+        resume (bool): whether to attemp to resume from checkpoint directory.
+            Defaults to True to maintain backward compatibility.
+    """
     optimizer = build_optimizer(cfg, model)
     scheduler = build_lr_scheduler(cfg, optimizer)
 
     checkpointer = DetectionCheckpointer(model, optimizer, scheduler, cfg.OUTPUT_DIR)
-    start_iter = checkpointer.resume_or_load(cfg.MODEL.WEIGHT).get("iteration", 0)
+    start_iter = checkpointer.resume_or_load(cfg.MODEL.WEIGHT, resume=resume).get("iteration", 0)
     max_iter = cfg.SOLVER.MAX_ITER
     periodic_checkpointer = PeriodicCheckpointer(
         checkpointer, cfg.SOLVER.CHECKPOINT_PERIOD, max_iter=max_iter
@@ -234,7 +239,8 @@ def setup(args):
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
     cfg.freeze()
-    set_global_cfg(cfg.GLOBAL)
+    # Enable hacky research that uses global config. You usually don't need it
+    # set_global_cfg(cfg.GLOBAL)
 
     colorful_logging = not args.no_color
     output_dir = cfg.OUTPUT_DIR
@@ -268,11 +274,10 @@ def main(args):
     model = build_model(cfg)
     logger = logging.getLogger("detectron2")
     logger.info("Model:\n{}".format(model))
-    output_dir = cfg.OUTPUT_DIR
 
     if args.eval_only:
-        checkpointer = DetectionCheckpointer(model, save_dir=output_dir)
-        checkpointer.load(cfg.MODEL.WEIGHT)
+        checkpointer = DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR)
+        checkpointer.resume_or_load(cfg.MODEL.WEIGHT, resume=args.resume)
         return do_test(cfg, model)
 
     distributed = comm.get_world_size() > 1
@@ -286,7 +291,7 @@ def main(args):
             broadcast_buffers=False,
         )
 
-    do_train(cfg, model)
+    do_train(cfg, model, args.resume)
     return do_test(cfg, model)
 
 
@@ -298,6 +303,11 @@ def parse_args(in_args=None):
     """
     parser = argparse.ArgumentParser(description="PyTorch Object Detection Training")
     parser.add_argument("--config-file", default="", metavar="FILE", help="path to config file")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="whether to attempt to resume from the checkpoint directory",
+    )
     parser.add_argument("--eval-only", action="store_true", help="perform evaluation only")
     parser.add_argument("--no-color", action="store_true", help="disable colorful logging")
     parser.add_argument("--num-gpus", type=int, default=1, help="number of gpus per machine")
