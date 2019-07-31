@@ -262,6 +262,7 @@ def setup(args):
     )
     logger.info("Running with full config:\n{}".format(cfg))
     if comm.is_main_process() and output_dir:
+        # Other scripts may expect the name config.yaml and depend on this.
         path = os.path.join(output_dir, "config.yaml")
         with open(path, "w") as f:
             f.write(cfg.dump())
