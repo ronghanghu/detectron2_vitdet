@@ -317,10 +317,11 @@ class FastRCNNOutputs(object):
         )
 
 
-# TODO a better name?
-class FastRCNNOutputHead(nn.Module):
+class FastRCNNOutputLayers(nn.Module):
     """
-    2 FC layers that does bbox regression and classification, respectively.
+    Two linear layers for predicting Fast R-CNN outputs:
+      (1) proposal-to-detection box regression deltas
+      (2) classification scores
     """
 
     def __init__(self, input_size, num_classes, cls_agnostic_bbox_reg):
@@ -330,7 +331,7 @@ class FastRCNNOutputHead(nn.Module):
             num_classes (int): number of foreground classes
             cls_agnostic_bbox_reg (bool): whether to use class agnostic for bbox regression
         """
-        super(FastRCNNOutputHead, self).__init__()
+        super(FastRCNNOutputLayers, self).__init__()
 
         if not isinstance(input_size, int):
             input_size = np.prod(input_size)

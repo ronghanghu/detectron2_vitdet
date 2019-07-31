@@ -21,7 +21,7 @@ from .densepose_head import (
     build_densepose_predictor,
     densepose_inference,
 )
-from .fast_rcnn import FastRCNNOutputHead, FastRCNNOutputs
+from .fast_rcnn import FastRCNNOutputLayers, FastRCNNOutputs
 from .keypoint_head import build_keypoint_head, keypoint_rcnn_inference, keypoint_rcnn_loss
 from .mask_head import build_mask_head, mask_rcnn_inference, mask_rcnn_loss
 
@@ -288,7 +288,7 @@ class Res5ROIHeads(ROIHeads):
 
         self.res5 = self.build_res5_block(cfg)
         out_channels = self.res5[-1].out_channels
-        self.box_predictor = FastRCNNOutputHead(
+        self.box_predictor = FastRCNNOutputLayers(
             out_channels, self.num_classes, self.cls_agnostic_bbox_reg
         )
 
@@ -450,7 +450,7 @@ class StandardROIHeads(ROIHeads):
         )
         self.box_head = build_box_head(cfg)
 
-        self.box_predictor = FastRCNNOutputHead(
+        self.box_predictor = FastRCNNOutputLayers(
             self.box_head.output_size, self.num_classes, self.cls_agnostic_bbox_reg
         )
 
