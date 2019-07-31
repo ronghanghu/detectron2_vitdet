@@ -47,7 +47,8 @@ class Transform(metaclass=ABCMeta):
         Apply the transform on an image.
 
         Args:
-            img (ndarray): of shape HxWxC or HxW.
+            img (ndarray): of shape HxWxC or HxW. The array can be of type uint8 in
+                range [0, 255], or floating point in range [0, 1] or [0, 255].
         """
         pass
 
@@ -57,7 +58,7 @@ class Transform(metaclass=ABCMeta):
         Apply the transform on coordinates.
 
         Args:
-            coords (ndarray): of shape Nx2. Each row is (x, y)
+            coords (ndarray): floating point array of shape Nx2. Each row is (x, y).
         """
         pass
 
@@ -67,7 +68,7 @@ class Transform(metaclass=ABCMeta):
         By default will just perform "apply_image".
 
         Args:
-            segmentation (ndarray): of shape HxW.
+            segmentation (ndarray): of shape HxW. The array should have integer or bool dtype.
         """
         return self.apply_image(segmentation)
 
