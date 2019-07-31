@@ -490,7 +490,7 @@ class Visualizer:
             if kp0 in keypoints_present and kp1 in keypoints_present:
                 x0, y0 = detected_keypoints_and_locations[kp0]
                 x1, y1 = detected_keypoints_and_locations[kp1]
-                color = (x / 255 for x in color)
+                color = tuple(x / 255 for x in color)
                 self.draw_line([x0, x1], [y0, y1], color=color)
 
         # draw lines to mid-shoulder and mid-hip
@@ -500,7 +500,7 @@ class Visualizer:
         ls_x, ls_y, ls_prob = keypoints[self.metadata.keypoint_names.index("left_shoulder")]
         rs_x, rs_y, rs_prob = keypoints[self.metadata.keypoint_names.index("right_shoulder")]
         if ls_prob > _KEYPOINT_THRESHOLD and rs_prob > _KEYPOINT_THRESHOLD:
-            color = (x / 255 for x in _RED)
+            color = tuple(x / 255 for x in _RED)
             # draw line from nose to mid-shoulder
             mid_shoulder_x, mid_shoulder_y = (ls_x + rs_x) / 2, (ls_y + rs_y) / 2
             if nose_prob > _KEYPOINT_THRESHOLD:
