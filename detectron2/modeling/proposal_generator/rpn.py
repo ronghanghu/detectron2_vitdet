@@ -14,7 +14,7 @@ RPN_HEAD_REGISTRY = Registry("RPN_HEAD")
 
 
 def build_rpn_head(cfg):
-    name = cfg.MODEL.RPN_HEAD.NAME
+    name = cfg.MODEL.RPN.HEAD_NAME
     return RPN_HEAD_REGISTRY.get(name)(cfg)
 
 

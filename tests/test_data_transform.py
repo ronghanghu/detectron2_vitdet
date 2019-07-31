@@ -12,7 +12,7 @@ class TestTransforms(unittest.TestCase):
         setup_logger()
 
     def test_register(self):
-        dtype = "voxel"
+        dtype = "int"
 
         def add1(t, x):
             return x + 1
@@ -30,7 +30,7 @@ class TestTransforms(unittest.TestCase):
                 T.HFlipTransform(3),  # -3
             ]
         )
-        self.assertEqual(transforms.apply_voxel(3), 2)
+        self.assertEqual(transforms.apply_int(3), 2)
 
         with self.assertRaises(AssertionError):
             T.HFlipTransform.register_type(dtype, lambda x: 1)

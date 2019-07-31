@@ -62,7 +62,7 @@ setup(
     url="unknown",
     description="object detection in pytorch",
     packages=find_packages(exclude=("configs", "tests")),
-    install_requires=["termcolor>=1.1", "Pillow", "yacs", "tabulate", "tensorboardX"],
+    install_requires=["termcolor>=1.1", "Pillow", "yacs>=0.1.6", "tabulate", "tensorboardX"],
     ext_modules=get_extensions(),
     cmdclass={"build_ext": torch.utils.cpp_extension.BuildExtension},
 )

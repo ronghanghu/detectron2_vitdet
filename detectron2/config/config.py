@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import logging
 from borc.common.config import CfgNode as _CfgNode
 
 
@@ -11,11 +12,54 @@ class CfgNode(_CfgNode):
        Note that this may lead to arbitrary code execution: you must not
        load a config file from untrusted sources before manually inspecting
        the content of the file.
-    2. TODO: convert old version of config files.
+    2. Support config versioning.
+       When attempting to merge an old config, it will convert the old config automatically.
     """
 
+    # Note that the default value of allow_unsafe is changed to True
     def merge_from_file(self, cfg_filename: str, allow_unsafe=True):
-        super().merge_from_file(cfg_filename, allow_unsafe)
+        loaded_cfg = _CfgNode.load_yaml_with_base(cfg_filename, allow_unsafe=allow_unsafe)
+        loaded_cfg = type(self)(loaded_cfg)
+
+        # defaults.py needs to import CfgNode
+        from .defaults import _C
+
+        latest_ver = _C.VERSION
+        assert (
+            latest_ver == self.VERSION
+        ), "CfgNode.merge_from_file is only allowed on a config of latest version!"
+
+        logger = logging.getLogger(__name__)
+
+        loaded_ver = loaded_cfg.get("VERSION", None)
+        if loaded_ver is None:
+            # TODO: haven't officially started V0. Keep things the old way for now.
+            # logger.warning(
+            #     "Config '{}' has no VERSION! Assuming it to be compatible.".format(cfg_filename)
+            # )
+            loaded_ver = self.VERSION
+        assert loaded_ver <= self.VERSION, "Cannot merge a v{} config into a v{} config.".format(
+            loaded_ver, self.VERSION
+        )
+
+        if loaded_ver == self.VERSION:
+            self.merge_from_other_cfg(loaded_cfg)
+        else:
+            # compat.py needs to import CfgNode
+            from .compat import upgrade_config, downgrade_config
+
+            logger.warning(
+                "Loading an old v{} config file '{}' by automatically upgrading to v{}. "
+                "See docs/CHANGELOG.md for instructions to update your files.".format(
+                    loaded_ver, cfg_filename, self.VERSION
+                )
+            )
+            # To convert, first obtain a full config at an old version
+            old_self = downgrade_config(self, to_version=loaded_ver)
+            old_self.merge_from_other_cfg(loaded_cfg)
+            new_config = upgrade_config(old_self)
+            self.clear()
+            self.update(new_config)
 
 
 global_cfg = CfgNode()

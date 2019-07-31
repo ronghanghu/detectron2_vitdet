@@ -1,4 +1,4 @@
-from detectron2.config import CfgNode as CN
+from .config import CfgNode as CN
 
 # -----------------------------------------------------------------------------
 # Convention about Training / Test specific parameters
@@ -15,6 +15,8 @@ from detectron2.config import CfgNode as CN
 # -----------------------------------------------------------------------------
 
 _C = CN()
+
+_C.VERSION = 1
 
 _C.MODEL = CN()
 _C.MODEL.LOAD_PROPOSALS = False
@@ -144,6 +146,8 @@ _C.MODEL.ANCHOR_GENERATOR.NAME = "DefaultAnchorGenerator"
 # RPN options
 # ---------------------------------------------------------------------------- #
 _C.MODEL.RPN = CN()
+_C.MODEL.RPN.HEAD_NAME = "StandardRPNHead"  # used by RPN_HEAD_REGISTRY
+
 # Names of the input feature maps to be used by RPN
 # e.g., ["p2", "p3", "p4", "p5", "p6"] for FPN
 _C.MODEL.RPN.IN_FEATURES = ["res4"]
@@ -195,13 +199,6 @@ _C.MODEL.RPN.POST_NMS_TOPK_TRAIN = 2000
 _C.MODEL.RPN.POST_NMS_TOPK_TEST = 1000
 # NMS threshold used on RPN proposals
 _C.MODEL.RPN.NMS_THRESH = 0.7
-
-
-# ---------------------------------------------------------------------------- #
-# RPN HEAD options
-# ---------------------------------------------------------------------------- #
-_C.MODEL.RPN_HEAD = CN()
-_C.MODEL.RPN_HEAD.NAME = "StandardRPNHead"
 
 # ---------------------------------------------------------------------------- #
 # ROI HEADS options
