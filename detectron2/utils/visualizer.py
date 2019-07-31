@@ -493,27 +493,28 @@ class Visualizer:
                 color = tuple(x / 255 for x in color)
                 self.draw_line([x0, x1], [y0, y1], color=color)
 
-        # draw lines to mid-shoulder and mid-hip
-        # Note that this strategy is specific to COCO person keypoints.
-        # TODO: Refactor this when visualizer is extended to other datasets.
-        nose_x, nose_y, nose_prob = keypoints[self.metadata.keypoint_names.index("nose")]
-        ls_x, ls_y, ls_prob = keypoints[self.metadata.keypoint_names.index("left_shoulder")]
-        rs_x, rs_y, rs_prob = keypoints[self.metadata.keypoint_names.index("right_shoulder")]
-        if ls_prob > _KEYPOINT_THRESHOLD and rs_prob > _KEYPOINT_THRESHOLD:
-            color = tuple(x / 255 for x in _RED)
-            # draw line from nose to mid-shoulder
-            mid_shoulder_x, mid_shoulder_y = (ls_x + rs_x) / 2, (ls_y + rs_y) / 2
-            if nose_prob > _KEYPOINT_THRESHOLD:
-                self.draw_line([nose_x, mid_shoulder_x], [nose_y, mid_shoulder_y], color=color)
+        if self.metadata.name == "coco_person":
+            # draw lines to mid-shoulder and mid-hip
+            # Note that this strategy is specific to COCO person keypoints.
+            # TODO: Refactor this when visualizer is extended to other datasets.
+            nose_x, nose_y, nose_prob = keypoints[self.metadata.keypoint_names.index("nose")]
+            ls_x, ls_y, ls_prob = keypoints[self.metadata.keypoint_names.index("left_shoulder")]
+            rs_x, rs_y, rs_prob = keypoints[self.metadata.keypoint_names.index("right_shoulder")]
+            if ls_prob > _KEYPOINT_THRESHOLD and rs_prob > _KEYPOINT_THRESHOLD:
+                color = tuple(x / 255 for x in _RED)
+                # draw line from nose to mid-shoulder
+                mid_shoulder_x, mid_shoulder_y = (ls_x + rs_x) / 2, (ls_y + rs_y) / 2
+                if nose_prob > _KEYPOINT_THRESHOLD:
+                    self.draw_line([nose_x, mid_shoulder_x], [nose_y, mid_shoulder_y], color=color)
 
-            # draw line from mid-shoulder to mid-hip
-            lh_x, lh_y, lh_prob = keypoints[self.metadata.keypoint_names.index("left_hip")]
-            rh_x, rh_y, rh_prob = keypoints[self.metadata.keypoint_names.index("right_hip")]
-            if lh_prob > _KEYPOINT_THRESHOLD and rh_prob > _KEYPOINT_THRESHOLD:
-                mid_hip_x, mid_hip_y = (lh_x + rh_x) / 2, (lh_y + rh_y) / 2
-                self.draw_line(
-                    [mid_hip_x, mid_shoulder_x], [mid_hip_y, mid_shoulder_y], color=color
-                )
+                # draw line from mid-shoulder to mid-hip
+                lh_x, lh_y, lh_prob = keypoints[self.metadata.keypoint_names.index("left_hip")]
+                rh_x, rh_y, rh_prob = keypoints[self.metadata.keypoint_names.index("right_hip")]
+                if lh_prob > _KEYPOINT_THRESHOLD and rh_prob > _KEYPOINT_THRESHOLD:
+                    mid_hip_x, mid_hip_y = (lh_x + rh_x) / 2, (lh_y + rh_y) / 2
+                    self.draw_line(
+                        [mid_hip_x, mid_shoulder_x], [mid_hip_y, mid_shoulder_y], color=color
+                    )
         return self.output
 
     def _get_color(self, class_name=None, idx=None):
