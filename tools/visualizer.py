@@ -1,7 +1,7 @@
 import argparse
 import os
 
-from detectron2.config import get_cfg, set_global_cfg
+from detectron2.config import get_cfg
 from detectron2.data import MetadataCatalog, build_detection_train_loader
 from detectron2.utils.env import setup_environment
 from detectron2.utils.visualizer import Visualizer
@@ -11,8 +11,8 @@ def setup(args):
     cfg = get_cfg()
     if args.config_file:
         cfg.merge_from_file(args.config_file)
+    cfg.merge_from_list(args.opts)
     cfg.freeze()
-    set_global_cfg(cfg.GLOBAL)
     return cfg
 
 
@@ -20,6 +20,12 @@ def parse_args(in_args=None):
     parser = argparse.ArgumentParser(description="Visualizes Ground-truth Dataset")
     parser.add_argument("--config-file", default="", metavar="FILE", help="path to config file")
     parser.add_argument("--output-dir", default="./", help="path to output directory")
+    parser.add_argument(
+        "opts",
+        help="Modify config options using the command-line",
+        default=None,
+        nargs=argparse.REMAINDER,
+    )
     return parser.parse_args(in_args)
 
 
@@ -53,4 +59,5 @@ if __name__ == "__main__":
                 keypoints=target_fields.get("gt_keypoints", None),
             )
             filepath = os.path.join(dirname, str(per_image["image_id"]) + ".jpg")
+            print("Saving to {} ...".format(filepath))
             vis.save_output_file(filepath)
