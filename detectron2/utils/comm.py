@@ -102,9 +102,8 @@ def all_gather(data, device="cpu"):
     if world_size == 1:
         return [data]
 
-    # Assert that the default PG uses nccl backend.
-    assert dist.get_backend() == "nccl", dist.get_backend()
-    if device == "cpu":
+    assert not (device == "cuda" and dist.get_backend() != "nccl"), (device, dist.get_backend())
+    if device == "cpu" and dist.get_backend() == "nccl":
         group = _get_global_gloo_group()
     else:
         group = dist.group.WORLD
