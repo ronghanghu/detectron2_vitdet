@@ -3,8 +3,7 @@ from collections import namedtuple
 import cv2
 import pycocotools.mask as mask_util
 
-from detectron2.structures import PolygonMasks
-from detectron2.utils.visualizer import Visualizer
+from detectron2.utils.visualizer import ColoringMode, Visualizer
 
 _DISTANCE_BW_POINTS_THRESHOLD = 600
 _AREA_DIFFERENCE_THRESHOLD = 3600
@@ -32,7 +31,9 @@ class VideoVisualizer:
         self.metadata = metadata
         self.prev_frame_info = None
 
-    def draw_instance_predictions(self, frame, predictions):
+    def draw_instance_predictions(
+        self, frame, predictions, coloring_mode=ColoringMode.IMAGE_FOCUSED
+    ):
         """
         Draw instance-level prediction results on an image.
 
@@ -45,12 +46,10 @@ class VideoVisualizer:
             predictions (Instances): the output of an instance detection/segmentation
                 model. Following fields will be used to draw:
                 "pred_boxes", "pred_classes", "scores", "pred_masks" (or "pred_masks_rle").
+            coloring_mode (ColoringMode): mode to use while picking colors for masks.
 
         Returns:
             output (VisualizedImageOutput): image object with visualizations.
-            color_metadata (dict): a dictionary, where the keys are the masks
-                of the different objects in the current frame and values are
-                :class:`_ColorScheme` objects, containing the mask center, color and area.
         """
         frame_visualizer = Visualizer(frame, self.metadata)
 
@@ -58,12 +57,10 @@ class VideoVisualizer:
         scores = predictions.scores if predictions.has("scores") else None
         labels = predictions.pred_classes if predictions.has("pred_classes") else None
         keypoints = predictions.pred_keypoints if predictions.has("pred_keypoints") else None
-        frame_visualizer.overlay_instances(
-            boxes=boxes, labels=labels, scores=scores, keypoints=keypoints
-        )
 
         # draw mask
         masks = None
+        assigned_colors = []
         if predictions.has("pred_masks"):
             masks = predictions.pred_masks
         elif predictions.has("pred_masks_rle"):
@@ -72,18 +69,10 @@ class VideoVisualizer:
 
         # Convert binary masks to vertices of polygon.
         if masks is not None:
-            # Display in largest to smallest order to reduce occlusion.
-            if boxes is not None:
-                areas = boxes.area().numpy()
-                sorted_idxs = np.argsort(-areas).tolist()
-                if masks is not None:
-                    if isinstance(masks, PolygonMasks):
-                        masks = masks[sorted_idxs]
-                    else:
-                        masks = [masks[idx] for idx in sorted_idxs]
-
             # assign colors to masks
-            mask_metadata = self._update_mask_colors_with_prev_frame(masks, frame_visualizer)
+            mask_metadata = self._update_mask_colors_with_prev_frame(
+                masks, frame_visualizer, labels, coloring_mode
+            )
 
             for mask, metadata in zip(masks, mask_metadata):
                 # cv2.RETR_CCOMP flag retrieves all the contours and arranges them to a 2-level
@@ -95,14 +84,25 @@ class VideoVisualizer:
                 )[-2]
 
                 mask_color = metadata.color
+                assigned_colors.append(mask_color)
                 for segment in mask_vertices:
                     segment = np.asarray(segment).reshape(-1, 2)
                     frame_visualizer.draw_polygon(segment, mask_color)
             self.prev_frame_info = mask_metadata
 
+        frame_visualizer.overlay_instances(
+            boxes=boxes,
+            labels=labels,
+            scores=scores,
+            keypoints=keypoints,
+            assigned_colors=assigned_colors,
+        )
+
         return frame_visualizer.output
 
-    def _update_mask_colors_with_prev_frame(self, masks, frame_visualizer):
+    def _update_mask_colors_with_prev_frame(
+        self, masks, frame_visualizer, labels, coloring_mode=ColoringMode.SEGMENTATION_FOCUSED
+    ):
         """
         Looks at previous frame to identify if the same object might have been seen.
         If an object is matched from the previous frame, updates the `color` field of
@@ -115,6 +115,11 @@ class VideoVisualizer:
                 width and H is the image height.
             frame_visualizer (Visualizer): a :class:`Visualizer` object that visualizes the
                 current frame.
+            labels (Tensor): a tensor of size N, where N is the number of objects in the
+                image. Each element in the tensor is the class label of the corresponding
+                object in the image. Note that the class labels are integers that are
+                in [0, #total classes) range.
+            coloring_mode (ColoringMode): mode to use while picking colors for masks.
 
         Returns:
             mask_metadata (list[_ColorScheme]): a list of :class:`_ColorScheme` objects that
@@ -122,11 +127,17 @@ class VideoVisualizer:
         """
         if self.prev_frame_info is None:
             mask_metadata = []
-            for mask in masks:
+            for idx, mask in enumerate(masks):
                 # find center of mass for each instance.
                 center, area = self._get_center_and_area_of_mask(mask)
-                random_color = frame_visualizer._get_color()
-                curr_obj = _ColorScheme(center=center, color=random_color, area=area)
+                if labels is not None and coloring_mode == ColoringMode.SEGMENTATION_FOCUSED:
+                    class_name = self.metadata.class_names[labels[idx]]
+                    color = frame_visualizer._jitter(
+                        frame_visualizer._get_color(class_name=class_name)
+                    )
+                else:
+                    color = frame_visualizer._get_color()
+                curr_obj = _ColorScheme(center=center, color=color, area=area)
                 mask_metadata.append(curr_obj)
 
         else:
@@ -175,7 +186,13 @@ class VideoVisualizer:
                 if not mask_metadata[mask_idx]:
                     mask = masks[mask_idx]
                     center, area = self._get_center_and_area_of_mask(mask)
-                    color = frame_visualizer._get_color()
+                    if labels is not None and coloring_mode == ColoringMode.SEGMENTATION_FOCUSED:
+                        class_name = self.metadata.class_names[labels[mask_idx]]
+                        color = frame_visualizer._jitter(
+                            frame_visualizer._get_color(class_name=class_name)
+                        )
+                    else:
+                        color = frame_visualizer._get_color()
                     curr_obj = _ColorScheme(center=center, color=color, area=area)
                     mask_metadata[mask_idx] = curr_obj
 

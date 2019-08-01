@@ -1,7 +1,9 @@
+import colorsys
 import numpy as np
 import random
 from enum import Enum, unique
 import cv2
+import matplotlib.colors as mc
 import matplotlib.pyplot as plt
 import pycocotools.mask as mask_util
 import torch
@@ -35,7 +37,7 @@ class ColoringMode(Enum):
 
 
 class VisualizedImageOutput:
-    def __init__(self, img, title="", dpi=75):
+    def __init__(self, img, title="", dpi=25):
         """
         Args:
             img (ndarray): a numpy representation of the image. It has a shape of (H, W, 3), where
@@ -44,6 +46,7 @@ class VisualizedImageOutput:
             title (str, optional): image title
             dpi (int, optional): the resolution in dots per inch.
         """
+        self.width, self.height = img.shape[1], img.shape[0]
         self.fig, self.ax = self._setup_figure(img, title, dpi)
 
     def _setup_figure(self, img, title, dpi):
@@ -57,7 +60,7 @@ class VisualizedImageOutput:
         """
         img = img.clamp(min=0, max=255).int()
         fig = plt.figure(frameon=False)
-        fig.set_size_inches(img.shape[1] / dpi, img.shape[0] / dpi)
+        fig.set_size_inches(self.width / dpi, self.height / dpi)
         ax = plt.Axes(fig, [0.0, 0.0, 1.0, 1.0])
         ax.set_title(title)
         ax.axis("off")
@@ -107,7 +110,7 @@ class Visualizer:
         self.output = VisualizedImageOutput(self.img)
         self.cpu_device = torch.device("cpu")
 
-    def draw_instance_predictions(self, predictions):
+    def draw_instance_predictions(self, predictions, coloring_mode=ColoringMode.IMAGE_FOCUSED):
         """
         Draw instance-level prediction results on an image.
 
@@ -124,16 +127,16 @@ class Visualizer:
         labels = predictions.pred_classes if predictions.has("pred_classes") else None
         keypoints = predictions.pred_keypoints if predictions.has("pred_keypoints") else None
 
-        masks, all_mask_vertices = None, None
+        binary_masks, masks = None, None
         if predictions.has("pred_masks"):
-            masks = predictions.pred_masks
+            binary_masks = predictions.pred_masks
         elif predictions.has("pred_masks_rle"):
             sorted_masks_rle = predictions.pred_masks_rle
-            masks = mask_util.decode(sorted_masks_rle)
+            binary_masks = mask_util.decode(sorted_masks_rle)
         # Convert binary masks to vertices of polygon.
-        if masks is not None:
-            all_mask_vertices = []
-            for mask in masks:
+        if binary_masks is not None:
+            masks = []
+            for mask in binary_masks:
                 # cv2.RETR_CCOMP flag retrieves all the contours and arranges them to a 2-level
                 # hierarchy. External contours (boundary) of the object are placed in hierarchy-1.
                 # Internal contours (holes) are placed in hierarchy-2.
@@ -141,10 +144,15 @@ class Visualizer:
                 mask_vertices = cv2.findContours(
                     mask.numpy().copy(), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE
                 )[-2]
-                all_mask_vertices.append(mask_vertices)
+                masks.append(mask_vertices)
 
         self.overlay_instances(
-            masks=all_mask_vertices, boxes=boxes, labels=labels, scores=scores, keypoints=keypoints
+            masks=masks,
+            boxes=boxes,
+            labels=labels,
+            scores=scores,
+            keypoints=keypoints,
+            coloring_mode=coloring_mode,
         )
         return self.output
 
@@ -256,7 +264,16 @@ class Visualizer:
 
         return self.output
 
-    def overlay_instances(self, masks=None, boxes=None, labels=None, scores=None, keypoints=None):
+    def overlay_instances(
+        self,
+        masks=None,
+        boxes=None,
+        labels=None,
+        scores=None,
+        keypoints=None,
+        assigned_colors=None,
+        coloring_mode=None,
+    ):
         """
         Args:
             masks (PolygonMasks i.e. list[list[Tensor[float]]] or list[list[ndarray]]):
@@ -277,6 +294,9 @@ class Visualizer:
             keypoints (Tensor): a tensor of shape (N, K, 3), where the N is the number of instances
                 and K is the number of keypoints. The last dimension corresponds to
                 (x, y, probability).
+            assigned_colors (list[matplotlib.colors]): a list of colors, where each color
+                corresponds to each mask or box in the image. Refer to 'matplotlib.colors'
+                for full list of formats that the colors are accepted in.
 
         Returns:
             output (VisualizedImageOutput): image object with visualizations.
@@ -293,52 +313,87 @@ class Visualizer:
             labels = labels[sorted_idxs] if labels is not None else labels
             scores = scores[sorted_idxs] if scores is not None else scores
             keypoints = keypoints[sorted_idxs] if keypoints is not None else keypoints
+            if assigned_colors:
+                assigned_colors = [assigned_colors[idx] for idx in sorted_idxs]
             if masks is not None:
                 if isinstance(masks, PolygonMasks):
                     masks = masks[sorted_idxs]
                 else:
                     masks = [masks[idx] for idx in sorted_idxs]
 
-        if boxes is not None:
-            for idx, box in enumerate(boxes):
+        if boxes is None and masks is None:
+            return self.output
+
+        # draw masks. boxes, labels and scores
+        boxes = [None for _ in masks] if boxes is None else boxes
+        for idx, box in enumerate(boxes):
+            # select color for this instance
+            if assigned_colors:
+                color = assigned_colors[idx]
+            else:
+                if (
+                    coloring_mode == ColoringMode.SEGMENTATION_FOCUSED
+                    and self.metadata.class_names
+                    and labels
+                ):
+                    label = labels[idx]
+                    color = self._jitter(
+                        self._get_color(class_name=self.metadata.class_names[label])
+                    )
+                else:
+                    color = self._get_color()
+
+            if box is not None:
                 x0, y0, x1, y1 = box
-                # draw boxes
-                self.draw_box(box)
+                # draw box
+                self.draw_box(box, edge_color=color)
 
                 # draw text
                 if labels is not None:
                     if scores is not None:
-                        score = scores[idx]
-                        text = "{}: {:.2f}".format(self.metadata.class_names[labels[idx]], score)
+                        score = scores[idx] * 100
+                        text = "{}: {:.0f}%".format(self.metadata.class_names[labels[idx]], score)
                     else:
                         text = self.metadata.class_names[labels[idx]]
-                    self.draw_text(text, (x0, y0))
+                    lighter_color = self._change_color_brightness(color, brightness_factor=0.7)
+                    self.draw_text(text, (x0, y0), color=lighter_color)
 
-        if masks is not None:
-            for mask in masks:
-                mask_color = self._get_color()
+            if masks is not None:
+                # select alpha
+                if coloring_mode == ColoringMode.IMAGE_FOCUSED:
+                    alpha = 0.5
+                else:
+                    alpha = 0.98
+                mask = masks[idx]
                 for segment in mask:
                     segment = np.asarray(segment).reshape(-1, 2)
-                    self.draw_polygon(segment, mask_color)
+                    self.draw_polygon(segment, color, alpha=alpha)
 
+        # draw keypoints
         if keypoints is not None:
             for keypoints_per_instance in keypoints:
                 self.draw_and_connect_keypoints(keypoints_per_instance)
 
         return self.output
 
-    def draw_text(self, text, position, font_size=15, color="g"):
+    def draw_text(self, text, position, font_size=None, color="g"):
         """
         Args:
             text (str): class label
             position (tuple): a tuple of the x and y coordinates to place text on image.
-            font_size (int): font of the text.
+            font_size (int, optional): font of the text. If not provided, a font size
+                proportional to the image width is calculated and used.
             color: color of the text. Refer to `matplotlib.colors` for full list
                 of formats that are accepted.
 
         Returns:
             output (VisualizedImageOutput): image object with text drawn.
         """
+        # calculate font size proportional to image width
+        if not font_size:
+            text_to_image_ratio = 1 / 16
+            font_size = int(text_to_image_ratio * self.output.height)
+
         x, y = position
         self.output.ax.text(
             x,
@@ -346,7 +401,7 @@ class Visualizer:
             text,
             fontsize=font_size,
             family="sans-serif",
-            bbox={"facecolor": "none", "alpha": 0.4, "pad": 0.5, "edgecolor": "none"},
+            bbox={"facecolor": "black", "alpha": 0.8, "pad": 0.7, "edgecolor": "none"},
             color=color,
             zorder=10,
         )
@@ -369,6 +424,11 @@ class Visualizer:
         x0, y0, x1, y1 = box_coord
         width = x1 - x0
         height = y1 - y0
+
+        # calculate line width of box proportional to image width
+        line_width_to_image_ratio = 1 / 128
+        line_width = int(line_width_to_image_ratio * self.output.height)
+
         self.output.ax.add_patch(
             plt.Rectangle(
                 (x0, y0),
@@ -376,7 +436,7 @@ class Visualizer:
                 height,
                 fill=False,
                 edgecolor=edge_color,
-                linewidth=2.5,
+                linewidth=line_width,
                 alpha=alpha,
                 linestyle=line_style,
             )
@@ -449,15 +509,31 @@ class Visualizer:
             color: color of the polygon. Refer to `matplotlib.colors` for a full list of
                 formats that are accepted.
             edge_color: color of the polygon edges. Refer to `matplotlib.colors` for a
-                full list of formats that are accepted.
+                full list of formats that are accepted. If not provided, a darker shade
+                of the polygon color will be used instead.
             alpha (float): blending efficient. Smaller values lead to more transparent masks.
 
         Returns:
             output (VisualizedImageOutput): image object with polygon drawn.
         """
-        edge_color = color if edge_color is None else edge_color
+        # make edge color darker than the polygon color
+        if edge_color is None:
+            edge_color = self._change_color_brightness(color, brightness_factor=-0.7)
+        edge_color = mc.to_rgb(color)
+        edge_alpha = 1  # make edge color always dark
+        edge_color = edge_color + (edge_alpha,)
+
+        # calculate line width of box proportional to image width
+        line_width_to_image_ratio = 1 / 64
+        line_width = int(line_width_to_image_ratio * self.output.height)
+
         polygon = Polygon(
-            segment, fill=True, facecolor=color, edgecolor=edge_color, linewidth=3, alpha=alpha
+            segment,
+            fill=True,
+            facecolor=color,
+            edgecolor=edge_color,
+            linewidth=line_width,
+            alpha=alpha,
         )
         self.output.ax.add_patch(polygon)
         return self.output
@@ -480,7 +556,8 @@ class Visualizer:
             # draw keypoint
             x, y, prob = keypoint
             if prob > _KEYPOINT_THRESHOLD:
-                self.draw_circle((x, y), color=_BLACK)
+                color = [x / 255 for x in _BLACK]
+                self.draw_circle((x, y), color=color)
                 keypoint_name = self.metadata.keypoint_names[idx]
                 detected_keypoints_and_locations[keypoint_name] = (x, y)
 
@@ -529,17 +606,63 @@ class Visualizer:
 
         Returns:
             color (tuple[double]): a tuple of 3 elements, containing the RGB values of the color
-                picked. The values in the list are in the range [0.0, 1.0].
+                picked. The values in the list are in the [0.0, 1.0] range.
         """
         # pick pre-defined color based on class label.
         if class_name:
             for category in self.metadata.categories:
                 if category["name"] == class_name:
-                    return np.array(category["color"]).astype(np.float32) / 255
+                    return tuple(np.array(category["color"]).astype(np.float32) / 255)
         color_list = colormap(rgb=True) / 255.0
         if idx is None:
             idx = random.randint(0, len(color_list) - 1)
         return tuple(color_list[idx % len(color_list)])
+
+    def _jitter(self, color):
+        """
+        Randomly modifies given color to produce a slightly different color than the color given.
+
+        Args:
+            color (tuple[double]): a tuple of 3 elements, containing the RGB values of the color
+                picked. The values in the list are in the [0.0, 1.0] range.
+
+        Returns:
+            jittered_color (tuple[double]): a tuple of 3 elements, containing the RGB values of the
+                color after being jittered. The values in the list are in the [0.0, 1.0] range.
+        """
+        color = mc.to_rgb(color)
+        jittered_color = []
+        for c in color:
+            jc = c + random.uniform(-0.1, 0.1)
+            jc = 0.0 if jc < 0.0 else jc
+            jc = 1.0 if jc > 1.0 else jc
+            jittered_color.append(jc)
+        return tuple(jittered_color)
+
+    def _change_color_brightness(self, color, brightness_factor):
+        """
+        Depending on the brightness_factor, gives a lighter or darker color i.e. a color with
+        less or more saturation than the original color.
+
+        Args:
+            color: color of the polygon. Refer to `matplotlib.colors` for a full list of
+                formats that are accepted.
+            brightness_factor (float): a value in [-1.0, 1.0] range. A lightness factor of
+                0 will correspond to no change, a factor in [-1.0, 0) range will result in
+                a darker color and a factor in (0, 1.0] range will result in a ligher color.
+
+        Returns:
+            modified_color (tuple[double]): a tuple containing the RGB values of the
+                modified color. Each value in the tuple is in the [0.0, 1.0] range.
+        """
+        assert brightness_factor >= -1.0 and brightness_factor <= 1.0
+        color = mc.to_rgb(color)
+        polygon_color = colorsys.rgb_to_hls(*mc.to_rgb(color))
+        modified_lightness = polygon_color[1] + (brightness_factor * polygon_color[1])
+        modified_lightness = 0.0 if modified_lightness < 0.0 else modified_lightness
+        modified_lightness = 1.0 if modified_lightness > 1.0 else modified_lightness
+        modified_color = colorsys.hls_to_rgb(polygon_color[0], modified_lightness, polygon_color[2])
+        return modified_color
 
     def get_output(self):
         """

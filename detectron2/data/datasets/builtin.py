@@ -212,7 +212,12 @@ def _get_coco_instances_meta():
     # Mapping from the incontiguous COCO category id to an id in [0, 79]
     dataset_id_to_contiguous_id = {k: i for i, k in enumerate(things_ids)}
     class_names = [k["name"] for k in COCO_CATEGORIES if k["isthing"] == 1]
-    return {"dataset_id_to_contiguous_id": dataset_id_to_contiguous_id, "class_names": class_names}
+    ret = {
+        "dataset_id_to_contiguous_id": dataset_id_to_contiguous_id,
+        "class_names": class_names,
+        "categories": COCO_CATEGORIES,
+    }
+    return ret
 
 
 def _get_coco_panoptic_separated_meta():
