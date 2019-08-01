@@ -15,7 +15,7 @@ from detectron2.utils.file_io import PathManager
 from . import samplers
 from .catalog import DatasetCatalog, MetadataCatalog
 from .common import DatasetFromList, MapDataset
-from .detection_transforms import DetectionTransform
+from .dataset_mapper import DatasetMapper
 
 """
 This file contains the default logic to build a dataloader for training or testing.
@@ -217,21 +217,21 @@ def build_batch_data_sampler(
     return batch_sampler
 
 
-def build_detection_train_loader(cfg, transform=None, start_iter=0):
+def build_detection_train_loader(cfg, mapper=None, start_iter=0):
     """
     A data loader is created by the following steps:
 
     1. Use the dataset names in config to query `DatasetCatalog`, and obtain a list of dicts.
     2. Start workers to work on the dicts. Each worker will:
-        (1) Transform each dict into another dict
+        (1) Map each metadata dict into another format to be consumed by the model.
         (2) Batch them by simply putting dicts into a list.
-    The batched `list[transformed_dict]` is what this dataloader will return.
+    The batched `list[mapped_dict]` is what this dataloader will return.
 
     Args:
         cfg (CfgNode): the config
-        transform (callable): a callable which takes a sample (dict) from dataset and
-            returns a transformed dict.
-            By default it will be `DetectionTransform(cfg, True)`.
+        mapper (callable): a callable which takes a sample (dict) from dataset and
+            returns the format to be consumed by the model.
+            By default it will be `DatasetMapper(cfg, True)`.
         start_iter (int): the iteration number to start training with.
             It is useful when resuming training: it will affect which sample to start loading.
 
@@ -298,9 +298,9 @@ def build_detection_train_loader(cfg, transform=None, start_iter=0):
     group_bin_edges = [1] if cfg.DATALOADER.ASPECT_RATIO_GROUPING else []
     aspect_ratios = [float(img["height"]) / float(img["width"]) for img in dataset]
 
-    if transform is None:
-        transform = DetectionTransform(cfg, True)
-    dataset = MapDataset(dataset, transform)
+    if mapper is None:
+        mapper = DatasetMapper(cfg, True)
+    dataset = MapDataset(dataset, mapper)
 
     sampler = samplers.TrainingSampler(len(dataset), seed=start_iter)
     batch_sampler = build_batch_data_sampler(
@@ -316,7 +316,7 @@ def build_detection_train_loader(cfg, transform=None, start_iter=0):
     return data_loader
 
 
-def build_detection_test_loader(cfg, dataset_name, transform=None):
+def build_detection_test_loader(cfg, dataset_name, mapper=None):
     """
     Similar to `build_detection_train_loader`.
     But this function uses the given `dataset_name` argument (instead of the names in cfg),
@@ -325,9 +325,9 @@ def build_detection_test_loader(cfg, dataset_name, transform=None):
     Args:
         cfg: a detectron2 CfgNode
         dataset_name (str): a name of the dataset that's available in the DatasetCatalog
-        transform (callable): a callable which takes a sample (dict) from dataset
-            and returns a transformed dict.
-            By default it will be `DetectionTransform(cfg, False)`.
+        mapper (callable): a callable which takes a sample (dict) from dataset
+            and returns the format to be consumed by the model.
+            By default it will be `DatasetMapper(cfg, False)`.
 
     Returns:
         DataLoader: a torch DataLoader, that loads the given detection
@@ -346,9 +346,9 @@ def build_detection_test_loader(cfg, dataset_name, transform=None):
         dataset_dicts = load_proposals_into_dataset(dataset_dicts, proposal_file)
 
     dataset = DatasetFromList(dataset_dicts)
-    if transform is None:
-        transform = DetectionTransform(cfg, False)
-    dataset = MapDataset(dataset, transform)
+    if mapper is None:
+        mapper = DatasetMapper(cfg, False)
+    dataset = MapDataset(dataset, mapper)
 
     sampler = samplers.InferenceSampler(len(dataset))
     # Always use 1 image per GPU during inference since this is the

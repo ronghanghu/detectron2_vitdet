@@ -29,7 +29,7 @@ import detectron2.utils.comm as comm
 from detectron2.checkpoint import DetectionCheckpointer, PeriodicCheckpointer
 from detectron2.config import get_cfg, set_global_cfg
 from detectron2.data import (
-    DetectionTransform,
+    DatasetMapper,
     MetadataCatalog,
     build_detection_test_loader,
     build_detection_train_loader,
@@ -46,7 +46,7 @@ from detectron2.evaluation import (
     print_csv_format,
     verify_results,
 )
-from detectron2.modeling import DetectionTransformTTA, GeneralizedRCNNWithTTA, build_model
+from detectron2.modeling import DatasetMapperTTA, GeneralizedRCNNWithTTA, build_model
 from detectron2.solver import build_lr_scheduler, build_optimizer
 from detectron2.utils.collect_env import collect_env_info
 from detectron2.utils.events import CommonMetricPrinter, JSONWriter, TensorboardXWriter
@@ -141,12 +141,12 @@ def do_test(cfg, model, is_final=True):
 
                 newcfg = cfg.clone()
                 newcfg.defrost()
-                newcfg.INPUT.MIN_SIZE_TEST = 0
+                newcfg.INPUT.MIN_SIZE_TEST = 0  # disable resizing
+                logger.info("Running inference with test-time augmentation ...")
                 data_loader = build_detection_test_loader(
-                    cfg, dataset_name, transform=DetectionTransform(newcfg, is_train=False)
+                    cfg, dataset_name, mapper=DatasetMapper(newcfg, is_train=False)
                 )
-                transform = DetectionTransformTTA(cfg)
-                model = GeneralizedRCNNWithTTA(cfg, model, transform)
+                model = GeneralizedRCNNWithTTA(cfg, model, DatasetMapperTTA(cfg))
                 evaluator = get_evaluator(cfg, dataset_name, output_folder)
                 results_per_dataset = inference_on_dataset(model, data_loader, evaluator)
                 logger.info(

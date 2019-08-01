@@ -11,10 +11,10 @@ from .meta_arch import GeneralizedRCNN
 from .postprocessing import detector_postprocess
 from .roi_heads.fast_rcnn import fast_rcnn_inference_single_image
 
-__all__ = ["DetectionTransformTTA", "GeneralizedRCNNWithTTA"]
+__all__ = ["DatasetMapperTTA", "GeneralizedRCNNWithTTA"]
 
 
-class DetectionTransformTTA:
+class DatasetMapperTTA:
     """
     Implement test-time augmentation for detection data.
     It is a callable which takes a dataset dict from a detection dataset,
@@ -64,12 +64,12 @@ class GeneralizedRCNNWithTTA:
     Its :meth:`__call__` method has the same interface as :meth:`GeneralizedRCNN.forward`.
     """
 
-    def __init__(self, cfg, model, transform, batch_size=3):
+    def __init__(self, cfg, model, tta_mapper, batch_size=3):
         """
         Args:
             cfg (CfgNode):
             model (GeneralizedRCNN): a GeneralizedRCNN to apply TTA on.
-            transform (callable): takes a dataset dict and returns a list of
+            tta_mapper (callable): takes a dataset dict and returns a list of
                 augmented versions of the dataset dict.
             batch_size (int): batch the augmented images into this batch size for inference.
         """
@@ -84,7 +84,7 @@ class GeneralizedRCNNWithTTA:
 
         self.model = model
         assert not model.training
-        self.transform = transform
+        self.tta_mapper = tta_mapper
         self.batch_size = batch_size
 
     @contextmanager
@@ -152,7 +152,7 @@ class GeneralizedRCNNWithTTA:
         # The input image is transformed to a torch Tensor already, but we
         # need numpy array for the augmentations.
         input["image"] = input["image"].permute(1, 2, 0).numpy().astype("uint8")
-        augmented_inputs = self.transform(input)
+        augmented_inputs = self.tta_mapper(input)
 
         do_hflip = [k.pop("horiz_flip", False) for k in augmented_inputs]
         heights = [k["height"] for k in augmented_inputs]

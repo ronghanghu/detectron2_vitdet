@@ -31,4 +31,4 @@ from .roi_heads import (
     build_roi_heads,
 )
 from .sem_seg_heads import SEM_SEG_HEADS_REGISTRY, build_sem_seg_head
-from .test_time_augmentation import DetectionTransformTTA, GeneralizedRCNNWithTTA
+from .test_time_augmentation import DatasetMapperTTA, GeneralizedRCNNWithTTA

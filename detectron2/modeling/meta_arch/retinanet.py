@@ -62,9 +62,7 @@ def _reshape_predictions(box_cls, box_regression):
 @META_ARCH_REGISTRY.register()
 class RetinaNet(nn.Module):
     """
-    RetinaNet head. Creates FPN backbone, anchors and a head for classification
-    and box regression. Calculates and applies smooth L1 loss and sigmoid focal
-    loss.
+    Implement RetinaNet (https://arxiv.org/abs/1708.02002).
     """
 
     def __init__(self, cfg):
@@ -106,7 +104,7 @@ class RetinaNet(nn.Module):
     def forward(self, batched_inputs):
         """
         Args:
-            batched_inputs: a list, batched outputs of :class:`DetectionTransform` .
+            batched_inputs: a list, batched outputs of :class:`DatasetMapper` .
                 Each item in the list contains the inputs for one image.
             For now, each item in the list is a dict that contains:
                 image: Tensor, image in (C, H, W) format.
@@ -114,7 +112,7 @@ class RetinaNet(nn.Module):
                 Other information that's included in the original dicts, such as:
                     "height", "width" (int): the output resolution of the model, used in inference.
                         See :meth:`postprocess` for details.
-         Returns:
+        Returns:
             losses (dict[str: Tensor]): mapping from a named loss to a tensor
                 storing the loss. Used during training only.
         """
@@ -371,12 +369,12 @@ class RetinaNet(nn.Module):
 
 
 class RetinaNetHead(nn.Module):
+    """
+    The head used in RetinaNet for object classification and box regression.
+    It has two subnets for the two tasks, with a common structure but separate parameters.
+    """
+
     def __init__(self, cfg):
-        """
-        Creates a head for object classification subnet and box regression
-        subnet. Although the two subnets share a common structure, they use
-        separate parameters (unlike RPN).
-        """
         super().__init__()
         # fmt: off
         self.in_features = cfg.MODEL.RETINANET.IN_FEATURES

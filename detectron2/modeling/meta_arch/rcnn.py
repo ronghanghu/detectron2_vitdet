@@ -39,7 +39,7 @@ class GeneralizedRCNN(nn.Module):
     def forward(self, batched_inputs):
         """
         Args:
-            batched_inputs: a list, batched outputs of :class:`DetectionTransform` .
+            batched_inputs: a list, batched outputs of :class:`DatasetMapper` .
                 Each item in the list contains the inputs for one image.
 
         For now, each item in the list is a dict that contains:
