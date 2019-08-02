@@ -191,7 +191,7 @@ class PolygonMasks(object):
             selected_polygons = [self.polygons[i] for i in item]
         else:
             # advanced indexing on a single dimension
-            if isinstance(item, torch.Tensor) and item.dtype == torch.uint8:
+            if isinstance(item, torch.Tensor) and item.dtype == torch.bool:
                 assert item.dim() == 1, item.shape
                 item = item.nonzero()
                 item = item.squeeze(1) if item.numel() > 0 else item
