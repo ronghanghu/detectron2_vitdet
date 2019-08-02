@@ -487,7 +487,7 @@ class DensePoseList(object):
             return DensePoseList(
                 densepose_datas_rel, boxes_xyxy_abs, self.image_size_hw, self.device
             )
-        elif isinstance(item, torch.Tensor) and (item.dtype == torch.uint8):
+        elif isinstance(item, torch.Tensor) and (item.dtype == torch.bool):
             densepose_datas_rel = [self.densepose_datas[i] for i, x in enumerate(item) if x > 0]
             boxes_xyxy_abs = self.boxes_xyxy_abs[item]
             return DensePoseList(
