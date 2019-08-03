@@ -9,23 +9,22 @@ from borc.common.download import download
 __all__ = ["PathManager"]
 
 
-def get_cache_dir(model_dir=None):
+def get_cache_dir(cache_dir=None):
     """
     Returns a default directory to cache static files
     (usually downloaded from Internet), if None is provided.
 
     Args:
-        model_dir (None or str): if not None, will be returned as is.
+        cache_dir (None or str): if not None, will be returned as is.
             If None, returns the default cache directory as:
 
-        1) $TORCH_MODEL_ZOO env variable, if set
-        2) otherwise $TORCH_HOME, if set
-        3) otherwise ~/.torch
+        1) $TORCH_HOME/detectron2_cache, if set
+        2) otherwise ~/.torch/detectron2_cache
     """
-    if model_dir is None:
+    if cache_dir is None:
         torch_home = os.path.expanduser(os.getenv("TORCH_HOME", "~/.torch"))
-        model_dir = os.getenv("TORCH_MODEL_ZOO", os.path.join(torch_home, "models"))
-    return model_dir
+        cache_dir = os.path.join(torch_home, "detectron2_cache")
+    return cache_dir
 
 
 class PathHandler(metaclass=ABCMeta):

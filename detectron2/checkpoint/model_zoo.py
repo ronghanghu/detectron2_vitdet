@@ -7,13 +7,17 @@ from detectron2.utils.comm import is_main_process, synchronize
 from detectron2.utils.file_io import PathHandler, PathManager, get_cache_dir
 
 
-def cache_file(file_name, cache_dir=None):
+def cache_file(file_name, cache_dir=None, distributed=True):
     """
     Caches a (presumably remote) file under cache_dir.
 
-    This function contains a barrier call. Therefore all processes must all
+    When `distributed==True`,
+    this function contains a barrier call. Therefore all processes must all
     call this method to avoid deadlock. Only the main process will actually
     perform the caching.
+
+    When `distributed==False`, this function may cause race condition if called
+    from multiple processes.
     """
     cache_dir = get_cache_dir(cache_dir)
     if file_name.startswith(cache_dir):
@@ -24,22 +28,24 @@ def cache_file(file_name, cache_dir=None):
     dst_dir = os.path.join(cache_dir, src_dir)
     dst_file_name = os.path.join(dst_dir, base_name)
     assert dst_file_name != file_name
+    if os.path.exists(dst_file_name):
+        return dst_file_name
 
-    if is_main_process():
+    if (not distributed) or is_main_process():
+
+        os.makedirs(dst_dir, exist_ok=True)
         f = tempfile.NamedTemporaryFile(delete=False)
         try:
-            if not os.path.exists(dst_dir):
-                os.makedirs(dst_dir)
-            if not os.path.exists(dst_file_name):
-                logger = logging.getLogger(__name__)
-                logger.info("Caching {} locally...".format(file_name))
-                shutil.copy(file_name, f.name)
-                shutil.move(f.name, dst_file_name)
+            logger = logging.getLogger(__name__)
+            logger.info("Caching {} locally...".format(file_name))
+            shutil.copy(file_name, f.name)
+            shutil.move(f.name, dst_file_name)
         finally:
             f.close()
             if os.path.exists(f.name):
                 os.remove(f.name)
-    synchronize()
+    if distributed:
+        synchronize()
     return dst_file_name
 
 

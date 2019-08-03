@@ -21,13 +21,13 @@ from detectron2.utils.env import setup_environment  # noqa F401 isort:skip
 import argparse
 import logging
 import os
-import torch
 from collections import OrderedDict
+import torch
 from torch.nn.parallel import DistributedDataParallel
 
 import detectron2.utils.comm as comm
 from detectron2.checkpoint import DetectionCheckpointer, PeriodicCheckpointer
-from detectron2.config import get_cfg, set_global_cfg
+from detectron2.config import get_cfg, set_global_cfg  # noqa
 from detectron2.data import (
     DatasetMapper,
     MetadataCatalog,

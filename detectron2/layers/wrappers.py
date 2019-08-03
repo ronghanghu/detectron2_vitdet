@@ -109,7 +109,9 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
 
 def interpolate(input, size=None, scale_factor=None, mode="nearest", align_corners=None):
     if input.numel() > 0:
-        return torch.nn.functional.interpolate(input, size, scale_factor, mode, align_corners)
+        return torch.nn.functional.interpolate(
+            input, size, scale_factor, mode, align_corners=align_corners
+        )
 
     def _check_size_scale_factor(dim):
         if size is None and scale_factor is None:
