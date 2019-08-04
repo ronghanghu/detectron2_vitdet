@@ -37,7 +37,7 @@ class COCODemo(object):
 
         Returns:
             predictions (Instances): the detected objects.
-            vis_output (VisualizedImageOutput): the visualized image output.
+            vis_output (VisImage): the visualized image output.
         """
         vis_output = None
         predictions = self.compute_predictions(image)

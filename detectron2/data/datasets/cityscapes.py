@@ -59,7 +59,7 @@ def load_cityscapes_instances(
     logger.info("Preprocessing cityscapes annotations ...")
     # This is still not fast: all workers will execute duplicate works and will
     # take up to 10m on a 8GPU server.
-    pool = mp.Pool(processes=mp.cpu_count() // get_world_size() // 2)
+    pool = mp.Pool(processes=max(mp.cpu_count() // get_world_size() // 2, 4))
 
     ret = pool.map(
         functools.partial(cityscapes_files_to_dict, from_json=from_json, to_polygons=to_polygons),

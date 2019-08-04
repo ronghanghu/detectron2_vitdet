@@ -82,7 +82,7 @@ def main():
                 assert os.path.isdir(args.output), args.output
                 out_filename = os.path.join(args.output, os.path.basename(path))
                 if visualized_output:
-                    visualized_output.save_output_file(out_filename)
+                    visualized_output.save(out_filename)
             else:
                 if visualized_output:
                     # Converts Matplotlib RGB format to OpenCV BGR format before visualizing output.

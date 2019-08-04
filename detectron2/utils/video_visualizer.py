@@ -49,7 +49,7 @@ class VideoVisualizer:
             coloring_mode (ColoringMode): mode to use while picking colors for masks.
 
         Returns:
-            output (VisualizedImageOutput): image object with visualizations.
+            output (VisImage): image object with visualizations.
         """
         frame_visualizer = Visualizer(frame, self.metadata)
 
@@ -90,12 +90,10 @@ class VideoVisualizer:
                     frame_visualizer.draw_polygon(segment, mask_color)
             self.prev_frame_info = mask_metadata
 
+        if scores is not None:
+            labels = ["{}: {:.0f}%".format(str(l), s * 100) for l, s in zip(labels, scores)]
         frame_visualizer.overlay_instances(
-            boxes=boxes,
-            labels=labels,
-            scores=scores,
-            keypoints=keypoints,
-            assigned_colors=assigned_colors,
+            boxes=boxes, labels=labels, keypoints=keypoints, assigned_colors=assigned_colors
         )
 
         return frame_visualizer.output

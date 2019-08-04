@@ -10,7 +10,7 @@ import torch
 from matplotlib.lines import Line2D
 from matplotlib.patches import Polygon
 
-from detectron2.structures import PolygonMasks
+from detectron2.structures import Boxes, BoxMode, PolygonMasks
 
 from .colormap import colormap
 
@@ -36,31 +36,38 @@ class ColoringMode(Enum):
     SEGMENTATION_FOCUSED = 1
 
 
-class VisualizedImageOutput:
-    def __init__(self, img, title="", dpi=25):
-        """
-        Args:
-            img (ndarray): a numpy representation of the image. It has a shape of (H, W, 3), where
-                H is the image height, W is the image width and 3 corresponds to the image's RGB
-                color channels.
-            title (str, optional): image title
-            dpi (int, optional): the resolution in dots per inch.
-        """
-        self.width, self.height = img.shape[1], img.shape[0]
-        self.fig, self.ax = self._setup_figure(img, title, dpi)
+def _mask_to_polygon(mask):
+    # cv2.RETR_CCOMP flag retrieves all the contours and arranges them to a 2-level
+    # hierarchy. External contours (boundary) of the object are placed in hierarchy-1.
+    # Internal contours (holes) are placed in hierarchy-2.
+    # cv2.CHAIN_APPROX_NONE flag gets vertices of polygons from countours.
+    return cv2.findContours(mask.copy(), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)[-2]
 
-    def _setup_figure(self, img, title, dpi):
+
+class VisImage:
+    def __init__(self, img, title="", scale=1.0):
         """
         Args:
-            Refer to :meth:`__init__()` in :class:`VisualizedImageOutput`.
+            img (ndarray): an RGB image of shape (H, W, 3).
+            title (str, optional): image title
+            scale (float): scale the input image
+        """
+        self.dpi = plt.gcf().get_dpi()
+        self.scale = scale
+        self.width, self.height = img.shape[1], img.shape[0]
+        self.fig, self.ax = self._setup_figure(img, title)
+
+    def _setup_figure(self, img, title):
+        """
+        Args:
+            Same as in :meth:`__init__()`.
 
         Returns:
             fig (matplotlib.pyplot.figure): top level container for all the image plot elements.
             ax (matplotlib.pyplot.Axes): contains figure elements and sets the coordinate system.
         """
-        img = img.clamp(min=0, max=255).int()
         fig = plt.figure(frameon=False)
-        fig.set_size_inches(self.width / dpi, self.height / dpi)
+        fig.set_size_inches(self.width * self.scale / self.dpi, self.height * self.scale / self.dpi)
         ax = plt.Axes(fig, [0.0, 0.0, 1.0, 1.0])
         ax.set_title(title)
         ax.axis("off")
@@ -68,7 +75,7 @@ class VisualizedImageOutput:
         ax.imshow(img)
         return fig, ax
 
-    def save_output_file(self, filepath):
+    def save(self, filepath):
         """
         Args:
             filepath (str): a string that contains the absolute path, including the file name, where
@@ -80,10 +87,8 @@ class VisualizedImageOutput:
     def get_image(self):
         """
         Returns:
-            visualized_image (ndarray): a numpy array representation of the visualized image. This
-                image has a shape of (H, W, 3), where H is the image height, W is the image width,
-                and 3 corresponds to the RGB channels of the image. Each element of the image array
-                is of uint8 type.
+            ndarray: the visualized image of shape (H, W, 3) (RGB) in uint8 type.
+              The shape is scaled w.r.t the input image using the given `scale` argument.
         """
         canvas = self.fig.canvas
         canvas.draw()
@@ -95,7 +100,7 @@ class VisualizedImageOutput:
 
 
 class Visualizer:
-    def __init__(self, img_rgb, metadata):
+    def __init__(self, img_rgb, metadata, scale=1.0):
         """
         Args:
             img_rgb: a numpy array of shape (H, W, C), where H and W correspond to
@@ -105,9 +110,9 @@ class Visualizer:
                 to be in the range [0, 255].
             metadata (MetadataCatalog): image metadata.
         """
-        self.img = img_rgb
+        self.img = np.asarray(img_rgb).clip(0, 255).astype(np.uint8)
         self.metadata = metadata
-        self.output = VisualizedImageOutput(self.img)
+        self.output = VisImage(self.img, scale=scale)
         self.cpu_device = torch.device("cpu")
 
     def draw_instance_predictions(self, predictions, coloring_mode=ColoringMode.IMAGE_FOCUSED):
@@ -120,39 +125,41 @@ class Visualizer:
                 "pred_boxes", "pred_classes", "scores", "pred_masks" (or "pred_masks_rle").
 
         Returns:
-            output (VisualizedImageOutput): image object with visualizations.
+            output (VisImage): image object with visualizations.
         """
         boxes = predictions.pred_boxes if predictions.has("pred_boxes") else None
         scores = predictions.scores if predictions.has("scores") else None
-        labels = predictions.pred_classes if predictions.has("pred_classes") else None
+        classes = predictions.pred_classes if predictions.has("pred_classes") else None
+        if classes is not None:
+            classes = classes.tolist()
+            names = self.metadata.get("class_names", None)
+            if names:
+                labels = [names[i] for i in classes]
+            if scores is not None:
+                labels = ["{}: {:.0f}%".format(l, s * 100) for l, s in zip(labels, scores)]
         keypoints = predictions.pred_keypoints if predictions.has("pred_keypoints") else None
 
-        binary_masks, masks = None, None
         if predictions.has("pred_masks"):
-            binary_masks = predictions.pred_masks
+            masks = predictions.pred_masks
         elif predictions.has("pred_masks_rle"):
-            sorted_masks_rle = predictions.pred_masks_rle
-            binary_masks = mask_util.decode(sorted_masks_rle)
-        # Convert binary masks to vertices of polygon.
-        if binary_masks is not None:
-            masks = []
-            for mask in binary_masks:
-                # cv2.RETR_CCOMP flag retrieves all the contours and arranges them to a 2-level
-                # hierarchy. External contours (boundary) of the object are placed in hierarchy-1.
-                # Internal contours (holes) are placed in hierarchy-2.
-                # cv2.CHAIN_APPROX_NONE flag gets vertices of polygons from countours.
-                mask_vertices = cv2.findContours(
-                    mask.numpy().copy(), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE
-                )[-2]
-                masks.append(mask_vertices)
+            masks = predictions.pred_masks_rle
+        masks = self._convert_polygons(masks)
+
+        if coloring_mode == ColoringMode.SEGMENTATION_FOCUSED:
+            colors = [
+                self._jitter(self._get_color(class_name=self.metadata.class_names[c]))
+                for c in classes
+            ]
+        else:
+            colors = None
 
         self.overlay_instances(
             masks=masks,
             boxes=boxes,
             labels=labels,
-            scores=scores,
             keypoints=keypoints,
-            coloring_mode=coloring_mode,
+            assigned_colors=colors,
+            alpha=0.5 if coloring_mode == ColoringMode.IMAGE_FOCUSED else 0.9,
         )
         return self.output
 
@@ -169,7 +176,7 @@ class Visualizer:
             coloring_mode (ColoringMode): mode to use while picking colors for masks.
 
         Returns:
-            output (VisualizedImageOutput): image object with visualizations.
+            output (VisImage): image object with visualizations.
         """
         labels, areas = np.unique(predictions, return_counts=True)
         sorted_idxs = np.argsort(-areas).tolist()
@@ -216,7 +223,7 @@ class Visualizer:
             area_limit (int): segments with less than `area_limit` are not drawn.
 
         Returns:
-            output (VisualizedImageOutput): image object with visualizations.
+            output (VisImage): image object with visualizations.
         """
         segment_ids, areas = torch.unique(panoptic_seg, sorted=True, return_counts=True)
         panoptic_seg = panoptic_seg.to(self.cpu_device)
@@ -264,33 +271,51 @@ class Visualizer:
 
         return self.output
 
+    def draw_dataset_dict(self, dic):
+        annos = dic.get("annotations", None)
+        if annos:
+            if "segmentation" in annos[0]:
+                masks = [x["segmentation"] for x in annos]
+            else:
+                masks = None
+            if "keypoints" in annos[0]:
+                keypts = [x["kepoints"] for x in annos]
+            else:
+                keypts = None
+
+            boxes = [BoxMode.convert(x["bbox"], x["bbox_mode"], BoxMode.XYXY_ABS) for x in annos]
+
+            labels = [x["category_id"] for x in annos]
+            names = self.metadata.get("class_names", None)
+            if names:
+                labels = [names[i] for i in labels]
+            labels = [i + ("|crowd" if a.get("iscrowd", 0) else "") for i, a in zip(labels, annos)]
+            self.overlay_instances(labels=labels, boxes=boxes, masks=masks, keypoints=keypts)
+        else:
+            raise NotImplementedError
+        return self.output
+
     def overlay_instances(
         self,
-        masks=None,
+        *,
         boxes=None,
         labels=None,
-        scores=None,
+        masks=None,
         keypoints=None,
         assigned_colors=None,
-        coloring_mode=None,
+        alpha=0.5
     ):
         """
         Args:
+            boxes (Boxes or ndarray): either a :class:`Boxes` or a Nx4 numpy array
+                of XYXY_ABS format for the N objects in a single image.
+            labels (list[str]): the text to be displayed for each instance.
             masks (PolygonMasks i.e. list[list[Tensor[float]]] or list[list[ndarray]]):
                 this contains the segmentation masks for all objects in one image. The
                 first level of the list corresponds to individual instances. The second
                 level to all the polygon that compose the instance, and the third level
                 to the polygon coordinates. The third level is either a Tensor or a numpy
                 array that should have the format of [x0, y0, x1, y1, ..., xn, yn] (n >= 3).
-            boxes (Boxes or ndarray): either a :class:`Boxes` or a Nx4 numpy array
-                of XYXY_ABS format for the N objects in a single image.
-            labels (Tensor): a tensor of size N, where N is the number of objects in the
-                image. Each element in the tensor is the class label of the corresponding
-                object in the image. Note that the class labels are integers that are
-                in [0, #total classes) range.
-            scores (Tensor): a tensor of size N, where N is the number of objects in the image.
-                Each element in the tensor is a float in [0.0, 1.0] range, representing the
-                confidence of the object's class prediction.
             keypoints (Tensor): a tensor of shape (N, K, 3), where the N is the number of instances
                 and K is the number of keypoints. The last dimension corresponds to
                 (x, y, probability).
@@ -299,73 +324,58 @@ class Visualizer:
                 for full list of formats that the colors are accepted in.
 
         Returns:
-            output (VisualizedImageOutput): image object with visualizations.
+            output (VisImage): image object with visualizations.
         """
         if labels is not None and boxes is None:
             raise ValueError("Cannot overlay labels when there are no boxes.")
+        num_instances = None
+        if boxes is not None:
+            boxes = self._convert_boxes(boxes)
+            num_instances = len(boxes)
+        if masks:
+            masks = self._convert_polygons(masks)
+            if num_instances:
+                assert len(masks) == num_instances
+            else:
+                num_instances = len(masks)
+        if keypoints:
+            if num_instances:
+                assert len(keypoints) == num_instances
+            else:
+                num_instances = len(keypoints)
+        if labels is not None:
+            assert len(labels) == num_instances
 
         # Display in largest to smallest order to reduce occlusion.
         if boxes is not None:
-            areas = boxes.area().numpy()
+            areas = np.prod(boxes[:, 2:] - boxes[:, :2], axis=1)
             sorted_idxs = np.argsort(-areas).tolist()
             # Re-order overlaid instances in descending order.
             boxes = boxes[sorted_idxs]
-            labels = labels[sorted_idxs] if labels is not None else labels
-            scores = scores[sorted_idxs] if scores is not None else scores
+            labels = [labels[k] for k in sorted_idxs] if labels is not None else labels
+            masks = [masks[idx] for idx in sorted_idxs] if masks is not None else masks
             keypoints = keypoints[sorted_idxs] if keypoints is not None else keypoints
             if assigned_colors:
                 assigned_colors = [assigned_colors[idx] for idx in sorted_idxs]
-            if masks is not None:
-                if isinstance(masks, PolygonMasks):
-                    masks = masks[sorted_idxs]
-                else:
-                    masks = [masks[idx] for idx in sorted_idxs]
-
-        if boxes is None and masks is None:
-            return self.output
 
         # draw masks. boxes, labels and scores
-        boxes = [None for _ in masks] if boxes is None else boxes
-        for idx, box in enumerate(boxes):
+        for i in range(num_instances):
             # select color for this instance
             if assigned_colors:
-                color = assigned_colors[idx]
+                color = assigned_colors[i]
             else:
-                if (
-                    coloring_mode == ColoringMode.SEGMENTATION_FOCUSED
-                    and self.metadata.class_names
-                    and labels
-                ):
-                    label = labels[idx]
-                    color = self._jitter(
-                        self._get_color(class_name=self.metadata.class_names[label])
-                    )
-                else:
-                    color = self._get_color()
+                color = self._get_color()
 
-            if box is not None:
-                x0, y0, x1, y1 = box
-                # draw box
-                self.draw_box(box, edge_color=color)
-
-                # draw text
+            if boxes is not None:
+                self.draw_box(boxes[i], edge_color=color)
+                # TODO can also draw labels on masks
                 if labels is not None:
-                    if scores is not None:
-                        score = scores[idx] * 100
-                        text = "{}: {:.0f}%".format(self.metadata.class_names[labels[idx]], score)
-                    else:
-                        text = self.metadata.class_names[labels[idx]]
+                    x0, y0, x1, y1 = boxes[i]
                     lighter_color = self._change_color_brightness(color, brightness_factor=0.7)
-                    self.draw_text(text, (x0, y0), color=lighter_color)
+                    self.draw_text(labels[i], (x0, y0), color=lighter_color)
 
             if masks is not None:
-                # select alpha
-                if coloring_mode == ColoringMode.IMAGE_FOCUSED:
-                    alpha = 0.5
-                else:
-                    alpha = 0.98
-                mask = masks[idx]
-                for segment in mask:
+                for segment in masks[i]:
                     segment = np.asarray(segment).reshape(-1, 2)
                     self.draw_polygon(segment, color, alpha=alpha)
 
@@ -374,168 +384,6 @@ class Visualizer:
             for keypoints_per_instance in keypoints:
                 self.draw_and_connect_keypoints(keypoints_per_instance)
 
-        return self.output
-
-    def draw_text(self, text, position, font_size=None, color="g"):
-        """
-        Args:
-            text (str): class label
-            position (tuple): a tuple of the x and y coordinates to place text on image.
-            font_size (int, optional): font of the text. If not provided, a font size
-                proportional to the image width is calculated and used.
-            color: color of the text. Refer to `matplotlib.colors` for full list
-                of formats that are accepted.
-
-        Returns:
-            output (VisualizedImageOutput): image object with text drawn.
-        """
-        # calculate font size proportional to image width
-        if not font_size:
-            text_to_image_ratio = 1 / 16
-            font_size = int(text_to_image_ratio * self.output.height)
-
-        x, y = position
-        self.output.ax.text(
-            x,
-            y,
-            text,
-            fontsize=font_size,
-            family="sans-serif",
-            bbox={"facecolor": "black", "alpha": 0.8, "pad": 0.7, "edgecolor": "none"},
-            color=color,
-            zorder=10,
-        )
-        return self.output
-
-    def draw_box(self, box_coord, alpha=0.5, edge_color="g", line_style="-"):
-        """
-        Args:
-            box_coord (tuple): a tuple containing x0, y0, x1, y1 coordinates, where x0 and y0
-                are the coordinates of the image's top left corner. x1 and y1 are the
-                coordinates of the image's bottom right corner.
-            alpha (float): blending efficient. Smaller values lead to more transparent masks.
-            edge_color: color of the outline of the box. Refer to `matplotlib.colors`
-                for full list of formats that are accepted.
-            line_style (string): the string to use to create the outline of the boxes.
-
-        Returns:
-            output (VisualizedImageOutput): image object with box drawn.
-        """
-        x0, y0, x1, y1 = box_coord
-        width = x1 - x0
-        height = y1 - y0
-
-        # calculate line width of box proportional to image width
-        line_width_to_image_ratio = 1 / 128
-        line_width = int(line_width_to_image_ratio * self.output.height)
-
-        self.output.ax.add_patch(
-            plt.Rectangle(
-                (x0, y0),
-                width,
-                height,
-                fill=False,
-                edgecolor=edge_color,
-                linewidth=line_width,
-                alpha=alpha,
-                linestyle=line_style,
-            )
-        )
-        return self.output
-
-    def draw_circle(self, circle_coord, color, radius=5):
-        """
-        Args:
-            circle_coord (list(int) or tuple(int)): contains the x and y coordinates
-                of the center of the circle.
-            color: color of the polygon. Refer to `matplotlib.colors` for a full list of
-                formats that are accepted.
-            radius (int): radius of the circle.
-
-        Returns:
-            output (VisualizedImageOutput): image object with box drawn.
-        """
-        x, y = circle_coord
-        self.output.ax.add_patch(plt.Circle(circle_coord, radius=radius, color=color))
-        return self.output
-
-    def draw_line(self, x_data, y_data, color):
-        """
-        Args:
-            x_data (list[int]): a list containing x values of all the points being drawn.
-                Length of list should match the length of y_data.
-            y_data (list[int]): a list containing y values of all the points being drawn.
-                Length of list should match the length of x_data.
-            color: color of the line. Refer to `matplotlib.colors` for a full list of
-                formats that are accepted.
-
-        Returns:
-            output (VisualizedImageOutput): image object with line drawn.
-        """
-        self.output.ax.add_line(Line2D(x_data, y_data, color=color))
-        return self.output
-
-    def draw_binary_mask(self, binary_mask, color, edge_color=None, alpha=0.5):
-        """
-        Args:
-            binary_mask (ndarray): numpy array of shape (H, W), where H is the image height and
-                W is the image width. Each value in the array is either a 0 or 1 value of uint8
-                type.
-            color: color of the mask. Refer to `matplotlib.colors` for a full list of
-                formats that are accepted.
-            edge_color: color of the polygon edges. Refer to `matplotlib.colors` for a
-                full list of formats that are accepted.
-            alpha (float): blending efficient. Smaller values lead to more transparent masks.
-
-        Returns:
-            output (VisualizedImageOutput): image object with mask drawn.
-        """
-        # cv2.RETR_CCOMP flag retrieves all the contours and arranges them to a 2-level
-        # hierarchy. External contours (boundary) of the object are placed in hierarchy-1.
-        # Internal contours (holes) are placed in hierarchy-2.
-        # cv2.CHAIN_APPROX_NONE flag gets vertices of polygons from countours.
-        mask_vertices = cv2.findContours(binary_mask.copy(), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)[
-            -2
-        ]
-        for segment in mask_vertices:
-            segment = segment.reshape(-1, 2)
-            self.draw_polygon(segment, color=color, edge_color=edge_color, alpha=alpha)
-        return self.output
-
-    def draw_polygon(self, segment, color, edge_color=None, alpha=0.5):
-        """
-        Args:
-            segment: numpy array of shape Nx2, containing all the points in the polygon.
-            color: color of the polygon. Refer to `matplotlib.colors` for a full list of
-                formats that are accepted.
-            edge_color: color of the polygon edges. Refer to `matplotlib.colors` for a
-                full list of formats that are accepted. If not provided, a darker shade
-                of the polygon color will be used instead.
-            alpha (float): blending efficient. Smaller values lead to more transparent masks.
-
-        Returns:
-            output (VisualizedImageOutput): image object with polygon drawn.
-        """
-        # make edge color darker than the polygon color
-        if edge_color is None:
-            edge_color = self._change_color_brightness(color, brightness_factor=-0.7)
-        edge_color = mc.to_rgb(color)
-        edge_alpha = 1  # make edge color always dark
-        edge_color = edge_color + (edge_alpha,)
-
-        # calculate line width of box proportional to image width
-        line_width_to_image_ratio = 1 / 64
-        line_width = int(line_width_to_image_ratio * self.output.height)
-
-        polygon = Polygon(
-            segment,
-            fill=True,
-            facecolor=color,
-            edgecolor=edge_color,
-            linewidth=line_width,
-            alpha=alpha,
-        )
-        self.output.ax.add_patch(polygon)
         return self.output
 
     def draw_and_connect_keypoints(self, keypoints):
@@ -549,7 +397,7 @@ class Visualizer:
                 and the last dimension corresponds to (x, y, probability).
 
         Returns:
-            output (VisualizedImageOutput): image object with visualizations.
+            output (VisImage): image object with visualizations.
         """
         detected_keypoints_and_locations = {}
         for idx, keypoint in enumerate(keypoints):
@@ -593,6 +441,175 @@ class Visualizer:
                         [mid_hip_x, mid_shoulder_x], [mid_hip_y, mid_shoulder_y], color=color
                     )
         return self.output
+
+    """
+    Primitive drawing functions:
+    """
+
+    def draw_text(self, text, position, font_size=None, color="g"):
+        """
+        Args:
+            text (str): class label
+            position (tuple): a tuple of the x and y coordinates to place text on image.
+            font_size (int, optional): font of the text. If not provided, a font size
+                proportional to the image width is calculated and used.
+            color: color of the text. Refer to `matplotlib.colors` for full list
+                of formats that are accepted.
+
+        Returns:
+            output (VisImage): image object with text drawn.
+        """
+        # calculate font size proportional to image width
+        if not font_size:
+            font_size = self.output.height // 64
+
+        # since the text background is dark, we don't want the text to be dark
+        color = list(mc.to_rgb(color))
+        color[np.argmax(color)] = 0.8
+
+        x, y = position
+        self.output.ax.text(
+            x,
+            y,
+            text,
+            size=font_size * self.output.scale,
+            family="sans-serif",
+            bbox={"facecolor": "black", "alpha": 0.8, "pad": 0.7, "edgecolor": "none"},
+            verticalalignment="top",
+            color=color,
+            zorder=10,
+        )
+        return self.output
+
+    def draw_box(self, box_coord, alpha=0.5, edge_color="g", line_style="-"):
+        """
+        Args:
+            box_coord (tuple): a tuple containing x0, y0, x1, y1 coordinates, where x0 and y0
+                are the coordinates of the image's top left corner. x1 and y1 are the
+                coordinates of the image's bottom right corner.
+            alpha (float): blending efficient. Smaller values lead to more transparent masks.
+            edge_color: color of the outline of the box. Refer to `matplotlib.colors`
+                for full list of formats that are accepted.
+            line_style (string): the string to use to create the outline of the boxes.
+
+        Returns:
+            output (VisImage): image object with box drawn.
+        """
+        x0, y0, x1, y1 = box_coord
+        width = x1 - x0
+        height = y1 - y0
+
+        # calculate line width of box proportional to image width
+        line_width = max(self.output.height // 256, 1)
+
+        self.output.ax.add_patch(
+            plt.Rectangle(
+                (x0, y0),
+                width,
+                height,
+                fill=False,
+                edgecolor=edge_color,
+                linewidth=line_width * self.output.scale,
+                alpha=alpha,
+                linestyle=line_style,
+            )
+        )
+        return self.output
+
+    def draw_circle(self, circle_coord, color, radius=5):
+        """
+        Args:
+            circle_coord (list(int) or tuple(int)): contains the x and y coordinates
+                of the center of the circle.
+            color: color of the polygon. Refer to `matplotlib.colors` for a full list of
+                formats that are accepted.
+            radius (int): radius of the circle.
+
+        Returns:
+            output (VisImage): image object with box drawn.
+        """
+        x, y = circle_coord
+        self.output.ax.add_patch(plt.Circle(circle_coord, radius=radius, color=color))
+        return self.output
+
+    def draw_line(self, x_data, y_data, color):
+        """
+        Args:
+            x_data (list[int]): a list containing x values of all the points being drawn.
+                Length of list should match the length of y_data.
+            y_data (list[int]): a list containing y values of all the points being drawn.
+                Length of list should match the length of x_data.
+            color: color of the line. Refer to `matplotlib.colors` for a full list of
+                formats that are accepted.
+
+        Returns:
+            output (VisImage): image object with line drawn.
+        """
+        self.output.ax.add_line(Line2D(x_data, y_data, color=color))
+        return self.output
+
+    def draw_binary_mask(self, binary_mask, color, edge_color=None, alpha=0.5):
+        """
+        Args:
+            binary_mask (ndarray): numpy array of shape (H, W), where H is the image height and
+                W is the image width. Each value in the array is either a 0 or 1 value of uint8
+                type.
+            color: color of the mask. Refer to `matplotlib.colors` for a full list of
+                formats that are accepted.
+            edge_color: color of the polygon edges. Refer to `matplotlib.colors` for a
+                full list of formats that are accepted.
+            alpha (float): blending efficient. Smaller values lead to more transparent masks.
+
+        Returns:
+            output (VisImage): image object with mask drawn.
+        """
+        # cv2.RETR_CCOMP flag retrieves all the contours and arranges them to a 2-level
+        # hierarchy. External contours (boundary) of the object are placed in hierarchy-1.
+        # Internal contours (holes) are placed in hierarchy-2.
+        # cv2.CHAIN_APPROX_NONE flag gets vertices of polygons from countours.
+        mask_vertices = cv2.findContours(binary_mask.copy(), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)[
+            -2
+        ]
+        for segment in mask_vertices:
+            segment = segment.reshape(-1, 2)
+            self.draw_polygon(segment, color=color, edge_color=edge_color, alpha=alpha)
+        return self.output
+
+    def draw_polygon(self, segment, color, edge_color=None, alpha=0.5):
+        """
+        Args:
+            segment: numpy array of shape Nx2, containing all the points in the polygon.
+            color: color of the polygon. Refer to `matplotlib.colors` for a full list of
+                formats that are accepted.
+            edge_color: color of the polygon edges. Refer to `matplotlib.colors` for a
+                full list of formats that are accepted. If not provided, a darker shade
+                of the polygon color will be used instead.
+            alpha (float): blending efficient. Smaller values lead to more transparent masks.
+
+        Returns:
+            output (VisImage): image object with polygon drawn.
+        """
+        # make edge color darker than the polygon color
+        if edge_color is None:
+            edge_color = self._change_color_brightness(color, brightness_factor=-0.7)
+        edge_color = mc.to_rgb(color)
+        edge_alpha = 1  # make edge color always dark
+        edge_color = edge_color + (edge_alpha,)
+
+        polygon = Polygon(
+            segment,
+            fill=True,
+            facecolor=color,
+            edgecolor=edge_color,
+            linewidth=max(self.output.height // 256 * self.output.scale, 1),
+            alpha=alpha,
+        )
+        self.output.ax.add_patch(polygon)
+        return self.output
+
+    """
+    Internal methods:
+    """
 
     def _get_color(self, class_name=None, idx=None):
         """
@@ -664,10 +681,51 @@ class Visualizer:
         modified_color = colorsys.hls_to_rgb(polygon_color[0], modified_lightness, polygon_color[2])
         return modified_color
 
+    def _convert_boxes(self, boxes):
+        """
+        Convert different format of boxes to a Nx4 array.
+        """
+        if isinstance(boxes, Boxes):
+            return boxes.tensor.numpy()
+        else:
+            return np.asarray(boxes)
+
+    def _convert_polygons(self, masks_or_polygons):
+        """
+        Convert different format of masks or polygons to polygons in ndarray format.
+
+        Returns:
+            list[list[ndarray]]: polygons for each instance.
+                Each ndarray has format [x, y, x, y, ...]
+        """
+
+        def to_polygons(p):
+            if isinstance(p, dict):
+                # RLEs
+                assert "counts" in p and "size" in p
+                if isinstance(p["counts"], list):  # uncompressed RLEs
+                    h, w = p["size"]
+                    p = mask_util.frPyObjects(p, h, w)
+                mask = mask_util.decode(p)
+                return _mask_to_polygon(mask)
+            if isinstance(p, list):
+                # check that the length is a multiple of 2
+                return [np.asarray(x).reshape(-1, 2).reshape(-1) for x in p]
+            else:
+                # assume p is a binary mask
+                assert p.shape[1] != 2, p.shape
+                return _mask_to_polygon(np.asarray(p))
+
+        m = masks_or_polygons
+        if isinstance(m, PolygonMasks):
+            return m.numpy()
+        else:
+            return [to_polygons(p) for p in masks_or_polygons]
+
     def get_output(self):
         """
         Returns:
-            output (VisualizedImageOutput): the image output containing the visualizations added
+            output (VisImage): the image output containing the visualizations added
                 to the image.
         """
         return self.output

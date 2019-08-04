@@ -22,7 +22,7 @@ can read from "file_name" if "image" is not available.
 + annotations (list[dict]): the per-instance annotations of every
 		instance in this image. Each annotation dict may contain:
 	+ iscrowd: 0 or 1. Whether this instance is labeled as COCO's "crowd region".
-	+ bbox (list[float]): list of 4 numbers (x, y, w, h) representing the bounding box of the instance.
+	+ bbox (list[float]): list of 4 numbers representing the bounding box of the instance.
 	+ bbox_mode (int): the format of bbox.
 			It must be a member of [detectron2.structures.BoxMode](detectron2/structures/boxes.py).
 		  Currently only supports `BoxMode.XYXY_ABS` and `BoxMode.XYWH_ABS`.

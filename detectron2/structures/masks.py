@@ -214,3 +214,10 @@ class PolygonMasks(object):
 
     def __len__(self):
         return len(self.polygons)
+
+    def numpy(self):
+        """
+        Returns:
+            list[list[ndarray]]: the polygons in numpy ndarray format.
+        """
+        return [[x.numpy() for x in p] for p in self.polygons]
