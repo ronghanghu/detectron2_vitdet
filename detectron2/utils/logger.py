@@ -6,11 +6,14 @@ from termcolor import colored
 
 class _ColorfulFormatter(logging.Formatter):
     def __init__(self, *args, **kwargs):
-        self._root_name = kwargs.pop("root_name")
+        self._root_name = kwargs.pop("root_name") + "."
+        self._abbrev_name = kwargs.pop("abbrev_name", "")
+        if len(self._abbrev_name):
+            self._abbrev_name = self._abbrev_name + "."
         super(_ColorfulFormatter, self).__init__(*args, **kwargs)
 
     def formatMessage(self, record):
-        record.name = record.name.replace(self._root_name + ".", "")
+        record.name = record.name.replace(self._root_name, self._abbrev_name)
         log = super(_ColorfulFormatter, self).formatMessage(record)
         if record.levelno == logging.WARNING:
             prefix = colored("WARNING", "red", attrs=["blink"])
@@ -21,10 +24,15 @@ class _ColorfulFormatter(logging.Formatter):
         return prefix + " " + log
 
 
-def setup_logger(save_dir=None, distributed_rank=0, color=True, name="detectron2"):
+def setup_logger(
+    save_dir=None, distributed_rank=0, color=True, name="detectron2", abbrev_name="d2"
+):
     """
     Args:
         save_dir (str): a directory to save log. If None, will not save log file.
+        name (str): the root module name of this logger
+        abbrev_name (str): an abbreviation of the module, to avoid long names in logs.
+            Set to "" to not log the root module in logs.
     """
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
@@ -39,9 +47,10 @@ def setup_logger(save_dir=None, distributed_rank=0, color=True, name="detectron2
     )
     if color:
         formatter = _ColorfulFormatter(
-            colored("[%(asctime)s] %(name)s: ", "green") + "%(message)s",
+            colored("[%(asctime)s %(name)s]: ", "green") + "%(message)s",
             datefmt="%m/%d %H:%M:%S",
             root_name=name,
+            abbrev_name=str(abbrev_name),
         )
     else:
         formatter = plain_formatter
