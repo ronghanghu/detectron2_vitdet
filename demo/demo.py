@@ -1,12 +1,15 @@
 from detectron2.utils.env import setup_environment  # noqa F401  isort:skip
 
 import argparse
+import glob
 import os
 import time
 import cv2
+import tqdm
 
-from detectron2.config import get_cfg, set_global_cfg
+from detectron2.config import get_cfg
 from detectron2.data import MetadataCatalog
+from detectron2.utils.logger import setup_logger
 
 from predictor import COCODemo
 
@@ -41,13 +44,14 @@ def main():
         nargs=argparse.REMAINDER,
     )
     args = parser.parse_args()
+    logger = setup_logger()
+    logger.info("Arguments: " + str(args))
 
     # load config from file and command-line arguments
     cfg = get_cfg()
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
     cfg.freeze()
-    set_global_cfg(cfg.GLOBAL)
 
     metadata = MetadataCatalog.get(cfg.DATASETS.TEST[0])
     # prepare object that handles inference plus adds predictions on top of image
@@ -60,9 +64,11 @@ def main():
         while True:
             start_time = time.time()
             ret_val, img = cam.read()
-            top_predictions, visualized_output = coco_demo.run_on_image(img)
-            print("#instances: ", len(top_predictions))
-            print("Time: {:.2f} s / img".format(time.time() - start_time))
+            predictions, visualized_output = coco_demo.run_on_image(img)
+            logger.info(
+                "Time: {:.2f} s; {} instances detected".format(time.time() - start_time),
+                len(predictions),
+            )
             if visualized_output:
                 # Converts Matplotlib RGB format to OpenCV BGR format before visualizing output.
                 cv2.imshow("COCO detections", visualized_output.get_image()[:, :, [2, 1, 0]])
@@ -71,12 +77,17 @@ def main():
         cv2.destroyAllWindows()
 
     elif args.input:
-        for path in args.input:
+        if len(args.input) == 1:
+            args.input = glob.glob(os.path.expanduser(args.input[0]))
+        for path in tqdm.tqdm(args.input, disable=not args.output):
             img = cv2.imread(path)
             start_time = time.time()
-            top_predictions, visualized_output = coco_demo.run_on_image(img)
-            print("#instances: ", len(top_predictions))
-            print("Time: {:.2f} s / img".format(time.time() - start_time))
+            predictions, visualized_output = coco_demo.run_on_image(img)
+            logger.info(
+                "{}: detected {} instances in {:.1f}s".format(
+                    path, len(predictions), time.time() - start_time
+                )
+            )
 
             if args.output:
                 assert os.path.isdir(args.output), args.output
@@ -86,7 +97,7 @@ def main():
             else:
                 if visualized_output:
                     # Converts Matplotlib RGB format to OpenCV BGR format before visualizing output.
-                    cv2.imshow("COCO detections", visualized_output.get_image()[:, :, [2, 1, 0]])
+                    cv2.imshow("COCO detections", visualized_output.get_image()[:, :, ::-1])
                 if cv2.waitKey(0) == 27:
                     break  # esc to quit
 

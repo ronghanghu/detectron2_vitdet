@@ -2,6 +2,6 @@ _BASE_: "../e2e_mask_rcnn_R_50_C4_1x.yaml"
 MODEL:
   WEIGHT: "detectron2://e2e_mask_rcnn_R_50_C4_1x/111802010/model_final_2303578b8d2a5f0bddbe76709042dabe.pkl"
 DATASETS:
-  TEST: ("coco_2014_minival_100",)
+  TEST: ("coco_2017_val_100",)
 TEST:
   EXPECTED_RESULTS: [["bbox", "AP", 44.82, 0.02], ["segm", "AP", 39.59, 0.02]]

@@ -14,6 +14,7 @@ from detectron2.structures import Boxes, BoxMode, PolygonMasks
 
 from .colormap import colormap
 
+_SMALL_OBJECT_AREA_THRESH = 1000
 _OFF_WHITE = (255, 255, 240)
 _BLACK = (0, 0, 0)
 _RED = (255, 0, 0)
@@ -41,7 +42,34 @@ def _mask_to_polygon(mask):
     # hierarchy. External contours (boundary) of the object are placed in hierarchy-1.
     # Internal contours (holes) are placed in hierarchy-2.
     # cv2.CHAIN_APPROX_NONE flag gets vertices of polygons from countours.
-    return cv2.findContours(mask.copy(), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)[-2]
+    res = cv2.findContours(mask.copy(), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)[-2]
+    return [x.flatten() for x in res]
+
+
+def _polygon_areas(polygons, h, w):
+    """
+    Args:
+        polygons (list[list[ndarray]]):
+    Returns:
+        list[float]: the areas
+    """
+    rles = []
+    for p in polygons:
+        assert len(p) > 0, "Does not support empty polygons!"
+        p = [x.tolist() for x in p]
+        p = mask_util.frPyObjects(p, h, w)
+        p = mask_util.merge(p)
+        rles.append(p)
+    return np.asarray(mask_util.area(rles), dtype=np.float32)
+
+
+def _polygon_to_box(polygon, h, w):
+    p = mask_util.frPyObjects([x.tolist() for x in polygon], h, w)
+    p = mask_util.merge(p)
+    bbox = mask_util.toBbox(p)
+    bbox[2] += bbox[0]
+    bbox[3] += bbox[1]
+    return bbox
 
 
 class VisImage:
@@ -279,7 +307,7 @@ class Visualizer:
             else:
                 masks = None
             if "keypoints" in annos[0]:
-                keypts = [x["kepoints"] for x in annos]
+                keypts = [x["keypoints"] for x in annos]
             else:
                 keypts = None
 
@@ -291,8 +319,6 @@ class Visualizer:
                 labels = [names[i] for i in labels]
             labels = [i + ("|crowd" if a.get("iscrowd", 0) else "") for i, a in zip(labels, annos)]
             self.overlay_instances(labels=labels, boxes=boxes, masks=masks, keypoints=keypts)
-        else:
-            raise NotImplementedError
         return self.output
 
     def overlay_instances(
@@ -316,9 +342,9 @@ class Visualizer:
                 level to all the polygon that compose the instance, and the third level
                 to the polygon coordinates. The third level is either a Tensor or a numpy
                 array that should have the format of [x0, y0, x1, y1, ..., xn, yn] (n >= 3).
-            keypoints (Tensor): a tensor of shape (N, K, 3), where the N is the number of instances
-                and K is the number of keypoints. The last dimension corresponds to
-                (x, y, probability).
+            keypoints (array like): an array-like object of shape (N, K, 3),
+                where the N is the number of instances and K is the number of keypoints.
+                The last dimension corresponds to (x, y, visibility or score).
             assigned_colors (list[matplotlib.colors]): a list of colors, where each color
                 corresponds to each mask or box in the image. Refer to 'matplotlib.colors'
                 for full list of formats that the colors are accepted in.
@@ -326,13 +352,11 @@ class Visualizer:
         Returns:
             output (VisImage): image object with visualizations.
         """
-        if labels is not None and boxes is None:
-            raise ValueError("Cannot overlay labels when there are no boxes.")
         num_instances = None
         if boxes is not None:
             boxes = self._convert_boxes(boxes)
             num_instances = len(boxes)
-        if masks:
+        if masks is not None:
             masks = self._convert_polygons(masks)
             if num_instances:
                 assert len(masks) == num_instances
@@ -343,41 +367,57 @@ class Visualizer:
                 assert len(keypoints) == num_instances
             else:
                 num_instances = len(keypoints)
+            keypoints = np.asarray(keypoints).reshape(num_instances, -1, 3)
         if labels is not None:
             assert len(labels) == num_instances
+        if assigned_colors is None:
+            assigned_colors = [self._get_color() for _ in range(num_instances)]
+        if num_instances == 0:
+            return self.output
 
         # Display in largest to smallest order to reduce occlusion.
+        areas = None
         if boxes is not None:
             areas = np.prod(boxes[:, 2:] - boxes[:, :2], axis=1)
+        elif masks is not None:
+            areas = _polygon_areas(masks, self.output.height, self.output.width)
+
+        if areas is not None:
             sorted_idxs = np.argsort(-areas).tolist()
-            # Re-order overlaid instances in descending order.
-            boxes = boxes[sorted_idxs]
-            labels = [labels[k] for k in sorted_idxs] if labels is not None else labels
-            masks = [masks[idx] for idx in sorted_idxs] if masks is not None else masks
-            keypoints = keypoints[sorted_idxs] if keypoints is not None else keypoints
-            if assigned_colors:
-                assigned_colors = [assigned_colors[idx] for idx in sorted_idxs]
+            # Re-order overlapped instances in descending order.
+            boxes = boxes[sorted_idxs] if boxes is not None else None
+            labels = [labels[k] for k in sorted_idxs] if labels is not None else None
+            masks = [masks[idx] for idx in sorted_idxs] if masks is not None else None
+            assigned_colors = [assigned_colors[idx] for idx in sorted_idxs]
 
-        # draw masks. boxes, labels and scores
         for i in range(num_instances):
-            # select color for this instance
-            if assigned_colors:
-                color = assigned_colors[i]
-            else:
-                color = self._get_color()
-
+            color = assigned_colors[i]
             if boxes is not None:
                 self.draw_box(boxes[i], edge_color=color)
-                # TODO can also draw labels on masks
-                if labels is not None:
-                    x0, y0, x1, y1 = boxes[i]
-                    lighter_color = self._change_color_brightness(color, brightness_factor=0.7)
-                    self.draw_text(labels[i], (x0, y0), color=lighter_color)
 
             if masks is not None:
                 for segment in masks[i]:
                     segment = np.asarray(segment).reshape(-1, 2)
                     self.draw_polygon(segment, color, alpha=alpha)
+
+            if labels is not None:
+                # first get a box
+                if boxes is not None:
+                    box = boxes[i]
+                elif masks is not None:
+                    box = _polygon_to_box(masks[i], self.output.height, self.output.width)
+                else:
+                    raise NotImplementedError("Cannot draw labels.")
+                x0, y0, x1, y1 = box
+                lighter_color = self._change_color_brightness(color, brightness_factor=0.7)
+                box_area = (y1 - y0) * (x1 - x0)
+                text_pos = (x0, y0)
+                if box_area < _SMALL_OBJECT_AREA_THRESH:
+                    if y1 >= self.output.height - 5:
+                        text_pos = (x1, y0)
+                    else:
+                        text_pos = (x0, y1)
+                self.draw_text(labels[i], text_pos, color=lighter_color)
 
         # draw keypoints
         if keypoints is not None:
@@ -399,47 +439,50 @@ class Visualizer:
         Returns:
             output (VisImage): image object with visualizations.
         """
-        detected_keypoints_and_locations = {}
+        visible = {}
         for idx, keypoint in enumerate(keypoints):
             # draw keypoint
             x, y, prob = keypoint
             if prob > _KEYPOINT_THRESHOLD:
-                color = [x / 255 for x in _BLACK]
+                color = tuple(x / 255 for x in _BLACK)
                 self.draw_circle((x, y), color=color)
                 keypoint_name = self.metadata.keypoint_names[idx]
-                detected_keypoints_and_locations[keypoint_name] = (x, y)
+                visible[keypoint_name] = (x, y)
 
-        for kp_pairs, color in self.metadata.keypoint_connection_rules.items():
-            kp0, kp1 = kp_pairs
-            keypoints_present = detected_keypoints_and_locations.keys()
-            if kp0 in keypoints_present and kp1 in keypoints_present:
-                x0, y0 = detected_keypoints_and_locations[kp0]
-                x1, y1 = detected_keypoints_and_locations[kp1]
-                color = tuple(x / 255 for x in color)
+        for kp0, kp1, color in self.metadata.keypoint_connection_rules:
+            if kp0 in visible and kp1 in visible:
+                x0, y0 = visible[kp0]
+                x1, y1 = visible[kp1]
+                color = tuple(x / 255.0 for x in color)
                 self.draw_line([x0, x1], [y0, y1], color=color)
 
-        if self.metadata.name == "coco_person":
-            # draw lines to mid-shoulder and mid-hip
-            # Note that this strategy is specific to COCO person keypoints.
-            # TODO: Refactor this when visualizer is extended to other datasets.
-            nose_x, nose_y, nose_prob = keypoints[self.metadata.keypoint_names.index("nose")]
-            ls_x, ls_y, ls_prob = keypoints[self.metadata.keypoint_names.index("left_shoulder")]
-            rs_x, rs_y, rs_prob = keypoints[self.metadata.keypoint_names.index("right_shoulder")]
-            if ls_prob > _KEYPOINT_THRESHOLD and rs_prob > _KEYPOINT_THRESHOLD:
-                color = tuple(x / 255 for x in _RED)
-                # draw line from nose to mid-shoulder
-                mid_shoulder_x, mid_shoulder_y = (ls_x + rs_x) / 2, (ls_y + rs_y) / 2
-                if nose_prob > _KEYPOINT_THRESHOLD:
-                    self.draw_line([nose_x, mid_shoulder_x], [nose_y, mid_shoulder_y], color=color)
+        # draw lines from nose to mid-shoulder and mid-shoulder to mid-hip
+        # Note that this strategy is specific to person keypoints.
+        # For other keypoints, it should just do nothing
+        try:
+            ls_x, ls_y = visible["left_shoulder"]
+            rs_x, rs_y = visible["right_shoulder"]
+            mid_shoulder_x, mid_shoulder_y = (ls_x + rs_x) / 2, (ls_y + rs_y) / 2
+        except KeyError:
+            pass
+        else:
+            color = tuple(x / 255 for x in _RED)
+            # draw line from nose to mid-shoulder
+            nose_x, nose_y = visible.get("nose", (None, None))
+            if nose_x is not None:
+                self.draw_line([nose_x, mid_shoulder_x], [nose_y, mid_shoulder_y], color=color)
 
+            try:
                 # draw line from mid-shoulder to mid-hip
-                lh_x, lh_y, lh_prob = keypoints[self.metadata.keypoint_names.index("left_hip")]
-                rh_x, rh_y, rh_prob = keypoints[self.metadata.keypoint_names.index("right_hip")]
-                if lh_prob > _KEYPOINT_THRESHOLD and rh_prob > _KEYPOINT_THRESHOLD:
-                    mid_hip_x, mid_hip_y = (lh_x + rh_x) / 2, (lh_y + rh_y) / 2
-                    self.draw_line(
-                        [mid_hip_x, mid_shoulder_x], [mid_hip_y, mid_shoulder_y], color=color
-                    )
+                lh_x, lh_y = visible["left_hip"]
+                rh_x, rh_y = visible["right_hip"]
+            except KeyError:
+                pass
+            else:
+                mid_hip_x, mid_hip_y = (lh_x + rh_x) / 2, (lh_y + rh_y) / 2
+                self.draw_line(
+                    [mid_hip_x, mid_shoulder_x], [mid_hip_y, mid_shoulder_y], color=color
+                )
         return self.output
 
     """
@@ -459,13 +502,12 @@ class Visualizer:
         Returns:
             output (VisImage): image object with text drawn.
         """
-        # calculate font size proportional to image width
         if not font_size:
             font_size = self.output.height // 64
 
         # since the text background is dark, we don't want the text to be dark
-        color = list(mc.to_rgb(color))
-        color[np.argmax(color)] = 0.8
+        color = np.maximum(list(mc.to_rgb(color)), 0.2)
+        color[np.argmax(color)] = max(0.8, np.max(color))
 
         x, y = position
         self.output.ax.text(
@@ -500,7 +542,7 @@ class Visualizer:
         height = y1 - y0
 
         # calculate line width of box proportional to image width
-        line_width = max(self.output.height // 256, 1)
+        line_width = max(self.output.height // 320, 1)
 
         self.output.ax.add_patch(
             plt.Rectangle(
@@ -563,14 +605,7 @@ class Visualizer:
         Returns:
             output (VisImage): image object with mask drawn.
         """
-        # cv2.RETR_CCOMP flag retrieves all the contours and arranges them to a 2-level
-        # hierarchy. External contours (boundary) of the object are placed in hierarchy-1.
-        # Internal contours (holes) are placed in hierarchy-2.
-        # cv2.CHAIN_APPROX_NONE flag gets vertices of polygons from countours.
-        mask_vertices = cv2.findContours(binary_mask.copy(), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)[
-            -2
-        ]
-        for segment in mask_vertices:
+        for segment in _mask_to_polygon(binary_mask):
             segment = segment.reshape(-1, 2)
             self.draw_polygon(segment, color=color, edge_color=edge_color, alpha=alpha)
         return self.output
@@ -589,20 +624,20 @@ class Visualizer:
         Returns:
             output (VisImage): image object with polygon drawn.
         """
-        # make edge color darker than the polygon color
         if edge_color is None:
-            edge_color = self._change_color_brightness(color, brightness_factor=-0.7)
-        edge_color = mc.to_rgb(color)
-        edge_alpha = 1  # make edge color always dark
-        edge_color = edge_color + (edge_alpha,)
+            # make edge color darker than the polygon color
+            if alpha > 0.8:
+                edge_color = self._change_color_brightness(color, brightness_factor=-0.7)
+            else:
+                edge_color = color
+        edge_color = mc.to_rgb(edge_color) + (1,)
 
         polygon = Polygon(
             segment,
             fill=True,
-            facecolor=color,
+            facecolor=mc.to_rgb(color) + (alpha,),
             edgecolor=edge_color,
-            linewidth=max(self.output.height // 256 * self.output.scale, 1),
-            alpha=alpha,
+            linewidth=max(self.output.height // 300 * self.output.scale, 1),
         )
         self.output.ax.add_patch(polygon)
         return self.output

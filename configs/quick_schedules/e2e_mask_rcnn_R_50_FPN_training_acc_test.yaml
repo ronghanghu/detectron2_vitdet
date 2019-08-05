@@ -5,8 +5,8 @@ MODEL:
     BATCH_SIZE_PER_IMAGE: 256
   MASK_ON: True
 DATASETS:
-  TRAIN: ("coco_2014_minival",)
-  TEST: ("coco_2014_minival",)
+  TRAIN: ("coco_2017_val",)
+  TEST: ("coco_2017_val",)
 INPUT:
   MIN_SIZE_TRAIN: (600,)
   MAX_SIZE_TRAIN: 1000

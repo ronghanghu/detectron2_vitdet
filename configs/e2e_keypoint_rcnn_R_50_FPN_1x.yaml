@@ -17,7 +17,7 @@ MODEL:
     # Therefore we increase it to 1500 per-image.
     POST_NMS_TOPK_TRAIN: 1500
 DATASETS:
-  TRAIN: ("keypoints_coco_2014_train", "keypoints_coco_2014_valminusminival",)
-  TEST: ("keypoints_coco_2014_minival",)
+  TRAIN: ("keypoints_coco_2017_train",)
+  TEST: ("keypoints_coco_2017_val",)
 INPUT:
   MIN_SIZE_TRAIN: (640, 672, 704, 736, 768, 800)

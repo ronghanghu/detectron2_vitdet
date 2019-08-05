@@ -17,6 +17,7 @@ from tabulate import tabulate
 from detectron2.data import MetadataCatalog
 from detectron2.structures import Boxes, BoxMode, pairwise_iou
 from detectron2.utils.comm import all_gather, is_main_process, synchronize
+from detectron2.utils.file_io import PathManager
 
 from .densepose_coco_evaluation import DensePoseCocoEval
 from .evaluator import DatasetEvaluator
@@ -48,7 +49,7 @@ class COCOEvaluator(DatasetEvaluator):
 
         self._metadata = MetadataCatalog.get(dataset_name)
         with contextlib.redirect_stdout(io.StringIO()):
-            self._coco_api = COCO(self._metadata.json_file)
+            self._coco_api = COCO(PathManager.get_file_name(self._metadata.json_file))
 
         self._kpt_oks_sigmas = cfg.TEST.KEYPOINT_OKS_SIGMAS
 

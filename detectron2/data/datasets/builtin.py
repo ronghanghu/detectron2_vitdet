@@ -182,26 +182,25 @@ COCO_PERSON_KEYPOINT_FLIP_MAP = (
 )
 
 # rules for pairs of keypoints to draw a line between, and the line color to use.
-RULES_FOR_CONNECTING_KEYPOINTS = dict({
+KEYPOINT_CONNECTION_RULES = [
     # face
-    (("left_ear", "left_eye"), (102, 204, 255)),
-    (("right_ear", "right_eye"), (51, 153, 255)),
-    (("left_eye", "nose"), (102, 0, 204)),
-    (("nose", "right_eye"), (51, 102, 255)),
-    (("left_eye", "right_eye"), (153, 0, 153)),
+    ("left_ear", "left_eye", (102, 204, 255)),
+    ("right_ear", "right_eye", (51, 153, 255)),
+    ("left_eye", "nose", (102, 0, 204)),
+    ("nose", "right_eye", (51, 102, 255)),
     # upper-body
-    (("left_shoulder", "right_shoulder"), (255, 128, 0)),
-    (("left_shoulder", "left_elbow"), (153, 255, 204)),
-    (("right_shoulder", "right_elbow"), (128, 229, 255)),
-    (("left_elbow", "left_wrist"), (153, 255, 153)),
-    (("right_elbow", "right_wrist"), (102, 255, 224)),
+    ("left_shoulder", "right_shoulder", (255, 128, 0)),
+    ("left_shoulder", "left_elbow", (153, 255, 204)),
+    ("right_shoulder", "right_elbow", (128, 229, 255)),
+    ("left_elbow", "left_wrist", (153, 255, 153)),
+    ("right_elbow", "right_wrist", (102, 255, 224)),
     # lower-body
-    (("left_hip", "right_hip"), (255, 102, 0)),
-    (("left_hip", "left_knee"), (255, 255, 77)),
-    (("right_hip", "right_knee"), (153, 255, 204)),
-    (("left_knee", "left_ankle"), (191, 255, 128)),
-    (("right_knee", "right_ankle"), (255, 195, 77)),
-})
+    ("left_hip", "right_hip", (255, 102, 0)),
+    ("left_hip", "left_knee", (255, 255, 77)),
+    ("right_hip", "right_knee", (153, 255, 204)),
+    ("left_knee", "left_ankle", (191, 255, 128)),
+    ("right_knee", "right_ankle", (255, 195, 77)),
+]
 
 # fmt: on
 
@@ -269,7 +268,7 @@ def _get_builtin_metadata(dataset_name):
             "class_names": ["person"],
             "keypoint_names": COCO_PERSON_KEYPOINT_NAMES,
             "keypoint_flip_map": COCO_PERSON_KEYPOINT_FLIP_MAP,
-            "keypoint_connection_rules": RULES_FOR_CONNECTING_KEYPOINTS,
+            "keypoint_connection_rules": KEYPOINT_CONNECTION_RULES,
         }
     elif dataset_name == "coco_densepose":
         return _get_coco_densepose_meta()
@@ -300,13 +299,20 @@ _PREDEFINED_SPLITS["coco"] = {
     "coco_2014_train": ("coco/train2014", "coco/annotations/instances_train2014.json"),
     "coco_2014_val": ("coco/val2014", "coco/annotations/instances_val2014.json"),
     "coco_2014_minival": ("coco/val2014", "coco/annotations/instances_minival2014.json"),
-    "coco_2014_minival_100": ("coco/val2014", "coco/annotations/instances_minival2014_100.json"),
+    "coco_2014_minival_100": (
+        "coco/val2014",
+        "detectron2://annotations/coco/instances_minival2014_100.json",
+    ),
     "coco_2014_valminusminival": (
         "coco/val2014",
         "coco/annotations/instances_valminusminival2014.json",
     ),
     "coco_2017_train": ("coco/train2017", "coco/annotations/instances_train2017.json"),
     "coco_2017_val": ("coco/val2017", "coco/annotations/instances_val2017.json"),
+    "coco_2017_val_100": (
+        "coco/val2017",
+        "detectron2://annotations/coco/instances_val2017_100.json",
+    ),
 }
 
 _PREDEFINED_SPLITS["cityscapes"] = {
@@ -343,6 +349,15 @@ _PREDEFINED_SPLITS["coco_person"] = {
         "coco/val2014",
         "coco/annotations/person_keypoints_minival2014_100.json",
     ),
+    "keypoints_coco_2017_train": (
+        "coco/train2017",
+        "coco/annotations/person_keypoints_train2017.json",
+    ),
+    "keypoints_coco_2017_val": ("coco/val2017", "coco/annotations/person_keypoints_val2017.json"),
+    "keypoints_coco_2017_val_100": (
+        "coco/val2017",
+        "detectron2://annotations/coco/person_keypoints_val2017_100.json",
+    ),
 }
 
 _PREDEFINED_SPLITS["coco_densepose"] = {
@@ -360,6 +375,6 @@ for dataset_name, splits_per_dataset in _PREDEFINED_SPLITS.items():
         register_coco_instances(
             key,
             _get_builtin_metadata(dataset_name),
-            os.path.join("datasets", json_file),
+            os.path.join("datasets", json_file) if "://" not in json_file else json_file,
             os.path.join("datasets", image_root),
         )

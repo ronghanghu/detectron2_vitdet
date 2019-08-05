@@ -7,6 +7,7 @@ from PIL import Image
 
 from borc.common.timer import Timer
 from detectron2.structures import BoxMode
+from detectron2.utils.file_io import PathManager
 
 from .. import MetadataCatalog
 
@@ -40,6 +41,8 @@ def load_coco_json(json_file, image_root, dataset_name=None):
            The results do not have the "image" field.
     """
     from pycocotools.coco import COCO
+
+    json_file = PathManager.get_file_name(json_file)
 
     timer = Timer()
     with contextlib.redirect_stdout(io.StringIO()):

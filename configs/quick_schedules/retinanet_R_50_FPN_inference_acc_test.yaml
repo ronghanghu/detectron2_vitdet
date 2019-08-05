@@ -2,6 +2,6 @@ _BASE_: "../retinanet_R_50_FPN_1x.yaml"
 MODEL:
   WEIGHT: "detectron2://retinanet_R_50_FPN_1x/125739798/model_final_21df471846ad2749c721c2f4a4e3d7e8.pkl"
 DATASETS:
-  TEST: ("coco_2014_minival_100",)
+  TEST: ("coco_2017_val_100",)
 TEST:
   EXPECTED_RESULTS: [["bbox", "AP", 43.65, 0.02]]

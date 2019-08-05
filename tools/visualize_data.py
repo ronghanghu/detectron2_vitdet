@@ -8,6 +8,7 @@ from PIL import Image
 from detectron2.config import get_cfg
 from detectron2.data import DatasetCatalog, MetadataCatalog, build_detection_train_loader
 from detectron2.data import detection_utils as utils
+from detectron2.data.build import filter_images_with_few_keypoints
 from detectron2.utils.env import setup_environment
 from detectron2.utils.logger import setup_logger
 from detectron2.utils.visualizer import Visualizer
@@ -49,7 +50,7 @@ if __name__ == "__main__":
     setup_environment()
     args = parse_args()
     logger = setup_logger()
-    logger.info("Arguments:" + str(args))
+    logger.info("Arguments: " + str(args))
     cfg = setup(args)
 
     dirname = args.output_dir
@@ -66,6 +67,7 @@ if __name__ == "__main__":
             print("Saving to {} ...".format(filepath))
             vis.save(filepath)
 
+    scale = 2.0 if args.show else 1.0
     if args.source == "dataloader":
         train_data_loader = build_detection_train_loader(cfg)
         for batch in train_data_loader:
@@ -77,7 +79,7 @@ if __name__ == "__main__":
                 else:
                     img = np.asarray(Image.fromarray(img, mode=cfg.INPUT.FORMAT).convert("RGB"))
 
-                visualizer = Visualizer(img, metadata=metadata, scale=2.0 if args.show else 1.0)
+                visualizer = Visualizer(img, metadata=metadata, scale=scale)
                 target_fields = per_image["targets"].get_fields()
                 labels = [metadata.class_names[i] for i in target_fields["gt_classes"]]
                 vis = visualizer.overlay_instances(
@@ -89,8 +91,10 @@ if __name__ == "__main__":
                 output(vis, str(per_image["image_id"]) + ".jpg")
     else:
         dicts = list(chain.from_iterable([DatasetCatalog.get(k) for k in cfg.DATASETS.TRAIN]))
+        if cfg.MODEL.KEYPOINT_ON:
+            dicts = filter_images_with_few_keypoints(dicts, 1)
         for dic in dicts:
             img = utils.read_image(dic["file_name"], "RGB")
-            visualizer = Visualizer(img, metadata=metadata)
+            visualizer = Visualizer(img, metadata=metadata, scale=scale)
             vis = visualizer.draw_dataset_dict(dic)
             output(vis, os.path.basename(dic["file_name"]))

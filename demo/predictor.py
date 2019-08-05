@@ -29,7 +29,7 @@ class COCODemo(object):
         self.confidence_threshold = confidence_threshold
         self.stuff_area_threshold = stuff_area_threshold
 
-    def run_on_image(self, image, dataset="coco_2017_train"):
+    def run_on_image(self, image):
         """
         Args:
             image (np.ndarray): an image of shape (H, W, C) (in BGR order).
@@ -85,9 +85,9 @@ class COCODemo(object):
         frames_per_second = video.get(cv2.CAP_PROP_FPS)
         frame_grab_frequency = int(round(seconds * frames_per_second))
 
+        width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
         if output_path:
-            width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
-            height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
             video_file = cv2.VideoWriter(
                 filename=output_path,
                 fourcc=cv2.VideoWriter_fourcc(*"x264"),

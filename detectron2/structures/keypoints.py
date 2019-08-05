@@ -5,9 +5,9 @@ from detectron2.layers import interpolate
 
 class Keypoints:
     """
-    Stores keypoint related data for all objects in an image. Instances have a `keypoints` property
-        containing the x,y location and visibility flag of each keypoint. This tensor has shape
-        (N, K, 3) where N is the number of instances and K is the number of keypoints per instance.
+    Stores keypoint annotation data. GT Instances have a `gt_keypoints` property
+    containing the x,y location and visibility flag of each keypoint. This tensor has shape
+    (N, K, 3) where N is the number of instances and K is the number of keypoints per instance.
 
     The visiblity flag follows the COCO format and must be one of three integers:
         v=0: not labeled (in which case x=y=0)

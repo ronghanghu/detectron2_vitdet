@@ -17,8 +17,8 @@ MODEL:
   RPN:
     SMOOTH_L1_BETA: 0.2  # Keypoint AP degrades when using plain L1 loss
 DATASETS:
-  TRAIN: ("keypoints_coco_2014_minival",)
-  TEST: ("keypoints_coco_2014_minival",)
+  TRAIN: ("keypoints_coco_2017_val",)
+  TEST: ("keypoints_coco_2017_val",)
 INPUT:
   MIN_SIZE_TRAIN: (640, 672, 704, 736, 768, 800)
 SOLVER:

@@ -85,6 +85,8 @@ unavailable to you.
 * `keypoint_flip_map`: Used by keypoint localization. A list of pairs of names,
   where each pair are the two keypoints that should be flipped if the image is
   flipped during augmentation.
+* `keypoint_connection_rules`: `list[tuple(name, name, (r, g, b))]`. The colors
+  to be used to connect keypoints during visualization.
 
 * `json_file`: Used by COCO evaluation.
 * `panoptic_root`, `panoptic_json`: Used by panoptic evaluation.

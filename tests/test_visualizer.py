@@ -19,7 +19,7 @@ class TestVisualizer(unittest.TestCase):
         def _rand_poly():
             return np.random.rand(3, 2).flatten() * H
 
-        polygons = [[_rand_poly() for _ in range(np.random.randint(3))] for _ in range(N)]
+        polygons = [[_rand_poly() for _ in range(np.random.randint(1, 5))] for _ in range(N)]
 
         labels = [str(i) for i in range(N)]
         return img, boxes, labels, polygons
@@ -39,3 +39,8 @@ class TestVisualizer(unittest.TestCase):
         v = Visualizer(img, self.metadata, scale=2.0)
         output = v.overlay_instances(masks=polygons, boxes=boxes, labels=labels).get_image()
         self.assertEqual(output.shape[0], img.shape[0] * 2)
+
+    def test_overlay_instances_no_boxes(self):
+        img, boxes, labels, polygons = self._random_data()
+        v = Visualizer(img, self.metadata)
+        v.overlay_instances(masks=polygons, boxes=None, labels=labels).get_image()
