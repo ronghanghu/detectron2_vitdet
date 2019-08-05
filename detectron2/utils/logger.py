@@ -17,7 +17,7 @@ class _ColorfulFormatter(logging.Formatter):
         elif record.levelno == logging.ERROR or record.levelno == logging.CRITICAL:
             prefix = colored("ERROR", "red", attrs=["blink", "underline"])
         else:
-            prefix = colored("INFO", "green")
+            return log
         return prefix + " " + log
 
 

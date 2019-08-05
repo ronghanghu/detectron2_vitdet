@@ -8,10 +8,21 @@ import cv2
 import tqdm
 
 from detectron2.config import get_cfg
-from detectron2.data import MetadataCatalog
 from detectron2.utils.logger import setup_logger
 
 from predictor import COCODemo
+
+
+def setup_cfg(args):
+    # load config from file and command-line arguments
+    cfg = get_cfg()
+    cfg.merge_from_file(args.config_file)
+    cfg.merge_from_list(args.opts)
+    # Set score_threshold for builtin models
+    cfg.MODEL.RETINANET.INFERENCE_SCORE_THRESHOLD = args.confidence_threshold
+    cfg.MODEL.ROI_HEADS.SCORE_THRESH = args.confidence_threshold
+    cfg.freeze()
+    return cfg
 
 
 def main():
@@ -47,15 +58,9 @@ def main():
     logger = setup_logger()
     logger.info("Arguments: " + str(args))
 
-    # load config from file and command-line arguments
-    cfg = get_cfg()
-    cfg.merge_from_file(args.config_file)
-    cfg.merge_from_list(args.opts)
-    cfg.freeze()
+    cfg = setup_cfg(args)
 
-    metadata = MetadataCatalog.get(cfg.DATASETS.TEST[0])
-    # prepare object that handles inference plus adds predictions on top of image
-    coco_demo = COCODemo(cfg, metadata, confidence_threshold=args.confidence_threshold)
+    coco_demo = COCODemo(cfg)
 
     if args.webcam:
         assert args.input is None, "Cannot have both --input and --webcam!"
@@ -80,11 +85,11 @@ def main():
         if len(args.input) == 1:
             args.input = glob.glob(os.path.expanduser(args.input[0]))
         for path in tqdm.tqdm(args.input, disable=not args.output):
-            img = cv2.imread(path)
+            img = cv2.imread(path, cv2.IMREAD_COLOR)
             start_time = time.time()
             predictions, visualized_output = coco_demo.run_on_image(img)
             logger.info(
-                "{}: detected {} instances in {:.1f}s".format(
+                "{}: detected {} instances in {:.2f}s".format(
                     path, len(predictions), time.time() - start_time
                 )
             )

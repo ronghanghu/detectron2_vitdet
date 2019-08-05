@@ -242,13 +242,12 @@ def setup(args):
     # Enable hacky research that uses global config. You usually don't need it
     # set_global_cfg(cfg.GLOBAL)
 
-    colorful_logging = not args.no_color
     output_dir = cfg.OUTPUT_DIR
     if comm.is_main_process() and output_dir:
         os.makedirs(output_dir, exist_ok=True)
     comm.synchronize()
 
-    logger = setup_logger(output_dir, color=colorful_logging, distributed_rank=comm.get_rank())
+    logger = setup_logger(output_dir, distributed_rank=comm.get_rank())
     logger.info(
         "Using {} GPUs per machine. Rank of current process: {}".format(
             args.num_gpus, comm.get_rank()
@@ -281,8 +280,7 @@ def main(args):
         checkpointer.resume_or_load(cfg.MODEL.WEIGHT, resume=args.resume)
         return do_test(cfg, model)
 
-    distributed = comm.get_world_size() > 1
-    if distributed:
+    if comm.get_world_size() > 1:
         local_rank = comm.get_rank() % args.num_gpus
         model = DistributedDataParallel(
             model,
@@ -310,7 +308,6 @@ def parse_args(in_args=None):
         help="whether to attempt to resume from the checkpoint directory",
     )
     parser.add_argument("--eval-only", action="store_true", help="perform evaluation only")
-    parser.add_argument("--no-color", action="store_true", help="disable colorful logging")
     parser.add_argument("--num-gpus", type=int, default=1, help="number of gpus per machine")
     parser.add_argument("--num-machines", type=int, default=1)
     parser.add_argument(

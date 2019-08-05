@@ -3,6 +3,7 @@ import cv2
 import torch
 
 import detectron2.data.transforms as T
+from detectron2.data import MetadataCatalog
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.modeling import build_model
 from detectron2.utils.video_visualizer import VideoVisualizer
@@ -10,13 +11,13 @@ from detectron2.utils.visualizer import ColoringMode, Visualizer
 
 
 class COCODemo(object):
-    def __init__(self, cfg, metadata, confidence_threshold=0.7, stuff_area_threshold=4096):
+    def __init__(self, cfg, stuff_area_threshold=4096):
         self.cfg = cfg.clone()
         self.model = build_model(self.cfg)  # cfg can be modified by model
         self.model.eval()
         self.device = torch.device(cfg.MODEL.DEVICE)
         self.model.to(self.device)
-        self.metadata = metadata
+        self.metadata = MetadataCatalog.get(cfg.DATASETS.TEST[0])
 
         checkpointer = DetectionCheckpointer(self.model)
         checkpointer.load(cfg.MODEL.WEIGHT)
@@ -26,7 +27,8 @@ class COCODemo(object):
         )
 
         self.cpu_device = torch.device("cpu")
-        self.confidence_threshold = confidence_threshold
+        self.input_format = cfg.INPUT.FORMAT
+        assert self.input_format in ["RGB", "BGR"]
         self.stuff_area_threshold = stuff_area_threshold
 
     def run_on_image(self, image):
@@ -36,14 +38,13 @@ class COCODemo(object):
                 This is the format used by OpenCV.
 
         Returns:
-            predictions (Instances): the detected objects.
+            predictions (dict): the output of the model.
             vis_output (VisImage): the visualized image output.
         """
         vis_output = None
         predictions = self.compute_predictions(image)
         # Convert image from OpenCV BGR format to Matplotlib RGB format.
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        image = torch.tensor(image)
+        image = torch.tensor(image).flip([2])
         visualizer = Visualizer(image, self.metadata)
         if "panoptic_seg" in predictions:
             panoptic_seg, segments_info = predictions["panoptic_seg"]
@@ -58,11 +59,9 @@ class COCODemo(object):
                     coloring_mode=ColoringMode.SEGMENTATION_FOCUSED,
                 )
             if "instances" in predictions:
-                predictions = self.select_top_predictions(
-                    predictions["instances"].to(self.cpu_device)
-                )
+                instances = predictions["instances"].to(self.cpu_device)
                 vis_output = visualizer.draw_instance_predictions(
-                    predictions=predictions.to("cpu"), coloring_mode=ColoringMode.IMAGE_FOCUSED
+                    predictions=instances, coloring_mode=ColoringMode.IMAGE_FOCUSED
                 )
 
         return predictions, vis_output
@@ -108,9 +107,7 @@ class COCODemo(object):
 
                     vis_frame = None
                     if "instances" in predictions:
-                        predictions = self.select_top_predictions(
-                            predictions["instances"].to(self.cpu_device)
-                        )
+                        predictions = predictions["instances"].to(self.cpu_device)
                         vis_frame = video_visualizer.draw_instance_predictions(
                             frame=frame, predictions=predictions.to("cpu")
                         )
@@ -133,6 +130,7 @@ class COCODemo(object):
             video_file.release()
         cv2.destroyAllWindows()
 
+    @torch.no_grad()
     def compute_predictions(self, original_image):
         """
         Arguments:
@@ -143,34 +141,12 @@ class COCODemo(object):
         """
         # apply pre-processing to image
         # whether the model expects BGR inputs or RGB
-        if self.cfg.INPUT.FORMAT == "RGB":
+        if self.input_format == "RGB":
             original_image = original_image[:, :, ::-1]
         height, width = original_image.shape[:2]
         image = self.transform_gen.get_transform(original_image).apply_image(original_image)
         image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
 
         inputs = {"image": image, "height": height, "width": width}
-        # compute predictions
-        with torch.no_grad():
-            predictions = self.model([inputs])
-        # there is only a single image
-        predictions = predictions[0]
+        predictions = self.model([inputs])[0]
         return predictions
-
-    def select_top_predictions(self, predictions):
-        """
-        Select only predictions which have a `score` > self.confidence_threshold,
-        and returns the predictions in descending order of score
-
-        Args:
-            predictions (Instances): the result of the computation by the model.
-
-        Returns:
-            predictions (Instances): the detected objects.
-        """
-        scores = predictions.scores
-        keep = torch.nonzero(scores > self.confidence_threshold).squeeze(1)
-        predictions = predictions[keep]
-        scores = predictions.scores
-        _, idx = scores.sort(0, descending=True)
-        return predictions[idx]
