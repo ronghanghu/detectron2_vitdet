@@ -3,8 +3,8 @@ import cv2
 import torch
 
 import detectron2.data.transforms as T
-from detectron2.data import MetadataCatalog
 from detectron2.checkpoint import DetectionCheckpointer
+from detectron2.data import MetadataCatalog
 from detectron2.modeling import build_model
 from detectron2.utils.video_visualizer import VideoVisualizer
 from detectron2.utils.visualizer import ColoringMode, Visualizer

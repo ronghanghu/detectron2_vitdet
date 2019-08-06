@@ -404,11 +404,6 @@ def _evaluate_predictions_on_coco(
         logger.warn("No predictions from the model! Set scores to -1")
         return {metric: -1 for metric in metrics}
 
-    # TODO: remove this hack (https://github.com/cocodataset/cocoapi/issues/49)
-    from pycocotools import coco
-
-    coco.unicode = str
-
     coco_dt = coco_gt.loadRes(coco_results)
     if iou_type == "densepose":
         coco_eval = DensePoseCocoEval(coco_gt, coco_dt, iou_type)

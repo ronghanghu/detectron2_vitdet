@@ -15,9 +15,6 @@ this file as an example of how to use the library.
 You may want to write your own script with your datasets and other customizations.
 """
 
-# Set up custom environment before anything else is imported
-from detectron2.utils.env import setup_environment  # noqa F401 isort:skip
-
 import argparse
 import logging
 import os

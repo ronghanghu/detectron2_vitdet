@@ -1,3 +1,5 @@
+import torch
+
 from .backbone import (
     BACKBONE_REGISTRY,
     FPN,
@@ -33,3 +35,7 @@ from .roi_heads import (
     build_roi_heads,
 )
 from .test_time_augmentation import DatasetMapperTTA, GeneralizedRCNNWithTTA
+
+assert (
+    torch.Tensor([1]) == torch.Tensor([2])
+).dtype == torch.bool, "Your Pytorch is too old. Please update to contain https://github.com/pytorch/pytorch/pull/21113"
