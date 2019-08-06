@@ -356,7 +356,7 @@ _C.MODEL.ROI_DENSEPOSE_HEAD.POINT_REGRESSION_WEIGHTS = 0.1
 # Semantic Segmenation Head
 # ---------------------------------------------------------------------------- #
 _C.MODEL.SEM_SEG_HEAD = CN()
-_C.MODEL.SEM_SEG_HEAD.NAME = "SemSegHead"
+_C.MODEL.SEM_SEG_HEAD.NAME = "SemSegFPNHead"
 _C.MODEL.SEM_SEG_HEAD.IN_FEATURES = ["p2", "p3", "p4", "p5"]
 # Label in the semantic segmentation ground truth that is ignored, i.e., no loss is calculated for
 # the correposnding pixel.

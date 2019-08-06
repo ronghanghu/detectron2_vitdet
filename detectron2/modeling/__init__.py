@@ -10,12 +10,14 @@ from .backbone import (
 )
 from .meta_arch import (
     META_ARCH_REGISTRY,
+    SEM_SEG_HEADS_REGISTRY,
     GeneralizedRCNN,
     PanopticFPN,
     ProposalNetwork,
     RetinaNet,
     SemanticSegmentor,
     build_model,
+    build_sem_seg_head,
 )
 from .postprocessing import detector_postprocess, sem_seg_postprocess
 from .roi_heads import (
@@ -30,5 +32,4 @@ from .roi_heads import (
     build_mask_head,
     build_roi_heads,
 )
-from .sem_seg_heads import SEM_SEG_HEADS_REGISTRY, build_sem_seg_head
 from .test_time_augmentation import DatasetMapperTTA, GeneralizedRCNNWithTTA
