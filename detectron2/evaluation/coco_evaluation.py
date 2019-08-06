@@ -14,9 +14,9 @@ from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 from tabulate import tabulate
 
+import detectron2.utils.comm as comm
 from detectron2.data import MetadataCatalog
 from detectron2.structures import Boxes, BoxMode, pairwise_iou
-from detectron2.utils.comm import all_gather, is_main_process, synchronize
 
 from .densepose_coco_evaluation import DensePoseCocoEval
 from .evaluator import DatasetEvaluator
@@ -108,11 +108,11 @@ class COCOEvaluator(DatasetEvaluator):
 
     def evaluate(self):
         if self._distributed:
-            synchronize()
-            self._predictions = all_gather(self._predictions)
+            comm.synchronize()
+            self._predictions = comm.gather(self._predictions, dst=0)
             self._predictions = list(itertools.chain(*self._predictions))
 
-            if not is_main_process():
+            if not comm.is_main_process():
                 return
 
         if len(self._predictions) == 0:

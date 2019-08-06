@@ -85,31 +85,21 @@ def _get_global_gloo_group():
     return dist.new_group(backend="gloo")
 
 
-def all_gather(data, device="cpu"):
+def _get_group_for_device(device):
     """
-    Run all_gather on arbitrary picklable data (not necessarily tensors)
-
     Args:
-        data: any picklable object
-        device (str): either "cpu" or "cuda"
-
-    Returns:
-        list[data]: list of data gathered from each rank
+        device (str): cpu or cuda
     """
     assert device in ["cpu", "cuda"], device
-
-    world_size = get_world_size()
-    if world_size == 1:
-        return [data]
-
     assert not (device == "cuda" and dist.get_backend() != "nccl"), (device, dist.get_backend())
     if device == "cpu" and dist.get_backend() == "nccl":
         group = _get_global_gloo_group()
     else:
         group = dist.group.WORLD
-    device = torch.device(device)
+    return group
 
-    # serialized to a Tensor
+
+def _serialize_to_tensor(data, device):
     buffer = pickle.dumps(data)
     if len(buffer) > 1024 ** 3:
         logger = logging.getLogger(__name__)
@@ -120,23 +110,58 @@ def all_gather(data, device="cpu"):
         )
     storage = torch.ByteStorage.from_buffer(buffer)
     tensor = torch.ByteTensor(storage).to(device=device)
+    return tensor
 
-    # obtain Tensor size of each rank
-    local_size = torch.tensor([tensor.numel()], dtype=torch.int64, device=device)
-    size_list = [torch.zeros([1], dtype=torch.int64, device=device) for _ in range(world_size)]
+
+def _pad_to_largest_tensor(tensor, group):
+    """
+    Returns:
+        list[int]: size of the tensor, on each rank
+        Tensor: padded tensor that has the max size
+    """
+    world_size = get_world_size()
+    local_size = torch.tensor([tensor.numel()], dtype=torch.int64, device=tensor.device)
+    size_list = [
+        torch.zeros([1], dtype=torch.int64, device=tensor.device) for _ in range(world_size)
+    ]
     dist.all_gather(size_list, local_size, group=group)
     size_list = [int(size.item()) for size in size_list]
+
+    max_size = max(size_list)
+
+    # we pad the tensor because torch all_gather does not support
+    # gathering tensors of different shapes
+    if local_size != max_size:
+        padding = torch.zeros((max_size - local_size,), dtype=torch.uint8, device=tensor.device)
+        tensor = torch.cat((tensor, padding), dim=0)
+    return size_list, tensor
+
+
+def all_gather(data, device="cpu"):
+    """
+    Run all_gather on arbitrary picklable data (not necessarily tensors)
+    across all ranks.
+
+    Args:
+        data: any picklable object
+        device (str): either "cpu" or "cuda"
+
+    Returns:
+        list[data]: list of data gathered from each rank
+    """
+    world_size = get_world_size()
+    if world_size == 1:
+        return [data]
+
+    group = _get_group_for_device(device)
+    device = torch.device(device)
+    tensor = _serialize_to_tensor(data, device)
+
+    size_list, tensor = _pad_to_largest_tensor(tensor, group)
     max_size = max(size_list)
 
     # receiving Tensor from all ranks
-    # we pad the tensor because torch all_gather does not support
-    # gathering tensors of different shapes
-    tensor_list = []
-    for _ in size_list:
-        tensor_list.append(torch.empty((max_size,), dtype=torch.uint8, device=device))
-    if local_size != max_size:
-        padding = torch.zeros((max_size - local_size,), dtype=torch.uint8, device=device)
-        tensor = torch.cat((tensor, padding), dim=0)
+    tensor_list = [torch.empty((max_size,), dtype=torch.uint8, device=device) for _ in size_list]
     dist.all_gather(tensor_list, tensor, group=group)
 
     data_list = []
@@ -145,6 +170,49 @@ def all_gather(data, device="cpu"):
         data_list.append(pickle.loads(buffer))
 
     return data_list
+
+
+def gather(data, device="cpu", dst=0):
+    """
+    Run gather on arbitrary picklable data (not necessarily tensors)
+    across all ranks.
+
+    Args:
+        data: any picklable object
+        device (str): either "cpu" or "cuda"
+        dst (int): destination rank
+
+    Returns:
+        list[data]: on dst, a list of data gathered from each rank. Otherwise,
+            an empty list.
+    """
+    world_size = get_world_size()
+    if world_size == 1:
+        return [data]
+    rank = get_rank()
+
+    group = _get_group_for_device(device)
+    device = torch.device(device)
+    tensor = _serialize_to_tensor(data, device)
+
+    size_list, tensor = _pad_to_largest_tensor(tensor, group)
+
+    # receiving Tensor from all ranks
+    if rank == dst:
+        max_size = max(size_list)
+        tensor_list = [
+            torch.empty((max_size,), dtype=torch.uint8, device=device) for _ in size_list
+        ]
+        dist.gather(tensor, tensor_list, dst=dst, group=group)
+
+        data_list = []
+        for size, tensor in zip(size_list, tensor_list):
+            buffer = tensor.cpu().numpy().tobytes()[:size]
+            data_list.append(pickle.loads(buffer))
+        return data_list
+    else:
+        dist.gather(tensor, [], dst=dst, group=group)
+        return []
 
 
 def reduce_dict(input_dict, average=True):

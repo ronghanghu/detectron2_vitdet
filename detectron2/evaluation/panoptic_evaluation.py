@@ -77,7 +77,7 @@ class COCOPanopticEvaluator(DatasetEvaluator):
     def evaluate(self):
         comm.synchronize()
 
-        self._predictions = comm.all_gather(self._predictions)
+        self._predictions = comm.gather(self._predictions)
         self._predictions = list(itertools.chain(*self._predictions))
 
         if not comm.is_main_process():

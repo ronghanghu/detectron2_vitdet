@@ -64,7 +64,9 @@ class Metadata(types.SimpleNamespace):
 
     def __getattr__(self, key):
         raise AttributeError(
-            "Attribute '{}' does not exist in the metadata of '{}'".format(key, self.name)
+            "Attribute '{}' does not exist in the metadata of '{}'. Available keys are {}.".format(
+                key, self.name, str(self.__dict__.keys())
+            )
         )
 
     def __setattr__(self, key, val):
