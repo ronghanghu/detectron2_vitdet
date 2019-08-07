@@ -1,8 +1,7 @@
 #include <ATen/ATen.h>
 #include <ATen/cuda/CUDAContext.h>
-
-#include <THC/THC.h>
-#include <THC/THCDeviceUtils.cuh>
+#include <c10/cuda/CUDAGuard.h>
+#include <ATen/cuda/CUDAApplyUtils.cuh>
 
 #include <vector>
 
@@ -59,7 +58,7 @@ __global__ void nms_kernel(const int n_boxes, const float nms_overlap_thresh,
         t |= 1ULL << i;
       }
     }
-    const int col_blocks = THCCeilDiv(n_boxes, threadsPerBlock);
+    const int col_blocks = at::cuda::ATenCeilDiv(n_boxes, threadsPerBlock);
     dev_mask[cur_box_idx * col_blocks + col_start] = t;
   }
 }
@@ -67,38 +66,32 @@ __global__ void nms_kernel(const int n_boxes, const float nms_overlap_thresh,
 // boxes is a N x 5 tensor
 at::Tensor nms_cuda(const at::Tensor& boxes, float nms_overlap_thresh) {
   using scalar_t = float;
-  AT_ASSERTM(boxes.type().is_cuda(), "boxes must be a CUDA tensor");
+  AT_ASSERTM(boxes.device().is_cuda(), "boxes must be a CUDA tensor");
+  at::cuda::CUDAGuard device_guard(boxes.device());
+
   auto scores = boxes.select(1, 4);
   auto order_t = std::get<1>(scores.sort(0, /* descending=*/true));
   auto boxes_sorted = boxes.index_select(0, order_t);
 
   int boxes_num = boxes.size(0);
 
-  const int col_blocks = THCCeilDiv(boxes_num, threadsPerBlock);
+  const int col_blocks = at::cuda::ATenCeilDiv(boxes_num, threadsPerBlock);
 
-  scalar_t* boxes_dev = boxes_sorted.data<scalar_t>();
+  at::Tensor mask =
+      at::empty({boxes_num * col_blocks}, boxes.options().dtype(at::kLong));
 
-  THCState *state = at::globalContext().lazyInitCUDA(); // TODO replace with getTHCState
-
-  unsigned long long* mask_dev = nullptr;
-  //THCudaCheck(THCudaMalloc(state, (void**) &mask_dev,
-  //                      boxes_num * col_blocks * sizeof(unsigned long long)));
-
-  mask_dev = (unsigned long long*) THCudaMalloc(state, boxes_num * col_blocks * sizeof(unsigned long long));
-
-  dim3 blocks(THCCeilDiv(boxes_num, threadsPerBlock),
-              THCCeilDiv(boxes_num, threadsPerBlock));
+  dim3 blocks(col_blocks, col_blocks);
   dim3 threads(threadsPerBlock);
-  nms_kernel<<<blocks, threads>>>(boxes_num,
-                                  nms_overlap_thresh,
-                                  boxes_dev,
-                                  mask_dev);
+  cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
-  std::vector<unsigned long long> mask_host(boxes_num * col_blocks);
-  THCudaCheck(cudaMemcpy(mask_host.data(),
-                        mask_dev,
-                        sizeof(unsigned long long) * boxes_num * col_blocks,
-                        cudaMemcpyDeviceToHost));
+  nms_kernel<<<blocks, threads, 0, stream>>>(
+        boxes_num,
+        nms_overlap_thresh,
+        boxes_sorted.data<scalar_t>(),
+        (unsigned long long*)mask.data<int64_t>());
+
+  at::Tensor mask_cpu = mask.to(at::kCPU);
+  unsigned long long* mask_host = (unsigned long long*)mask_cpu.data<int64_t>();
 
   std::vector<unsigned long long> remv(col_blocks);
   memset(remv.data(), 0, sizeof(unsigned long long) * col_blocks);
@@ -113,14 +106,16 @@ at::Tensor nms_cuda(const at::Tensor& boxes, float nms_overlap_thresh) {
 
     if (!(remv[nblock] & (1ULL << inblock))) {
       keep_out[num_to_keep++] = i;
-      unsigned long long *p = mask_host.data() + i * col_blocks;
+      unsigned long long *p = mask_host + i * col_blocks;
       for (int j = nblock; j < col_blocks; j++) {
         remv[j] |= p[j];
       }
     }
   }
 
-  THCudaFree(state, mask_dev);
+
+  AT_CUDA_CHECK(cudaGetLastError());
+
   return order_t.index({
               keep.narrow(/*dim=*/0, /*start=*/0, /*length=*/num_to_keep).to(order_t.device(), keep.scalar_type())
           });

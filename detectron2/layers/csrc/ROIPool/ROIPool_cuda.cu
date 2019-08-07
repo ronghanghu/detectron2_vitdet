@@ -1,9 +1,8 @@
 #include <ATen/ATen.h>
 #include <ATen/cuda/CUDAContext.h>
+#include <c10/cuda/CUDAGuard.h>
+#include <ATen/cuda/CUDAApplyUtils.cuh>
 
-#include <THC/THC.h>
-#include <THC/THCAtomics.cuh>
-#include <THC/THCDeviceUtils.cuh>
 
 
 // TODO make it in a common file
@@ -111,8 +110,16 @@ std::tuple<at::Tensor, at::Tensor> ROIPool_forward_cuda(const at::Tensor& input,
                                 const float spatial_scale,
                                 const int pooled_height,
                                 const int pooled_width) {
-  AT_ASSERTM(input.type().is_cuda(), "input must be a CUDA tensor");
-  AT_ASSERTM(rois.type().is_cuda(), "rois must be a CUDA tensor");
+  AT_ASSERTM(input.device().is_cuda(), "input must be a CUDA tensor");
+  AT_ASSERTM(rois.device().is_cuda(), "rois must be a CUDA tensor");
+  at::TensorArg input_t{input, "input", 1}, rois_t{rois, "rois", 2};
+
+  at::CheckedFrom c = "ROIPool_forward_cuda";
+  at::checkAllSameGPU(c, {input_t, rois_t});
+  at::checkAllSameType(c, {input_t, rois_t});
+
+  at::cuda::CUDAGuard device_guard(input.device());
+
 
   auto num_rois = rois.size(0);
   auto channels = input.size(1);
@@ -125,11 +132,11 @@ std::tuple<at::Tensor, at::Tensor> ROIPool_forward_cuda(const at::Tensor& input,
 
   cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
-  dim3 grid(std::min(THCCeilDiv(output_size, 512L), 4096L));
+  dim3 grid(std::min(at::cuda::ATenCeilDiv(output_size, 512L), 4096L));
   dim3 block(512);
 
   if (output.numel() == 0) {
-    THCudaCheck(cudaGetLastError());
+    AT_CUDA_CHECK(cudaGetLastError());
     return std::make_tuple(output, argmax);
   }
 
@@ -147,7 +154,7 @@ std::tuple<at::Tensor, at::Tensor> ROIPool_forward_cuda(const at::Tensor& input,
          output.data<scalar_t>(),
          argmax.data<int>());
   });
-  THCudaCheck(cudaGetLastError());
+  AT_CUDA_CHECK(cudaGetLastError());
   return std::make_tuple(output, argmax);
 }
 
@@ -163,21 +170,29 @@ at::Tensor ROIPool_backward_cuda(const at::Tensor& grad,
                                  const int channels,
                                  const int height,
                                  const int width) {
-  AT_ASSERTM(grad.type().is_cuda(), "grad must be a CUDA tensor");
-  AT_ASSERTM(rois.type().is_cuda(), "rois must be a CUDA tensor");
-  // TODO add more checks
+  AT_ASSERTM(grad.device().is_cuda(), "grad must be a CUDA tensor");
+  AT_ASSERTM(rois.device().is_cuda(), "rois must be a CUDA tensor");
+  at::TensorArg grad_t{grad, "grad", 1},
+    rois_t{rois, "rois", 2},
+    argmax_t{argmax, "argmax", 3};
+
+  at::CheckedFrom c = "ROIPool_backward_cuda";
+  at::checkAllSameGPU(c, {grad_t, rois_t, argmax_t});
+  at::checkAllSameType(c, {grad_t, rois_t});
+
+  at::cuda::CUDAGuard device_guard(grad.device());
 
   auto num_rois = rois.size(0);
   auto grad_input = at::zeros({batch_size, channels, height, width}, grad.options());
 
   cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
-  dim3 grid(std::min(THCCeilDiv(grad.numel(), 512L), 4096L));
+  dim3 grid(std::min(at::cuda::ATenCeilDiv(grad.numel(), 512L), 4096L));
   dim3 block(512);
 
   // handle possibly empty gradients
   if (grad.numel() == 0) {
-    THCudaCheck(cudaGetLastError());
+    AT_CUDA_CHECK(cudaGetLastError());
     return grad_input;
   }
 
@@ -196,6 +211,6 @@ at::Tensor ROIPool_backward_cuda(const at::Tensor& grad,
          grad_input.data<scalar_t>(),
          rois.contiguous().data<scalar_t>());
   });
-  THCudaCheck(cudaGetLastError());
+  AT_CUDA_CHECK(cudaGetLastError());
   return grad_input;
 }
