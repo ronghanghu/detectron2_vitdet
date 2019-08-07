@@ -19,8 +19,9 @@ import scipy.spatial.distance as ssd
 from pycocotools import mask as maskUtils
 from scipy.io import loadmat
 
-from detectron2.structures.densepose import DensePoseResult
 from detectron2.utils.file_io import PathManager
+
+from .structures import DensePoseResult
 
 logger = logging.getLogger(__name__)
 

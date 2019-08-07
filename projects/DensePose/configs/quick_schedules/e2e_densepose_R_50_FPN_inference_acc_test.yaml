@@ -5,4 +5,4 @@ DATASETS:
   TRAIN: ()
   TEST: ("densepose_coco_2014_minival_100",)
 TEST:
-  EXPECTED_RESULTS: [["bbox", "AP", 56.05, 0.02], ["densepose", "AP",  46.54, 0.02]]
+  EXPECTED_RESULTS: [["bbox", "AP", 56.05, 0.025], ["densepose", "AP",  46.54, 0.02]]

@@ -19,7 +19,6 @@ from detectron2.data import MetadataCatalog
 from detectron2.structures import Boxes, BoxMode, pairwise_iou
 from detectron2.utils.file_io import PathManager
 
-from .densepose_coco_evaluation import DensePoseCocoEval
 from .evaluator import DatasetEvaluator
 
 
@@ -68,8 +67,6 @@ class COCOEvaluator(DatasetEvaluator):
             tasks = tasks + ("segm",)
         if cfg.MODEL.KEYPOINT_ON:
             tasks = tasks + ("keypoints",)
-        if cfg.MODEL.DENSEPOSE_ON:
-            tasks = tasks + ("densepose",)
         return tasks
 
     def process(self, inputs, outputs):
@@ -103,7 +100,8 @@ class COCOEvaluator(DatasetEvaluator):
                         rle["counts"] = rle["counts"].decode("utf-8")
                     instances.pred_masks_rle = rles
                     instances.remove("pred_masks")
-                prediction["instances"] = instances
+
+                prediction["instances"] = instances_to_json(instances, input["image_id"])
             if "proposals" in output:
                 prediction["proposals"] = output["proposals"].to(self._cpu_device)
             self._predictions.append(prediction)
@@ -140,7 +138,7 @@ class COCOEvaluator(DatasetEvaluator):
         Fill self._results with the metrics of the tasks.
         """
         self._logger.info("Preparing results for COCO format ...")
-        self._coco_results = prepare_for_coco_evaluation(self._predictions)
+        self._coco_results = list(itertools.chain(*[x["instances"] for x in self._predictions]))
 
         # unmap the category ids for COCO
         if hasattr(self._metadata, "dataset_id_to_contiguous_id"):
@@ -213,59 +211,46 @@ def prepare_for_coco_evaluation(dataset_predictions):
     Returns:
         list[dict]: the format used by COCO evaluation.
     """
-    coco_results = []
-    processed_ids = {}
-    for prediction_dict in dataset_predictions:
-        img_id = prediction_dict["image_id"]
-        if img_id in processed_ids:
-            # The same image may be processed multiple times due to the underlying
-            # dataset sampler, such as torch.utils.data.distributed.DistributedSampler:
-            # https://git.io/fhScl
-            continue
-        processed_ids[img_id] = True
-        predictions = prediction_dict["instances"]
-        num_instance = len(predictions)
-        if num_instance == 0:
-            continue
 
-        boxes = predictions.pred_boxes.tensor.numpy()
-        boxes = BoxMode.convert(boxes, BoxMode.XYXY_ABS, BoxMode.XYWH_ABS)
-        boxes = boxes.tolist()
-        scores = predictions.scores.tolist()
-        classes = predictions.pred_classes.tolist()
 
-        has_mask = predictions.has("pred_masks_rle")
+def instances_to_json(instances, img_id):
+    num_instance = len(instances)
+    if num_instance == 0:
+        return []
+
+    boxes = instances.pred_boxes.tensor.numpy()
+    boxes = BoxMode.convert(boxes, BoxMode.XYXY_ABS, BoxMode.XYWH_ABS)
+    boxes = boxes.tolist()
+    scores = instances.scores.tolist()
+    classes = instances.pred_classes.tolist()
+
+    has_mask = instances.has("pred_masks_rle")
+    if has_mask:
+        rles = instances.pred_masks_rle
+
+    has_keypoints = instances.has("pred_keypoints")
+    if has_keypoints:
+        keypoints = instances.pred_keypoints
+
+    results = []
+    for k in range(num_instance):
+        result = {
+            "image_id": img_id,
+            "category_id": classes[k],
+            "bbox": boxes[k],
+            "score": scores[k],
+        }
         if has_mask:
-            rles = predictions.pred_masks_rle
-
-        has_keypoints = predictions.has("pred_keypoints")
+            result["segmentation"] = rles[k]
         if has_keypoints:
-            keypoints = predictions.pred_keypoints
-
-        has_densepose = predictions.has("densepose")
-        if has_densepose:
-            densepose = predictions.densepose
-
-        for k in range(num_instance):
-            result = {
-                "image_id": img_id,
-                "category_id": classes[k],
-                "bbox": boxes[k],
-                "score": scores[k],
-            }
-            if has_mask:
-                result["segmentation"] = rles[k]
-            if has_keypoints:
-                # In COCO annotations,
-                # keypoints coordinates are pixel indices.
-                # However our predictions are floating point coordinates.
-                # Therefore we subtract 0.5 to be consistent with the annotation format.
-                keypoints[k][:, :2] -= 0.5
-                result["keypoints"] = keypoints[k].flatten().tolist()
-            if has_densepose:
-                result["densepose"] = densepose[k]
-            coco_results.append(result)
-    return coco_results
+            # In COCO annotations,
+            # keypoints coordinates are pixel indices.
+            # However our predictions are floating point coordinates.
+            # Therefore we subtract 0.5 to be consistent with the annotation format.
+            keypoints[k][:, :2] -= 0.5
+            result["keypoints"] = keypoints[k].flatten().tolist()
+        results.append(result)
+    return results
 
 
 # inspired from Detectron:
@@ -396,7 +381,6 @@ def _evaluate_predictions_on_coco(
         "bbox": ["AP", "AP50", "AP75", "APs", "APm", "APl"],
         "segm": ["AP", "AP50", "AP75", "APs", "APm", "APl"],
         "keypoints": ["AP", "AP50", "AP75", "APm", "APl"],
-        "densepose": ["AP", "AP50", "AP75", "APm", "APl"],
     }[iou_type]
 
     logger = logging.getLogger(__name__)
@@ -406,10 +390,7 @@ def _evaluate_predictions_on_coco(
         return {metric: -1 for metric in metrics}
 
     coco_dt = coco_gt.loadRes(coco_results)
-    if iou_type == "densepose":
-        coco_eval = DensePoseCocoEval(coco_gt, coco_dt, iou_type)
-    else:
-        coco_eval = COCOeval(coco_gt, coco_dt, iou_type)
+    coco_eval = COCOeval(coco_gt, coco_dt, iou_type)
     # Use the COCO default keypoint OKS sigmas unless overrides are specified
     if kpt_oks_sigmas:
         coco_eval.params.kpt_oks_sigmas = np.array(kpt_oks_sigmas)

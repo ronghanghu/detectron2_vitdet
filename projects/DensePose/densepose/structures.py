@@ -108,7 +108,7 @@ class DensePoseDataRelative(object):
             poly_i = poly_specs[i]
             if poly_i:
                 mask_i = mask_utils.decode(poly_i)
-                segm[(mask_i > 0).astype(np.uint8)] = i + 1
+                segm[mask_i > 0] = i + 1
         return segm
 
     @staticmethod
@@ -143,9 +143,9 @@ class DensePoseDataRelative(object):
         self._transform_segm(transforms, densepose_transform_data)
 
     def _transform_pts(self, transforms, dp_transform_data):
-        # NOTE: This assumes that HorizFlipTransform is the only one that does flip
         import detectron2.data.transforms as T
 
+        # NOTE: This assumes that HorizFlipTransform is the only one that does flip
         do_hflip = sum(isinstance(t, T.HFlipTransform) for t in transforms.transforms) % 2 == 1
         if do_hflip:
             self.x = self.segm.size(1) - self.x
@@ -165,9 +165,9 @@ class DensePoseDataRelative(object):
                 self.v[annot_indices_i] = uv_symmetries["V_transforms"][i][v_loc, u_loc]
 
     def _transform_segm(self, transforms, dp_transform_data):
-        # NOTE: This assumes that HorizFlipTransform is the only one that does flip
         import detectron2.data.transforms as T
 
+        # NOTE: This assumes that HorizFlipTransform is the only one that does flip
         do_hflip = sum(isinstance(t, T.HFlipTransform) for t in transforms.transforms) % 2 == 1
         if do_hflip:
             self.segm = torch.flip(self.segm, [1])
@@ -361,21 +361,22 @@ class DensePoseResult(object):
         assert (
             len(S.size()) == 4
         ), "AnnIndex tensor size should have {} " "dimensions but has {}".format(4, len(S.size()))
-        s_bbox = F.interpolate(S, (h, w), mode="bilinear").argmax(dim=1)
+        s_bbox = F.interpolate(S, (h, w), mode="bilinear", align_corners=False).argmax(dim=1)
         assert (
             len(I.size()) == 4
         ), "IndexUV tensor size should have {} " "dimensions but has {}".format(4, len(S.size()))
         i_bbox = (
-            F.interpolate(I, (h, w), mode="bilinear").argmax(dim=1) * (s_bbox > 0).long()
+            F.interpolate(I, (h, w), mode="bilinear", align_corners=False).argmax(dim=1)
+            * (s_bbox > 0).long()
         ).squeeze(0)
         assert len(U.size()) == 4, "U tensor size should have {} " "dimensions but has {}".format(
             4, len(U.size())
         )
-        u_bbox = F.interpolate(U, (h, w), mode="bilinear")
+        u_bbox = F.interpolate(U, (h, w), mode="bilinear", align_corners=False)
         assert len(V.size()) == 4, "V tensor size should have {} " "dimensions but has {}".format(
             4, len(V.size())
         )
-        v_bbox = F.interpolate(V, (h, w), mode="bilinear")
+        v_bbox = F.interpolate(V, (h, w), mode="bilinear", align_corners=False)
         result[0] = i_bbox
         for part_id in range(1, u_bbox.size(1)):
             result[1][i_bbox == part_id] = (

@@ -3,12 +3,10 @@ import numpy as np
 import torch
 from PIL import Image
 
-from detectron2.structures import DensePoseDataRelative, DensePoseTransformData
 from detectron2.utils.file_io import PathManager
 
 from . import detection_utils as utils
 from . import transforms as T
-from .catalog import MetadataCatalog
 
 """
 This file contains the default mapping that's applied to "dataset dicts".
@@ -38,7 +36,6 @@ class DatasetMapper:
         self.img_format     = cfg.INPUT.FORMAT
         self.mask_on        = cfg.MODEL.MASK_ON
         self.keypoint_on    = cfg.MODEL.KEYPOINT_ON
-        self.densepose_on   = cfg.MODEL.DENSEPOSE_ON
         self.load_proposals = cfg.MODEL.LOAD_PROPOSALS
         # fmt: on
         if self.keypoint_on and is_train:
@@ -46,25 +43,6 @@ class DatasetMapper:
             self.keypoint_hflip_indices = utils.create_keypoint_hflip_indices(cfg.DATASETS.TRAIN)
         else:
             self.keypoint_hflip_indices = None
-
-        # TODO: this is temporary. We're aiming to gradually refactor
-        # densepose to become "user code"
-        # instead of injecting it inside detectron2 in many places.
-        if self.densepose_on:
-            densepose_transform_srcs = [
-                MetadataCatalog.get(ds).densepose_transform_src
-                for ds in cfg.DATASETS.TRAIN + cfg.DATASETS.TEST
-            ]
-            assert len(densepose_transform_srcs) > 0
-            # TODO: check that DensePose transformation data is the same for
-            # all the datasets. Otherwise one would have to pass DB ID with
-            # each entry to select proper transformation data. For now, since
-            # all DensePose annotated data uses the same data semantics, we
-            # omit this check.
-            densepose_transform_data_fpath = PathManager.get_local_path(densepose_transform_srcs[0])
-            self.densepose_transform_data = DensePoseTransformData.load(
-                densepose_transform_data_fpath
-            )
 
         if self.load_proposals:
             self.min_box_side_len = cfg.MODEL.PROPOSAL_GENERATOR.MIN_SIZE
@@ -118,16 +96,9 @@ class DatasetMapper:
                     anno.pop("keypoints", None)
 
             # USER: Implement additional transformations if you have other types of data
-            # USER: Don't call transpose_densepose if you don't need
             annos = [
-                self._transform_densepose(
-                    utils.transform_instance_annotations(
-                        obj,
-                        transforms,
-                        image_shape,
-                        keypoint_hflip_indices=self.keypoint_hflip_indices,
-                    ),
-                    transforms,
+                utils.transform_instance_annotations(
+                    obj, transforms, image_shape, keypoint_hflip_indices=self.keypoint_hflip_indices
                 )
                 for obj in dataset_dict.pop("annotations")
                 if obj.get("iscrowd", 0) == 0
@@ -145,23 +116,3 @@ class DatasetMapper:
             dataset_dict["sem_seg_gt"] = sem_seg_gt
         # TODO find a better way to load panoptic data than using the "separate" dataset
         return dataset_dict
-
-    # TODO Keep it in this class for now since we'll move it to a separate directory
-    def _transform_densepose(self, annotation, transforms):
-        if not self.densepose_on:
-            return annotation
-
-        # Handle densepose annotations
-        is_valid, reason_not_valid = DensePoseDataRelative.validate_annotation(annotation)
-        if is_valid:
-            densepose_data = DensePoseDataRelative(annotation, cleanup=True)
-            densepose_data.apply_transform(transforms, self.densepose_transform_data)
-            annotation["densepose"] = densepose_data
-        else:
-            # logger = logging.getLogger(__name__)
-            # logger.debug("Could not load DensePose annotation: {}".format(reason_not_valid))
-            DensePoseDataRelative.cleanup_annotation(annotation)
-            # NOTE: annotations for certain instances may be unavailable.
-            # This is accepted by the DensePostList data structure.
-            annotation["densepose"] = None
-        return annotation

@@ -1,4 +1,4 @@
-_BASE_: "../Base-RCNN-FPN.yaml"
+_BASE_: "../Base-DensePose-RCNN.yaml"
 MODEL:
   WEIGHT: "catalog://ImageNetPretrained/MSRA/R-50"
   DENSEPOSE_ON: True

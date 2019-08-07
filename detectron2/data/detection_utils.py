@@ -9,7 +9,7 @@ import numpy as np
 import torch
 from PIL import Image
 
-from detectron2.structures import Boxes, BoxMode, DensePoseList, Instances, Keypoints, PolygonMasks
+from detectron2.structures import Boxes, BoxMode, Instances, Keypoints, PolygonMasks
 from detectron2.utils.file_io import PathManager
 
 from . import transforms as T
@@ -209,10 +209,6 @@ def annotations_to_instances(annos, image_size):
     if len(annos) and "keypoints" in annos[0]:
         kpts = [obj.get("keypoints", []) for obj in annos]
         target.gt_keypoints = Keypoints(kpts)
-
-    if len(annos) and "densepose" in annos[0]:
-        gt_densepose = [obj["densepose"] for obj in annos]
-        target.gt_densepose = DensePoseList(gt_densepose, boxes, image_size)
 
     return target
 
