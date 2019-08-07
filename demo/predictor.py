@@ -49,14 +49,15 @@ class COCODemo(object):
         if "panoptic_seg" in predictions:
             panoptic_seg, segments_info = predictions["panoptic_seg"]
             vis_output = visualizer.draw_panoptic_seg_predictions(
-                panoptic_seg, segments_info, area_limit=self.stuff_area_threshold
+                panoptic_seg.to(self.cpu_device),
+                segments_info,
+                area_limit=self.stuff_area_threshold,
             )
         else:
             if "sem_seg" in predictions:
                 vis_output = visualizer.draw_sem_seg_predictions(
-                    predictions=predictions["sem_seg"].to("cpu"),
+                    predictions=predictions["sem_seg"].argmax(dim=0).to(self.cpu_device),
                     area_limit=self.stuff_area_threshold,
-                    coloring_mode=ColoringMode.SEGMENTATION_FOCUSED,
                 )
             if "instances" in predictions:
                 instances = predictions["instances"].to(self.cpu_device)

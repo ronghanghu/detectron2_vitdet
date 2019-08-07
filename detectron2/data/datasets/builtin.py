@@ -207,14 +207,16 @@ KEYPOINT_CONNECTION_RULES = [
 
 
 def _get_coco_instances_meta():
-    things_ids = [k["id"] for k in COCO_CATEGORIES if k["isthing"] == 1]
-    assert len(things_ids) == 80, len(things_ids)
+    thing_ids = [k["id"] for k in COCO_CATEGORIES if k["isthing"] == 1]
+    thing_colors = [k["color"] for k in COCO_CATEGORIES if k["isthing"] == 1]
+    assert len(thing_ids) == 80, len(thing_ids)
     # Mapping from the incontiguous COCO category id to an id in [0, 79]
-    dataset_id_to_contiguous_id = {k: i for i, k in enumerate(things_ids)}
+    dataset_id_to_contiguous_id = {k: i for i, k in enumerate(thing_ids)}
     class_names = [k["name"] for k in COCO_CATEGORIES if k["isthing"] == 1]
     ret = {
         "dataset_id_to_contiguous_id": dataset_id_to_contiguous_id,
         "class_names": class_names,
+        "thing_colors": thing_colors,
         "categories": COCO_CATEGORIES,
     }
     return ret
@@ -233,15 +235,21 @@ def _get_coco_panoptic_separated_meta():
     stuff_contiguous_id_to_dataset_id = {i + 1: k for i, k in enumerate(stuff_ids)}
     # When converting COCO panoptic annotations to semantic annotations
     # We label the "thing" category to 0
-    stuff_contiguous_id_to_dataset_id[0] = 255
-    stuff_contiguous_id_to_dataset_id = stuff_contiguous_id_to_dataset_id
+    stuff_contiguous_id_to_dataset_id[0] = 0
 
     # 54 names for COCO stuff categories (including "things")
-    stuff_class_names = ["things"] + [k["name"] for k in COCO_CATEGORIES if k["isthing"] == 0]
-    stuff_class_names = stuff_class_names
+    stuff_class_names = ["things"] + [
+        k["name"].replace("-other", "").replace("-merged", "")
+        for k in COCO_CATEGORIES
+        if k["isthing"] == 0
+    ]
+
+    # NOTE: I randomly picked a color for things
+    stuff_colors = [[82, 18, 128]] + [k["color"] for k in COCO_CATEGORIES if k["isthing"] == 0]
     ret = {
         "stuff_contiguous_id_to_dataset_id": stuff_contiguous_id_to_dataset_id,
         "stuff_class_names": stuff_class_names,
+        "stuff_colors": stuff_colors,
         "categories": COCO_CATEGORIES,
     }
     ret.update(_get_coco_instances_meta())

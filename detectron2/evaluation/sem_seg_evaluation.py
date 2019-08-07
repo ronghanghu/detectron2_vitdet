@@ -68,7 +68,7 @@ class SemSegEvaluator(DatasetEvaluator):
                 segmentation prediction in the same format.
         """
         for input, output in zip(inputs, outputs):
-            output = output["sem_seg"].to(self._cpu_device)
+            output = output["sem_seg"].argmax(dim=0).to(self._cpu_device)
             pred = np.array(output, dtype=np.int)
             with PathManager.open(self.image_id_to_gt_file[input["image_id"]], "rb") as f:
                 gt = np.array(Image.open(f), dtype=np.int)

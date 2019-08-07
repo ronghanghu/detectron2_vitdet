@@ -121,7 +121,7 @@ class PanopticFPN(nn.Module):
             if self.combine_on:
                 panoptic_r = combine_semantic_and_instance_outputs(
                     detector_r,
-                    sem_seg_r,
+                    sem_seg_r.argmax(dim=0),
                     self.combine_overlap_threshold,
                     self.combine_stuff_area_limit,
                     self.combine_instances_confidence_threshold,
@@ -191,7 +191,7 @@ def combine_semantic_and_instance_outputs(
         )
 
     # Add semantic results to remaining empty areas
-    semantic_labels = torch.unique(semantic_results)
+    semantic_labels = torch.unique(semantic_results).cpu().tolist()
     for semantic_label in semantic_labels:
         if semantic_label == 0:  # 0 is a special "thing" class
             continue
@@ -202,7 +202,7 @@ def combine_semantic_and_instance_outputs(
         current_segment_id += 1
         panoptic_seg[mask] = current_segment_id
         segments_info.append(
-            {"id": current_segment_id, "isthing": False, "category_id": semantic_label.item()}
+            {"id": current_segment_id, "isthing": False, "category_id": semantic_label}
         )
 
     return panoptic_seg, segments_info
