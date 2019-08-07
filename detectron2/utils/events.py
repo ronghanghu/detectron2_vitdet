@@ -1,6 +1,7 @@
 import datetime
 import json
 import logging
+import os
 from collections import defaultdict
 import torch
 from borc.common.history_buffer import HistoryBuffer
@@ -77,6 +78,10 @@ class JSONWriter:
         to_save.update(storage.latest_with_smoothing_hint(self._window_size))
         self._file_handle.write(json.dumps(to_save, sort_keys=True) + "\n")
         self._file_handle.flush()
+        try:
+            os.fsync(self._file_handle.fileno())
+        except AttributeError:
+            pass
 
     def __del__(self):
         # not guaranteed to be called at exit, but probably fine
