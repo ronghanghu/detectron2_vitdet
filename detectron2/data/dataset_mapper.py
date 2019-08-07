@@ -61,7 +61,7 @@ class DatasetMapper:
             # each entry to select proper transformation data. For now, since
             # all DensePose annotated data uses the same data semantics, we
             # omit this check.
-            densepose_transform_data_fpath = PathManager.get_file_name(densepose_transform_srcs[0])
+            densepose_transform_data_fpath = PathManager.get_local_path(densepose_transform_srcs[0])
             self.densepose_transform_data = DensePoseTransformData.load(
                 densepose_transform_data_fpath
             )

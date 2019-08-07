@@ -92,9 +92,9 @@ class Checkpointer(object):
             # In that case it might be the best to just manually put the file
             # somewhere to use.
             if comm.is_main_process():
-                path = PathManager.get_file_name(path)
+                path = PathManager.get_local_path(path)
             comm.synchronize()
-            path = PathManager.get_file_name(path)
+            path = PathManager.get_local_path(path)
             assert os.path.isfile(path), "Checkpoint {} not found!".format(path)
         if os.path.isfile(path) and self.cache_on_load:
             cached_f = cache_file(path)

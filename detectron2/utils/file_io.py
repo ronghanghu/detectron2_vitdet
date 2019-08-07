@@ -42,35 +42,78 @@ class PathHandler(metaclass=ABCMeta):
         """
         pass
 
-    @abstractmethod
-    def _get_file_name(self, path):
+    def _get_local_path(self, path):
         """
         Returns:
-            str: a file name which exists on the file system.
+            str: a file path which exists on the local file system. This function
+                 can download/cache if the resource is located remotely.
         """
-        pass
+        return path
 
     def _open(self, path, mode="r"):
         """
         Returns:
             file: a file-like object.
         """
-        return open(self._get_file_name(path), mode)
+        raise NotImplementedError()
+
+    def _exists(self, path):
+        """
+        Returns:
+            bool: true if the path exists
+        """
+        raise NotImplementedError()
+
+    def _isfile(self, path):
+        """
+        Returns:
+            bool: true if the path is a file
+        """
+        raise NotImplementedError()
+
+    def _ls(self, path):
+        """
+        Returns:
+            List[str]: list of contents in given path
+        """
+        raise NotImplementedError()
+
+    def _mkdirs(self, path):
+        """
+        Creates path recursively
+        """
+        raise NotImplementedError()
 
     @staticmethod
     def _has_protocol(url, protocol):
         return url.startswith(protocol + "://")
 
 
-# Implement the handlers we need:
-
-
 class NativePathHandler(PathHandler):
     def _support(self, path):
+        return bool(path)
+
+    def _get_local_path(self, path):
+        return path
+
+    def _open(self, path, mode="r"):
+        return open(path, mode)
+
+    def _exists(self, path):
+        return os.path.exists(path)
+
+    def _isfile(self, path):
         return os.path.isfile(path)
 
-    def _get_file_name(self, path):
-        return path
+    def _ls(self, path):
+        return os.listdir(path)
+
+    def _mkdirs(self, path):
+        try:
+            os.makedirs(path)
+        except OSError as e:
+            if e.errno != os.errno.EEXIST:
+                raise
 
 
 class HTTPURLHandler(PathHandler):
@@ -78,17 +121,28 @@ class HTTPURLHandler(PathHandler):
     Download URLs and cache them to disk.
     """
 
+    def __init__(self):
+        self.cache_map = {}
+
     def _support(self, path):
         return any(self._has_protocol(path, k) for k in ["http", "https", "ftp"])
 
-    def _get_file_name(self, path):
-        logger = logging.getLogger(__name__)
+    def _get_local_path(self, path):
+        if path not in self.cache_map:
+            logger = logging.getLogger(__name__)
+            url = urlparse(path)
+            dirname = os.path.join(get_cache_dir(), os.path.dirname(url.path.lstrip("/")))
+            cached = download(path, dirname)
+            logger.info("URL {} cached in {}".format(path, cached))
+            self.cache_map[path] = cached
+        return self.cache_map[path]
 
-        url = urlparse(path)
-        dirname = os.path.join(get_cache_dir(), os.path.dirname(url.path.lstrip("/")))
-        cached = download(path, dirname)
-        logger.info("URL {} cached in {}".format(path, cached))
-        return cached
+    def _open(self, path, mode="r"):
+        assert mode in ("r", "rb"), "{} does not support open with {} mode".format(
+            self.__class__.__name__, mode
+        )
+        local_path = self._get_local_path(path)
+        return open(local_path, mode)
 
 
 class PathManager:
@@ -106,10 +160,38 @@ class PathManager:
         raise OSError("Unable to open {}".format(path))
 
     @staticmethod
-    def get_file_name(path):
+    def get_local_path(path):
         for h in PathManager._PATH_HANDLERS:
             if h._support(path):
-                return h._get_file_name(path)
+                return h._get_local_path(path)
+        raise OSError("Unable to lookup file name for {}".format(path))
+
+    @staticmethod
+    def exists(path):
+        for h in PathManager._PATH_HANDLERS:
+            if h._support(path):
+                return h._exists(path)
+        raise OSError("Unable to lookup file name for {}".format(path))
+
+    @staticmethod
+    def isfile(path):
+        for h in PathManager._PATH_HANDLERS:
+            if h._support(path):
+                return h._isfile(path)
+        raise OSError("Unable to lookup file name for {}".format(path))
+
+    @staticmethod
+    def ls(path):
+        for h in PathManager._PATH_HANDLERS:
+            if h._support(path):
+                return h._ls(path)
+        raise OSError("Unable to lookup file name for {}".format(path))
+
+    @staticmethod
+    def mkdirs(path):
+        for h in PathManager._PATH_HANDLERS:
+            if h._support(path):
+                return h._mkdirs(path)
         raise OSError("Unable to lookup file name for {}".format(path))
 
     @staticmethod
@@ -121,4 +203,4 @@ class PathManager:
             handler (PathHandler):
         """
         assert isinstance(handler, PathHandler), handler
-        PathManager._PATH_HANDLERS.append(handler)
+        PathManager._PATH_HANDLERS.insert(0, handler)
