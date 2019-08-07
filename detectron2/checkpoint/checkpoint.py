@@ -63,7 +63,8 @@ class Checkpointer(object):
         save_file = os.path.join(self.save_dir, basename)
         assert os.path.basename(save_file) == basename, basename
         self.logger.info("Saving checkpoint to {}".format(save_file))
-        torch.save(data, save_file)
+        with PathManager.open(save_file, "wb") as f:
+            torch.save(data, f)
         self.tag_last_checkpoint(basename)
 
     def load(self, path: str):
@@ -82,19 +83,7 @@ class Checkpointer(object):
             return {}
         self.logger.info("Loading checkpoint from {}".format(path))
         if not os.path.isfile(path):
-            # In case the file does not exist, PathManager is responsible to
-            # looking for the file.
-            # We let the main process look for the file first, since the file
-            # may need to be downloaded/cached.
-
-            # If you run distributed training on non-shared filesystem,
-            # this logic may not work for you. But what else can we do?
-            # In that case it might be the best to just manually put the file
-            # somewhere to use.
-            if comm.is_main_process():
-                path = PathManager.get_local_path(path)
-            comm.synchronize()
-            path = PathManager.get_local_path(path)
+            path = comm.dist_get_local_path(path)
             assert os.path.isfile(path), "Checkpoint {} not found!".format(path)
         if os.path.isfile(path) and self.cache_on_load:
             cached_f = cache_file(path)
@@ -119,7 +108,7 @@ class Checkpointer(object):
             bool: whether a checkpoint exists in the target directory
         """
         save_file = os.path.join(self.save_dir, "last_checkpoint")
-        return os.path.exists(save_file)
+        return PathManager.exists(save_file)
 
     def get_checkpoint_file(self):
         """
@@ -128,7 +117,7 @@ class Checkpointer(object):
         """
         save_file = os.path.join(self.save_dir, "last_checkpoint")
         try:
-            with open(save_file, "r") as f:
+            with PathManager.open(save_file, "r") as f:
                 last_saved = f.read().strip()
         except IOError:
             # if file doesn't exist, maybe because it has just been
@@ -143,8 +132,8 @@ class Checkpointer(object):
         """
         all_model_checkpoints = [
             os.path.join(self.save_dir, file)
-            for file in os.listdir(self.save_dir)
-            if os.path.isfile(os.path.join(self.save_dir, file)) and file.endswith(".pth")
+            for file in PathManager.ls(self.save_dir)
+            if PathManager.isfile(os.path.join(self.save_dir, file)) and file.endswith(".pth")
         ]
         return all_model_checkpoints
 
@@ -162,7 +151,7 @@ class Checkpointer(object):
 
     def tag_last_checkpoint(self, last_filename_basename):
         save_file = os.path.join(self.save_dir, "last_checkpoint")
-        with open(save_file, "w") as f:
+        with PathManager.open(save_file, "w") as f:
             f.write(last_filename_basename)
 
     def _load_file(self, f):
@@ -171,7 +160,7 @@ class Checkpointer(object):
         to support different formats.
 
         Args:
-            f (str): a file name
+            f (str): a locally mounted file path
         Returns:
             dict: with keys "model" and optionally others that are saved by the checkpointer
                 dict["model"] must be a dict which maps strings to torch.Tensor or numpy arrays.
