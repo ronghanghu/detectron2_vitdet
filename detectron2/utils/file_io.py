@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import errno
 import logging
 import os
 from abc import ABCMeta, abstractmethod
@@ -110,9 +111,10 @@ class NativePathHandler(PathHandler):
 
     def _mkdirs(self, path):
         try:
-            os.makedirs(path)
+            os.makedirs(path, exist_ok=True)
         except OSError as e:
-            if e.errno != os.errno.EEXIST:
+            # EEXIST it can still happen if multiple processes are creating the dir
+            if e.errno != errno.EEXIST:
                 raise
 
 
