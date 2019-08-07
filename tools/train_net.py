@@ -74,10 +74,6 @@ def get_evaluator(cfg, dataset_name, output_folder):
     if evaluator_type == "coco_densepose":
         evaluator_list.append()
     if evaluator_type == "coco_panoptic_seg":
-        # TODO add per-machine primitives (https://github.com/fairinternal/detectron2/issues/138)
-        assert (
-            torch.cuda.device_count() >= comm.get_rank()
-        ), "COCOPanopticEvaluator currently do not work with multiple machines."
         evaluator_list.append(COCOPanopticEvaluator(dataset_name, output_folder))
     if evaluator_type == "cityscapes":
         assert (

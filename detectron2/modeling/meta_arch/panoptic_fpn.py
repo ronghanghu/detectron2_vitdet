@@ -151,7 +151,7 @@ def combine_semantic_and_instance_outputs(
         segments_info (list[dict]): Describe each segment in `panoptic_seg`.
             Each dict contains keys "id", "category_id", "isthing".
     """
-    panoptic_seg = torch.zeros_like(semantic_results)
+    panoptic_seg = torch.zeros_like(semantic_results, dtype=torch.int32)
 
     # sort instance outputs by scores
     sorted_inds = torch.argsort(-instance_results.scores)
