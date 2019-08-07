@@ -139,7 +139,7 @@ def combine_semantic_and_instance_outputs(
 ):
     """
     Implement a simple combining logic following
-    https://github.com/cocodataset/panopticapi/blob/master/combine_semantic_and_instance_predictions.py
+    "combine_semantic_and_instance_predictions.py" in panopticapi
     to produce panoptic segmentation outputs.
 
     Args:

@@ -237,6 +237,22 @@ def load_sem_seg(gt_root, image_root, gt_ext="png", image_ext="jpg"):
         key=lambda file_path: file2id(gt_root, file_path),
     )
 
+    assert len(gt_files) > 0, "No annotations found in {}.".format(gt_root)
+
+    # Use the intersection, so that val2017_100 annotations can run smoothly with val2017 images
+    if len(input_files) != len(gt_files):
+        logger.warn(
+            "Directory {} and {} has {} and {} files, respectively.".format(
+                image_root, gt_root, len(input_files), len(gt_files)
+            )
+        )
+        input_basenames = [os.path.basename(f)[: -len(image_ext)] for f in input_files]
+        gt_basenames = [os.path.basename(f)[: -len(gt_ext)] for f in gt_files]
+        intersect = list(set(input_basenames) & set(gt_basenames))
+        logger.warn("Will use their intersection of {} files.".format(len(intersect)))
+        input_files = [os.path.join(image_root, f + image_ext) for f in intersect]
+        gt_files = [os.path.join(gt_root, f + gt_ext) for f in intersect]
+
     logger.info(
         "Loaded {} images with semantic segmentation from {}".format(len(input_files), image_root)
     )

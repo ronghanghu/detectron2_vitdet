@@ -58,17 +58,18 @@ def register_coco_panoptic_separated(
     The annotations in this registered dataset will contain both instance annotations and
     semantic annotations, each with its own contiguous ids. Hence it's called "separated".
 
-    The instance annotations directly comes from polygons in the COCO
-    instances annotation task, rather than from the masks in the COCO panoptic annotations.
-    We now use the polygons because it is what the PanopticFPN paper uses.
-    We may later need to add an option to use masks.
-    The two format have small differences:
-    Polygons in the instance annotations may have overlaps.
-    The mask annotations are produced by labeling the depth ordering of overlapped polygons.
+    It follows the setting used by the PanopticFPN paper:
+        1. The instance annotations directly comes from polygons in the COCO
+          instances annotation task, rather than from the masks in the COCO panoptic annotations.
 
-    The semantic annotations are converted from panoptic annotations, where
-    all things are assigned a semantic id of 0.
-    All semantic categories will therefore have ids in contiguous range [0, #stuff_categories).
+          The two format have small differences:
+          Polygons in the instance annotations may have overlaps.
+          The mask annotations are produced by labeling the depth ordering of overlapped polygons.
+
+        2. The semantic annotations are converted from panoptic annotations, where
+          all "things" are assigned a semantic id of 0.
+          All semantic categories will therefore have ids in contiguous
+          range [0, #stuff_categories).
 
     This function will also register a pure semantic segmentation dataset
     named `name + '_stuffonly'`.
@@ -76,13 +77,11 @@ def register_coco_panoptic_separated(
     Args:
         name (str): the name that identifies a dataset,
             e.g. "coco_2017_train_panoptic"
-        metadata (str): extra metadata associated with this dataset
+        metadata (str): extra metadata associated with this dataset.
         image_root (str): directory which contains all the images
         panoptic_root (str): directory which contains panoptic annotation images
         panoptic_json (str): path to the json panoptic annotation file
         semantic_root (str): directory which contains all the ground truth segmentation annotations.
-            It can be converted from `panoptic_root` by scripts in
-            https://github.com/cocodataset/panopticapi/tree/master/converters
         instances_json (str): path to the json instance annotation file
     """
     panoptic_name = name + "_separated"
@@ -129,6 +128,7 @@ def merge_to_panoptic(detection_dicts, semantic_segmentation_dicts):
     """
     results = []
     semseg_file_to_entry = {x["file_name"]: x for x in semantic_segmentation_dicts}
+    assert len(semseg_file_to_entry) > 0
 
     for det_dict in detection_dicts:
         dic = copy.copy(det_dict)
