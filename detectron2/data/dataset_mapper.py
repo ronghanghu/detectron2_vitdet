@@ -137,8 +137,9 @@ class DatasetMapper:
 
         # USER: Remove if you don't do semantic/panoptic segmentation.
         if "sem_seg_file_name" in dataset_dict:
-            sem_seg_gt = Image.open(dataset_dict.pop("sem_seg_file_name"))
-            sem_seg_gt = np.asarray(sem_seg_gt, dtype="uint8")
+            with PathManager.open(dataset_dict.pop("sem_seg_file_name"), "rb") as f:
+                sem_seg_gt = Image.open(f)
+                sem_seg_gt = np.asarray(sem_seg_gt, dtype="uint8")
             sem_seg_gt = transforms.apply_segmentation(sem_seg_gt)
             sem_seg_gt = torch.as_tensor(sem_seg_gt.astype("long"))
             dataset_dict["sem_seg_gt"] = sem_seg_gt

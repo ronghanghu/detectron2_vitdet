@@ -10,6 +10,7 @@ import torch
 
 from detectron2.data import DatasetCatalog, MetadataCatalog
 from detectron2.utils.comm import all_gather, is_main_process, synchronize
+from detectron2.utils.file_io import PathManager
 
 from .evaluator import DatasetEvaluator
 
@@ -69,7 +70,8 @@ class SemSegEvaluator(DatasetEvaluator):
         for input, output in zip(inputs, outputs):
             output = output["sem_seg"].to(self._cpu_device)
             pred = np.array(output, dtype=np.int)
-            gt = np.array(Image.open(self.image_id_to_gt_file[input["image_id"]]), dtype=np.int)
+            with PathManager.open(self.image_id_to_gt_file[input["image_id"]], "rb") as f:
+                gt = np.array(Image.open(f), dtype=np.int)
 
             gt[gt == self._ignore_label] = self._num_classes
 
@@ -100,8 +102,9 @@ class SemSegEvaluator(DatasetEvaluator):
                 self._conf_matrix += conf_matrix
 
         if self._output_dir:
-            with open(os.path.join(self._output_dir, "semantic_seg_predictions.json"), "w") as f:
-                json.dump(self._predictions, f)
+            file_path = os.path.join(self._output_dir, "semantic_seg_predictions.json")
+            with PathManager.open(file_path, "w") as f:
+                f.write(json.dumps(self._predictions))
 
         acc = np.zeros(self._num_classes, dtype=np.float)
         iou = np.zeros(self._num_classes, dtype=np.float)
@@ -126,7 +129,9 @@ class SemSegEvaluator(DatasetEvaluator):
         res["pACC"] = 100 * pacc
 
         if self._output_dir:
-            torch.save(res, os.path.join(self._output_dir, "semantic_seg_evaluation.pth"))
+            file_path = os.path.join(self._output_dir, "semantic_seg_evaluation.pth")
+            with PathManager.open(file_path, "wb") as f:
+                torch.save(res, f)
         results = OrderedDict({"semantic_seg": res})
         self._logger.info(results)
         return results

@@ -17,6 +17,7 @@ from tabulate import tabulate
 import detectron2.utils.comm as comm
 from detectron2.data import MetadataCatalog
 from detectron2.structures import Boxes, BoxMode, pairwise_iou
+from detectron2.utils.file_io import PathManager
 
 from .densepose_coco_evaluation import DensePoseCocoEval
 from .evaluator import DatasetEvaluator
@@ -48,7 +49,8 @@ class COCOEvaluator(DatasetEvaluator):
 
         self._metadata = MetadataCatalog.get(dataset_name)
         with contextlib.redirect_stdout(io.StringIO()):
-            self._coco_api = COCO(self._metadata.json_file)
+            json_file = comm.dist_get_local_path(self._metadata.json_file)
+            self._coco_api = COCO(json_file)
 
         self._kpt_oks_sigmas = cfg.TEST.KEYPOINT_OKS_SIGMAS
 
@@ -120,9 +122,9 @@ class COCOEvaluator(DatasetEvaluator):
             return {}
 
         if self._output_dir:
-            torch.save(
-                self._predictions, os.path.join(self._output_dir, "instances_predictions.pth")
-            )
+            file_path = os.path.join(self._output_dir, "instances_predictions.pth")
+            with PathManager.open(file_path, "wb") as f:
+                torch.save(self._predictions, f)
 
         self._results = OrderedDict()
         if "proposals" in self._predictions[0]:
@@ -150,10 +152,9 @@ class COCOEvaluator(DatasetEvaluator):
 
         if self._output_dir:
             file_path = os.path.join(self._output_dir, "coco_instances_results.json")
-            with open(file_path, "w") as f:
-                json.dump(self._coco_results, f)
+            with PathManager.open(file_path, "w") as f:
+                f.write(json.dumps(self._coco_results))
                 f.flush()
-                os.fsync(f.fileno())
 
         self._logger.info("Evaluating predictions ...")
         for task in sorted(tasks):
@@ -187,7 +188,7 @@ class COCOEvaluator(DatasetEvaluator):
                 "ids": ids,
                 "bbox_mode": bbox_mode,
             }
-            with open(os.path.join(self._output_dir, "box_proposals.pkl"), "wb") as f:
+            with PathManager.open(os.path.join(self._output_dir, "box_proposals.pkl"), "wb") as f:
                 pickle.dump(proposal_data, f)
 
         self._logger.info("Evaluating bbox proposals ...")

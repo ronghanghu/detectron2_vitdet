@@ -47,6 +47,7 @@ from detectron2.modeling import DatasetMapperTTA, GeneralizedRCNNWithTTA, build_
 from detectron2.solver import build_lr_scheduler, build_optimizer
 from detectron2.utils.collect_env import collect_env_info
 from detectron2.utils.events import CommonMetricPrinter, JSONWriter, TensorboardXWriter
+from detectron2.utils.file_io import PathManager
 from detectron2.utils.logger import setup_logger
 
 
@@ -115,7 +116,7 @@ def do_test(cfg, model, is_final=True):
             if cfg.OUTPUT_DIR:
                 output_folder = os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
                 if comm.is_main_process():
-                    os.makedirs(output_folder, exist_ok=True)
+                    PathManager.mkdirs(output_folder)
                 comm.synchronize()
             else:
                 output_folder = None
@@ -131,10 +132,13 @@ def do_test(cfg, model, is_final=True):
 
             if is_final and cfg.TEST.AUG_ON:
                 # In the end of training, run an evaluation with TTA
-                output_folder = os.path.join(cfg.OUTPUT_DIR, "inference_TTA", dataset_name)
-                if comm.is_main_process():
-                    os.makedirs(output_folder, exist_ok=True)
-                comm.synchronize()
+                if cfg.OUTPUT_DIR:
+                    output_folder = os.path.join(cfg.OUTPUT_DIR, "inference_TTA", dataset_name)
+                    if comm.is_main_process():
+                        PathManager.mkdirs(output_folder)
+                    comm.synchronize()
+                else:
+                    output_folder = None
 
                 newcfg = cfg.clone()
                 newcfg.defrost()
@@ -241,7 +245,7 @@ def setup(args):
 
     output_dir = cfg.OUTPUT_DIR
     if comm.is_main_process() and output_dir:
-        os.makedirs(output_dir, exist_ok=True)
+        PathManager.mkdirs(output_dir)
     comm.synchronize()
 
     logger = setup_logger(output_dir, distributed_rank=comm.get_rank())
@@ -253,14 +257,13 @@ def setup(args):
     logger.info(args)
 
     logger.info("Environment info:\n" + collect_env_info())
-    logger.info(
-        "Loaded config file {}:\n{}".format(args.config_file, open(args.config_file, "r").read())
-    )
+    with PathManager.open(args.config_file, "r") as f:
+        logger.info("Loaded config file {}:\n{}".format(args.config_file, f.read()))
     logger.info("Running with full config:\n{}".format(cfg))
     if comm.is_main_process() and output_dir:
         # Other scripts may expect the name config.yaml and depend on this.
         path = os.path.join(output_dir, "config.yaml")
-        with open(path, "w") as f:
+        with PathManager.open(path, "w") as f:
             f.write(cfg.dump())
         logger.info("Full config saved to {}".format(os.path.abspath(path)))
     return cfg

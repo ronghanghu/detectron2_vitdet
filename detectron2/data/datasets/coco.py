@@ -1,4 +1,3 @@
-import glob
 import io
 import logging
 import contextlib
@@ -7,6 +6,8 @@ from PIL import Image
 
 from borc.common.timer import Timer
 from detectron2.structures import BoxMode
+from detectron2.utils.file_io import PathManager
+import detectron2.utils.comm as comm
 
 from .. import MetadataCatalog
 
@@ -43,6 +44,7 @@ def load_coco_json(json_file, image_root, dataset_name=None):
 
     timer = Timer()
     with contextlib.redirect_stdout(io.StringIO()):
+        json_file = comm.dist_get_local_path(json_file)
         coco_api = COCO(json_file)
     if timer.seconds() > 1:
         logger.info("Loading {} takes {:.2f} seconds.".format(json_file, timer.seconds()))
@@ -227,11 +229,11 @@ def load_sem_seg(gt_root, image_root, gt_ext="png", image_ext="jpg"):
         return image_id
 
     input_files = sorted(
-        glob.iglob(os.path.join(image_root, "**/*.{}".format(image_ext)), recursive=True),
+        (os.path.join(image_root, f) for f in PathManager.ls(image_root) if f.endswith(image_ext)),
         key=lambda file_path: file2id(image_root, file_path),
     )
     gt_files = sorted(
-        glob.iglob(os.path.join(gt_root, "**/*.{}".format(gt_ext)), recursive=True),
+        (os.path.join(gt_root, f) for f in PathManager.ls(gt_root) if f.endswith(gt_ext)),
         key=lambda file_path: file2id(gt_root, file_path),
     )
 
@@ -248,8 +250,9 @@ def load_sem_seg(gt_root, image_root, gt_ext="png", image_ext="jpg"):
         assert record["image_id"] == file2id(
             gt_root, gt_path
         ), "there is no ground truth for {}".format(img_path)
-        img = Image.open(gt_path)
-        w, h = img.size
+        with PathManager.open(gt_path, "rb") as f:
+            img = Image.open(f)
+            w, h = img.size
         record["height"] = h
         record["width"] = w
         dataset_dicts.append(record)

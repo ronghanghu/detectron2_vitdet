@@ -148,6 +148,9 @@ class ModelCatalogHandler(PathHandler):
         logger.info("Catalog entry {} points to {}".format(path, catalog_path))
         return PathManager.get_local_path(catalog_path)
 
+    def _open(self, path, mode="r"):
+        return PathManager.open(self._get_local_path(path), mode)
+
 
 class Detectron2Handler(PathHandler):
     """
@@ -162,6 +165,9 @@ class Detectron2Handler(PathHandler):
     def _get_local_path(self, path):
         name = path[len("detectron2://") :]
         return PathManager.get_local_path(self.S3_DETECTRON2_PREFIX + name)
+
+    def _open(self, path, mode="r"):
+        return PathManager.open(self._get_local_path(path), mode)
 
 
 PathManager.register_handler(ModelCatalogHandler())

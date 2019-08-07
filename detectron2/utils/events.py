@@ -1,10 +1,11 @@
 import datetime
 import json
 import logging
-import os
 from collections import defaultdict
 import torch
 from borc.common.history_buffer import HistoryBuffer
+
+from detectron2.utils.file_io import PathManager
 
 _CURRENT_STORAGE = None
 
@@ -67,7 +68,7 @@ class JSONWriter:
             window_size (int): the window size of median smoothing for the scalars whose
                 `smoothing_hint` are True.
         """
-        self._file_handle = open(json_file, "a")
+        self._file_handle = PathManager.open(json_file, "a")
         self._window_size = window_size
 
     def write(self):
@@ -76,7 +77,6 @@ class JSONWriter:
         to_save.update(storage.latest_with_smoothing_hint(self._window_size))
         self._file_handle.write(json.dumps(to_save, sort_keys=True) + "\n")
         self._file_handle.flush()
-        os.fsync(self._file_handle.fileno())
 
     def __del__(self):
         # not guaranteed to be called at exit, but probably fine

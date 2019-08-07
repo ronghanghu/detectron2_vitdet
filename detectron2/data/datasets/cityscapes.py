@@ -11,6 +11,7 @@ from PIL import Image
 
 from detectron2.structures import BoxMode
 from detectron2.utils.comm import get_world_size
+from detectron2.utils.file_io import PathManager
 
 try:
     import cv2  # noqa
@@ -96,7 +97,7 @@ def cityscapes_files_to_dict(files, from_json, to_polygons):
     if from_json:
         from shapely.geometry import MultiPolygon, Polygon
 
-        with open(json_file) as f:
+        with PathManager.open(json_file, "r") as f:
             jsonobj = json.load(f)
         ret = {
             "file_name": image_file,
@@ -176,7 +177,8 @@ def cityscapes_files_to_dict(files, from_json, to_polygons):
     else:
         # See also the official annotation parsing scripts at
         # https://github.com/mcordts/cityscapesScripts/blob/master/cityscapesscripts/evaluation/instances2dict.py  # noqa
-        inst_image = np.asarray(Image.open(instance_id_file), order="F")
+        with PathManager.open(instance_id_file, "rb") as f:
+            inst_image = np.asarray(Image.open(f), order="F")
         # ids < 24 are stuff labels (filtering them first is about 5% faster)
         flattened_ids = np.unique(inst_image[inst_image >= 24])
 

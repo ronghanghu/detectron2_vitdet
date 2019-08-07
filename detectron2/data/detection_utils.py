@@ -10,6 +10,7 @@ import torch
 from PIL import Image
 
 from detectron2.structures import Boxes, BoxMode, DensePoseList, Instances, Keypoints, PolygonMasks
+from detectron2.utils.file_io import PathManager
 
 from . import transforms as T
 from .catalog import MetadataCatalog
@@ -32,22 +33,23 @@ def read_image(file_name, format=None):
     Returns:
         image (np.ndarray): an HWC image
     """
-    image = Image.open(file_name)
+    with PathManager.open(file_name, "rb") as f:
+        image = Image.open(f)
 
-    if format is not None:
-        # PIL only supports RGB, so convert to RGB and flip channels over below
-        conversion_format = format
+        if format is not None:
+            # PIL only supports RGB, so convert to RGB and flip channels over below
+            conversion_format = format
+            if format == "BGR":
+                conversion_format = "RGB"
+            image = image.convert(conversion_format)
+        image = np.asarray(image)
         if format == "BGR":
-            conversion_format = "RGB"
-        image = image.convert(conversion_format)
-    image = np.asarray(image)
-    if format == "BGR":
-        # flip channels if needed
-        image = image[:, :, ::-1]
-    # PIL squeezes out the channel dimension for "L", so make it HWC
-    if format == "L":
-        image = np.expand_dims(image, -1)
-    return image
+            # flip channels if needed
+            image = image[:, :, ::-1]
+        # PIL squeezes out the channel dimension for "L", so make it HWC
+        if format == "L":
+            image = np.expand_dims(image, -1)
+        return image
 
 
 def check_image_size(dataset_dict, image):

@@ -7,6 +7,7 @@ from PIL import Image
 
 from detectron2.data import MetadataCatalog
 from detectron2.utils import comm
+from detectron2.utils.file_io import PathManager
 
 from .evaluator import DatasetEvaluator
 
@@ -33,7 +34,9 @@ class COCOPanopticEvaluator(DatasetEvaluator):
         self._output_dir = output_dir
         self._predictions_dir = os.path.join(output_dir, "predictions")
         self._predictions_json = os.path.join(output_dir, "predictions.json")
-        os.makedirs(self._predictions_dir, exist_ok=True)
+        if comm.is_main_process():
+            PathManager.mkdirs(self._predictions_dir)
+        comm.synchronize()
 
     def reset(self):
         self._predictions = []
@@ -62,9 +65,9 @@ class COCOPanopticEvaluator(DatasetEvaluator):
 
             file_name = os.path.basename(input["file_name"])
             file_name_png = os.path.splitext(file_name)[0] + ".png"
-            Image.fromarray(id2rgb(panoptic_img.numpy())).save(
-                os.path.join(self._predictions_dir, file_name_png)
-            )
+            file_path = os.path.join(self._predictions_dir, file_name_png)
+            with PathManager.open(file_path, "wb") as f:
+                Image.fromarray(id2rgb(panoptic_img.numpy())).save(f, format="png")
             segments_info = [self._convert_category_id(x) for x in segments_info]
             self._predictions.append(
                 {
@@ -83,19 +86,22 @@ class COCOPanopticEvaluator(DatasetEvaluator):
         if not comm.is_main_process():
             return
 
-        gt_json = self._metadata.panoptic_json
-        gt_folder = self._metadata.panoptic_root
+        gt_json = PathManager.get_local_path(self._metadata.panoptic_json)
+        gt_folder = PathManager.get_local_path(self._metadata.panoptic_root)
 
         with open(gt_json, "r") as f:
             json_data = json.load(f)
         json_data["annotations"] = self._predictions
-        with open(self._predictions_json, "w") as f:
-            json.dump(json_data, f)
+        with PathManager.open(self._predictions_json, "w") as f:
+            f.write(json.dumps(json_data))
 
         from panopticapi.evaluation import pq_compute
 
         pq_res = pq_compute(
-            gt_json, self._predictions_json, gt_folder=gt_folder, pred_folder=self._predictions_dir
+            gt_json,
+            PathManager.get_local_path(self._predictions_json),
+            gt_folder=gt_folder,
+            pred_folder=self._predictions_dir,
         )
         res = {}
         res["PQ"] = 100 * pq_res["All"]["pq"]
