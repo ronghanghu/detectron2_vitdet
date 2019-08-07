@@ -3,6 +3,8 @@ import os
 import sys
 from termcolor import colored
 
+from detectron2.utils.file_io import PathManager
+
 
 class _ColorfulFormatter(logging.Formatter):
     def __init__(self, *args, **kwargs):
@@ -58,7 +60,7 @@ def setup_logger(
     logger.addHandler(ch)
 
     if save_dir:
-        fh = logging.FileHandler(os.path.join(save_dir, "log.txt"))
+        fh = logging.StreamHandler(PathManager.open(os.path.join(save_dir, "log.txt"), "a"))
         fh.setLevel(logging.DEBUG)
         fh.setFormatter(plain_formatter)
         logger.addHandler(fh)
