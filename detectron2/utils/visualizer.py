@@ -23,18 +23,19 @@ _KEYPOINT_THRESHOLD = 0.01
 
 
 @unique
-class ColoringMode(Enum):
+class ColorMode(Enum):
     """
-    Enum of different coloring modes to use during visualizations.
+    Enum of different color modes to use for instance visualizations.
 
-    IMAGE_FOCUSED: Visualizations with overlay. Each region picks a random color (or with some
-        rules) from the palette. Colors picked need to have high contrast.
-    SEGMENTATION_FOCUSED: Visualizations without overlay. Instances of the same category have
-        similar colors.
+    IMAGE: Picks a random color for every instance and overlay segmentations with low opacity.
+    SEGMENTATION: Let instances of the same category have similar colors, and overlay them with
+        high opacity. This provides more attention on the quality of segmentation.
+    IMAGE_BW: same as IMAGE, but convert all areas without masks to gray-scale.
     """
 
-    IMAGE_FOCUSED = 0
-    SEGMENTATION_FOCUSED = 1
+    IMAGE = 0
+    SEGMENTATION = 1
+    IMAGE_BW = 2
 
 
 def _mask_to_polygon(mask):
@@ -128,7 +129,7 @@ class VisImage:
 
 
 class Visualizer:
-    def __init__(self, img_rgb, metadata, scale=1.0):
+    def __init__(self, img_rgb, metadata, scale=1.0, instance_mode=ColorMode.IMAGE):
         """
         Args:
             img_rgb: a numpy array of shape (H, W, C), where H and W correspond to
@@ -144,8 +145,9 @@ class Visualizer:
         self.cpu_device = torch.device("cpu")
 
         self._default_font_size = np.sqrt(self.output.height * self.output.width) // 50
+        self._instance_mode = instance_mode
 
-    def draw_instance_predictions(self, predictions, coloring_mode=ColoringMode.IMAGE_FOCUSED):
+    def draw_instance_predictions(self, predictions):
         """
         Draw instance-level prediction results on an image.
 
@@ -169,26 +171,39 @@ class Visualizer:
                 labels = ["{}: {:.0f}%".format(l, s * 100) for l, s in zip(labels, scores)]
         keypoints = predictions.pred_keypoints if predictions.has("pred_keypoints") else None
 
+        masks, polygons = None, None
         if predictions.has("pred_masks"):
             masks = predictions.pred_masks
         elif predictions.has("pred_masks_rle"):
             masks = predictions.pred_masks_rle
-        masks = self._convert_polygons(masks)
+        if masks is not None:
+            polygons = self._convert_polygons(masks)
 
-        if coloring_mode == ColoringMode.SEGMENTATION_FOCUSED and self.metadata.get("thing_colors"):
+        if self._instance_mode == ColorMode.SEGMENTATION and self.metadata.get("thing_colors"):
             colors = [
                 self._jitter([x / 255 for x in self.metadata.thing_colors[c]]) for c in classes
             ]
+            alpha = 0.8
         else:
             colors = None
+            alpha = 0.5
+
+        if self._instance_mode == ColorMode.IMAGE_BW:
+            img_bw = self.img.astype("f4").mean(axis=2)
+            img_bw = np.stack([img_bw] * 3, axis=2)
+            if masks is not None:
+                visible = masks.any(dim=0).numpy() > 0
+                img_bw[visible] = self.img[visible]
+            self.output.ax.imshow(img_bw.astype("uint8"))
+            alpha = 0.2
 
         self.overlay_instances(
-            masks=masks,
+            masks=polygons,
             boxes=boxes,
             labels=labels,
             keypoints=keypoints,
             assigned_colors=colors,
-            alpha=0.5 if coloring_mode == ColoringMode.IMAGE_FOCUSED else 0.8,
+            alpha=alpha,
         )
         return self.output
 

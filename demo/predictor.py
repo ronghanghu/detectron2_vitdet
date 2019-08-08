@@ -7,7 +7,7 @@ from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.data import MetadataCatalog
 from detectron2.modeling import build_model
 from detectron2.utils.video_visualizer import VideoVisualizer
-from detectron2.utils.visualizer import ColoringMode, Visualizer
+from detectron2.utils.visualizer import ColorMode, Visualizer
 
 
 class COCODemo(object):
@@ -45,7 +45,7 @@ class COCODemo(object):
         predictions = self.compute_predictions(image)
         # Convert image from OpenCV BGR format to Matplotlib RGB format.
         image = torch.tensor(image).flip([2])
-        visualizer = Visualizer(image, self.metadata)
+        visualizer = Visualizer(image, self.metadata, instance_mode=ColorMode.IMAGE)
         if "panoptic_seg" in predictions:
             panoptic_seg, segments_info = predictions["panoptic_seg"]
             vis_output = visualizer.draw_panoptic_seg_predictions(
@@ -61,9 +61,7 @@ class COCODemo(object):
                 )
             if "instances" in predictions:
                 instances = predictions["instances"].to(self.cpu_device)
-                vis_output = visualizer.draw_instance_predictions(
-                    predictions=instances, coloring_mode=ColoringMode.IMAGE_FOCUSED
-                )
+                vis_output = visualizer.draw_instance_predictions(predictions=instances)
 
         return predictions, vis_output
 

@@ -3,7 +3,7 @@ from collections import namedtuple
 import cv2
 import pycocotools.mask as mask_util
 
-from detectron2.utils.visualizer import ColoringMode, Visualizer
+from detectron2.utils.visualizer import ColorMode, Visualizer
 
 _DISTANCE_BW_POINTS_THRESHOLD = 600
 _AREA_DIFFERENCE_THRESHOLD = 3600
@@ -31,9 +31,7 @@ class VideoVisualizer:
         self.metadata = metadata
         self.prev_frame_info = None
 
-    def draw_instance_predictions(
-        self, frame, predictions, coloring_mode=ColoringMode.IMAGE_FOCUSED
-    ):
+    def draw_instance_predictions(self, frame, predictions, coloring_mode=ColorMode.IMAGE):
         """
         Draw instance-level prediction results on an image.
 
@@ -46,7 +44,7 @@ class VideoVisualizer:
             predictions (Instances): the output of an instance detection/segmentation
                 model. Following fields will be used to draw:
                 "pred_boxes", "pred_classes", "scores", "pred_masks" (or "pred_masks_rle").
-            coloring_mode (ColoringMode): mode to use while picking colors for masks.
+            coloring_mode (ColorMode): mode to use while picking colors for masks.
 
         Returns:
             output (VisImage): image object with visualizations.
@@ -99,7 +97,7 @@ class VideoVisualizer:
         return frame_visualizer.output
 
     def _update_mask_colors_with_prev_frame(
-        self, masks, frame_visualizer, labels, coloring_mode=ColoringMode.SEGMENTATION_FOCUSED
+        self, masks, frame_visualizer, labels, coloring_mode=ColorMode.SEGMENTATION
     ):
         """
         Looks at previous frame to identify if the same object might have been seen.
@@ -117,7 +115,7 @@ class VideoVisualizer:
                 image. Each element in the tensor is the class label of the corresponding
                 object in the image. Note that the class labels are integers that are
                 in [0, #total classes) range.
-            coloring_mode (ColoringMode): mode to use while picking colors for masks.
+            coloring_mode (ColorMode): mode to use while picking colors for masks.
 
         Returns:
             mask_metadata (list[_ColorScheme]): a list of :class:`_ColorScheme` objects that
@@ -128,7 +126,7 @@ class VideoVisualizer:
             for idx, mask in enumerate(masks):
                 # find center of mass for each instance.
                 center, area = self._get_center_and_area_of_mask(mask)
-                if labels is not None and coloring_mode == ColoringMode.SEGMENTATION_FOCUSED:
+                if labels is not None and coloring_mode == ColorMode.SEGMENTATION:
                     class_name = self.metadata.class_names[labels[idx]]
                     color = frame_visualizer._jitter(
                         frame_visualizer._get_color(class_name=class_name)
@@ -184,7 +182,7 @@ class VideoVisualizer:
                 if not mask_metadata[mask_idx]:
                     mask = masks[mask_idx]
                     center, area = self._get_center_and_area_of_mask(mask)
-                    if labels is not None and coloring_mode == ColoringMode.SEGMENTATION_FOCUSED:
+                    if labels is not None and coloring_mode == ColorMode.SEGMENTATION:
                         class_name = self.metadata.class_names[labels[mask_idx]]
                         color = frame_visualizer._jitter(
                             frame_visualizer._get_color(class_name=class_name)
