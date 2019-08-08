@@ -25,12 +25,17 @@ class DatasetMapper:
 
     The callable currently does the following:
     1. Read the image from "file_name"
-    2. Applies geometric transforms to the image and annotations
+    2. Applies cropping/geometric transforms to the image and annotations
     3. Prepare data and annotations to Tensor and :class:`Instances`
     """
 
     def __init__(self, cfg, is_train=True):
         self.tfm_gens = utils.build_transform_gen(cfg, is_train)
+
+        if cfg.INPUT.CROP.ENABLED and is_train:
+            self.crop_gen = T.RandomCrop(cfg.INPUT.CROP.TYPE, cfg.INPUT.CROP.SIZE)
+        else:
+            self.crop_gen = None
 
         # fmt: off
         self.img_format     = cfg.INPUT.FORMAT
@@ -66,7 +71,22 @@ class DatasetMapper:
         image = utils.read_image(dataset_dict["file_name"], format=self.img_format)
         utils.check_image_size(dataset_dict, image)
 
-        image, transforms = T.apply_transform_gens(self.tfm_gens, image)
+        if "annotations" not in dataset_dict:
+            image, transforms = T.apply_transform_gens(
+                ([self.crop_gen] if self.crop_gen else []) + self.tfm_gens, image
+            )
+        else:
+            # Crop around an instance if there are instances in the image.
+            if self.crop_gen:
+                crop_tfm = utils.gen_crop_transform_with_instance(
+                    self.crop_gen.get_crop_size(image.shape[:2]),
+                    image.shape[:2],
+                    np.random.choice(dataset_dict["annotations"]),
+                )
+                image = crop_tfm.apply_image(image)
+            image, transforms = T.apply_transform_gens(self.tfm_gens, image)
+            if self.crop_gen:
+                transforms = crop_tfm + transforms
 
         image_shape = image.shape[:2]  # h, w
 
@@ -104,7 +124,10 @@ class DatasetMapper:
                 if obj.get("iscrowd", 0) == 0
             ]
             targets = utils.annotations_to_instances(annos, image_shape)
-            dataset_dict["targets"] = targets[targets.gt_boxes.nonempty()]
+            # Create a tight bounding box from masks, useful when image is cropped
+            if self.crop_gen and targets.has("gt_masks"):
+                targets.gt_boxes = targets.gt_masks.get_bounding_boxes()
+            dataset_dict["targets"] = utils.filter_empty_instances(targets)
 
         # USER: Remove if you don't do semantic/panoptic segmentation.
         if "sem_seg_file_name" in dataset_dict:

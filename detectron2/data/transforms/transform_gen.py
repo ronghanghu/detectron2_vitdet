@@ -7,9 +7,23 @@ import sys
 from abc import ABCMeta, abstractmethod
 from PIL import Image
 
-from .transform import HFlipTransform, NoOpTransform, ResizeTransform, Transform, TransformList
+from .transform import (
+    CropTransform,
+    HFlipTransform,
+    NoOpTransform,
+    ResizeTransform,
+    Transform,
+    TransformList,
+)
 
-__all__ = ["TransformGen", "apply_transform_gens", "RandomFlip", "Resize", "ResizeShortestEdge"]
+__all__ = [
+    "TransformGen",
+    "apply_transform_gens",
+    "RandomFlip",
+    "Resize",
+    "ResizeShortestEdge",
+    "RandomCrop",
+]
 
 
 def check_dtype(img):
@@ -197,6 +211,53 @@ class ResizeShortestEdge(TransformGen):
         neww = int(neww + 0.5)
         newh = int(newh + 0.5)
         return ResizeTransform(h, w, newh, neww, self.interp)
+
+
+class RandomCrop(TransformGen):
+    """
+    Randomly crop a subimage out of an image.
+    """
+
+    def __init__(self, crop_type: str, crop_size):
+        """
+        Args:
+            crop_type (str): one of "relative_range", "relative", "absolute".
+                See `config/defaults.py` for explanation.
+            crop_size (tuple[float]): the relative ratio or absolute pixels of
+                height and width
+        """
+        super().__init__()
+        assert crop_type in ["relative_range", "relative", "absolute"]
+        self._init(locals())
+
+    def get_transform(self, img):
+        h, w = img.shape[:2]
+        croph, cropw = self.get_crop_size((h, w))
+        assert h >= croph and w >= cropw, "Shape computation in {} has bugs.".format(self)
+        h0 = self.rng.randint(h - croph + 1)
+        w0 = self.rng.randint(w - cropw + 1)
+        return CropTransform(w0, h0, cropw, croph)
+
+    def get_crop_size(self, image_size):
+        """
+        Args:
+            image_size (tuple): height, width
+
+        Returns:
+            crop_size (tuple): height, width in absolute pixels
+        """
+        h, w = image_size
+        if self.crop_type == "relative":
+            ch, cw = self.crop_size
+            return int(h * ch + 0.5), int(w * cw + 0.5)
+        elif self.crop_type == "relative_range":
+            crop_size = np.asarray(self.crop_size, dtype=np.float32)
+            ch, cw = crop_size + np.random.rand(2) * (1 - crop_size)
+            return int(h * ch + 0.5), int(w * cw + 0.5)
+        elif self.crop_type == "absolute":
+            return self.crop_size
+        else:
+            NotImplementedError("Unknown crop type {}".format(self.crop_type))
 
 
 def apply_transform_gens(transform_gens, img):

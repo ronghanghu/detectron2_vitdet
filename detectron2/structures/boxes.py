@@ -175,6 +175,13 @@ class Boxes:
         )
         return inds_inside
 
+    def get_centers(self):
+        """
+        Returns:
+            The box centers in a Nx2 array of (x, y).
+        """
+        return (self.tensor[:, :2] + self.tensor[:, 2:]) / 2
+
     @staticmethod
     def cat(boxes_list):
         """

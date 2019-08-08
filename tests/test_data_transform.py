@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-
+import numpy as np
 import unittest
 
 from detectron2.data import transforms as T
@@ -34,3 +34,12 @@ class TestTransforms(unittest.TestCase):
 
         with self.assertRaises(AssertionError):
             T.HFlipTransform.register_type(dtype, lambda x: 1)
+
+    def test_crop_polygons(self):
+        # Ensure that shapely produce an extra vertex at the end
+        import shapely.geometry as geometry
+
+        polygon = np.asarray([3, 3.5, 11, 10.0, 38, 98, 15.0, 100.0]).reshape(-1, 2)
+        g = geometry.Polygon(polygon)
+        coords = np.asarray(g.exterior.coords)
+        self.assertEqual(coords[0].tolist(), coords[-1].tolist())

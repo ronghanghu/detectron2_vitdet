@@ -36,7 +36,8 @@ pip install --user 'git+https://github.com/cocodataset/cocoapi.git#subdirectory=
 # optionally, install cityscapescripts
 pip install --user cityscapescripts
 
-# optionally, install shapely to work with cityscapes' ground truth JSON files
+# optionally, install shapely to use cropping for instance segmentation or work with cityscapes'
+# ground truth JSON files
 pip install --user shapely
 
 # Clone this repo, and run:

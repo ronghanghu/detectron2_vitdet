@@ -5,6 +5,23 @@ import torch
 
 from detectron2.layers.roi_align import ROIAlign
 
+from .boxes import Boxes
+
+
+def polygons_to_mask(polygons, height, width):
+    """
+    Args:
+        polygons (list[ndarray]): each array has shape (Nx2,)
+        height, width (int)
+
+    Returns:
+        ndarray: a mask of shape (height, width)
+    """
+    assert len(polygons) > 0, "COCOAPI does not support empty polygons"
+    rles = mask_utils.frPyObjects(polygons, height, width)
+    rle = mask_utils.merge(rles)
+    return mask_utils.decode(rle)
+
 
 def rasterize_polygons_within_box(polygons, box, mask_size):
     """
@@ -47,9 +64,7 @@ def rasterize_polygons_within_box(polygons, box, mask_size):
             p[1::2] *= ratio_h
 
     # 3. Rasterize the polygons with coco api
-    rles = mask_utils.frPyObjects(polygons, mask_size, mask_size)
-    rle = mask_utils.merge(rles)
-    mask = mask_utils.decode(rle)
+    mask = polygons_to_mask(polygons, mask_size, mask_size)
     mask = torch.from_numpy(mask)
     return mask
 
@@ -111,9 +126,7 @@ def batch_rasterize_full_image_polygons_within_box(masks, boxes, mask_size):
 
     bit_masks = []  # #instance x H x W
     for polygons_per_instance in masks:
-        rles = mask_utils.frPyObjects(polygons_per_instance, height, width)
-        rle = mask_utils.merge(rles)
-        bit_mask = mask_utils.decode(rle)
+        bit_mask = polygons_to_mask(polygons_per_instance, height, width)
         bit_masks.append(bit_mask)
     bit_masks = torch.from_numpy(np.asarray(bit_masks, dtype="float32"))
 
@@ -172,6 +185,34 @@ class PolygonMasks(object):
 
     def to(self, *args, **kwargs):
         return self
+
+    def get_bounding_boxes(self):
+        """
+        Returns:
+            Boxes: tight bounding boxes around polygon masks.
+        """
+        boxes = torch.zeros(len(self.polygons), 4, dtype=torch.float32)
+        for idx, polygons_per_instance in enumerate(self.polygons):
+            minxy = torch.as_tensor([float("inf"), float("inf")], dtype=torch.float32)
+            maxxy = torch.zeros(2, dtype=torch.float32)
+            for polygon in polygons_per_instance:
+                coords = polygon.view(-1, 2).to(dtype=torch.float32)
+                minxy = torch.min(minxy, torch.min(coords, dim=0).values)
+                maxxy = torch.max(maxxy, torch.max(coords, dim=0).values)
+            boxes[idx, :2] = minxy
+            boxes[idx, 2:] = maxxy
+        return Boxes(boxes)
+
+    def nonempty(self):
+        """
+        Find masks that are non-empty.
+
+        Returns:
+            Tensor: a ByteTensor which represents
+                whether each mask is empty (False) or non-empty (True).
+        """
+        keep = [1 if len(polygon) > 0 else 0 for polygon in self.polygons]
+        return torch.as_tensor(keep, dtype=torch.bool)
 
     def __getitem__(self, item):
         """

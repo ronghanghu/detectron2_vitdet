@@ -91,12 +91,7 @@ class ROIAlign(nn.Module):
         """
         assert rois.dim() == 2 and rois.size(1) == 5
         return roi_align(
-            input,
-            rois,
-            self.output_size,
-            self.spatial_scale,
-            self.sampling_ratio,
-            self.aligned,
+            input, rois, self.output_size, self.spatial_scale, self.sampling_ratio, self.aligned
         )
 
     def __repr__(self):

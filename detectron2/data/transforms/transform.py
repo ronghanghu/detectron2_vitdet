@@ -93,6 +93,18 @@ class Transform(metaclass=ABCMeta):
         trans_boxes = np.concatenate((minxy, maxxy), axis=1)
         return trans_boxes
 
+    def apply_polygons(self, polygons):
+        """
+        Apply the transform on a list of polygons,
+        each represented by a Nx2 array.
+        By default will just transform all the points.
+
+        Args:
+            polygon (list[ndarray]): each is a Nx2 floating point
+                array of (x, y) format in absolute coordinates.
+        """
+        return [self.apply_coords(p) for p in polygons]
+
     @classmethod
     def register_type(cls, data_type: str, func):
         """
@@ -151,6 +163,19 @@ class TransformList:
             return lambda x: self._apply(x, name)
         raise AttributeError("TransformList object has no attribute {}".format(name))
 
+    def __add__(self, other):
+        other = other.transforms if isinstance(other, TransformList) else [other]
+        return TransformList(self.transforms + other)
+
+    def __iadd__(self, other):
+        other = other.transforms if isinstance(other, TransformList) else [other]
+        self.transforms.extend(other)
+        return self
+
+    def __radd__(self, other):
+        other = other.transforms if isinstance(other, TransformList) else [other]
+        return TransformList(other + self.transforms)
+
 
 class ResizeTransform(Transform):
     """
@@ -202,6 +227,35 @@ class CropTransform(Transform):
         coords[:, 0] -= self.x0
         coords[:, 1] -= self.y0
         return coords
+
+    def apply_polygons(self, polygons):
+        import shapely.geometry as geometry
+
+        # Create a window that will be used to crop
+        crop_box = geometry.box(self.x0, self.y0, self.x0 + self.w, self.y0 + self.h).buffer(0.0)
+
+        cropped_polygons = []
+
+        for polygon in polygons:
+            polygon = geometry.Polygon(polygon).buffer(0.0)
+            # polygon must be valid to perform intersection.
+            assert polygon.is_valid, polygon
+            cropped = polygon.intersection(crop_box)
+            if cropped.is_empty:
+                continue
+            if not isinstance(cropped, geometry.collection.BaseMultipartGeometry):
+                cropped = [cropped]
+            # one polygon may be cropped to multiple ones
+            for poly in cropped:
+                # It could produce lower dimensional objects like lines or points,
+                # which we want to ignore
+                if not isinstance(poly, geometry.Polygon) or not poly.is_valid:
+                    continue
+                coords = np.asarray(poly.exterior.coords)
+                # NOTE This process will produce an extra identical vertex at the end.
+                # So we remove it. This is tested by `tests/test_data_transform.py`
+                cropped_polygons.append(coords[:-1])
+        return [self.apply_coords(p) for p in cropped_polygons]
 
 
 class NoOpTransform(Transform):

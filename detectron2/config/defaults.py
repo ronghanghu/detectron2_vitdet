@@ -55,6 +55,19 @@ _C.INPUT.MIN_SIZE_TEST = 800
 # Maximum size of the side of the image during testing
 _C.INPUT.MAX_SIZE_TEST = 1333
 
+# `True` if cropping is used for data augmentation during training
+_C.INPUT.CROP = CN({"ENABLED": False})
+# Cropping type:
+# - "relative" crop (H * CROP.SIZE[0], W * CROP.SIZE[1]) part of an input of size (H, W)
+# - "relative_range" uniformly sample relative crop size from between [CROP.SIZE[0], [CROP.SIZE[1]].
+#   and  [1, 1] and use it as in "realtive" scenario.
+# - "absolute" crop part of an input with absolute size: (CROP.SIZE[0], CROP.SIZE[1]).
+_C.INPUT.CROP.TYPE = "relative_range"
+# Size of crop in range (0, 1] if CROP.TYPE is "relative" or "relative_range" and in number of
+# pixels if CROP.TYPE is "absolute"
+_C.INPUT.CROP.SIZE = [0.9, 0.9]
+
+
 # Whether the model needs RGB, YUV, HSV etc.
 # Should be one of the modes defined here, as we use PIL to read the image:
 # https://pillow.readthedocs.io/en/stable/handbook/concepts.html#concept-modes

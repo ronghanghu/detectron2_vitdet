@@ -111,12 +111,17 @@ def transform_instance_annotations(
     annotation, transforms, image_size, *, keypoint_hflip_indices=None
 ):
     """
-    Apply transformations to box, segmentation and keypoints in the instance annotations.
+    Apply transforms to box, segmentation and keypoints of annotations of a single instance.
+
+    It will use `transforms.apply_box` for the box, and
+    `transforms.apply_coords` for segmentation polygons & keypoints.
+    If you need anything more specially designed for each data structure,
+    you'll need to implement your own version of this function or the transforms.
 
     Args:
-        annotation (dict): dict of instance annotations,
+        annotation (dict): dict of instance annotations for a single instance.
         transforms (TransformList):
-        image_size (tuple): height, width
+        image_size (tuple): the height, width of the transformed image
         keypoint_hflip_indices (ndarray[int]): see `create_keypoint_hflip_indices`.
 
     Returns:
@@ -131,10 +136,8 @@ def transform_instance_annotations(
 
     if "segmentation" in annotation:
         # each instance contains 1 or more polygons
-        annotation["segmentation"] = [
-            transforms.apply_coords(np.asarray(p).reshape(-1, 2)).reshape(-1)
-            for p in annotation["segmentation"]
-        ]
+        polygons = [np.asarray(p).reshape(-1, 2) for p in annotation["segmentation"]]
+        annotation["segmentation"] = [p.reshape(-1) for p in transforms.apply_polygons(polygons)]
 
     if "keypoints" in annotation:
         keypoints = transform_keypoint_annotations(
@@ -152,7 +155,7 @@ def transform_keypoint_annotations(keypoints, transforms, image_size, keypoint_h
     Args:
         keypoints (list[float]): Nx3 float in Detectron2 Dataset format.
         transforms (TransformList):
-        image_size (tuple): height, width
+        image_size (tuple): the height, width of the transformed image
         keypoint_hflip_indices (ndarray[int]): see `create_keypoint_hflip_indices`.
     """
     # (N*3,) -> (N, 3)
@@ -173,6 +176,8 @@ def transform_keypoint_annotations(keypoints, transforms, image_size, keypoint_h
         keypoints = keypoints[keypoint_hflip_indices, :]
 
     # Maintain COCO convention that if visibility == 0, then x, y = 0
+    # TODO may need to reset visibility for cropped keypoints,
+    # but it does not matter for our existing algorithms
     keypoints[keypoints[:, 2] == 0] = 0
     return keypoints
 
@@ -213,6 +218,35 @@ def annotations_to_instances(annos, image_size):
     return target
 
 
+def filter_empty_instances(instances, by_box=True, by_mask=True):
+    """
+    Filter out empty instances in an `Instances` object.
+
+    Args:
+        instances (Instances):
+        by_box (bool): whether to filter out instances with empty boxes
+        by_mask (bool): whether to filter out instances with empty masks
+
+    Returns
+        Instances: the filtered instances.
+    """
+    assert by_box or by_mask
+    r = []
+    if by_box:
+        r.append(instances.gt_boxes.nonempty())
+    if instances.has("gt_masks") and by_mask:
+        r.append(instances.gt_masks.nonempty())
+
+    # TODO: can also filter visible keypoints
+
+    if not r:
+        return instances
+    m = r[0]
+    for x in r[1:]:
+        m = m & x
+    return instances[m]
+
+
 def create_keypoint_hflip_indices(dataset_names):
     """
     Args:
@@ -247,6 +281,30 @@ def create_keypoint_hflip_indices(dataset_names):
     flipped_names = [i if i not in flip_map else flip_map[i] for i in names]
     flip_indices = [names.index(i) for i in flipped_names]
     return np.asarray(flip_indices)
+
+
+def gen_crop_transform_with_instance(crop_size, image_size, instance):
+    """
+    Generate a CropTransform so that the cropping region contains
+    the center of the given instance.
+
+    Args:
+        crop_size (tuple): h, w in pixels
+        image_size (tuple): h, w
+        instance (dict): an annotation dict of one instance, in Detectron2's
+            dataset format.
+    """
+    crop_size = np.asarray(crop_size, dtype=np.int32)
+    bbox = BoxMode.convert(instance["bbox"], instance["bbox_mode"], BoxMode.XYXY_ABS)
+    center_yx = (bbox[1] + bbox[3]) * 0.5, (bbox[0] + bbox[2]) * 0.5
+
+    min_yx = np.maximum(np.floor(center_yx).astype(np.int32) - crop_size, 0)
+    max_yx = np.maximum(np.asarray(image_size, dtype=np.int32) - crop_size, 0)
+    max_yx = np.minimum(max_yx, np.ceil(center_yx).astype(np.int32))
+
+    y0 = np.random.randint(min_yx[0], max_yx[0] + 1)
+    x0 = np.random.randint(min_yx[1], max_yx[1] + 1)
+    return T.CropTransform(x0, y0, crop_size[1], crop_size[0])
 
 
 def build_transform_gen(cfg, is_train):
