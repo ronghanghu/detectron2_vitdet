@@ -65,7 +65,8 @@ __global__ void RoIAlignForward(const int nthreads, const T* bottom_data,
     const int height, const int width,
     const int pooled_height, const int pooled_width,
     const int sampling_ratio,
-    const T* bottom_rois, T* top_data) {
+    const T* bottom_rois, T* top_data,
+    bool aligned) {
   CUDA_1D_KERNEL_LOOP(index, nthreads) {
     // (n, c, ph, pw) is an element in the pooled output
     int pw = index % pooled_width;
@@ -77,18 +78,18 @@ __global__ void RoIAlignForward(const int nthreads, const T* bottom_data,
     int roi_batch_ind = offset_bottom_rois[0];
 
     // Do not using rounding; this implementation detail is critical
-    T roi_start_w = offset_bottom_rois[1] * spatial_scale;
-    T roi_start_h = offset_bottom_rois[2] * spatial_scale;
-    T roi_end_w = offset_bottom_rois[3] * spatial_scale;
-    T roi_end_h = offset_bottom_rois[4] * spatial_scale;
-    // T roi_start_w = round(offset_bottom_rois[1] * spatial_scale);
-    // T roi_start_h = round(offset_bottom_rois[2] * spatial_scale);
-    // T roi_end_w = round(offset_bottom_rois[3] * spatial_scale);
-    // T roi_end_h = round(offset_bottom_rois[4] * spatial_scale);
+    T offset = aligned ? (T)0.5 : (T)0.0;
+    T roi_start_w = offset_bottom_rois[1] * spatial_scale - offset;
+    T roi_start_h = offset_bottom_rois[2] * spatial_scale - offset;
+    T roi_end_w = offset_bottom_rois[3] * spatial_scale - offset;
+    T roi_end_h = offset_bottom_rois[4] * spatial_scale - offset;
 
-    // Force malformed ROIs to be 1x1
-    T roi_width = max(roi_end_w - roi_start_w, (T)1.);
-    T roi_height = max(roi_end_h - roi_start_h, (T)1.);
+    T roi_width = roi_end_w - roi_start_w;
+    T roi_height = roi_end_h - roi_start_h;
+    if (!aligned) {  // for backward-compatibility only
+      roi_width = max(roi_width, (T)1.);
+      roi_height = max(roi_height, (T)1.);
+    }
     T bin_size_h = static_cast<T>(roi_height) / static_cast<T>(pooled_height);
     T bin_size_w = static_cast<T>(roi_width) / static_cast<T>(pooled_width);
 
@@ -179,7 +180,8 @@ __global__ void RoIAlignBackwardFeature(const int nthreads, const T* top_diff,
     const int pooled_height, const int pooled_width,
     const int sampling_ratio,
     T* bottom_diff,
-    const T* bottom_rois) {
+    const T* bottom_rois,
+    bool aligned) {
   CUDA_1D_KERNEL_LOOP(index, nthreads) {
     // (n, c, ph, pw) is an element in the pooled output
     int pw = index % pooled_width;
@@ -191,18 +193,18 @@ __global__ void RoIAlignBackwardFeature(const int nthreads, const T* top_diff,
     int roi_batch_ind = offset_bottom_rois[0];
 
     // Do not using rounding; this implementation detail is critical
-    T roi_start_w = offset_bottom_rois[1] * spatial_scale;
-    T roi_start_h = offset_bottom_rois[2] * spatial_scale;
-    T roi_end_w = offset_bottom_rois[3] * spatial_scale;
-    T roi_end_h = offset_bottom_rois[4] * spatial_scale;
-    // T roi_start_w = round(offset_bottom_rois[1] * spatial_scale);
-    // T roi_start_h = round(offset_bottom_rois[2] * spatial_scale);
-    // T roi_end_w = round(offset_bottom_rois[3] * spatial_scale);
-    // T roi_end_h = round(offset_bottom_rois[4] * spatial_scale);
+    T offset = aligned ? (T)0.5 : (T)0.0;
+    T roi_start_w = offset_bottom_rois[1] * spatial_scale - offset;
+    T roi_start_h = offset_bottom_rois[2] * spatial_scale - offset;
+    T roi_end_w = offset_bottom_rois[3] * spatial_scale - offset;
+    T roi_end_h = offset_bottom_rois[4] * spatial_scale - offset;
 
-    // Force malformed ROIs to be 1x1
-    T roi_width = max(roi_end_w - roi_start_w, (T)1.);
-    T roi_height = max(roi_end_h - roi_start_h, (T)1.);
+    T roi_width = roi_end_w - roi_start_w;
+    T roi_height = roi_end_h - roi_start_h;
+    if (!aligned) {  // for backward-compatibility only
+      roi_width = max(roi_width, (T)1.);
+      roi_height = max(roi_height, (T)1.);
+    }
     T bin_size_h = static_cast<T>(roi_height) / static_cast<T>(pooled_height);
     T bin_size_w = static_cast<T>(roi_width) / static_cast<T>(pooled_width);
 
@@ -257,7 +259,8 @@ at::Tensor ROIAlign_forward_cuda(const at::Tensor& input,
                                  const float spatial_scale,
                                  const int pooled_height,
                                  const int pooled_width,
-                                 const int sampling_ratio) {
+                                 const int sampling_ratio,
+                                 bool aligned) {
   AT_ASSERTM(input.device().is_cuda(), "input must be a CUDA tensor");
   AT_ASSERTM(rois.device().is_cuda(), "rois must be a CUDA tensor");
   at::TensorArg input_t{input, "input", 1}, rois_t{rois, "rois", 2};
@@ -296,7 +299,8 @@ at::Tensor ROIAlign_forward_cuda(const at::Tensor& input,
          pooled_width,
          sampling_ratio,
          rois.contiguous().data<scalar_t>(),
-         output.data<scalar_t>());
+         output.data<scalar_t>(),
+         aligned);
   });
   cudaDeviceSynchronize();
   AT_CUDA_CHECK(cudaGetLastError());
@@ -313,7 +317,8 @@ at::Tensor ROIAlign_backward_cuda(const at::Tensor& grad,
                                   const int channels,
                                   const int height,
                                   const int width,
-                                  const int sampling_ratio) {
+                                  const int sampling_ratio,
+                                  bool aligned) {
   AT_ASSERTM(grad.device().is_cuda(), "grad must be a CUDA tensor");
   AT_ASSERTM(rois.device().is_cuda(), "rois must be a CUDA tensor");
 
@@ -322,7 +327,6 @@ at::Tensor ROIAlign_backward_cuda(const at::Tensor& grad,
   at::checkAllSameGPU(c, {grad_t, rois_t});
   at::checkAllSameType(c, {grad_t, rois_t});
   at::cuda::CUDAGuard device_guard(grad.device());
-
 
   auto num_rois = rois.size(0);
   auto grad_input = at::zeros({batch_size, channels, height, width}, grad.options());
@@ -351,7 +355,8 @@ at::Tensor ROIAlign_backward_cuda(const at::Tensor& grad,
          pooled_width,
          sampling_ratio,
          grad_input.data<scalar_t>(),
-         rois.contiguous().data<scalar_t>());
+         rois.contiguous().data<scalar_t>(),
+         aligned);
   });
   AT_CUDA_CHECK(cudaGetLastError());
   return grad_input;

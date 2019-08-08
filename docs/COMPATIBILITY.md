@@ -34,6 +34,15 @@ The major differences are:
 	and label "K" means background.
 	In Detectron, lable "0" means background, and [1, K] means the K categories.
 
+- ROIAlign is implemented differently. The new implementation is [available in Caffe2](https://github.com/pytorch/pytorch/pull/23706).
+
+  1. All the rois are shifted by half a pixel to be more aligned. See `layers/roi_align.py` for details.
+     To enable the old behavior, use `ROIAlign(aligned=False)`, or in the config set `POOLER_TYPE=ROIAlign` instead of
+     `ROIAlignV2` (the default).
+
+  1. The rois are not required to have a minimum size of 1.
+     This will lead to tiny differences in the output, but should be negligible.
+
 - Mask inference function is different.
 
 	In Detectron2, the "paste_mask" function is different and should be more accurate than Detectron.

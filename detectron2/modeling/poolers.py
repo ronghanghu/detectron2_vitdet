@@ -90,10 +90,9 @@ class ROIPooler(nn.Module):
             scales (list[float]): The scale for each low-level pooling op relative to
                 the input image. For a feature map with stride s relative to the input
                 image, scale is defined as a 1 / s.
-            sampling_ratio (int): The `sampling_ratio` parameter for the ROIAlign
-                pooling op.
+            sampling_ratio (int): The `sampling_ratio` parameter for the ROIAlign op.
             pooler_type (string): Name of the type of pooling operation that should be applied.
-                For instance, "ROIPool" or "ROIAlign".
+                For instance, "ROIPool" or "ROIAlignV2".
             canonical_box_size (int): A canonical box size in pixels (sqrt(box area)). The default
                 is heuristically defined as 224 pixels in the FPN paper (based on ImageNet
                 pre-training).
@@ -110,7 +109,16 @@ class ROIPooler(nn.Module):
 
         if pooler_type == "ROIAlign":
             self.level_poolers = nn.ModuleList(
-                ROIAlign(output_size, spatial_scale=scale, sampling_ratio=sampling_ratio)
+                ROIAlign(
+                    output_size, spatial_scale=scale, sampling_ratio=sampling_ratio, aligned=False
+                )
+                for scale in scales
+            )
+        elif pooler_type == "ROIAlignV2":
+            self.level_poolers = nn.ModuleList(
+                ROIAlign(
+                    output_size, spatial_scale=scale, sampling_ratio=sampling_ratio, aligned=True
+                )
                 for scale in scales
             )
         elif pooler_type == "ROIPool":

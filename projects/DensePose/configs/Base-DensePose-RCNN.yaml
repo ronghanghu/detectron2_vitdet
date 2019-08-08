@@ -28,8 +28,10 @@ MODEL:
     NUM_FC: 2
     POOLER_RESOLUTION: 7
     POOLER_SAMPLING_RATIO: 2
+    POOLER_TYPE: "ROIAlign"
   ROI_DENSEPOSE_HEAD:
     NAME: "DensePoseV1ConvXHead"
+    POOLER_TYPE: "ROIAlign"
 DATASETS:
   TRAIN: ("densepose_coco_2014_train", "densepose_coco_2014_valminusminival")
   TEST: ("densepose_coco_2014_minival",)

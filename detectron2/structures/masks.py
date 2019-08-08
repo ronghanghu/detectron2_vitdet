@@ -118,13 +118,14 @@ def batch_rasterize_full_image_polygons_within_box(masks, boxes, mask_size):
     bit_masks = torch.from_numpy(np.asarray(bit_masks, dtype="float32"))
 
     batch_inds = torch.arange(len(boxes)).to(dtype=boxes.dtype)[:, None]
-    # See comments in roi_align.py about -0.5
-    rois = torch.cat([batch_inds, boxes - 0.5], dim=1)  # Nx5
+    rois = torch.cat([batch_inds, boxes], dim=1)  # Nx5
 
     bit_masks = bit_masks.to(device=device)
     rois = rois.to(device=device)
     output = (
-        ROIAlign((mask_size, mask_size), 1.0, 0).forward(bit_masks[:, None, :, :], rois).squeeze(1)
+        ROIAlign((mask_size, mask_size), 1.0, 0, aligned=True)
+        .forward(bit_masks[:, None, :, :], rois)
+        .squeeze(1)
     )
     output = output >= 0.5
     return output

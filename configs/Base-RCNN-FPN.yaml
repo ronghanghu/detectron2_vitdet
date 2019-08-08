@@ -25,11 +25,16 @@ MODEL:
     NUM_FC: 2
     POOLER_RESOLUTION: 7
     POOLER_SAMPLING_RATIO: 2
+    POOLER_TYPE: "ROIAlign"
   ROI_MASK_HEAD:
     NAME: "MaskRCNNConvUpsampleHead"
     NUM_CONV: 4
     POOLER_RESOLUTION: 14
     POOLER_SAMPLING_RATIO: 2
+    POOLER_TYPE: "ROIAlign"
+  # set pooler type to be compatible with model zoo
+  ROI_KEYPOINT_HEAD:
+    POOLER_TYPE: "ROIAlign"
 DATASETS:
   TRAIN: ("coco_2017_train",)
   TEST: ("coco_2017_val",)

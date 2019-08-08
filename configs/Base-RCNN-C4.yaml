@@ -5,6 +5,11 @@ MODEL:
     POST_NMS_TOPK_TEST: 1000
   ROI_HEADS:
     NAME: "Res5ROIHeads"
+  # set pooler type to be compatible with model zoo
+  ROI_BOX_HEAD:
+    POOLER_TYPE: "ROIAlign"
+  ROI_MASK_HEAD:
+    POOLER_TYPE: "ROIAlign"
 DATASETS:
   TRAIN: ("coco_2017_train",)
   TEST: ("coco_2017_val",)
