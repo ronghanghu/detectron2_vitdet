@@ -5,20 +5,11 @@ import torch
 from torch.nn.parallel import DataParallel, DistributedDataParallel
 
 import detectron2.utils.comm as comm
-from detectron2.checkpoint.model_zoo import cache_file
 from detectron2.utils.file_io import PathManager
 
 
 class Checkpointer(object):
-    def __init__(
-        self,
-        model,
-        optimizer=None,
-        scheduler=None,
-        save_dir="",
-        save_to_disk=None,
-        cache_on_load=False,
-    ):
+    def __init__(self, model, optimizer=None, scheduler=None, save_dir="", save_to_disk=None):
         """
         Args:
             model (nn.Module):
@@ -39,7 +30,6 @@ class Checkpointer(object):
             save_to_disk = comm.is_main_process()
         self.save_to_disk = save_to_disk
         self.logger = logging.getLogger(__name__)
-        self.cache_on_load = cache_on_load
 
     def save(self, name, **kwargs):
         """
@@ -70,6 +60,7 @@ class Checkpointer(object):
     def load(self, path: str):
         """
         Load from the given checkpoint.
+        When path points to network file, this function has to be called on all ranks.
 
         Args:
             path (str): path or url to the checkpoint. If empty, will not load anything.
@@ -85,10 +76,6 @@ class Checkpointer(object):
         if not os.path.isfile(path):
             path = comm.dist_get_local_path(path)
             assert os.path.isfile(path), "Checkpoint {} not found!".format(path)
-        if os.path.isfile(path) and self.cache_on_load:
-            cached_f = cache_file(path)
-            self.logger.info("File {} cached in {}".format(path, cached_f))
-            path = cached_f
 
         checkpoint = self._load_file(path)
         self._load_model(checkpoint)
@@ -204,7 +191,7 @@ class Checkpointer(object):
                 state_dict[k] = torch.from_numpy(v)
 
 
-class PeriodicCheckpointer(object):
+class PeriodicCheckpointer:
     """
     Save checkpoints periodically.
 

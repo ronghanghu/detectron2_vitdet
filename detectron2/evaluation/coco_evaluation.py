@@ -48,6 +48,7 @@ class COCOEvaluator(DatasetEvaluator):
 
         self._metadata = MetadataCatalog.get(dataset_name)
         with contextlib.redirect_stdout(io.StringIO()):
+            # TODO this requires calling this function from all ranks
             json_file = comm.dist_get_local_path(self._metadata.json_file)
             self._coco_api = COCO(json_file)
 

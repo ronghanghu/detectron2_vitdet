@@ -44,6 +44,7 @@ def load_coco_json(json_file, image_root, dataset_name=None):
 
     timer = Timer()
     with contextlib.redirect_stdout(io.StringIO()):
+        # TODO this requires calling this function from all ranks
         json_file = comm.dist_get_local_path(json_file)
         coco_api = COCO(json_file)
     if timer.seconds() > 1:

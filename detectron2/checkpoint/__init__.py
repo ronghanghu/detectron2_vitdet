@@ -2,5 +2,6 @@
 # File:
 
 
+from . import model_zoo as _UNUSED  # register the handler
 from .checkpoint import Checkpointer, PeriodicCheckpointer
 from .detection_checkpoint import DetectionCheckpointer

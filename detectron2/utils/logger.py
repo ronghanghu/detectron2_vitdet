@@ -38,6 +38,7 @@ def setup_logger(
     """
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
+    logger.propagate = False
     # don't log results to files for non-master processes
     # TODO can create separate log files for subprocesses to facilitate debugging
     if distributed_rank > 0:
