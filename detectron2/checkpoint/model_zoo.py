@@ -92,11 +92,6 @@ class ModelCatalogHandler(PathHandler):
         return self._has_protocol(path, "catalog")
 
     def _get_local_path(self, path):
-        # TODO keep D2 model zoo handler for BC. Remove when release.
-        d2_prefix = "catalog://Detectron2/"
-        if path.startswith(d2_prefix):
-            return PathManager.get_local_path("detectron2://" + path[len(d2_prefix) :])
-
         logger = logging.getLogger(__name__)
         catalog_path = ModelCatalog.get(path[len("catalog://") :])
         logger.info("Catalog entry {} points to {}".format(path, catalog_path))

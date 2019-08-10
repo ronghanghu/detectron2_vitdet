@@ -26,6 +26,10 @@ def convert_basic_c2_names(original_keys):
     # Uniform both bn and gn names to "norm"
     layer_keys = [re.sub("bn\\.s$", "norm.weight", k) for k in layer_keys]
     layer_keys = [re.sub("bn\\.bias$", "norm.bias", k) for k in layer_keys]
+    layer_keys = [re.sub("bn\\.mean.ema$", "norm.running_mean", k) for k in layer_keys]
+    layer_keys = [re.sub("bn\\.variance.ema$", "norm.running_var", k) for k in layer_keys]
+    layer_keys = [re.sub("bn\\.gamma$", "norm.weight", k) for k in layer_keys]
+    layer_keys = [re.sub("bn\\.beta$", "norm.bias", k) for k in layer_keys]
     layer_keys = [re.sub("gn\\.s$", "norm.weight", k) for k in layer_keys]
     layer_keys = [re.sub("gn\\.bias$", "norm.bias", k) for k in layer_keys]
 
