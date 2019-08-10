@@ -387,7 +387,6 @@ _C.MODEL.RETINANET.ANCHOR_STRIDES = [[8, 16, 32, 64, 128]]
 _C.MODEL.RETINANET.ANCHOR_SIZES = [
     [x, x * 2 ** (1.0 / 3), x * 2 ** (2.0 / 3)] for x in [32, 64, 128, 256, 512]
 ]
-_C.MODEL.RETINANET.STRADDLE_THRESH = 0
 _C.MODEL.RETINANET.IN_FEATURES = ["p3", "p4", "p5", "p6", "p7"]
 
 # Convolutions to use in the cls and bbox tower

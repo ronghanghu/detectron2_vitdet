@@ -9,7 +9,6 @@ MODEL:
   ANCHOR_GENERATOR:
     NAME: "RetinaNetAnchorGenerator"
   RETINANET:
-    STRADDLE_THRESH: -1
     IOU_THRESHOLDS: [0.4, 0.5]
     IOU_LABELS: [0, -1, 1]
 DATASETS:
