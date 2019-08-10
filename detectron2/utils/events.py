@@ -146,6 +146,11 @@ class CommonMetricPrinter:
         except KeyError:  # they may not exist in the first few iterations (due to warmup)
             pass
 
+        try:
+            lr = "{:.6f}".format(storage.history("lr").latest())
+        except KeyError:
+            lr = "N/A"
+
         if torch.cuda.is_available():
             max_mem_mb = torch.cuda.max_memory_allocated() / 1024.0 / 1024.0
         else:
@@ -156,7 +161,7 @@ class CommonMetricPrinter:
             """\
 eta: {eta}  iter: {iter}  {losses}  \
 {time}  {data_time}  \
-lr: {lr:.6f}  {memory}\
+lr: {lr}  {memory}\
 """.format(
                 eta=eta_string,
                 iter=iteration,
@@ -169,7 +174,7 @@ lr: {lr:.6f}  {memory}\
                 ),
                 time="time: {:.4f}".format(time) if time is not None else "",
                 data_time="data_time: {:.4f}".format(data_time) if data_time is not None else "",
-                lr=storage.history("lr").latest(),
+                lr=lr,
                 memory="max mem: {:.0f}M".format(max_mem_mb) if max_mem_mb is not None else "",
             )
         )
