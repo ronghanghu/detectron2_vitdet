@@ -254,7 +254,7 @@ class Visualizer:
                 segment.
             segments_info (list[dict]): Describe each segment in `panoptic_seg`.
                 Each dict contains keys "id", "category_id", "isthing".
-            area_limit (int): segments with less than `area_limit` are not drawn.
+            area_limit (int): stuff segments with less than `area_limit` are not drawn.
 
         Returns:
             output (VisImage): image object with visualizations.

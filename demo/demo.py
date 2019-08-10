@@ -9,7 +9,7 @@ import tqdm
 
 from detectron2.config import get_cfg
 from detectron2.utils.logger import setup_logger
-
+from detectron2.engine.defaults import DefaultPredictor
 from predictor import COCODemo
 
 
@@ -60,7 +60,7 @@ def main():
 
     cfg = setup_cfg(args)
 
-    coco_demo = COCODemo(cfg)
+    coco_demo = COCODemo(DefaultPredictor(cfg))
 
     if args.webcam:
         assert args.input is None, "Cannot have both --input and --webcam!"
@@ -107,12 +107,35 @@ def main():
                     break  # esc to quit
 
     elif args.video_input:
+        video = cv2.VideoCapture(args.video_input)
+        width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        frames_per_second = video.get(cv2.CAP_PROP_FPS)
+        basename = os.path.basename(args.video_input)
+
         if args.output:
-            video_output_filename = "visualized-" + os.path.basename(args.video_input)
-            video_output = os.path.join(args.output, video_output_filename)
+            output_fname = os.path.join(args.output, basename)
+            assert not os.path.isfile(output_fname)
+            output_file = cv2.VideoWriter(
+                filename=output_fname,
+                fourcc=cv2.VideoWriter_fourcc(*"x264"),
+                fps=float(frames_per_second),
+                frameSize=(width, height),
+                isColor=True,
+            )
+        assert os.path.isfile(args.video_input)
+        for vis_frame in coco_demo.run_on_video(video):
+            if args.output:
+                output_file.write(vis_frame)
+            else:
+                cv2.imshow(basename, vis_frame)
+                if cv2.waitKey(1) == 27:
+                    break  # esc to quit
+        video.release()
+        if args.output:
+            output_file.release()
         else:
-            video_output = None
-        coco_demo.run_on_video(args.video_input, video_output)
+            cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
