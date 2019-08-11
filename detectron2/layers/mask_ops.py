@@ -56,7 +56,7 @@ def paste_masks_in_image(masks, boxes, image_shape, threshold=0.5):
         # ]
         # img_masks = torch.stack(img_masks, dim=0)[:, None]
     else:
-        img_masks = masks.new_empty((0, 1) + image_shape)
+        img_masks = masks.new_empty((0, 1) + image_shape, dtype=torch.uint8)
     return img_masks
 
 

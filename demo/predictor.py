@@ -1,4 +1,3 @@
-import cv2
 import torch
 
 from detectron2.utils.video_visualizer import VideoVisualizer
@@ -25,7 +24,7 @@ class COCODemo(object):
         vis_output = None
         predictions = self.predictor(image)
         # Convert image from OpenCV BGR format to Matplotlib RGB format.
-        image = torch.tensor(image).flip([2])
+        image = image[:, :, ::-1]
         visualizer = Visualizer(image, self.metadata, instance_mode=ColorMode.IMAGE)
         if "panoptic_seg" in predictions:
             panoptic_seg, segments_info = predictions["panoptic_seg"]
@@ -57,31 +56,22 @@ class COCODemo(object):
         Yields:
             ndarray: BGR visualizations of each video frame.
         """
-        # frequency of frame capture
-        seconds = 0.03
-        frames_per_second = video.get(cv2.CAP_PROP_FPS)
-        frame_grab_frequency = int(round(seconds * frames_per_second))
-
         video_visualizer = VideoVisualizer(self.metadata)
+        # cnt = 0
         while video.isOpened():
             success, frame = video.read()
             if success:
-                frame_number = int(round(video.get(cv2.CAP_PROP_POS_FRAMES)))
-                if frame_number % frame_grab_frequency == 0:
-                    predictions = self.predictor(frame)
-                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    frame = torch.tensor(frame)
+                predictions = self.predictor(frame)
+                # cnt += 1
+                frame = frame[:, :, ::-1]
+                vis_frame = None
+                if "instances" in predictions:
+                    predictions = predictions["instances"].to(self.cpu_device)
+                    vis_frame = video_visualizer.draw_instance_predictions(frame, predictions)
 
-                    vis_frame = None
-                    if "instances" in predictions:
-                        predictions = predictions["instances"].to(self.cpu_device)
-                        vis_frame = video_visualizer.draw_instance_predictions(
-                            frame=frame, predictions=predictions.to("cpu")
-                        )
-
-                    # Converts Matplotlib RGB format to OpenCV BGR format before visualizing
-                    # output in window.
-                    vis_frame = vis_frame.get_image()[:, :, [2, 1, 0]]
-                    yield vis_frame
+                # Converts Matplotlib RGB format to OpenCV BGR format before visualizing
+                # output in window.
+                vis_frame = vis_frame.get_image()[:, :, ::-1]
+                yield vis_frame
             else:
                 break

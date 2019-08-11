@@ -1,212 +1,149 @@
 import numpy as np
-from collections import namedtuple
-import cv2
 import pycocotools.mask as mask_util
 
 from detectron2.utils.visualizer import ColorMode, Visualizer
 
-_DISTANCE_BW_POINTS_THRESHOLD = 600
-_AREA_DIFFERENCE_THRESHOLD = 3600
+from .colormap import colormap
 
 
-"""
-Used to store data about different objects in this video frame.
+class _DetectedInstance:
+    """
+    Used to store data about detected objects in video frame,
+    in order to transfer color to objects in the future frames.
 
-Args:
-    center (ndarray[float]): a numpy array containing the x and y coordinates
-        that correspond to the mask's center of mass.
-    color: color of the polygon. Refer to `matplotlib.colors` for a full list of
-        formats that are accepted.
-    area (float): the area of the mask.
-"""
-_ColorScheme = namedtuple("_ColorScheme", "center, color, area")
+    Attributes:
+        label (int):
+        bbox (tuple[float]):
+        mask_rle (dict):
+        color (tuple[float]): RGB colors in range (0, 1)
+        ttl (int): time-to-live for the instance. For example, if ttl=2,
+            the instance color can be transferred to objects in the next two frames.
+    """
+
+    def __init__(self, label, bbox, mask_rle, color, ttl):
+        self.label = label
+        self.bbox = bbox
+        self.mask_rle = mask_rle
+        self.color = color
+        self.ttl = ttl
 
 
 class VideoVisualizer:
-    def __init__(self, metadata):
+    def __init__(self, metadata, instance_mode=ColorMode.IMAGE):
         """
         Args:
             metadata (MetadataCatalog): image metadata.
         """
         self.metadata = metadata
-        self.prev_frame_info = None
+        self._old_instances = []
+        assert instance_mode == ColorMode.IMAGE, "Other mode not supported yet."
+        self._instance_mode = instance_mode
 
-    def draw_instance_predictions(self, frame, predictions, coloring_mode=ColorMode.IMAGE):
+    def draw_instance_predictions(self, frame, predictions):
         """
         Draw instance-level prediction results on an image.
 
         Args:
-            frame (tensor): a tensor of shape (H, W, C), where H and W correspond to
-                the height and width of the image respectively. C is the number of
-                color channels. The image is required to be in RGB format since that
-                is a requirement of the Matplotlib library. The image is also expected
-                to be in the range [0, 255].
+            frame (ndarray): an RGB image of shape (H, W, C), in the range [0, 255].
             predictions (Instances): the output of an instance detection/segmentation
                 model. Following fields will be used to draw:
                 "pred_boxes", "pred_classes", "scores", "pred_masks" (or "pred_masks_rle").
-            coloring_mode (ColorMode): mode to use while picking colors for masks.
 
         Returns:
             output (VisImage): image object with visualizations.
         """
         frame_visualizer = Visualizer(frame, self.metadata)
+        num_instances = len(predictions)
+        if num_instances == 0:
+            return frame_visualizer.output
 
-        boxes = predictions.pred_boxes if predictions.has("pred_boxes") else None
+        boxes = predictions.pred_boxes.tensor.numpy() if predictions.has("pred_boxes") else None
         scores = predictions.scores if predictions.has("scores") else None
-        labels = predictions.pred_classes if predictions.has("pred_classes") else None
+        labels = predictions.pred_classes.numpy() if predictions.has("pred_classes") else None
         keypoints = predictions.pred_keypoints if predictions.has("pred_keypoints") else None
 
-        # draw mask
-        masks = None
-        assigned_colors = []
         if predictions.has("pred_masks"):
             masks = predictions.pred_masks
-        elif predictions.has("pred_masks_rle"):
-            sorted_masks_rle = predictions.pred_masks_rle
-            masks = mask_util.decode(sorted_masks_rle)
+            # mask IOU is not yet enabled
+            # masks_rles = mask_util.encode(np.asarray(masks.permute(1, 2, 0), order="F"))
+            # assert len(masks_rles) == num_instances
+        else:
+            masks = None
+        masks_rles = [None] * num_instances
 
-        # Convert binary masks to vertices of polygon.
-        if masks is not None:
-            # assign colors to masks
-            mask_metadata = self._update_mask_colors_with_prev_frame(
-                masks, frame_visualizer, labels, coloring_mode
-            )
-
-            for mask, metadata in zip(masks, mask_metadata):
-                # cv2.RETR_CCOMP flag retrieves all the contours and arranges them to a 2-level
-                # hierarchy. External contours (boundary) of the object are placed in hierarchy-1.
-                # Internal contours (holes) are placed in hierarchy-2.
-                # cv2.CHAIN_APPROX_NONE flag gets vertices of polygons from countours.
-                mask_vertices = cv2.findContours(
-                    mask.numpy().copy(), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE
-                )[-2]
-
-                mask_color = metadata.color
-                assigned_colors.append(mask_color)
-                for segment in mask_vertices:
-                    segment = np.asarray(segment).reshape(-1, 2)
-                    frame_visualizer.draw_polygon(segment, mask_color)
-            self.prev_frame_info = mask_metadata
+        detected = [
+            _DetectedInstance(labels[i], boxes[i], masks_rles[i], color=None, ttl=2)
+            for i in range(num_instances)
+        ]
+        colors = self._assign_colors(detected)
 
         if scores is not None:
-            labels = ["{}: {:.0f}%".format(str(l), s * 100) for l, s in zip(labels, scores)]
+            labels = [
+                "{}: {:.0f}%".format(self.metadata.class_names[l], s * 100)
+                for l, s in zip(labels, scores)
+            ]
         frame_visualizer.overlay_instances(
-            boxes=boxes, labels=labels, keypoints=keypoints, assigned_colors=assigned_colors
+            boxes=None,  # boxes are a bit distracting
+            masks=masks,
+            labels=labels,
+            keypoints=keypoints,
+            assigned_colors=colors,
         )
 
         return frame_visualizer.output
 
-    def _update_mask_colors_with_prev_frame(
-        self, masks, frame_visualizer, labels, coloring_mode=ColorMode.SEGMENTATION
-    ):
+    def _assign_colors(self, instances):
         """
-        Looks at previous frame to identify if the same object might have been seen.
-        If an object is matched from the previous frame, updates the `color` field of
-        the :class:`_ColorScheme` object used to represent different objects in
-        the this video frame.
-
-        Args:
-            masks (list[Tensor[float]]): the list contains the segmentation masks for all
-                objects in one image. Each tensor has a shape of (W, H), where W is the image
-                width and H is the image height.
-            frame_visualizer (Visualizer): a :class:`Visualizer` object that visualizes the
-                current frame.
-            labels (Tensor): a tensor of size N, where N is the number of objects in the
-                image. Each element in the tensor is the class label of the corresponding
-                object in the image. Note that the class labels are integers that are
-                in [0, #total classes) range.
-            coloring_mode (ColorMode): mode to use while picking colors for masks.
+        Naive tracking heuristics to assign same color to the same instance,
+        will update the internal state of tracked instances.
 
         Returns:
-            mask_metadata (list[_ColorScheme]): a list of :class:`_ColorScheme` objects that
-                store metadata related to each mask.
+            list[tuple[float]]: list of colors.
         """
-        if self.prev_frame_info is None:
-            mask_metadata = []
-            for idx, mask in enumerate(masks):
-                # find center of mass for each instance.
-                center, area = self._get_center_and_area_of_mask(mask)
-                if labels is not None and coloring_mode == ColorMode.SEGMENTATION:
-                    class_name = self.metadata.class_names[labels[idx]]
-                    color = frame_visualizer._jitter(
-                        frame_visualizer._get_color(class_name=class_name)
-                    )
-                else:
-                    color = frame_visualizer._get_color()
-                curr_obj = _ColorScheme(center=center, color=color, area=area)
-                mask_metadata.append(curr_obj)
 
+        # Compute iou with either boxes or masks:
+        is_crowd = np.zeros((len(instances),), dtype=np.bool)
+        # if instances[0].mask_rle is not None:
+        if False:  # box iou seems good enough
+            rles_old = [x.mask_rle for x in self._old_instances]
+            rles_new = [x.mask_rle for x in instances]
+            ious = mask_util.iou(rles_old, rles_new, is_crowd)
+            threshold = 0.7
         else:
-            mask_metadata = [None for _ in range(len(masks))]
-            matches = []
-            for curr_mask_idx, mask in enumerate(masks):
-                center, area = self._get_center_and_area_of_mask(mask)
-                # get distances to all objects in previous frame.
-                for prev_mask_idx, prev_obj in enumerate(self.prev_frame_info):
-                    dist = np.linalg.norm(center - prev_obj.center)
-                    if (
-                        dist < _DISTANCE_BW_POINTS_THRESHOLD
-                        and abs(prev_obj.area - area) < _AREA_DIFFERENCE_THRESHOLD
-                    ):
-                        matches.append([prev_mask_idx, curr_mask_idx, dist])
+            boxes_old = [x.bbox for x in self._old_instances]
+            boxes_new = [x.bbox for x in instances]
+            ious = mask_util.iou(boxes_old, boxes_new, is_crowd)
+            threshold = 0.7
+        if len(ious) == 0:
+            ious = np.zeros((len(self._old_instances), len(instances)), dtype="float32")
 
-            # sort by distance
-            matches.sort(key=lambda x: x[2])
+        # Only allow matching instances of the same label:
+        for old_idx, old in enumerate(self._old_instances):
+            for new_idx, new in enumerate(instances):
+                if old.label != new.label:
+                    ious[old_idx, new_idx] = 0
 
-            # match objects and share color.
-            prev_frame_matched_idx = set()
-            curr_frame_matched_idx = set()
-            for match in matches:
-                prev_mask_idx, curr_mask_idx, _ = match
+        matched_new_per_old = np.asarray(ious).argmax(axis=1)
+        max_iou_per_old = np.asarray(ious).max(axis=1)
 
-                # share color
-                if (
-                    prev_mask_idx not in prev_frame_matched_idx
-                    and curr_mask_idx not in curr_frame_matched_idx
-                ):
-                    # update matched indices
-                    prev_frame_matched_idx.add(prev_mask_idx)
-                    curr_frame_matched_idx.add(curr_mask_idx)
+        # Try to find match for each old instance:
+        extra_instances = []
+        for idx, inst in enumerate(self._old_instances):
+            if max_iou_per_old[idx] > threshold:
+                newidx = matched_new_per_old[idx]
+                if instances[newidx].color is None:
+                    instances[newidx].color = inst.color
+                    continue
+            # If an old instance does not match any new instances,
+            # keep it for the next frame in case it is just missed by the detector
+            inst.ttl -= 1
+            if inst.ttl > 0:
+                extra_instances.append(inst)
 
-                    # create current mask object
-                    prev_obj = self.prev_frame_info[prev_mask_idx]
-                    mask = masks[curr_mask_idx]
-                    center, area = self._get_center_and_area_of_mask(mask)
-                    color = prev_obj.color
-                    curr_obj = _ColorScheme(center=center, color=color, area=area)
-
-                    mask_metadata[curr_mask_idx] = curr_obj
-
-            # assign color, center and area values to remaining masks
-            for mask_idx, _ in enumerate(masks):
-                if not mask_metadata[mask_idx]:
-                    mask = masks[mask_idx]
-                    center, area = self._get_center_and_area_of_mask(mask)
-                    if labels is not None and coloring_mode == ColorMode.SEGMENTATION:
-                        class_name = self.metadata.class_names[labels[mask_idx]]
-                        color = frame_visualizer._jitter(
-                            frame_visualizer._get_color(class_name=class_name)
-                        )
-                    else:
-                        color = frame_visualizer._get_color()
-                    curr_obj = _ColorScheme(center=center, color=color, area=area)
-                    mask_metadata[mask_idx] = curr_obj
-
-        return mask_metadata
-
-    def _get_center_and_area_of_mask(self, mask):
-        """
-        Args:
-            mask (Tensor[float]): tensor of shape (W, H), where W is the image width
-                and H is the image height.
-
-        Returns:
-            center (ndarray[float]): a numpy array containing the x and y coordinates
-                that correspond to the mask's center of mass.
-            area (float): the area of the mask.
-        """
-        _, _, stats, centroids = cv2.connectedComponentsWithStats(mask.numpy(), 8)
-        area = float((stats[1:, -1])[0])
-        largest_component_id = np.argmax(area) + 1
-        center = centroids[largest_component_id]
-        return center, area
+        # Assign random color to newly-detected instances:
+        for inst in instances:
+            if inst.color is None:
+                cmap = colormap(rgb=True)
+                inst.color = cmap[np.random.randint(len(cmap))] / 255.0
+        self._old_instances = instances[:] + extra_instances
+        return [d.color for d in instances]

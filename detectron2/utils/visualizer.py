@@ -44,7 +44,9 @@ def _mask_to_polygon(mask):
     # Internal contours (holes) are placed in hierarchy-2.
     # cv2.CHAIN_APPROX_NONE flag gets vertices of polygons from countours.
     res = cv2.findContours(mask.copy(), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)[-2]
-    return [x.flatten() for x in res]
+    res = [x.flatten() for x in res]
+    res = [x for x in res if len(x) >= 6]
+    return res
 
 
 def _polygon_areas(polygons, h, w):
@@ -55,13 +57,17 @@ def _polygon_areas(polygons, h, w):
         list[float]: the areas
     """
     rles = []
+    non_empty = np.asarray([len(p) > 0 for p in polygons])
     for p in polygons:
-        assert len(p) > 0, "Does not support empty polygons!"
-        p = [x.tolist() for x in p]
-        p = mask_util.frPyObjects(p, h, w)
-        p = mask_util.merge(p)
-        rles.append(p)
-    return np.asarray(mask_util.area(rles), dtype=np.float32)
+        if len(p) > 0:  # coco does not work for empty ones
+            p = [x.tolist() for x in p]
+            p = mask_util.frPyObjects(p, h, w)
+            p = mask_util.merge(p)
+            rles.append(p)
+    non_empty_areas = np.asarray(mask_util.area(rles), dtype=np.float32)
+    areas = np.zeros((len(polygons),), dtype=np.float32)
+    areas[non_empty] = non_empty_areas
+    return areas
 
 
 def _polygon_to_box(polygon, h, w):
@@ -144,7 +150,7 @@ class Visualizer:
         self.output = VisImage(self.img, scale=scale)
         self.cpu_device = torch.device("cpu")
 
-        self._default_font_size = np.sqrt(self.output.height * self.output.width) // 50
+        self._default_font_size = np.sqrt(self.output.height * self.output.width) // 60
         self._instance_mode = instance_mode
 
     def draw_instance_predictions(self, predictions):
@@ -171,13 +177,11 @@ class Visualizer:
                 labels = ["{}: {:.0f}%".format(l, s * 100) for l, s in zip(labels, scores)]
         keypoints = predictions.pred_keypoints if predictions.has("pred_keypoints") else None
 
-        masks, polygons = None, None
         if predictions.has("pred_masks"):
             masks = predictions.pred_masks
-        elif predictions.has("pred_masks_rle"):
-            masks = predictions.pred_masks_rle
-        if masks is not None:
             polygons = self._convert_polygons(masks)
+        else:
+            masks, polygons = None, None
 
         if self._instance_mode == ColorMode.SEGMENTATION and self.metadata.get("thing_colors"):
             colors = [

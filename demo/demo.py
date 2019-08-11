@@ -8,8 +8,9 @@ import cv2
 import tqdm
 
 from detectron2.config import get_cfg
-from detectron2.utils.logger import setup_logger
 from detectron2.engine.defaults import DefaultPredictor
+from detectron2.utils.logger import setup_logger
+
 from predictor import COCODemo
 
 
@@ -111,10 +112,12 @@ def main():
         width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
         frames_per_second = video.get(cv2.CAP_PROP_FPS)
+        num_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
         basename = os.path.basename(args.video_input)
 
         if args.output:
             output_fname = os.path.join(args.output, basename)
+            output_fname = os.path.splitext(output_fname)[0] + ".avi"
             assert not os.path.isfile(output_fname)
             output_file = cv2.VideoWriter(
                 filename=output_fname,
@@ -124,7 +127,7 @@ def main():
                 isColor=True,
             )
         assert os.path.isfile(args.video_input)
-        for vis_frame in coco_demo.run_on_video(video):
+        for vis_frame in tqdm.tqdm(coco_demo.run_on_video(video), total=num_frames):
             if args.output:
                 output_file.write(vis_frame)
             else:
