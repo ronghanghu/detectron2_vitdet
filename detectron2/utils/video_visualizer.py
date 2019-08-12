@@ -3,7 +3,7 @@ import pycocotools.mask as mask_util
 
 from detectron2.utils.visualizer import ColorMode, Visualizer
 
-from .colormap import colormap
+from .colormap import random_color
 
 
 class _DetectedInstance:
@@ -143,7 +143,6 @@ class VideoVisualizer:
         # Assign random color to newly-detected instances:
         for inst in instances:
             if inst.color is None:
-                cmap = colormap(rgb=True)
-                inst.color = cmap[np.random.randint(len(cmap))] / 255.0
+                inst.color = random_color(rgb=True, maximum=1)
         self._old_instances = instances[:] + extra_instances
         return [d.color for d in instances]

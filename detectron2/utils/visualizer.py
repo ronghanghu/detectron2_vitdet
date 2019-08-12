@@ -1,6 +1,5 @@
 import colorsys
 import numpy as np
-import random
 from enum import Enum, unique
 import cv2
 import matplotlib.colors as mc
@@ -12,7 +11,7 @@ from matplotlib.patches import Polygon
 
 from detectron2.structures import Boxes, BoxMode, PolygonMasks
 
-from .colormap import colormap
+from .colormap import random_color
 
 _SMALL_OBJECT_AREA_THRESH = 1000
 _OFF_WHITE = (255, 255, 240)
@@ -235,7 +234,7 @@ class Visualizer:
             try:
                 mask_color = [x / 255 for x in self.metadata.stuff_colors[label]]
             except AttributeError:
-                mask_color = self._get_color()
+                mask_color = random_color(rgb=True, maximum=1)
 
             binary_mask = (predictions == label).numpy().astype(np.uint8)
             self.draw_binary_mask(binary_mask, color=mask_color, edge_color=edge_color, alpha=alpha)
@@ -290,7 +289,7 @@ class Visualizer:
             try:
                 mask_color = [x / 255 for x in self.metadata.stuff_colors[category_idx]]
             except AttributeError:
-                mask_color = self._get_color()
+                mask_color = random_color(rgb=True, maximum=1)
             self.draw_binary_mask(binary_mask, color=mask_color, edge_color=edge_color, alpha=alpha)
 
             # write label at the object's center of mass
@@ -312,7 +311,7 @@ class Visualizer:
                 mask_color = [x / 255 for x in self.metadata.thing_colors[category_idx]]
                 mask_color = self._jitter(mask_color)
             except AttributeError:
-                mask_color = self._get_color()
+                mask_color = random_color(rgb=True, maximum=1)
             self.draw_binary_mask(binary_mask, color=mask_color, edge_color=edge_color, alpha=alpha)
 
             # write label at the object's center of mass
@@ -397,7 +396,7 @@ class Visualizer:
         if labels is not None:
             assert len(labels) == num_instances
         if assigned_colors is None:
-            assigned_colors = [self._get_color() for _ in range(num_instances)]
+            assigned_colors = [random_color(rgb=True, maximum=1) for _ in range(num_instances)]
         if num_instances == 0:
             return self.output
 
@@ -672,30 +671,6 @@ class Visualizer:
     """
     Internal methods:
     """
-
-    def _get_color(self, class_name=None, idx=None):
-        """
-        Gives the color corresponding to the class name. If not specified, gives the color
-        corresponding to the index. Otherwise, picks a random color from the colormap.
-
-        Args:
-            class_name (str, optional): the class of the object. This will be used to
-                pick the color assigned to this class.
-            idx (int, optional): the index used to pick a color from the colormap list.
-
-        Returns:
-            color (tuple[double]): a tuple of 3 elements, containing the RGB values of the color
-                picked. The values in the list are in the [0.0, 1.0] range.
-        """
-        # pick pre-defined color based on class label.
-        if class_name:
-            for category in self.metadata.categories:
-                if category["name"] == class_name:
-                    return tuple(np.array(category["color"]).astype(np.float32) / 255)
-        color_list = colormap(rgb=True) / 255.0
-        if idx is None:
-            idx = random.randint(0, len(color_list) - 1)
-        return tuple(color_list[idx % len(color_list)])
 
     def _jitter(self, color):
         """

@@ -217,7 +217,6 @@ def _get_coco_instances_meta():
         "dataset_id_to_contiguous_id": dataset_id_to_contiguous_id,
         "class_names": class_names,
         "thing_colors": thing_colors,
-        "categories": COCO_CATEGORIES,
     }
     return ret
 
@@ -250,7 +249,6 @@ def _get_coco_panoptic_separated_meta():
         "stuff_contiguous_id_to_dataset_id": stuff_contiguous_id_to_dataset_id,
         "stuff_class_names": stuff_class_names,
         "stuff_colors": stuff_colors,
-        "categories": COCO_CATEGORIES,
     }
     ret.update(_get_coco_instances_meta())
     return ret
