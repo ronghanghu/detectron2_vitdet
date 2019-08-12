@@ -1,0 +1,11 @@
+_BASE_: "../Base-RCNN-FPN.yaml"
+MODEL:
+  WEIGHT: "catalog://ImageNetPretrained/MSRA/R-50"
+  MASK_ON: True
+  RESNETS:
+    DEPTH: 50
+  ROI_HEADS:
+    NUM_CLASSES: 1230
+DATASETS:
+  TRAIN: ("lvis_v0.5_train",)
+  TEST: ("lvis_v0.5_val",)

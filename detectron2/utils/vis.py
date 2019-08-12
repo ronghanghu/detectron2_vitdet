@@ -129,7 +129,7 @@ def draw_coco_dict(dataset_dict, class_names=None):
 
     Args:
         dataset_dict (dict): a dict in Detectron2 Dataset format. See DATASETS.md
-        class_names (list[str] or None): `class_names[cateogory_id]` is the
+        class_names (list[str] or None): `class_names[category_id]` is the
             name for this category. If not provided, the visualization will
             not contain class names.
     """

@@ -19,6 +19,7 @@ import os
 
 from detectron2.data import MetadataCatalog
 from .register_coco import register_coco_instances, register_coco_panoptic_separated
+from .lvis import register_lvis_instances, get_lvis_instances_meta
 
 # All coco categories, together with their nice-looking visualization colors
 # It's from https://github.com/cocodataset/panopticapi/blob/master/panoptic_coco_categories.json
@@ -354,6 +355,25 @@ for dataset_name, splits_per_dataset in _PREDEFINED_SPLITS.items():
         register_coco_instances(
             key,
             _get_builtin_metadata(dataset_name),
+            os.path.join("datasets", json_file) if "://" not in json_file else json_file,
+            os.path.join("datasets", image_root),
+        )
+
+
+_PREDEFINED_SPLITS_LVIS = {
+    "lvis_v0.5": {
+        "lvis_v0.5_train": ("coco/train2017", "lvis/lvis_v0.5_train.json"),
+        "lvis_v0.5_val": ("coco/val2017", "lvis/lvis_v0.5_val.json"),
+    }
+}
+
+
+for dataset_name, splits_per_dataset in _PREDEFINED_SPLITS_LVIS.items():
+    for key, (image_root, json_file) in splits_per_dataset.items():
+        # Assume pre-defined datasets live in `./datasets`.
+        register_lvis_instances(
+            key,
+            get_lvis_instances_meta(dataset_name),
             os.path.join("datasets", json_file) if "://" not in json_file else json_file,
             os.path.join("datasets", image_root),
         )

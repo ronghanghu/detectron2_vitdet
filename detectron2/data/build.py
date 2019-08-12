@@ -40,7 +40,7 @@ def filter_images_with_only_crowd_annotations(dataset_dicts):
 
     def valid(anns):
         for ann in anns:
-            if ann["iscrowd"] == 0:
+            if ann.get("iscrowd", 0) == 0:
                 return True
         return False
 
@@ -155,7 +155,7 @@ def print_instances_class_histogram(dataset_dicts, class_names):
     histogram = np.zeros((num_classes,), dtype=np.int)
     for entry in dataset_dicts:
         annos = entry["annotations"]
-        classes = [x["category_id"] for x in annos if not x["iscrowd"]]
+        classes = [x["category_id"] for x in annos if not x.get("iscrowd", 0)]
         histogram += np.histogram(classes, bins=hist_bins)[0]
 
     N_COLS = min(6, len(class_names) * 2)
