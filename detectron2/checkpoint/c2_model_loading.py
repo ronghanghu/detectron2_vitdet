@@ -1,6 +1,5 @@
 import copy
 import logging
-import numpy as np
 import re
 import torch
 
@@ -59,16 +58,16 @@ def convert_basic_c2_names(original_keys):
     return layer_keys
 
 
-# TODO make it support RetinaNet, etc
 def convert_c2_detectron_names(weights):
     """
     Map Caffe2 Detectron weight names to Detectron2 names.
 
     Args:
-        weights (dict): name -> numpy array
+        weights (dict): name -> tensor
 
     Returns:
-        dict with detectron2 names
+        dict: detectron2 names -> tensor
+        dict: detectron2 names -> C2 names
     """
     logger = logging.getLogger(__name__)
     logger.info("Remapping C2 weights ......")
@@ -171,11 +170,12 @@ def convert_c2_detectron_names(weights):
     # Done with replacements
     # --------------------------------------------------------------------------
     assert len(set(layer_keys)) == len(layer_keys)
+    assert len(original_keys) == len(layer_keys)
 
-    max_c2_key_size = max(len(k) for k in original_keys)
     new_weights = {}
+    new_keys_to_old_keys = {}
     for orig, renamed in zip(original_keys, layer_keys):
-        logger.info("C2 name: {: <{}} mapped name: {}".format(orig, max_c2_key_size, renamed))
+        new_keys_to_old_keys[renamed] = orig
         if renamed.startswith("bbox_pred.") or renamed.startswith("mask_head.predictor."):
             # remove the meaningless prediction weight for background class
             new_start_idx = 4 if renamed.startswith("bbox_pred.") else 1
@@ -192,19 +192,19 @@ def convert_c2_detectron_names(weights):
                 "Move classification weights for background class in {} from index 0 to "
                 "index {}.".format(renamed, weights[orig].shape[0] - 1)
             )
-            new_weights[renamed] = np.concatenate((weights[orig][1:], weights[orig][:1]))
+            new_weights[renamed] = torch.cat([weights[orig][1:], weights[orig][:1]])
         else:
             new_weights[renamed] = weights[orig]
 
-    return new_weights
+    return new_weights, new_keys_to_old_keys
 
 
 # Note the current matching is not symmetric.
 # it assumes model_state_dict will have longer names.
-def align_and_update_state_dicts(model_state_dict, loaded_state_dict):
+def align_and_update_state_dicts(model_state_dict, c2_state_dict):
     """
     Match names between the two state-dict, and update the values of model_state_dict in-place with
-    copies of the matched tensor in loaded_state_dict.
+    copies of the matched tensor in c2_state_dict.
 
     Strategy: suppose that the models that we will create will have prefixes appended
     to each of its keys, for example due to an extra level of nesting that the original
@@ -220,6 +220,7 @@ def align_and_update_state_dicts(model_state_dict, loaded_state_dict):
     backbone[0].body.res2.conv1.weight to res2.conv1.weight.
     """
     model_keys = sorted(list(model_state_dict.keys()))
+    loaded_state_dict, old_keys = convert_c2_detectron_names(c2_state_dict)
     loaded_keys = sorted(list(loaded_state_dict.keys()))
 
     def match(a, b):
@@ -277,7 +278,9 @@ def align_and_update_state_dicts(model_state_dict, loaded_state_dict):
 
         matched_keys[key_old] = key
         logger.info(
-            log_str_template.format(key, max_size, key_old, max_size_loaded, tuple(shape_in_model))
+            log_str_template.format(
+                key, max_size, old_keys[key_old], max_size_loaded, tuple(shape_in_model)
+            )
         )
     matched_model_keys = matched_keys.values()
     matched_loaded_keys = matched_keys.keys()
@@ -291,5 +294,6 @@ def align_and_update_state_dicts(model_state_dict, loaded_state_dict):
     unmatched_loaded_keys = [k for k in loaded_keys if k not in matched_loaded_keys]
     if len(unmatched_loaded_keys):
         logger.warning(
-            "Keys in the checkpoint but not found in the model: " + ", ".join(unmatched_loaded_keys)
+            "Keys in the checkpoint but not found in the model: "
+            + ", ".join([old_keys[x] for x in unmatched_loaded_keys])
         )

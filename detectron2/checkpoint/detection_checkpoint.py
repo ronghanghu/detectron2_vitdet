@@ -2,7 +2,7 @@ import logging
 import numpy as np
 import pickle
 
-from .c2_model_loading import align_and_update_state_dicts, convert_c2_detectron_names
+from .c2_model_loading import align_and_update_state_dicts
 from .checkpoint import Checkpointer
 
 
@@ -122,8 +122,7 @@ class DetectionCheckpointer(Checkpointer):
                     # Detection models have "blobs", but ImageNet models don't
                     data = data["blobs"]
                 data = {k: v for k, v in data.items() if not k.endswith("_momentum")}
-                model = convert_c2_detectron_names(data)
-                return {"model": model, "__author__": "Caffe2"}
+                return {"model": data, "__author__": "Caffe2"}
 
         loaded = super()._load_file(f)  # load native pth checkpoint
         if "model" not in loaded:
