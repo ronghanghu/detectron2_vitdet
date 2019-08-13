@@ -139,7 +139,7 @@ class CommonMetricPrinter:
         data_time, time = None, None
         eta_string = "N/A"
         try:
-            data_time = storage.history("data_time").median(20)
+            data_time = storage.history("data_time").avg(20)
             time = storage.history("time").global_avg()
             eta_seconds = storage.history("time").median(1000) * (self._max_iter - iteration)
             eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
