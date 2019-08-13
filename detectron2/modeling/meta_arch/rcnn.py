@@ -1,7 +1,9 @@
+import logging
 import torch
 from torch import nn
 
 from detectron2.structures import ImageList
+from detectron2.utils.logger import log_first_n
 
 from ..backbone import build_backbone
 from ..postprocessing import detector_postprocess
@@ -44,7 +46,7 @@ class GeneralizedRCNN(nn.Module):
 
         For now, each item in the list is a dict that contains:
             image: Tensor, image in (C, H, W) format.
-            targets: Instances
+            instances: Instances
             proposals: Instances, precomputed proposals.
             Other information that's included in the original dicts, such as:
                 "height", "width" (int): the output resolution of the model, used in inference.
@@ -60,21 +62,26 @@ class GeneralizedRCNN(nn.Module):
             return self.inference(batched_inputs)
 
         images = self.preprocess_image(batched_inputs)
-        if "targets" in batched_inputs[0]:
-            targets = [x["targets"].to(self.device) for x in batched_inputs]
+        if "instances" in batched_inputs[0]:
+            gt_instances = [x["instances"].to(self.device) for x in batched_inputs]
+        elif "targets" in batched_inputs[0]:
+            log_first_n(
+                logging.WARN, "'targets' in the model inputs is now renamed to 'instances'!", n=10
+            )
+            gt_instances = [x["targets"].to(self.device) for x in batched_inputs]
         else:
-            targets = None
+            gt_instances = None
 
         features = self.backbone(images.tensor)
 
         if self.proposal_generator:
-            proposals, proposal_losses = self.proposal_generator(images, features, targets)
+            proposals, proposal_losses = self.proposal_generator(images, features, gt_instances)
         else:
             assert "proposals" in batched_inputs[0]
             proposals = [x["proposals"].to(self.device) for x in batched_inputs]
             proposal_losses = {}
 
-        _, detector_losses = self.roi_heads(images, features, proposals, targets)
+        _, detector_losses = self.roi_heads(images, features, proposals, gt_instances)
 
         losses = {}
         losses.update(detector_losses)
@@ -167,11 +174,16 @@ class ProposalNetwork(nn.Module):
         images = ImageList.from_tensors(images, self.backbone.size_divisibility)
         features = self.backbone(images.tensor)
 
-        if "targets" in batched_inputs[0]:
-            targets = [x["targets"].to(self.device) for x in batched_inputs]
+        if "instances" in batched_inputs[0]:
+            gt_instances = [x["instances"].to(self.device) for x in batched_inputs]
+        elif "targets" in batched_inputs[0]:
+            log_first_n(
+                logging.WARN, "'targets' in the model inputs is now renamed to 'instances'!", n=10
+            )
+            gt_instances = [x["targets"].to(self.device) for x in batched_inputs]
         else:
-            targets = None
-        proposals, proposal_losses = self.proposal_generator(images, features, targets)
+            gt_instances = None
+        proposals, proposal_losses = self.proposal_generator(images, features, gt_instances)
         # In training, the proposals are not useful at all but we generate them anyway.
         # This makes RPN-only models about 5% slower.
         if self.training:

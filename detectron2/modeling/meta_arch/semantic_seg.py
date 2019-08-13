@@ -46,7 +46,7 @@ class SemanticSegmentor(nn.Module):
 
         For now, each item in the list is a dict that contains:
             image: Tensor, image in (C, H, W) format.
-            sem_seg_gt: semantic segmentation ground truth
+            sem_seg: semantic segmentation ground truth
             Other information that's included in the original dicts, such as:
                 "height", "width" (int): the output resolution of the model, used in inference.
                     See :meth:`postprocess` for details.
@@ -63,8 +63,8 @@ class SemanticSegmentor(nn.Module):
 
         features = self.backbone(images.tensor)
 
-        if "sem_seg_gt" in batched_inputs[0]:
-            targets = [x["sem_seg_gt"].to(self.device) for x in batched_inputs]
+        if "sem_seg" in batched_inputs[0]:
+            targets = [x["sem_seg"].to(self.device) for x in batched_inputs]
             targets = ImageList.from_tensors(
                 targets, self.backbone.size_divisibility, self.sem_seg_head.ignore_value
             ).tensor

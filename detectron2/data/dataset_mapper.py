@@ -123,11 +123,11 @@ class DatasetMapper:
                 for obj in dataset_dict.pop("annotations")
                 if obj.get("iscrowd", 0) == 0
             ]
-            targets = utils.annotations_to_instances(annos, image_shape)
+            instances = utils.annotations_to_instances(annos, image_shape)
             # Create a tight bounding box from masks, useful when image is cropped
-            if self.crop_gen and targets.has("gt_masks"):
-                targets.gt_boxes = targets.gt_masks.get_bounding_boxes()
-            dataset_dict["targets"] = utils.filter_empty_instances(targets)
+            if self.crop_gen and instances.has("gt_masks"):
+                instances.gt_boxes = instances.gt_masks.get_bounding_boxes()
+            dataset_dict["instances"] = utils.filter_empty_instances(instances)
 
         # USER: Remove if you don't do semantic/panoptic segmentation.
         if "sem_seg_file_name" in dataset_dict:
@@ -136,6 +136,5 @@ class DatasetMapper:
                 sem_seg_gt = np.asarray(sem_seg_gt, dtype="uint8")
             sem_seg_gt = transforms.apply_segmentation(sem_seg_gt)
             sem_seg_gt = torch.as_tensor(sem_seg_gt.astype("long"))
-            dataset_dict["sem_seg_gt"] = sem_seg_gt
-        # TODO find a better way to load panoptic data than using the "separate" dataset
+            dataset_dict["sem_seg"] = sem_seg_gt
         return dataset_dict

@@ -20,6 +20,8 @@ class _DetectedInstance:
             the instance color can be transferred to objects in the next two frames.
     """
 
+    __slots__ = ["label", "bbox", "mask_rle", "color", "ttl"]
+
     def __init__(self, label, bbox, mask_rle, color, ttl):
         self.label = label
         self.bbox = bbox

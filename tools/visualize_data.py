@@ -78,7 +78,7 @@ if __name__ == "__main__":
                     img = np.asarray(Image.fromarray(img, mode=cfg.INPUT.FORMAT).convert("RGB"))
 
                 visualizer = Visualizer(img, metadata=metadata, scale=scale)
-                target_fields = per_image["targets"].get_fields()
+                target_fields = per_image["instances"].get_fields()
                 labels = [metadata.class_names[i] for i in target_fields["gt_classes"]]
                 vis = visualizer.overlay_instances(
                     labels=labels,

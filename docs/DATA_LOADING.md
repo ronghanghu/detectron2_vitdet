@@ -34,7 +34,7 @@ which is the input format of all the builtin models.
 The dict may contain the following keys:
 
 * "image": `Tensor` in (C, H, W) format.
-* "targets": an `Instances` object, with the following fields:
+* "instances": an `Instances` object, with the following fields:
 	+ "gt_boxes": `Boxes` object of N boxes
 	+ "gt_classes": `Tensor`, a vector of N labels, in range [0, #class)
 	+ "gt_masks": a `PolygonMasks` object, masks for each instance.
@@ -48,7 +48,7 @@ The dict may contain the following keys:
 
 	If provided, the model will produce output in this resolution,
 	rather than in the resolution of `image`. This is more efficient and accurate.
-* "sem_seg_gt": `Tensor[int]` in (H, W) format. The semantic segmentation ground truth.
+* "sem_seg": `Tensor[int]` in (H, W) format. The semantic segmentation ground truth.
 
 
 ## Model Output Format
@@ -57,6 +57,7 @@ The builtin models produce a `list[dict]`, one dict for each image. Each dict ma
 
 * "instances": `Instances` object with the following fields:
 	* "pred_boxes": `Boxes` object of N boxes
+	* "scores": `Tensor`, a vector of N scores
 	* "pred_classes": `Tensor`, a vector of N labels in range [0, #class)
 	+ "pred_masks": a `Tensor` of shape (N, H, W), masks for each instance.
 	+ "pred_keypoints": a `Tensor` of shape (N, #keypoint, 3).

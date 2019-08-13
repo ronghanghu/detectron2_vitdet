@@ -1,6 +1,8 @@
+import inspect
 import logging
 import os
 import sys
+from collections import Counter
 from termcolor import colored
 
 from detectron2.utils.file_io import PathManager
@@ -67,3 +69,22 @@ def setup_logger(
         logger.addHandler(fh)
 
     return logger
+
+
+_LOGGED_MSGS = Counter()
+
+
+def log_first_n(lvl, msg, n=1):
+    """
+    Log the given msg only for the first n times.
+
+    Args:
+        lvl (int): the logging level
+        msg (str):
+        n (int):
+    """
+    _LOGGED_MSGS[msg] += 1
+    if _LOGGED_MSGS[msg] <= n:
+        caller_frame = inspect.currentframe().f_back
+        logger = logging.getLogger(caller_frame.f_globals["__name__"])
+        logger.log(lvl, msg)

@@ -57,8 +57,8 @@ class PanopticFPN(nn.Module):
 
         For now, each item in the list is a dict that contains:
             image: Tensor, image in (C, H, W) format.
-            targets: Instances
-            sem_seg_gt: semantic segmentation ground truth.
+            instances: Instances
+            sem_seg: semantic segmentation ground truth.
             Other information that's included in the original dicts, such as:
                 "height", "width" (int): the output resolution of the model, used in inference.
                     See :meth:`postprocess` for details.
@@ -81,23 +81,23 @@ class PanopticFPN(nn.Module):
             proposals = [x["proposals"].to(self.device) for x in batched_inputs]
             proposal_losses = {}
 
-        if "sem_seg_gt" in batched_inputs[0]:
-            sem_seg_targets = [x["sem_seg_gt"].to(self.device) for x in batched_inputs]
-            sem_seg_targets = ImageList.from_tensors(
-                sem_seg_targets, self.backbone.size_divisibility, self.sem_seg_head.ignore_value
+        if "sem_seg" in batched_inputs[0]:
+            gt_sem_seg = [x["sem_seg"].to(self.device) for x in batched_inputs]
+            gt_sem_seg = ImageList.from_tensors(
+                gt_sem_seg, self.backbone.size_divisibility, self.sem_seg_head.ignore_value
             ).tensor
         else:
-            sem_seg_targets = None
-        sem_seg_results, sem_seg_losses = self.sem_seg_head(features, sem_seg_targets)
+            gt_sem_seg = None
+        sem_seg_results, sem_seg_losses = self.sem_seg_head(features, gt_sem_seg)
 
-        if "targets" in batched_inputs[0]:
-            detector_targets = [x["targets"].to(self.device) for x in batched_inputs]
+        if "instances" in batched_inputs[0]:
+            gt_instances = [x["instances"].to(self.device) for x in batched_inputs]
         else:
-            detector_targets = None
+            gt_instances = None
         if self.proposal_generator:
-            proposals, proposal_losses = self.proposal_generator(images, features, detector_targets)
+            proposals, proposal_losses = self.proposal_generator(images, features, gt_instances)
         detector_results, detector_losses = self.roi_heads(
-            images, features, proposals, detector_targets
+            images, features, proposals, gt_instances
         )
 
         if self.training:

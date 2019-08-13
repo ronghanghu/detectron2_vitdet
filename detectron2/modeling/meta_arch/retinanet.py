@@ -1,3 +1,4 @@
+import logging
 import math
 from collections import defaultdict
 import torch
@@ -6,6 +7,7 @@ from torch import nn
 
 from detectron2.layers import cat, nms
 from detectron2.structures import Boxes, ImageList, Instances, pairwise_iou
+from detectron2.utils.logger import log_first_n
 
 from ..anchor_generator import build_anchor_generator
 from ..backbone import build_backbone
@@ -108,7 +110,7 @@ class RetinaNet(nn.Module):
                 Each item in the list contains the inputs for one image.
             For now, each item in the list is a dict that contains:
                 image: Tensor, image in (C, H, W) format.
-                targets: Instances
+                instances: Instances
                 Other information that's included in the original dicts, such as:
                     "height", "width" (int): the output resolution of the model, used in inference.
                         See :meth:`postprocess` for details.
@@ -117,10 +119,15 @@ class RetinaNet(nn.Module):
                 storing the loss. Used during training only.
         """
         images = self.preprocess_image(batched_inputs)
-        if "targets" in batched_inputs[0]:
-            targets = [x["targets"].to(self.device) for x in batched_inputs]
+        if "instances" in batched_inputs[0]:
+            gt_instances = [x["instances"].to(self.device) for x in batched_inputs]
+        elif "targets" in batched_inputs[0]:
+            log_first_n(
+                logging.WARN, "'targets' in the model inputs is now renamed to 'instances'!", n=10
+            )
+            gt_instances = [x["targets"].to(self.device) for x in batched_inputs]
         else:
-            targets = None
+            gt_instances = None
 
         features = self.backbone(images.tensor)
         features = [features[f] for f in self.in_features]
@@ -128,7 +135,7 @@ class RetinaNet(nn.Module):
         anchors = self.anchor_generator(images, features)
 
         if self.training:
-            gt_classes, gt_anchors_reg_deltas = self.get_ground_truth(anchors, targets)
+            gt_classes, gt_anchors_reg_deltas = self.get_ground_truth(anchors, gt_instances)
             return self.losses(gt_classes, gt_anchors_reg_deltas, box_cls, box_regression)
         else:
             results = self.inference(box_cls, box_regression, anchors, images)

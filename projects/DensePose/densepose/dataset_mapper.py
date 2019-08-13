@@ -88,13 +88,13 @@ class DatasetMapper:
             for obj in dataset_dict.pop("annotations")
             if obj.get("iscrowd", 0) == 0
         ]
-        targets = utils.annotations_to_instances(annos, image_shape)
+        instances = utils.annotations_to_instances(annos, image_shape)
 
         if len(annos) and "densepose" in annos[0]:
             gt_densepose = [obj["densepose"] for obj in annos]
-            targets.gt_densepose = DensePoseList(gt_densepose, targets.gt_boxes, image_shape)
+            instances.gt_densepose = DensePoseList(gt_densepose, instances.gt_boxes, image_shape)
 
-        dataset_dict["targets"] = targets[targets.gt_boxes.nonempty()]
+        dataset_dict["instances"] = instances[instances.gt_boxes.nonempty()]
         return dataset_dict
 
     def _transform_densepose(self, annotation, transforms):
