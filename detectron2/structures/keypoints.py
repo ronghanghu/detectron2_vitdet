@@ -130,6 +130,10 @@ def _keypoints_to_heatmap(keypoints, rois, heatmap_size):
 @torch.no_grad()
 def heatmaps_to_keypoints(maps, rois):
     """
+    Args:
+        maps (Tensor): (#ROIs, #keypoints, POOL_H, POOL_W)
+        rois (Tensor): (#ROIs, 4)
+
     Extract predicted keypoint locations from heatmaps. Output has shape
     (#rois, #keypoints, 4) with the last dimension corresponding to (x, y, logit, prob)
     for each keypoint.
@@ -158,9 +162,16 @@ def heatmaps_to_keypoints(maps, rois):
         outsize = (int(heights_ceil[i]), int(widths_ceil[i]))
         roi_map = interpolate(maps[[i]], size=outsize, mode="bicubic", align_corners=False).squeeze(
             0
-        )
+        )  # #keypoints x H x W
 
-        roi_map_probs = scores_to_probs(roi_map)
+        # softmax over the spatial region
+        max_score, _ = roi_map.view(num_keypoints, -1).max(1)
+        max_score = max_score.view(num_keypoints, 1, 1)
+        tmp_full_resoltuion = (roi_map - max_score).exp_()
+        tmp_pool_resoltuion = (maps[i] - max_score).exp_()
+        # Produce scores over the region H x W, but normalize with POOL_H x POOL_W
+        # So that the scores of objects of different absolute sizes will be more comparable
+        roi_map_probs = tmp_full_resoltuion / tmp_pool_resoltuion.sum((1, 2), keepdim=True)
 
         w = roi_map.shape[2]
         pos = roi_map.view(num_keypoints, -1).argmax(1)
@@ -182,12 +193,3 @@ def heatmaps_to_keypoints(maps, rois):
         xy_preds[i, :, 3] = roi_map_probs[keypoints_idx, y_int, x_int]
 
     return xy_preds
-
-
-def scores_to_probs(scores):
-    """ Converts a CxHxW tensor of scores to probabilities spatially."""
-    num_keypoints = scores.shape[0]
-    max_score, _ = scores.view(num_keypoints, -1).max(1)
-    tmp = (scores - max_score.view(num_keypoints, 1, 1)).exp_()
-    scores = tmp / tmp.sum((1, 2), keepdim=True)
-    return scores

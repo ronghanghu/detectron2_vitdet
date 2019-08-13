@@ -18,7 +18,7 @@ _OFF_WHITE = (255, 255, 240)
 _BLACK = (0, 0, 0)
 _RED = (255, 0, 0)
 
-_KEYPOINT_THRESHOLD = 0.01
+_KEYPOINT_THRESHOLD = 0.05
 
 
 @unique
@@ -387,12 +387,12 @@ class Visualizer:
                 assert len(masks) == num_instances
             else:
                 num_instances = len(masks)
-        if keypoints:
+        if keypoints is not None:
             if num_instances:
                 assert len(keypoints) == num_instances
             else:
                 num_instances = len(keypoints)
-            keypoints = np.asarray(keypoints).reshape(num_instances, -1, 3)
+            keypoints = np.asarray(keypoints)
         if labels is not None:
             assert len(labels) == num_instances
         if assigned_colors is None:
@@ -414,6 +414,8 @@ class Visualizer:
             labels = [labels[k] for k in sorted_idxs] if labels is not None else None
             masks = [masks[idx] for idx in sorted_idxs] if masks is not None else None
             assigned_colors = [assigned_colors[idx] for idx in sorted_idxs]
+            # keypoints do not need to be sorted
+            # keypoints = keypoints[sorted_idxs] if keypoints is not None else None
 
         for i in range(num_instances):
             color = assigned_colors[i]

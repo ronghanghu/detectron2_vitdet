@@ -45,6 +45,14 @@ class COCODemo(object):
 
         return predictions, vis_output
 
+    def _frame_from_video(self, video):
+        while video.isOpened():
+            success, frame = video.read()
+            if success:
+                yield frame
+            else:
+                break
+
     def run_on_video(self, video):
         """
         Visualizes predictions on frames of the input video.
@@ -57,21 +65,15 @@ class COCODemo(object):
             ndarray: BGR visualizations of each video frame.
         """
         video_visualizer = VideoVisualizer(self.metadata)
-        # cnt = 0
-        while video.isOpened():
-            success, frame = video.read()
-            if success:
-                predictions = self.predictor(frame)
-                # cnt += 1
-                frame = frame[:, :, ::-1]
-                vis_frame = None
-                if "instances" in predictions:
-                    predictions = predictions["instances"].to(self.cpu_device)
-                    vis_frame = video_visualizer.draw_instance_predictions(frame, predictions)
+        for _, frame in enumerate(self._frame_from_video(video)):
+            predictions = self.predictor(frame)
+            frame = frame[:, :, ::-1]
+            vis_frame = None
+            if "instances" in predictions:
+                predictions = predictions["instances"].to(self.cpu_device)
+                vis_frame = video_visualizer.draw_instance_predictions(frame, predictions)
 
-                # Converts Matplotlib RGB format to OpenCV BGR format before visualizing
-                # output in window.
-                vis_frame = vis_frame.get_image()[:, :, ::-1]
-                yield vis_frame
-            else:
-                break
+            # Converts Matplotlib RGB format to OpenCV BGR format before visualizing
+            # output in window.
+            vis_frame = vis_frame.get_image()[:, :, ::-1]
+            yield vis_frame

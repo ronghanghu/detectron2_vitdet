@@ -85,7 +85,7 @@ class VideoVisualizer:
                 for l, s in zip(labels, scores)
             ]
         frame_visualizer.overlay_instances(
-            boxes=None,  # boxes are a bit distracting
+            boxes=None if masks is not None else boxes,  # boxes are a bit distracting
             masks=masks,
             labels=labels,
             keypoints=keypoints,

@@ -63,26 +63,7 @@ def main():
 
     coco_demo = COCODemo(DefaultPredictor(cfg))
 
-    if args.webcam:
-        assert args.input is None, "Cannot have both --input and --webcam!"
-
-        cam = cv2.VideoCapture(0)
-        while True:
-            start_time = time.time()
-            ret_val, img = cam.read()
-            predictions, visualized_output = coco_demo.run_on_image(img)
-            logger.info(
-                "Time: {:.2f} s; {} instances detected".format(time.time() - start_time),
-                len(predictions),
-            )
-            if visualized_output:
-                # Converts Matplotlib RGB format to OpenCV BGR format before visualizing output.
-                cv2.imshow("COCO detections", visualized_output.get_image()[:, :, [2, 1, 0]])
-            if cv2.waitKey(1) == 27:
-                break  # esc to quit
-        cv2.destroyAllWindows()
-
-    elif args.input:
+    if args.input:
         if len(args.input) == 1:
             args.input = glob.glob(os.path.expanduser(args.input[0]))
         for path in tqdm.tqdm(args.input, disable=not args.output):
@@ -102,11 +83,17 @@ def main():
                     visualized_output.save(out_filename)
             else:
                 if visualized_output:
-                    # Converts Matplotlib RGB format to OpenCV BGR format before visualizing output.
                     cv2.imshow("COCO detections", visualized_output.get_image()[:, :, ::-1])
                 if cv2.waitKey(0) == 27:
                     break  # esc to quit
-
+    elif args.webcam:
+        assert args.input is None, "Cannot have both --input and --webcam!"
+        cam = cv2.VideoCapture(0)
+        for vis in tqdm.tqdm(coco_demo.run_on_video(cam)):
+            cv2.imshow("COCO detections", vis)
+            if cv2.waitKey(1) == 27:
+                break  # esc to quit
+        cv2.destroyAllWindows()
     elif args.video_input:
         video = cv2.VideoCapture(args.video_input)
         width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
