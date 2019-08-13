@@ -3,7 +3,6 @@
 import errno
 import logging
 import os
-from abc import ABCMeta, abstractmethod
 from urllib.parse import urlparse
 from borc.common.download import download
 
@@ -28,20 +27,19 @@ def get_cache_dir(cache_dir=None):
     return cache_dir
 
 
-class PathHandler(metaclass=ABCMeta):
+class PathHandler:
     """
     Base class for path handler. Path handler takes a
     generic path (which may look like "protocol://*") which identifies a file,
     and returns either a file name or a file-like object.
     """
 
-    @abstractmethod
-    def _support(self, path):
+    def _get_supported_prefixes(self):
         """
         Returns:
-            bool: whether this handler can handle this path
+            List[str]: the list of URI prefixes this PathHandler can support
         """
-        pass
+        raise NotImplementedError()
 
     def _get_local_path(self, path):
         """
@@ -49,7 +47,7 @@ class PathHandler(metaclass=ABCMeta):
             str: a file path which exists on the local file system. This function
                  can download/cache if the resource is located remotely.
         """
-        return path
+        raise NotImplementedError()
 
     def _open(self, path, mode="r"):
         """
@@ -85,15 +83,8 @@ class PathHandler(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
-    @staticmethod
-    def _has_protocol(url, protocol):
-        return url.startswith(protocol + "://")
-
 
 class NativePathHandler(PathHandler):
-    def _support(self, path):
-        return bool(path)
-
     def _get_local_path(self, path):
         return path
 
@@ -126,8 +117,8 @@ class HTTPURLHandler(PathHandler):
     def __init__(self):
         self.cache_map = {}
 
-    def _support(self, path):
-        return any(self._has_protocol(path, k) for k in ["http", "https", "ftp"])
+    def _get_supported_prefixes(self):
+        return ["http://", "https://", "ftp://"]
 
     def _get_local_path(self, path):
         if path not in self.cache_map:
@@ -152,57 +143,64 @@ class PathManager:
     A class for users to open generic paths or translate generic paths to file names.
     """
 
-    _PATH_HANDLERS = [HTTPURLHandler(), NativePathHandler()]
+    _PATH_HANDLERS = {}
+    _NATIVE_PATH_HANDLER = NativePathHandler()
+
+    @staticmethod
+    def __get_path_handler(path):
+        """
+        Finds a PathHandler that supports the given path. Falls back to the native
+        PathHandler if no other handler is found.
+
+        Args:
+            path (str): URI path to resource
+        Returns:
+            handler (PathHandler)
+        """
+        # Sort in reverse order so that longer prefixes take priority,
+        # eg: http://foo/bar before http://foo
+        for p in sorted(PathManager._PATH_HANDLERS.keys(), reverse=True):
+            if path.startswith(p):
+                return PathManager._PATH_HANDLERS[p]
+        return PathManager._NATIVE_PATH_HANDLER
 
     @staticmethod
     def open(path, mode="r"):
-        for h in PathManager._PATH_HANDLERS:
-            if h._support(path):
-                return h._open(path, mode)
-        raise OSError("Unable to open {}".format(path))
+        return PathManager.__get_path_handler(path)._open(path, mode)
 
     @staticmethod
     def get_local_path(path):
-        for h in PathManager._PATH_HANDLERS:
-            if h._support(path):
-                return h._get_local_path(path)
-        raise OSError("Unable to lookup file name for {}".format(path))
+        return PathManager.__get_path_handler(path)._get_local_path(path)
 
     @staticmethod
     def exists(path):
-        for h in PathManager._PATH_HANDLERS:
-            if h._support(path):
-                return h._exists(path)
-        raise OSError("Unable to lookup file name for {}".format(path))
+        return PathManager.__get_path_handler(path)._exists(path)
 
     @staticmethod
     def isfile(path):
-        for h in PathManager._PATH_HANDLERS:
-            if h._support(path):
-                return h._isfile(path)
-        raise OSError("Unable to lookup file name for {}".format(path))
+        return PathManager.__get_path_handler(path)._isfile(path)
 
     @staticmethod
     def ls(path):
-        for h in PathManager._PATH_HANDLERS:
-            if h._support(path):
-                return h._ls(path)
-        raise OSError("Unable to lookup file name for {}".format(path))
+        return PathManager.__get_path_handler(path)._ls(path)
 
     @staticmethod
     def mkdirs(path):
-        for h in PathManager._PATH_HANDLERS:
-            if h._support(path):
-                return h._mkdirs(path)
-        raise OSError("Unable to lookup file name for {}".format(path))
+        return PathManager.__get_path_handler(path)._mkdirs(path)
 
     @staticmethod
     def register_handler(handler):
         """
-        Add a handler to the end of the available handlers.
+        Register a path handler associated with `handler._get_supported_prefixes`
+        URI prefixes.
 
         Args:
-            handler (PathHandler):
+            handler (PathHandler)
         """
         assert isinstance(handler, PathHandler), handler
-        PathManager._PATH_HANDLERS.insert(0, handler)
+        for prefix in handler._get_supported_prefixes():
+            assert prefix not in PathManager._PATH_HANDLERS
+            PathManager._PATH_HANDLERS[prefix] = handler
+
+
+PathManager.register_handler(HTTPURLHandler())

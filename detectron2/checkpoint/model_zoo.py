@@ -88,12 +88,14 @@ class ModelCatalogHandler(PathHandler):
     Resolve URL like catalog:// by the model zoo.
     """
 
-    def _support(self, path):
-        return self._has_protocol(path, "catalog")
+    PREFIX = "catalog://"
+
+    def _get_supported_prefixes(self):
+        return [self.PREFIX]
 
     def _get_local_path(self, path):
         logger = logging.getLogger(__name__)
-        catalog_path = ModelCatalog.get(path[len("catalog://") :])
+        catalog_path = ModelCatalog.get(path[len(self.PREFIX) :])
         logger.info("Catalog entry {} points to {}".format(path, catalog_path))
         return PathManager.get_local_path(catalog_path)
 
@@ -106,13 +108,14 @@ class Detectron2Handler(PathHandler):
     Resolve anything that's in Detectron2 model zoo.
     """
 
+    PREFIX = "detectron2://"
     S3_DETECTRON2_PREFIX = "https://dl.fbaipublicfiles.com/detectron2/"
 
-    def _support(self, path):
-        return self._has_protocol(path, "detectron2")
+    def _get_supported_prefixes(self):
+        return [self.PREFIX]
 
     def _get_local_path(self, path):
-        name = path[len("detectron2://") :]
+        name = path[len(self.PREFIX) :]
         return PathManager.get_local_path(self.S3_DETECTRON2_PREFIX + name)
 
     def _open(self, path, mode="r"):
