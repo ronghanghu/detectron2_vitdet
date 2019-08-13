@@ -179,7 +179,9 @@ class SimpleTrainer(TrainerBase):
         losses = sum(loss for loss in loss_dict.values())
         if not torch.isfinite(losses).all():
             raise FloatingPointError(
-                "Loss became infinite or NaN at iteration={}!".format(self.iter)
+                "Loss became infinite or NaN at iteration={}!\nloss_dict = {}".format(
+                    self.iter, loss_dict
+                )
             )
 
         # reduce losses over all GPUs for logging purposes
