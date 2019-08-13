@@ -174,9 +174,7 @@ def _get_lvis_instances_meta_v0_5():
     # Ensure that the category list is sorted by id
     lvis_categories = [k for k in sorted(LVIS_CATEGORIES, key=lambda x: x["id"])]
     class_names = [k["synonyms"][0] for k in lvis_categories]
-    meta = {
-        "class_names": class_names,
-    }
+    meta = {"class_names": class_names}
     return meta
 
 

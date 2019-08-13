@@ -37,6 +37,7 @@ from detectron2.evaluation import (
     COCOPanopticEvaluator,
     DatasetEvaluators,
     SemSegEvaluator,
+    flatten_results_dict,
     inference_context,
     inference_on_dataset,
     print_csv_format,
@@ -45,7 +46,12 @@ from detectron2.evaluation import (
 from detectron2.modeling import DatasetMapperTTA, GeneralizedRCNNWithTTA, build_model
 from detectron2.solver import build_lr_scheduler, build_optimizer
 from detectron2.utils.collect_env import collect_env_info
-from detectron2.utils.events import CommonMetricPrinter, JSONWriter, TensorboardXWriter
+from detectron2.utils.events import (
+    CommonMetricPrinter,
+    JSONWriter,
+    TensorboardXWriter,
+    get_event_storage,
+)
 from detectron2.utils.file_io import PathManager
 from detectron2.utils.logger import setup_logger
 
@@ -152,6 +158,14 @@ def do_test(cfg, model, is_final=True):
     if is_final and cfg.TEST.EXPECTED_RESULTS and comm.is_main_process():
         assert len(results) == 1, "Results verification only supports one dataset!"
         verify_results(cfg, results[cfg.DATASETS.TEST[0]])
+
+    try:
+        storage = get_event_storage()
+    except Exception:  # do_test may be called outside training
+        pass
+    else:
+        storage.put_scalars(**flatten_results_dict(results), smoothing_hint=False)
+
     return results
 
 
@@ -167,13 +181,7 @@ def create_after_step_hook(cfg, model, optimizer, scheduler, periodic_checkpoint
             and (trainer.iter + 1) % cfg.TEST.EVAL_PERIOD == 0
             and trainer.iter != trainer.max_iter - 1
         ):
-            results = do_test(cfg, model, is_final=False)
-
-            for dataset_name, results_per_dataset in results.items():
-                for task, metrics_per_task in results_per_dataset.items():
-                    for metric, value in metrics_per_task.items():
-                        key = "{}/{}/{}".format(dataset_name, task, metric)
-                        trainer.storage.put_scalar(key, value, smoothing_hint=False)
+            do_test(cfg, model, is_final=False)
             # Evaluation may take different time among workers.
             # A barrier make them start the next iteration together.
             comm.synchronize()
@@ -226,6 +234,8 @@ def do_train(cfg, model, resume=True):
         trainer_hooks.append(hooks.PeriodicWriter(writers))
     trainer.register_hooks(trainer_hooks)
     trainer.train(start_iter, max_iter)
+    with trainer.storage:
+        return do_test(cfg, model)
 
 
 def setup(args):
@@ -281,8 +291,7 @@ def main(args):
             model, device_ids=[comm.get_local_rank()], broadcast_buffers=False
         )
 
-    do_train(cfg, model, args.resume)
-    return do_test(cfg, model)
+    return do_train(cfg, model, args.resume)
 
 
 if __name__ == "__main__":
