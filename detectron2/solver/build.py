@@ -1,6 +1,6 @@
 import torch
 
-from .lr_scheduler import WarmupMultiStepLR
+from .lr_scheduler import WarmupCosineLR, WarmupMultiStepLR
 
 
 def build_optimizer(cfg, model):
@@ -32,11 +32,23 @@ def build_lr_scheduler(cfg, optimizer):
     """
     Build a LR scheduler from config.
     """
-    return WarmupMultiStepLR(
-        optimizer,
-        cfg.SOLVER.STEPS,
-        cfg.SOLVER.GAMMA,
-        warmup_factor=cfg.SOLVER.WARMUP_FACTOR,
-        warmup_iters=cfg.SOLVER.WARMUP_ITERS,
-        warmup_method=cfg.SOLVER.WARMUP_METHOD,
-    )
+    name = cfg.SOLVER.LR_SCHEDULER_NAME
+    if name == "WarmupMultiStepLR":
+        return WarmupMultiStepLR(
+            optimizer,
+            cfg.SOLVER.STEPS,
+            cfg.SOLVER.GAMMA,
+            warmup_factor=cfg.SOLVER.WARMUP_FACTOR,
+            warmup_iters=cfg.SOLVER.WARMUP_ITERS,
+            warmup_method=cfg.SOLVER.WARMUP_METHOD,
+        )
+    elif name == "WarmupCosineLR":
+        return WarmupCosineLR(
+            optimizer,
+            cfg.SOLVER.MAX_ITER,
+            warmup_factor=cfg.SOLVER.WARMUP_FACTOR,
+            warmup_iters=cfg.SOLVER.WARMUP_ITERS,
+            warmup_method=cfg.SOLVER.WARMUP_METHOD,
+        )
+    else:
+        raise ValueError("Unknown LR scheduler: {}".format(name))
