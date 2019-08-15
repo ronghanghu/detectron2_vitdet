@@ -3,8 +3,9 @@ import math
 import sys
 import torch
 from torch import nn
+from torchvision.ops import RoIPool
 
-from detectron2.layers import ROIAlign, ROIPool, cat
+from detectron2.layers import ROIAlign, cat
 
 
 def assign_boxes_to_levels(box_lists, min_level, max_level, canonical_box_size, canonical_level):
@@ -123,7 +124,7 @@ class ROIPooler(nn.Module):
             )
         elif pooler_type == "ROIPool":
             self.level_poolers = nn.ModuleList(
-                ROIPool(output_size, spatial_scale=scale) for scale in scales
+                RoIPool(output_size, spatial_scale=scale) for scale in scales
             )
         else:
             raise ValueError("Unknown pooler type: {}".format(pooler_type))
