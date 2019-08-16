@@ -376,7 +376,7 @@ class Res5ROIHeads(ROIHeads):
                 losses["loss_mask"] = mask_rcnn_loss(mask_logits, proposals)
             return [], losses
         else:
-            pred_instances = outputs.inference(
+            pred_instances, _ = outputs.inference(
                 self.test_score_thresh, self.test_nms_thresh, self.test_detections_per_img
             )
             pred_instances = self.forward_with_given_boxes(features, pred_instances)
@@ -543,7 +543,7 @@ class StandardROIHeads(ROIHeads):
             losses.update(self._forward_keypoint(features_list, proposals))
             return proposals, losses
         else:
-            pred_instances = outputs.inference(
+            pred_instances, _ = outputs.inference(
                 self.test_score_thresh, self.test_nms_thresh, self.test_detections_per_img
             )
             # During inference cascaded prediction is used: the mask and keypoints heads are only

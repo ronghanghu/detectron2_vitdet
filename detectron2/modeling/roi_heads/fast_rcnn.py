@@ -131,15 +131,18 @@ def fast_rcnn_inference(boxes, scores, image_shapes, score_thresh, nms_thresh, t
             all detections.
 
     Returns:
-        list[Instances]: A list of N box lists, one for each image in the batch, that stores the
-            topk most confidence detections.
+        instances: (list[Instances]): A list of N box lists, one for each image in the batch,
+            that stores the topk most confidence detections.
+        kept_indices: (list[Tensor]): A list of 1D tensor of length of N, each element indicates
+            the corresponding boxes/scores index in [0, Ri) from the input, for image i.
     """
-    return [
+    result_per_image = [
         fast_rcnn_inference_single_image(
             boxes_per_image, scores_per_image, image_shape, score_thresh, nms_thresh, topk_per_image
         )
         for scores_per_image, boxes_per_image, image_shape in zip(scores, boxes, image_shapes)
     ]
+    return tuple(list(x) for x in zip(*result_per_image))
 
 
 def fast_rcnn_inference_single_image(
@@ -167,6 +170,7 @@ def fast_rcnn_inference_single_image(
     results = []
     # Apply threshold on detection probabilities and apply NMS
     inds_all = scores > score_thresh
+    kept_indices_per_class = []
     for j in range(num_fg_classes):
         inds = inds_all[:, j].nonzero().squeeze(1)
         scores_j = scores[inds, j]
@@ -176,6 +180,7 @@ def fast_rcnn_inference_single_image(
             boxes_j = boxes[inds, j, :]
         # image_size is not used, fill -1
         keep = nms(boxes_j, scores_j, nms_thresh)
+        kept_indices_per_class.append(inds[keep])
         boxes_j = boxes_j[keep]
         num_labels = len(keep)
         classes_j = torch.full((num_labels,), j, dtype=torch.int64, device=device)
@@ -187,13 +192,16 @@ def fast_rcnn_inference_single_image(
         results.append(result_j)
 
     results = Instances.cat(results)
+    kept_indices = cat(kept_indices_per_class)
     number_of_detections = len(results)
 
     # Only keep the top-scoring K boxes per image **over all classes**
     if number_of_detections > topk_per_image > 0:
         _, sorted_score_indices = torch.sort(results.scores)
-        results = results[sorted_score_indices[-topk_per_image:]]
-    return results
+        indices_topk = sorted_score_indices[-topk_per_image:]
+        results = results[indices_topk]
+        kept_indices = kept_indices[indices_topk]
+    return results, kept_indices
 
 
 class FastRCNNOutputs(object):
@@ -307,6 +315,7 @@ class FastRCNNOutputs(object):
             topk_per_image (int): same as fast_rcnn_inference.
         Returns:
             list[Instances]: same as fast_rcnn_inference.
+            list[Tensor]: same as fast_rcnn_inference.
         """
         boxes = self.predict_boxes()
         scores = self.predict_probs()

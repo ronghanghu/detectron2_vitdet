@@ -189,7 +189,7 @@ class GeneralizedRCNNWithTTA:
         for idx, cls, score in zip(count(), all_classes, all_scores):
             all_scores_2d[idx, cls] = score
 
-        merged_instances = fast_rcnn_inference_single_image(
+        merged_instances, _ = fast_rcnn_inference_single_image(
             all_boxes,
             all_scores_2d,
             (height, width),
