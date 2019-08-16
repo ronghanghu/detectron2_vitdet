@@ -66,6 +66,9 @@ class Boxes:
     (`area`, `clip`, `nonempty`, etc),
     and also behaves like a Tensor
     (support indexing, `to(device)`, `.device`, and iteration over all boxes)
+
+    Attributes:
+        tensor: float matrix of Nx4.
     """
 
     def __init__(self, tensor):
@@ -142,7 +145,7 @@ class Boxes:
         The following usage are allowed:
         1. `new_boxes = boxes[3]`: return a `Boxes` which contains only one box.
         2. `new_boxes = boxes[2:10]`: return a slice of boxes.
-        3. `new_boxes = boxes[vector]`, where vector is a torch.ByteTensor
+        3. `new_boxes = boxes[vector]`, where vector is a torch.BoolTensor
            with `length = len(boxes)`. Nonzero elements in the vector will be selected.
 
         Note that the returned Boxes might share storage with this Boxes,

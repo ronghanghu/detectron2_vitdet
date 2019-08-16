@@ -40,6 +40,7 @@ class DatasetMapper:
         # fmt: off
         self.img_format     = cfg.INPUT.FORMAT
         self.mask_on        = cfg.MODEL.MASK_ON
+        self.mask_format    = cfg.INPUT.MASK_FORMAT
         self.keypoint_on    = cfg.MODEL.KEYPOINT_ON
         self.load_proposals = cfg.MODEL.LOAD_PROPOSALS
         # fmt: on
@@ -123,7 +124,9 @@ class DatasetMapper:
                 for obj in dataset_dict.pop("annotations")
                 if obj.get("iscrowd", 0) == 0
             ]
-            instances = utils.annotations_to_instances(annos, image_shape)
+            instances = utils.annotations_to_instances(
+                annos, image_shape, mask_format=self.mask_format
+            )
             # Create a tight bounding box from masks, useful when image is cropped
             if self.crop_gen and instances.has("gt_masks"):
                 instances.gt_boxes = instances.gt_masks.get_bounding_boxes()

@@ -29,6 +29,7 @@ logger = logging.getLogger("detectron2")
 def setup(args):
     cfg = get_cfg()
     cfg.merge_from_file(args.config_file)
+    cfg.SOLVER.BASE_LR = 0.001  # Avoid NaNs. Not useful in this script anyway.
     cfg.merge_from_list(args.opts)
     cfg.freeze()
     setup_logger(distributed_rank=comm.get_rank())

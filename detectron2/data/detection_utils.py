@@ -9,7 +9,7 @@ import numpy as np
 import torch
 from PIL import Image
 
-from detectron2.structures import Boxes, BoxMode, Instances, Keypoints, PolygonMasks
+from detectron2.structures import BitMasks, Boxes, BoxMode, Instances, Keypoints, PolygonMasks
 from detectron2.utils.file_io import PathManager
 
 from . import transforms as T
@@ -182,7 +182,7 @@ def transform_keypoint_annotations(keypoints, transforms, image_size, keypoint_h
     return keypoints
 
 
-def annotations_to_instances(annos, image_size):
+def annotations_to_instances(annos, image_size, mask_format="polygon"):
     """
     Create an :class:`Instances` object used by the models,
     from instance annotations in the dataset dict.
@@ -207,8 +207,12 @@ def annotations_to_instances(annos, image_size):
     target.gt_classes = classes
 
     if len(annos) and "segmentation" in annos[0]:
-        masks = [obj["segmentation"] for obj in annos]
-        masks = PolygonMasks(masks)
+        polygons = [obj["segmentation"] for obj in annos]
+        if mask_format == "polygon":
+            masks = PolygonMasks(polygons)
+        else:
+            assert mask_format == "bitmask", mask_format
+            masks = BitMasks.from_polygon_masks(polygons, *image_size)
         target.gt_masks = masks
 
     if len(annos) and "keypoints" in annos[0]:

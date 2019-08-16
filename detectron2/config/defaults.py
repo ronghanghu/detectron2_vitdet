@@ -74,6 +74,7 @@ _C.INPUT.CROP.SIZE = [0.9, 0.9]
 # with BGR being the one exception. One can set image format to BGR, we will
 # internally use RGB for conversion and flip the channels over
 _C.INPUT.FORMAT = "BGR"
+_C.INPUT.MASK_FORMAT = "polygon"  # alternative: "bitmask"
 
 
 # -----------------------------------------------------------------------------

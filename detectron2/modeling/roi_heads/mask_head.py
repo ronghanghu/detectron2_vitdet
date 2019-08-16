@@ -4,7 +4,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from detectron2.layers import Conv2d, ConvTranspose2d, cat, get_norm
-from detectron2.structures import batch_rasterize_polygons_within_box
+from detectron2.structures import batch_crop_and_resize
 from detectron2.utils.events import get_event_storage
 from detectron2.utils.registry import Registry
 
@@ -42,7 +42,7 @@ def mask_rcnn_loss(pred_mask_logits, instances):
             gt_classes_per_image = instances_per_image.gt_classes.to(dtype=torch.int64)
             gt_classes.append(gt_classes_per_image)
 
-        gt_masks_per_image = batch_rasterize_polygons_within_box(
+        gt_masks_per_image = batch_crop_and_resize(
             instances_per_image.gt_masks, instances_per_image.proposal_boxes.tensor, mask_side_len
         ).to(device=pred_mask_logits.device)
         # A tensor of shape (N, M, M), N=#instances in the image; M=mask_side_len
@@ -60,12 +60,25 @@ def mask_rcnn_loss(pred_mask_logits, instances):
         gt_classes = cat(gt_classes, dim=0)
         pred_mask_logits = pred_mask_logits[indices, gt_classes]
 
+    if gt_masks.dtype == torch.bool:
+        gt_masks_bool = gt_masks
+    else:
+        # Here we allow gt_masks to be float as well (depend on the implementation of rasterize())
+        gt_masks_bool = gt_masks > 0.5
+
     # Log the training accuracy (using gt classes and 0.5 threshold)
-    # Note that here we allow gt_masks to be float as well
-    # (depend on the implementation of rasterize())
-    mask_accurate = (pred_mask_logits > 0.0) == (gt_masks > 0.5)
-    mask_accuracy = mask_accurate.nonzero().size(0) / mask_accurate.numel()
-    get_event_storage().put_scalar("mask_rcnn/accuracy", mask_accuracy)
+    mask_incorrect = (pred_mask_logits > 0.0) != gt_masks_bool
+    mask_accuracy = 1 - (mask_incorrect.sum().item() / mask_incorrect.numel())
+    num_positive = gt_masks_bool.sum().item()
+    false_positive = (mask_incorrect & ~gt_masks_bool).sum().item() / (
+        gt_masks_bool.numel() - num_positive
+    )
+    false_negative = (mask_incorrect & gt_masks_bool).sum().item() / num_positive
+
+    storage = get_event_storage()
+    storage.put_scalar("mask_rcnn/accuracy", mask_accuracy)
+    storage.put_scalar("mask_rcnn/false_positive", false_positive)
+    storage.put_scalar("mask_rcnn/false_negative", false_negative)
 
     mask_loss = F.binary_cross_entropy_with_logits(
         pred_mask_logits, gt_masks.to(dtype=torch.float32), reduction="mean"

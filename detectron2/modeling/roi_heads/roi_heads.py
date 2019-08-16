@@ -209,6 +209,10 @@ class ROIHeads(torch.nn.Module):
             # and have not been added to proposals yet (="gt_classes").
             if has_gt:
                 sampled_targets = matched_idxs[sampled_inds]
+                # NOTE: here the indexing waste some compute, because heads
+                # like masks, keypoints, etc, will filter the proposals again,
+                # (by foreground/background, or number of keypoints in the image, etc)
+                # so we essentially index the data twice.
                 for (trg_name, trg_value) in targets_per_image.get_fields().items():
                     if trg_name.startswith("gt_") and not proposals_per_image.has(trg_name):
                         proposals_per_image.set(trg_name, trg_value[sampled_targets])
