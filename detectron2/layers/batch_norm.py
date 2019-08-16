@@ -1,6 +1,8 @@
 import torch
 from torch import nn
 
+from .wrappers import BatchNorm2d
+
 
 class FrozenBatchNorm2d(nn.Module):
     """
@@ -13,7 +15,7 @@ class FrozenBatchNorm2d(nn.Module):
     The pre-trained backbone models from Caffe2 only contain "weight" and "bias",
     which are computed from the original four parameters of BN.
     The affine transform `x * weight + bias` will perform the equivalent
-    computation of `(x - mean) / std * scale + offset`.
+    computation of `(x - running_mean) / sqrt(running_var) * weight + bias`.
     When loading a backbone model from Caffe2, "running_mean" and "running_var"
     will be left unchanged as identity transformation.
 
@@ -24,12 +26,13 @@ class FrozenBatchNorm2d(nn.Module):
 
     _version = 2
 
-    def __init__(self, n):
-        super(FrozenBatchNorm2d, self).__init__()
-        self.register_buffer("weight", torch.ones(n))
-        self.register_buffer("bias", torch.zeros(n))
-        self.register_buffer("running_mean", torch.zeros(n))
-        self.register_buffer("running_var", torch.ones(n))
+    def __init__(self, num_features):
+        super().__init__()
+        self.num_features = num_features
+        self.register_buffer("weight", torch.ones(num_features))
+        self.register_buffer("bias", torch.zeros(num_features))
+        self.register_buffer("running_mean", torch.zeros(num_features))
+        self.register_buffer("running_var", torch.ones(num_features))
 
     def forward(self, x):
         scale = self.weight * self.running_var.rsqrt()
@@ -54,3 +57,58 @@ class FrozenBatchNorm2d(nn.Module):
         super()._load_from_state_dict(
             state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs
         )
+
+    def __repr__(self):
+        return "FrozenBatchNorm2d(num_features={})".format(self.num_features)
+
+    @classmethod
+    def convert_frozen_batchnorm(cls, module):
+        """
+        Convert BatchNorm/SyncBatchNorm in module into FrozenBatchNorm.
+
+        Args:
+            module (torch.nn.Module):
+
+        Returns:
+            If module is BatchNorm/SyncBatchNorm, returns a new module.
+            Otherwise, in-place convert module and return it.
+
+        Similar to convert_sync_batchnorm in
+        https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/batchnorm.py
+        """
+        bn_module = nn.modules.batchnorm
+        bn_module = (bn_module.BatchNorm2d, bn_module.SyncBatchNorm)
+        res = module
+        if isinstance(module, bn_module):
+            res = cls(module.num_features)
+            if module.affine:
+                res.weight.data = module.weight.data.clone().detach()
+                res.bias.data = module.bias.data.clone().detach()
+            res.running_mean.data = module.running_mean.data
+            res.running_var.data = module.running_var.data + module.eps
+        else:
+            for name, child in module.named_children():
+                new_child = cls.convert_frozen_batchnorm(child)
+                if new_child is not child:
+                    res.add_module(name, new_child)
+        return res
+
+
+def get_norm(norm, out_channels):
+    """
+    Args:
+        norm (str or callable):
+
+    Returns:
+        nn.Module or None: the normalization layer
+    """
+    if isinstance(norm, str):
+        if len(norm) == 0:
+            return None
+        norm = {
+            "BN": BatchNorm2d,
+            "SyncBN": nn.SyncBatchNorm,
+            "FrozenBN": FrozenBatchNorm2d,
+            "GN": lambda channels: nn.GroupNorm(32, channels),
+        }[norm]
+    return norm(out_channels)

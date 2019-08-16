@@ -4,13 +4,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from detectron2.layers import (
-    BatchNorm2d,
-    Conv2d,
-    DeformConv,
-    FrozenBatchNorm2d,
-    ModulatedDeformConv,
-)
+from detectron2.layers import Conv2d, DeformConv, FrozenBatchNorm2d, ModulatedDeformConv, get_norm
 
 from .backbone import Backbone
 from .build import BACKBONE_REGISTRY
@@ -24,22 +18,6 @@ __all__ = [
     "make_stage",
     "build_resnet_backbone",
 ]
-
-
-def _get_norm(norm, out_channels):
-    """
-    Args:
-        norm (str or callable):
-    Returns:
-        nn.Module: the normalization layer
-    """
-    if isinstance(norm, str):
-        norm = {
-            "BN": BatchNorm2d,
-            "FrozenBN": FrozenBatchNorm2d,
-            "GN": lambda channels: nn.GroupNorm(32, channels),
-        }[norm]
-    return norm(out_channels)
 
 
 class ResNetBlockBase(nn.Module):
@@ -60,6 +38,7 @@ class ResNetBlockBase(nn.Module):
     def freeze(self):
         for p in self.parameters():
             p.requires_grad = False
+        FrozenBatchNorm2d.convert_frozen_batchnorm(self)
         return self
 
 
@@ -93,7 +72,7 @@ class BottleneckBlock(ResNetBlockBase):
                 kernel_size=1,
                 stride=stride,
                 bias=False,
-                norm=_get_norm(norm, out_channels),
+                norm=get_norm(norm, out_channels),
             )
         else:
             self.shortcut = None
@@ -109,7 +88,7 @@ class BottleneckBlock(ResNetBlockBase):
             kernel_size=1,
             stride=stride_1x1,
             bias=False,
-            norm=_get_norm(norm, bottleneck_channels),
+            norm=get_norm(norm, bottleneck_channels),
         )
 
         self.conv2 = Conv2d(
@@ -121,7 +100,7 @@ class BottleneckBlock(ResNetBlockBase):
             bias=False,
             groups=num_groups,
             dilation=dilation,
-            norm=_get_norm(norm, bottleneck_channels),
+            norm=get_norm(norm, bottleneck_channels),
         )
 
         self.conv3 = Conv2d(
@@ -129,7 +108,7 @@ class BottleneckBlock(ResNetBlockBase):
             out_channels,
             kernel_size=1,
             bias=False,
-            norm=_get_norm(norm, out_channels),
+            norm=get_norm(norm, out_channels),
         )
 
         for layer in [self.conv1, self.conv2, self.conv3, self.shortcut]:
@@ -195,7 +174,7 @@ class DeformBottleneckBlock(ResNetBlockBase):
                 kernel_size=1,
                 stride=stride,
                 bias=False,
-                norm=_get_norm(norm, out_channels),
+                norm=get_norm(norm, out_channels),
             )
         else:
             self.shortcut = None
@@ -208,7 +187,7 @@ class DeformBottleneckBlock(ResNetBlockBase):
             kernel_size=1,
             stride=stride_1x1,
             bias=False,
-            norm=_get_norm(norm, bottleneck_channels),
+            norm=get_norm(norm, bottleneck_channels),
         )
 
         if deform_modulated:
@@ -237,7 +216,7 @@ class DeformBottleneckBlock(ResNetBlockBase):
             groups=num_groups,
             dilation=dilation,
             deformable_groups=deform_num_groups,
-            norm=_get_norm(norm, bottleneck_channels),
+            norm=get_norm(norm, bottleneck_channels),
         )
 
         self.conv3 = Conv2d(
@@ -245,7 +224,7 @@ class DeformBottleneckBlock(ResNetBlockBase):
             out_channels,
             kernel_size=1,
             bias=False,
-            norm=_get_norm(norm, out_channels),
+            norm=get_norm(norm, out_channels),
         )
 
         for layer in [self.conv1, self.conv2, self.conv3, self.shortcut]:
@@ -318,7 +297,7 @@ class BasicStem(nn.Module):
             stride=2,
             padding=3,
             bias=False,
-            norm=_get_norm(norm, out_channels),
+            norm=get_norm(norm, out_channels),
         )
         weight_init.c2_msra_fill(self.conv1)
 
@@ -428,6 +407,7 @@ def build_resnet_backbone(cfg):
     if freeze_at >= 1:
         for p in stem.parameters():
             p.requires_grad = False
+        stem = FrozenBatchNorm2d.convert_frozen_batchnorm(stem)
 
     # fmt: off
     out_features        = cfg.MODEL.RESNETS.OUT_FEATURES

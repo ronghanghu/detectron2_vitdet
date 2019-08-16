@@ -61,10 +61,19 @@ class Conv2d(torch.nn.Conv2d):
                 )
             ]
             output_shape = [x.shape[0], self.weight.shape[0]] + output_shape
-            # This is to make DDP happy.
-            # DDP expects all workers to have gradient w.r.t the parameters.
-            _dummy = sum(x.view(-1)[0] for x in self.parameters()) * 0.0
-            return _NewEmptyTensorOp.apply(x, output_shape) + _dummy
+            empty = _NewEmptyTensorOp.apply(x, output_shape)
+            if self.training:
+                # https://github.com/pytorch/pytorch/issues/12013
+                assert not isinstance(
+                    self.norm, torch.nn.SyncBatchNorm
+                ), "SyncBatchNorm does not support empty inputs!"
+
+                # This is to make DDP happy.
+                # DDP expects all workers to have gradient w.r.t the same set of parameters.
+                _dummy = sum(x.view(-1)[0] for x in self.parameters()) * 0.0
+                return empty + _dummy
+            else:
+                return empty
 
         x = super().forward(x)
         if self.norm is not None:
@@ -93,7 +102,7 @@ class ConvTranspose2d(torch.nn.ConvTranspose2d):
         ]
         output_shape = [x.shape[0], self.bias.shape[0]] + output_shape
         # This is to make DDP happy.
-        # DDP expects all workers to have gradient w.r.t the parameters.
+        # DDP expects all workers to have gradient w.r.t the same set of parameters.
         _dummy = sum(x.view(-1)[0] for x in self.parameters()) * 0.0
         return _NewEmptyTensorOp.apply(x, output_shape) + _dummy
 

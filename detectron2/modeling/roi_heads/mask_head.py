@@ -3,7 +3,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from detectron2.layers import Conv2d, ConvTranspose2d, cat
+from detectron2.layers import Conv2d, ConvTranspose2d, cat, get_norm
 from detectron2.structures import batch_rasterize_polygons_within_box
 from detectron2.utils.events import get_event_storage
 from detectron2.utils.registry import Registry
@@ -133,7 +133,7 @@ class MaskRCNNConvUpsampleHead(nn.Module):
         # fmt: off
         num_classes       = cfg.MODEL.ROI_HEADS.NUM_CLASSES
         conv_dims         = cfg.MODEL.ROI_MASK_HEAD.CONV_DIM
-        norm              = cfg.MODEL.ROI_MASK_HEAD.NORM
+        self.norm         = cfg.MODEL.ROI_MASK_HEAD.NORM
         num_conv          = cfg.MODEL.ROI_MASK_HEAD.NUM_CONV
         input_channels    = cfg.MODEL.ROI_MASK_HEAD.COMPUTED_INPUT_SIZE[0]
         cls_agnostic_mask = cfg.MODEL.ROI_MASK_HEAD.CLS_AGNOSTIC_MASK
@@ -142,15 +142,14 @@ class MaskRCNNConvUpsampleHead(nn.Module):
         self.conv_norm_relus = []
 
         for k in range(num_conv):
-            norm_module = nn.GroupNorm(32, conv_dims) if norm == "GN" else None
             conv = Conv2d(
                 input_channels if k == 0 else conv_dims,
                 conv_dims,
                 kernel_size=3,
                 stride=1,
                 padding=1,
-                bias=not norm,
-                norm=norm_module,
+                bias=not self.norm,
+                norm=get_norm(self.norm, conv_dims),
                 activation=F.relu,
             )
             self.add_module("mask_fcn{}".format(k + 1), conv)

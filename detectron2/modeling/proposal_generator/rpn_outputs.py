@@ -270,6 +270,9 @@ class RPNOutputs(object):
         self.positive_fraction = positive_fraction
         self.pred_objectness_logits = pred_objectness_logits
         self.pred_anchor_deltas = pred_anchor_deltas
+        for deltas in pred_anchor_deltas:
+            assert torch.isfinite(deltas).all()
+
         self.anchors = anchors
         self.gt_boxes = gt_boxes
         self.num_feature_maps = len(pred_objectness_logits)
@@ -339,6 +342,7 @@ class RPNOutputs(object):
             pos_idx, neg_idx = subsample_labels(
                 label, self.batch_size_per_image, self.positive_fraction, 0
             )
+            assert pos_idx.numel() > 0, "There must be positive anchors!"
             # Fill with the ignore label (-1), then set positive and negative labels
             label.fill_(-1)
             label.scatter_(0, pos_idx, 1)
@@ -363,8 +367,8 @@ class RPNOutputs(object):
         )
 
         # Log the number of positive/negative anchors per-image that's used in training
-        num_pos_anchors = (gt_objectness_logits == 1).nonzero().size(0)
-        num_neg_anchors = (gt_objectness_logits == 0).nonzero().size(0)
+        num_pos_anchors = (gt_objectness_logits == 1).sum().item()
+        num_neg_anchors = (gt_objectness_logits == 0).sum().item()
         storage = get_event_storage()
         storage.put_scalar("rpn/num_pos_anchors", num_pos_anchors / self.num_images)
         storage.put_scalar("rpn/num_neg_anchors", num_neg_anchors / self.num_images)

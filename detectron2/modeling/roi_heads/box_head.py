@@ -3,7 +3,7 @@ import borc.nn.weight_init as weight_init
 from torch import nn
 from torch.nn import functional as F
 
-from detectron2.layers import Conv2d
+from detectron2.layers import Conv2d, get_norm
 from detectron2.utils.registry import Registry
 
 ROI_BOX_HEAD_REGISTRY = Registry("ROI_BOX_HEAD")
@@ -42,14 +42,13 @@ class FastRCNNConvFCHead(nn.Module):
 
         self.conv_norm_relus = []
         for k in range(num_conv):
-            norm_module = nn.GroupNorm(32, conv_dim) if norm == "GN" else None
             conv = Conv2d(
                 self._output_size[0],
                 conv_dim,
                 kernel_size=3,
                 padding=1,
                 bias=not norm,
-                norm=norm_module,
+                norm=get_norm(norm, conv_dim),
                 activation=F.relu,
             )
             self.add_module("conv{}".format(k + 1), conv)

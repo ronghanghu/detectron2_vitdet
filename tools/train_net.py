@@ -281,15 +281,17 @@ def main(args):
     logger = logging.getLogger("detectron2")
     logger.info("Model:\n{}".format(model))
 
+    if comm.get_world_size() > 1:
+        # Not useful for inference, but need it to hack around
+        # https://github.com/pytorch/pytorch/issues/22538
+        model = DistributedDataParallel(
+            model, device_ids=[comm.get_local_rank()], broadcast_buffers=False
+        )
+
     if args.eval_only:
         checkpointer = DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR)
         checkpointer.resume_or_load(cfg.MODEL.WEIGHT, resume=args.resume)
         return do_test(cfg, model)
-
-    if comm.get_world_size() > 1:
-        model = DistributedDataParallel(
-            model, device_ids=[comm.get_local_rank()], broadcast_buffers=False
-        )
 
     return do_train(cfg, model, args.resume)
 
