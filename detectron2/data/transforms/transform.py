@@ -7,13 +7,14 @@ from abc import ABCMeta, abstractmethod
 from PIL import Image
 
 __all__ = [
+    "BlendTransform",
+    "CropTransform",
+    "ExtentTransform",
+    "HFlipTransform",
+    "NoOpTransform",
     "Transform",
     "TransformList",
     "ResizeTransform",
-    "CropTransform",
-    "NoOpTransform",
-    "HFlipTransform",
-    "ExtentTransform"
 ]
 
 
@@ -345,4 +346,41 @@ class ExtentTransform(Transform):
 
     def apply_segmentation(self, segmentation):
         segmentation = self.apply_image(segmentation, interp=Image.NEAREST)
+        return segmentation
+
+
+class BlendTransform(Transform):
+    """
+    Transforms pixel colors with PIL enhance functions.
+    """
+
+    def __init__(
+        self,
+        src_image,
+        src_weight,
+        dst_weight,
+    ):
+        """
+        Blends the input image (dst_image) with the src_image using formula:
+            src_weight * src_image + dst_weight * dst_image
+        Args:
+            src_image (ndarray or float): Input image is blended with this image
+            src_weight (float): Blend weighting of src_image
+            dst_weight (float): Blend weighting of dst_image
+        """
+        super().__init__()
+        self._init(locals())
+
+    def apply_image(self, img, interp=None):
+        if img.dtype == np.uint8:
+            img = img.astype(np.float32)
+            img = self.src_weight * self.src_image + self.dst_weight * img
+            return np.clip(img, 0, 255).astype(np.uint8)
+        else:
+            return self.src_weight * self.src_image + self.dst_weight * img
+
+    def apply_coords(self, coords):
+        return coords
+
+    def apply_segmentation(self, segmentation):
         return segmentation

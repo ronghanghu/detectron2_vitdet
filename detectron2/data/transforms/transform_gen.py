@@ -8,6 +8,7 @@ from abc import ABCMeta, abstractmethod
 from PIL import Image
 
 from .transform import (
+    BlendTransform,
     CropTransform,
     ExtentTransform,
     HFlipTransform,
@@ -18,9 +19,13 @@ from .transform import (
 )
 
 __all__ = [
+    "RandomBrightness",
+    "RandomContrast",
     "RandomCrop",
     "RandomExtent",
     "RandomFlip",
+    "RandomSaturation",
+    "RandomLighting",
     "Resize",
     "ResizeShortestEdge",
     "TransformGen",
@@ -318,6 +323,147 @@ class RandomExtent(TransformGen):
                 int(src_rect[3] - src_rect[1]),
                 int(src_rect[2] - src_rect[0]),
             ),
+        )
+
+
+class RandomContrast(TransformGen):
+    """
+    Randomly transforms image contrast.
+
+    Contrast intensity is uniformly sampled in (intensity_min, intensity_max).
+    - intensity < 1 will reduce contrast
+    - intensity = 1 will preserve the input image
+    - intensity > 1 will increase contrast
+
+    See: https://pillow.readthedocs.io/en/3.0.x/reference/ImageEnhance.html
+    """
+
+    def __init__(
+        self,
+        intensity_min,
+        intensity_max,
+    ):
+        """
+        Args:
+            intensity_min (float): Minimum augmentation
+            intensity_max (float): Maximum augmentation
+        """
+        super().__init__()
+        self._init(locals())
+
+    def get_transform(self, img):
+        w = self.rng.uniform(self.intensity_min, self.intensity_max)
+        return BlendTransform(
+            src_image=img.mean(),
+            src_weight=1 - w,
+            dst_weight=w,
+        )
+
+
+class RandomBrightness(TransformGen):
+    """
+    Randomly transforms image brightness.
+
+    Brightness intensity is uniformly sampled in (intensity_min, intensity_max).
+    - intensity < 1 will reduce brightness
+    - intensity = 1 will preserve the input image
+    - intensity > 1 will increase brightness
+
+    See: https://pillow.readthedocs.io/en/3.0.x/reference/ImageEnhance.html
+    """
+
+    def __init__(
+        self,
+        intensity_min,
+        intensity_max,
+    ):
+        """
+        Args:
+            intensity_min (float): Minimum augmentation
+            intensity_max (float): Maximum augmentation
+        """
+        super().__init__()
+        self._init(locals())
+
+    def get_transform(self, img):
+        w = self.rng.uniform(self.intensity_min, self.intensity_max)
+        return BlendTransform(
+            src_image=0,
+            src_weight=1 - w,
+            dst_weight=w,
+        )
+
+
+class RandomSaturation(TransformGen):
+    """
+    Randomly transforms image saturation.
+
+    Saturation intensity is uniformly sampled in (intensity_min, intensity_max).
+    - intensity < 1 will reduce saturation (make the image more grayscale)
+    - intensity = 1 will preserve the input image
+    - intensity > 1 will increase saturation
+
+    See: https://pillow.readthedocs.io/en/3.0.x/reference/ImageEnhance.html
+    """
+
+    def __init__(
+        self,
+        intensity_min,
+        intensity_max,
+    ):
+        """
+        Args:
+            intensity_min (float): Minimum augmentation (1 preserves input).
+            intensity_max (float): Maximum augmentation (1 preserves input).
+        """
+        super().__init__()
+        self._init(locals())
+
+    def get_transform(self, img):
+        assert img.shape[-1] == 3, "Saturation only works on RGB images"
+        w = self.rng.uniform(self.intensity_min, self.intensity_max)
+        grayscale = img.dot([0.299, 0.587, 0.114])[:, :, np.newaxis]
+        return BlendTransform(
+            src_image=grayscale,
+            src_weight=1 - w,
+            dst_weight=w,
+        )
+
+
+class RandomLighting(TransformGen):
+    """
+    Randomly transforms image color using fixed PCA over ImageNet.
+
+    The degree of color jittering is randomly sampled via a normal distribution,
+    with standard deviation given by the scale parameter.
+    """
+
+    def __init__(
+        self,
+        scale,
+    ):
+        """
+        Args:
+            scale (float): Standard deviation of principal component weighting.
+        """
+        super().__init__()
+        self._init(locals())
+        self.eigen_vecs = np.array([
+            [-0.5675, 0.7192, 0.4009],
+            [-0.5808, -0.0045, -0.8140],
+            [-0.5836, -0.6948, 0.4203],
+        ])
+        self.eigen_vals = np.array([
+            0.2175, 0.0188, 0.0045
+        ])
+
+    def get_transform(self, img):
+        assert img.shape[-1] == 3, "Saturation only works on RGB images"
+        weights = np.random.normal(scale=self.scale, size=3)
+        return BlendTransform(
+            src_image=self.eigen_vecs.dot(weights * self.eigen_vals),
+            src_weight=1.0,
+            dst_weight=1.0,
         )
 
 
