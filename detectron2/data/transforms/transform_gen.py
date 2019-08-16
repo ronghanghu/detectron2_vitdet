@@ -9,6 +9,7 @@ from PIL import Image
 
 from .transform import (
     CropTransform,
+    ExtentTransform,
     HFlipTransform,
     NoOpTransform,
     ResizeTransform,
@@ -17,12 +18,13 @@ from .transform import (
 )
 
 __all__ = [
-    "TransformGen",
-    "apply_transform_gens",
+    "RandomCrop",
+    "RandomExtent",
     "RandomFlip",
     "Resize",
     "ResizeShortestEdge",
-    "RandomCrop",
+    "TransformGen",
+    "apply_transform_gens",
 ]
 
 
@@ -258,6 +260,65 @@ class RandomCrop(TransformGen):
             return self.crop_size
         else:
             NotImplementedError("Unknown crop type {}".format(self.crop_type))
+
+
+class RandomExtent(TransformGen):
+    """
+    Outputs an image by cropping a random "subrect" of the source image.
+
+    The subrect can be parameterized to include pixels outside the source image,
+    in which case they will be set to zeros (i.e. black). The size of the output
+    image will vary with the size of the random subrect.
+    """
+
+    def __init__(
+        self,
+        scale_range,
+        shift_range,
+    ):
+        """
+        Args:
+            output_size (h, w): Dimensions of output image
+            scale_range (l, h): Range of input-to-output size scaling factor
+            shift_range (x, y): Range of shifts of the cropped subrect. The rect
+                is shifted by [w / 2 * Uniform(-x, x), h / 2 * Uniform(-y, y)],
+                where (w, h) is the (width, height) of the input image. Set each
+                component to zero to crop at the image's center.
+        """
+        super().__init__()
+        self._init(locals())
+
+    def get_transform(self, img):
+        img_h, img_w = img.shape[:2]
+
+        # Initialize src_rect to fit the input image.
+        src_rect = np.array([
+            -0.5 * img_w, -0.5 * img_h, 0.5 * img_w, 0.5 * img_h
+        ])
+
+        # Apply a random scaling to the src_rect.
+        src_rect *= self.rng.uniform(self.scale_range[0], self.scale_range[1])
+
+        # Apply a random shift to the coordinates origin.
+        src_rect[0::2] += self.shift_range[0] * img_w * (self.rng.rand() - 0.5)
+        src_rect[1::2] += self.shift_range[1] * img_h * (self.rng.rand() - 0.5)
+
+        # Map src_rect coordinates into image coordinates (center at corner).
+        src_rect[0::2] += 0.5 * img_w
+        src_rect[1::2] += 0.5 * img_h
+
+        return ExtentTransform(
+            src_rect=(
+                src_rect[0],
+                src_rect[1],
+                src_rect[2],
+                src_rect[3],
+            ),
+            output_size=(
+                int(src_rect[3] - src_rect[1]),
+                int(src_rect[2] - src_rect[0]),
+            ),
+        )
 
 
 def apply_transform_gens(transform_gens, img):
