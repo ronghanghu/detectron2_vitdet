@@ -9,7 +9,7 @@ from detectron2.structures import BoxMode
 from detectron2.utils.file_io import PathManager
 import detectron2.utils.comm as comm
 
-from .. import MetadataCatalog
+from .. import MetadataCatalog, DatasetCatalog
 
 """
 This file contains functions to parse COCO-format annotations into dicts in "Detectron2 format".
@@ -288,13 +288,14 @@ if __name__ == "__main__":
         "dataset_name" can be "coco", "coco_person", or other
         pre-registered ones
     """
+    import numpy as np
     from detectron2.utils.logger import setup_logger
-    from detectron2.utils.vis import draw_coco_dict
+    from detectron2.utils.visualizer import Visualizer
     import detectron2.data.datasets  # noqa # add pre-defined metadata
-    import cv2
     import sys
 
     logger = setup_logger(name=__name__)
+    assert sys.argv[3] in DatasetCatalog.list()
     meta = MetadataCatalog.get(sys.argv[3])
 
     dicts = load_coco_json(sys.argv[1], sys.argv[2], sys.argv[3])
@@ -303,6 +304,8 @@ if __name__ == "__main__":
     dirname = "coco-data-vis"
     os.makedirs(dirname, exist_ok=True)
     for d in dicts:
-        vis = draw_coco_dict(d, meta.class_names + ["0"])
+        img = np.array(Image.open(d["file_name"]))
+        visualizer = Visualizer(img, metadata=meta)
+        vis = visualizer.draw_dataset_dict(d)
         fpath = os.path.join(dirname, os.path.basename(d["file_name"]))
-        cv2.imwrite(fpath, vis)
+        vis.save(fpath)

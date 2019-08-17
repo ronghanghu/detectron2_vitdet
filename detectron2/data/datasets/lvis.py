@@ -179,18 +179,19 @@ def _get_lvis_instances_meta_v0_5():
 
 
 if __name__ == "__main__":
-    # """
-    # Test the LVIS json dataset loader.
-    #
-    # Usage:
-    #     python -m detectron2.data.datasets.lvis \
-    #         path/to/json path/to/image_root dataset_name vis_limit
-    # """
-    from detectron2.utils.logger import setup_logger
-    from detectron2.utils.vis import draw_coco_dict  # Draws LVIS annotations as well
-    import detectron2.data.datasets  # noqa # add pre-defined metadata
-    import cv2
+    """
+    Test the LVIS json dataset loader.
+
+    Usage:
+        python -m detectron2.data.datasets.lvis \
+            path/to/json path/to/image_root dataset_name vis_limit
+    """
     import sys
+    import numpy as np
+    from detectron2.utils.logger import setup_logger
+    from PIL import Image
+    import detectron2.data.datasets  # noqa # add pre-defined metadata
+    from detectron2.utils.visualizer import Visualizer
 
     logger = setup_logger(name=__name__)
     meta = MetadataCatalog.get(sys.argv[3])
@@ -201,6 +202,8 @@ if __name__ == "__main__":
     dirname = "lvis-data-vis"
     os.makedirs(dirname, exist_ok=True)
     for d in dicts[: int(sys.argv[4])]:
-        vis = draw_coco_dict(d, meta.class_names + ["0"])
+        img = np.array(Image.open(d["file_name"]))
+        visualizer = Visualizer(img, metadata=meta)
+        vis = visualizer.draw_dataset_dict(d)
         fpath = os.path.join(dirname, os.path.basename(d["file_name"]))
-        cv2.imwrite(fpath, vis)
+        vis.save(fpath)

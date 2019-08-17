@@ -1,5 +1,3 @@
-from detectron2.utils.env import setup_environment  # noqa F401  isort:skip
-
 import argparse
 import glob
 import os
@@ -8,10 +6,9 @@ import cv2
 import tqdm
 
 from detectron2.config import get_cfg
-from detectron2.engine.defaults import DefaultPredictor
 from detectron2.utils.logger import setup_logger
 
-from predictor import COCODemo
+from predictor import VisualizationDemo
 
 
 def setup_cfg(args):
@@ -26,7 +23,7 @@ def setup_cfg(args):
     return cfg
 
 
-def main():
+def get_parser():
     parser = argparse.ArgumentParser(description="Detectron2 Demo")
     parser.add_argument(
         "--config-file",
@@ -55,13 +52,17 @@ def main():
         default=None,
         nargs=argparse.REMAINDER,
     )
-    args = parser.parse_args()
+    return parser
+
+
+if __name__ == "__main__":
+    args = get_parser().parse_args()
     logger = setup_logger()
     logger.info("Arguments: " + str(args))
 
     cfg = setup_cfg(args)
 
-    coco_demo = COCODemo(DefaultPredictor(cfg))
+    demo = VisualizationDemo(cfg)
 
     if args.input:
         if len(args.input) == 1:
@@ -69,7 +70,7 @@ def main():
         for path in tqdm.tqdm(args.input, disable=not args.output):
             img = cv2.imread(path, cv2.IMREAD_COLOR)
             start_time = time.time()
-            predictions, visualized_output = coco_demo.run_on_image(img)
+            predictions, visualized_output = demo.run_on_image(img)
             logger.info(
                 "{}: detected {} instances in {:.2f}s".format(
                     path, len(predictions), time.time() - start_time
@@ -89,7 +90,7 @@ def main():
     elif args.webcam:
         assert args.input is None, "Cannot have both --input and --webcam!"
         cam = cv2.VideoCapture(0)
-        for vis in tqdm.tqdm(coco_demo.run_on_video(cam)):
+        for vis in tqdm.tqdm(demo.run_on_video(cam)):
             cv2.imshow("COCO detections", vis)
             if cv2.waitKey(1) == 27:
                 break  # esc to quit
@@ -114,7 +115,7 @@ def main():
                 isColor=True,
             )
         assert os.path.isfile(args.video_input)
-        for vis_frame in tqdm.tqdm(coco_demo.run_on_video(video), total=num_frames):
+        for vis_frame in tqdm.tqdm(demo.run_on_video(video), total=num_frames):
             if args.output:
                 output_file.write(vis_frame)
             else:
@@ -126,7 +127,3 @@ def main():
             output_file.release()
         else:
             cv2.destroyAllWindows()
-
-
-if __name__ == "__main__":
-    main()

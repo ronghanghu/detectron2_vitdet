@@ -10,6 +10,7 @@ import pycocotools.mask as mask_util
 from PIL import Image
 
 from detectron2.structures import BoxMode
+from detectron2.utils.logger import setup_logger
 from detectron2.utils.comm import get_world_size
 from detectron2.utils.file_io import PathManager
 
@@ -236,15 +237,15 @@ if __name__ == "__main__":
         python -m detectron2.data.datasets.cityscapes \
             cityscapes/leftImg8bit/train cityscapes/gtFine/train
     """
-    from detectron2.utils.logger import setup_logger
-    from detectron2.utils.vis import draw_coco_dict
     import sys
+    from detectron2.data.catalog import Metadata
+    from detectron2.utils.visualizer import Visualizer
+    from cityscapesscripts.helpers.labels import labels
 
     logger = setup_logger(name=__name__)
 
-    from cityscapesscripts.helpers.labels import labels
-
     thing_names = [k.name for k in labels]
+    meta = Metadata().set(class_names=thing_names)
 
     dicts = load_cityscapes_instances(sys.argv[1], sys.argv[2], from_json=True, to_polygons=True)
     logger.info("Done loading {} samples.".format(len(dicts)))
@@ -252,9 +253,8 @@ if __name__ == "__main__":
     dirname = "cityscapes-data-vis"
     os.makedirs(dirname, exist_ok=True)
     for d in dicts:
-        vis = draw_coco_dict(d, thing_names)
+        img = np.array(Image.open(d["file_name"]))
+        visualizer = Visualizer(img, metadata=meta)
+        vis = visualizer.draw_dataset_dict(d)
         fpath = os.path.join(dirname, os.path.basename(d["file_name"]))
-        cv2.imwrite(fpath, vis)
-
-        # cv2.imshow("", vis)
-        # cv2.waitKey()
+        vis.save(fpath)

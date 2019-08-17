@@ -302,13 +302,7 @@ class ExtentTransform(Transform):
     See: https://pillow.readthedocs.io/en/latest/PIL.html#PIL.ImageTransform.ExtentTransform
     """
 
-    def __init__(
-        self,
-        src_rect,
-        output_size,
-        interp=Image.LINEAR,
-        fill=0,
-    ):
+    def __init__(self, src_rect, output_size, interp=Image.LINEAR, fill=0):
         """
         Args:
             src_rect (x0, y0, x1, y1): src coordinates
@@ -354,12 +348,7 @@ class BlendTransform(Transform):
     Transforms pixel colors with PIL enhance functions.
     """
 
-    def __init__(
-        self,
-        src_image,
-        src_weight,
-        dst_weight,
-    ):
+    def __init__(self, src_image, src_weight, dst_weight):
         """
         Blends the input image (dst_image) with the src_image using formula:
             src_weight * src_image + dst_weight * dst_image

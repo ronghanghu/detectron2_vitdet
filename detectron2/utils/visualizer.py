@@ -198,7 +198,7 @@ class Visualizer:
                 visible = masks.any(dim=0).numpy() > 0
                 img_bw[visible] = self.img[visible]
             self.output.ax.imshow(img_bw.astype("uint8"))
-            alpha = 0.2
+            alpha = 0.3
 
         self.overlay_instances(
             masks=polygons,
@@ -333,6 +333,7 @@ class Visualizer:
                 masks = None
             if "keypoints" in annos[0]:
                 keypts = [x["keypoints"] for x in annos]
+                keypts = np.array(keypts).reshape(len(annos), -1, 3)
             else:
                 keypts = None
 

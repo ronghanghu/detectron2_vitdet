@@ -1,6 +1,7 @@
 import copy
 import logging
 import types
+from typing import List
 
 
 class DatasetCatalog(object):
@@ -41,7 +42,25 @@ class DatasetCatalog(object):
         Returns:
             list[dict]: dataset annotations.0
         """
-        return DatasetCatalog._REGISTERED[name]()
+        try:
+            f = DatasetCatalog._REGISTERED[name]
+        except KeyError:
+            raise KeyError(
+                "Dataset '{}' is not registered! Available datasets are: {}".format(
+                    name, ", ".join(DatasetCatalog._REGISTERED.keys())
+                )
+            )
+        return f()
+
+    @staticmethod
+    def list() -> List[str]:
+        """
+        List all registered datasets.
+
+        Returns:
+            list[str]
+        """
+        return list(DatasetCatalog._REGISTERED.keys())
 
 
 class Metadata(types.SimpleNamespace):
@@ -60,7 +79,9 @@ class Metadata(types.SimpleNamespace):
         class_names = MetadataCatalog.get("mydataset").class_names
     """
 
-    name: str  # the name of the dataset
+    # the name of the dataset
+    # set default to N/A so that `self.name` in the errors will not trigger getattr again
+    name: str = "N/A"
 
     def __getattr__(self, key):
         raise AttributeError(
@@ -93,6 +114,7 @@ class Metadata(types.SimpleNamespace):
         """
         for k, v in kwargs.items():
             setattr(self, k, v)
+        return self
 
     def get(self, key, default=None):
         """

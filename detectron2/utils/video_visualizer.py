@@ -38,7 +38,10 @@ class VideoVisualizer:
         """
         self.metadata = metadata
         self._old_instances = []
-        assert instance_mode == ColorMode.IMAGE, "Other mode not supported yet."
+        assert instance_mode in [
+            ColorMode.IMAGE,
+            ColorMode.IMAGE_BW,
+        ], "Other mode not supported yet."
         self._instance_mode = instance_mode
 
     def draw_instance_predictions(self, frame, predictions):
@@ -71,10 +74,9 @@ class VideoVisualizer:
             # assert len(masks_rles) == num_instances
         else:
             masks = None
-        masks_rles = [None] * num_instances
 
         detected = [
-            _DetectedInstance(labels[i], boxes[i], masks_rles[i], color=None, ttl=2)
+            _DetectedInstance(labels[i], boxes[i], mask_rle=None, color=None, ttl=2)
             for i in range(num_instances)
         ]
         colors = self._assign_colors(detected)
@@ -84,12 +86,25 @@ class VideoVisualizer:
                 "{}: {:.0f}%".format(self.metadata.class_names[l], s * 100)
                 for l, s in zip(labels, scores)
             ]
+
+        if self._instance_mode == ColorMode.IMAGE_BW:
+            img_bw = frame.astype("f4").mean(axis=2)
+            img_bw = np.stack([img_bw] * 3, axis=2)
+            if masks is not None:
+                visible = masks.any(dim=0).numpy() > 0
+                img_bw[visible] = frame[visible]
+            frame_visualizer.output.ax.imshow(img_bw.astype("uint8"))
+            alpha = 0.4
+        else:
+            alpha = 0.5
+
         frame_visualizer.overlay_instances(
             boxes=None if masks is not None else boxes,  # boxes are a bit distracting
             masks=masks,
             labels=labels,
             keypoints=keypoints,
             assigned_colors=colors,
+            alpha=alpha,
         )
 
         return frame_visualizer.output

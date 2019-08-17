@@ -1,15 +1,17 @@
 import torch
 
+from detectron2.engine.defaults import DefaultPredictor
 from detectron2.utils.video_visualizer import VideoVisualizer
 from detectron2.utils.visualizer import ColorMode, Visualizer
 
 
-class COCODemo(object):
-    def __init__(self, predictor, stuff_area_threshold=4096):
-        self.predictor = predictor
-        self.metadata = predictor.metadata
+class VisualizationDemo(object):
+    def __init__(self, cfg, stuff_area_threshold=4096, instance_mode=ColorMode.IMAGE):
+        self.predictor = DefaultPredictor(cfg)
+        self.metadata = self.predictor.metadata
         self.cpu_device = torch.device("cpu")
         self.stuff_area_threshold = stuff_area_threshold
+        self.instance_mode = instance_mode
 
     def run_on_image(self, image):
         """
@@ -25,7 +27,7 @@ class COCODemo(object):
         predictions = self.predictor(image)
         # Convert image from OpenCV BGR format to Matplotlib RGB format.
         image = image[:, :, ::-1]
-        visualizer = Visualizer(image, self.metadata, instance_mode=ColorMode.IMAGE)
+        visualizer = Visualizer(image, self.metadata, instance_mode=self.instance_mode)
         if "panoptic_seg" in predictions:
             panoptic_seg, segments_info = predictions["panoptic_seg"]
             vis_output = visualizer.draw_panoptic_seg_predictions(
@@ -64,7 +66,7 @@ class COCODemo(object):
         Yields:
             ndarray: BGR visualizations of each video frame.
         """
-        video_visualizer = VideoVisualizer(self.metadata)
+        video_visualizer = VideoVisualizer(self.metadata, self.instance_mode)
         for _, frame in enumerate(self._frame_from_video(video)):
             predictions = self.predictor(frame)
             frame = frame[:, :, ::-1]
@@ -72,6 +74,7 @@ class COCODemo(object):
             if "instances" in predictions:
                 predictions = predictions["instances"].to(self.cpu_device)
                 vis_frame = video_visualizer.draw_instance_predictions(frame, predictions)
+            # TODO semantic / panoptic
 
             # Converts Matplotlib RGB format to OpenCV BGR format before visualizing
             # output in window.
