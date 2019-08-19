@@ -1,6 +1,8 @@
 For a few datasets that detectron2 natively supports,
 it assumes they exist in this directory, with the following directory structure.
 
+You can link the original datasets to this directory.
+
 
 ## Expected dataset structure for COCO instance/keypoint detection:
 
@@ -35,3 +37,19 @@ coco/
 ```
 
 Then, run `./prepare_panoptic_fpn.py`, to extract semantic annotations from panoptic annotations.
+
+## Expected dataset structure for cityscapes:
+```
+cityscapes/
+  gtFine/
+    train/
+      aachen/
+        color, instanceIds, labelIds, polygons
+      ...
+    val/
+    test/
+  leftImg8bit/
+    train/
+    val/
+    test/
+```

@@ -21,9 +21,7 @@ except ImportError:
     pass
 
 
-def load_cityscapes_instances(
-    image_dir, gt_dir, from_json=True, to_polygons=True, dataset_id_to_contiguous_id=None
-):
+def load_cityscapes_instances(image_dir, gt_dir, from_json=True, to_polygons=True):
     """
     Args:
         image_dir (str): path to the raw dataset. e.g., "~/cityscapes/leftImg8bit/train".
@@ -69,10 +67,14 @@ def load_cityscapes_instances(
     )
     logger.info("Loaded {} images from {}".format(len(ret), image_dir))
 
-    if dataset_id_to_contiguous_id is not None:
-        for dict_per_image in ret:
-            for anno in dict_per_image["annotations"]:
-                anno["category_id"] = dataset_id_to_contiguous_id[anno["category_id"]]
+    # Map cityscape ids to contiguous ids
+    from cityscapesscripts.helpers.labels import labels
+
+    labels = [l for l in labels if l.hasInstances and not l.ignoreInEval]
+    dataset_id_to_contiguous_id = {l.id: idx for idx, l in enumerate(labels)}
+    for dict_per_image in ret:
+        for anno in dict_per_image["annotations"]:
+            anno["category_id"] = dataset_id_to_contiguous_id[anno["category_id"]]
     return ret
 
 

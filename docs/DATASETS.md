@@ -70,7 +70,7 @@ unavailable to you.
 * `class_names`: Used by all instance detection/segmentation tasks.
   A list of names for each instance category. Will be automatically set by the function `load_coco_json`.
 
-* `dataset_id_to_contiguous_id`: Used by all instance detection/segmentation tasks.
+* `dataset_id_to_contiguous_id`: Used by all instance detection/segmentation tasks in COCO format.
   A mapping from instance class ids in the dataset to a contiguous ids in range [0, #class).
   Will be automatically set by the function `load_coco_json`.
 

@@ -1,8 +1,40 @@
 #include "ROIAlign/ROIAlign.h"
 #include "deformable/deform_conv.h"
 
+namespace detectron2 {
+
+
+// similar to https://github.com/pytorch/pytorch/blob/master/aten/src/ATen/Version.cpp
+std::string get_compiler_version() {
+  std::ostringstream ss;
+#if defined(__GNUC__)
+#ifndef __clang__
+  {
+    ss << "GCC " << __GNUC__ << "." << __GNUC_MINOR__;
+  }
+#endif
+#endif
+
+#if defined(__clang_major__)
+  {
+    ss << "clang " << __clang_major__ << "." << __clang_minor__ << "." << __clang_patchlevel__;
+  }
+#endif
+
+#if defined(_MSC_VER)
+  {
+    ss << "MSVC " << _MSC_FULL_VER;
+  }
+#endif
+  return ss.str();
+}
+
+
+
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+  m.def("get_compiler_version", &get_compiler_version, "get_compiler_version");
+
   m.def("roi_align_forward", &ROIAlign_forward, "ROIAlign_forward");
   m.def("roi_align_backward", &ROIAlign_backward, "ROIAlign_backward");
 
@@ -16,4 +48,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         &modulated_deform_conv_forward, "modulated_deform_conv_forward");
   m.def("modulated_deform_conv_backward",
         &modulated_deform_conv_backward, "modulated_deform_conv_backward");
+}
+
 }

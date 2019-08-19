@@ -26,6 +26,13 @@ def get_env_module():
 def collect_env_info():
     data = []
     data.append(("Python", sys.version.replace("\n", "")))
+    try:
+        from detectron2 import _C
+    except ImportError:
+        pass
+    else:
+        data.append(("Detectron2 Compiler", _C.get_compiler_version()))
+
     data.append(get_env_module())
     data.append(("PyTorch", torch.__version__))
     data.append(("PyTorch Debug Build", torch.version.debug))

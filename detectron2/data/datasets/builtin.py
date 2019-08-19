@@ -6,7 +6,8 @@ This file registers pre-defined datasets at hard-coded paths, and their metadata
 
 We hard-code metadata for common datasets. This will enable:
 1. Consistency check when loading the datasets
-2. Use models on these standard datasets directly without having the dataset annotations
+2. Use models on these standard datasets directly and run demos,
+   without having to download the dataset annotations
 
 We hard-code some paths to the dataset that's assumed to
 exist in "./datasets/".
@@ -17,9 +18,10 @@ To add new dataset, refer to the tutorial "docs/DATASETS.md".
 
 import os
 
-from detectron2.data import MetadataCatalog
+from detectron2.data import MetadataCatalog, DatasetCatalog
 from .register_coco import register_coco_instances, register_coco_panoptic_separated
 from .lvis import register_lvis_instances, get_lvis_instances_meta
+from .cityscapes import load_cityscapes_instances
 
 # All coco categories, together with their nice-looking visualization colors
 # It's from https://github.com/cocodataset/panopticapi/blob/master/panoptic_coco_categories.json
@@ -268,18 +270,15 @@ def _get_builtin_metadata(dataset_name):
             "keypoint_connection_rules": KEYPOINT_CONNECTION_RULES,
         }
     elif dataset_name == "cityscapes":
-        # We choose this order because it is consistent with our old json annotation files
-        # TODO Perhaps switch to an order that's consistent with Cityscapes'
-        # original label, when we don't need the legacy jsons any more.
         CITYSCAPES_THING_CLASS_NAMES = [
-            "bicycle",
-            "motorcycle",
-            "rider",
-            "train",
-            "car",
             "person",
+            "rider",
+            "car",
             "truck",
             "bus",
+            "train",
+            "motorcycle",
+            "bicycle",
         ]
         return {"class_names": CITYSCAPES_THING_CLASS_NAMES}
     raise KeyError("No built-in metadata for dataset {}".format(dataset_name))
@@ -289,8 +288,8 @@ def _get_builtin_metadata(dataset_name):
 
 
 # Some predefined datasets in COCO format
-_PREDEFINED_SPLITS = {}
-_PREDEFINED_SPLITS["coco"] = {
+_PREDEFINED_SPLITS_COCO = {}
+_PREDEFINED_SPLITS_COCO["coco"] = {
     "coco_2014_train": ("coco/train2014", "coco/annotations/instances_train2014.json"),
     "coco_2014_val": ("coco/val2014", "coco/annotations/instances_val2014.json"),
     "coco_2014_minival": ("coco/val2014", "coco/annotations/instances_minival2014.json"),
@@ -304,23 +303,7 @@ _PREDEFINED_SPLITS["coco"] = {
     "coco_2017_val_100": ("coco/val2017", "coco/annotations/instances_val2017_100.json"),
 }
 
-_PREDEFINED_SPLITS["cityscapes"] = {
-    # TODO understand what is "filtered"
-    "cityscapes_fine_instanceonly_seg_train_cocostyle": (
-        "cityscapes/images",
-        "cityscapes/annotations/instancesonly_gtFine_train.json",
-    ),
-    "cityscapes_fine_instanceonly_seg_val_cocostyle": (
-        "cityscapes/images",
-        "cityscapes/annotations/instancesonly_filtered_gtFine_val.json",
-    ),
-    "cityscapes_fine_instanceonly_seg_test_cocostyle": (
-        "cityscapes/images",
-        "cityscapes/annotations/instancesonly_gtFine_test.json",
-    ),
-}
-
-_PREDEFINED_SPLITS["coco_person"] = {
+_PREDEFINED_SPLITS_COCO["coco_person"] = {
     "keypoints_coco_2014_train": (
         "coco/train2014",
         "coco/annotations/person_keypoints_train2014.json",
@@ -349,7 +332,26 @@ _PREDEFINED_SPLITS["coco_person"] = {
     ),
 }
 
-for dataset_name, splits_per_dataset in _PREDEFINED_SPLITS.items():
+
+# our internal coco-format jsons for cityscapes. TODO removed them at release
+# NOTE: it has different order of class label
+_PREDEFINED_SPLITS_COCO["cityscapes"] = {
+    "cityscapes_fine_instanceonly_seg_train_cocostyle": (
+        "cityscapes/images",
+        "cityscapes/annotations/instancesonly_gtFine_train.json",
+    ),
+    "cityscapes_fine_instanceonly_seg_val_cocostyle": (
+        "cityscapes/images",
+        "cityscapes/annotations/instancesonly_filtered_gtFine_val.json",
+    ),
+    "cityscapes_fine_instanceonly_seg_test_cocostyle": (
+        "cityscapes/images",
+        "cityscapes/annotations/instancesonly_gtFine_test.json",
+    ),
+}
+
+
+for dataset_name, splits_per_dataset in _PREDEFINED_SPLITS_COCO.items():
     for key, (image_root, json_file) in splits_per_dataset.items():
         # Assume pre-defined datasets live in `./datasets`.
         register_coco_instances(
@@ -377,6 +379,35 @@ for dataset_name, splits_per_dataset in _PREDEFINED_SPLITS_LVIS.items():
             os.path.join("datasets", json_file) if "://" not in json_file else json_file,
             os.path.join("datasets", image_root),
         )
+
+
+# ==== Predefined splits for raw cityscapes images ===========
+
+
+_RAW_CITYSCAPES_SPLITS = {
+    "cityscapes_fine_instanceonly_seg_train": (
+        "cityscapes/leftImg8bit/train",
+        "cityscapes/gtFine/train",
+    ),
+    "cityscapes_fine_instanceonly_seg_val": ("cityscapes/leftImg8bit/val", "cityscapes/gtFine/val"),
+    "cityscapes_fine_instanceonly_seg_test": (
+        "cityscapes/leftImg8bit/test",
+        "cityscapes/gtFine/test",
+    ),
+}
+for key, (image_dir, gt_dir) in _RAW_CITYSCAPES_SPLITS.items():
+    meta = _get_builtin_metadata("cityscapes")
+    image_dir = os.path.join("datasets", image_dir)
+    gt_dir = os.path.join("datasets", gt_dir)
+    DatasetCatalog.register(
+        key,
+        lambda x=image_dir, y=gt_dir: load_cityscapes_instances(
+            x, y, from_json=True, to_polygons=True
+        ),
+    )
+    MetadataCatalog.get(key).set(
+        image_dir=image_dir, gt_dir=gt_dir, evaluator_type="cityscapes", **meta
+    )
 
 
 # ==== Predefined panoptic segmentation datasets and splits ==========
