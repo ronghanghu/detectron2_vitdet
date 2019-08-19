@@ -162,6 +162,21 @@ class Checkpointer(object):
         # DataParallel or DistributedDataParallel during serialization,
         # remove the "module" prefix before performing the matching
         _strip_prefix_if_present(checkpoint_state_dict, "module.")
+
+        # work around https://github.com/pytorch/pytorch/issues/24139
+        model_state_dict = self.model.state_dict()
+        for k in list(checkpoint_state_dict.keys()):
+            if k in model_state_dict:
+                shape_model = tuple(model_state_dict[k].shape)
+                shape_checkpoint = tuple(checkpoint_state_dict[k].shape)
+                if shape_model != shape_checkpoint:
+                    self.logger.warning(
+                        "'{}' has shape {} in the checkpoint but {} in the model! Skipped.".format(
+                            k, shape_checkpoint, shape_model
+                        )
+                    )
+                    checkpoint_state_dict.pop(k)
+
         incompatible = self.model.load_state_dict(checkpoint_state_dict, strict=False)
         if incompatible.missing_keys:
             self.logger.warning(
