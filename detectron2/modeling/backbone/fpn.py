@@ -3,7 +3,7 @@ import borc.nn.weight_init as weight_init
 import torch.nn.functional as F
 from torch import nn
 
-from detectron2.layers import Conv2d
+from detectron2.layers import Conv2d, get_norm
 
 from .backbone import Backbone
 from .build import BACKBONE_REGISTRY
@@ -30,7 +30,7 @@ class FPN(Backbone):
                 backbone produces ["res2", "res3", "res4"], any *contiguous* sublist
                 of these may be used; order must be from high to low resolution.
             out_channels (int): number of channels in the output feature maps.
-            norm (str): either "" or "GN".
+            norm (str): the normalization to use.
             top_block (nn.Module or None): if provided, an extra operation will
                 be performed on the output of the last (smallest resolution)
                 FPN output, and the result will extend the result list. The top_block
@@ -51,8 +51,8 @@ class FPN(Backbone):
 
         use_bias = norm == ""
         for idx, in_channels in enumerate(in_channels):
-            lateral_norm = nn.GroupNorm(32, out_channels) if norm == "GN" else None
-            output_norm = nn.GroupNorm(32, out_channels) if norm == "GN" else None
+            lateral_norm = get_norm(norm, out_channels)
+            output_norm = get_norm(norm, out_channels)
 
             lateral_conv = Conv2d(
                 in_channels, out_channels, kernel_size=1, bias=use_bias, norm=lateral_norm

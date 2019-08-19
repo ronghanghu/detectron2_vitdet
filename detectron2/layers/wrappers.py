@@ -41,6 +41,8 @@ class Conv2d(torch.nn.Conv2d):
 
         norm (nn.Module, optional): a normalization layer
         activation (callable(Tensor) -> Tensor): a callable activation function
+
+        It assumes that norm layer is used before activation.
         """
         norm = kwargs.pop("norm", None)
         activation = kwargs.pop("activation", None)
