@@ -1,4 +1,3 @@
-import inspect
 import logging
 import os
 import sys
@@ -63,6 +62,7 @@ def setup_logger(
     logger.addHandler(ch)
 
     if save_dir:
+        PathManager.mkdirs(save_dir)
         fh = logging.StreamHandler(PathManager.open(os.path.join(save_dir, "log.txt"), "a"))
         fh.setLevel(logging.DEBUG)
         fh.setFormatter(plain_formatter)
@@ -71,20 +71,60 @@ def setup_logger(
     return logger
 
 
-_LOGGED_MSGS = Counter()
+"""
+Below are some other convenient logging methods.
+They are mainly adopted from
+https://github.com/abseil/abseil-py/blob/master/absl/logging/__init__.py
+"""
 
 
-def log_first_n(lvl, msg, n=1):
+def _find_caller():
     """
-    Log the given msg only for the first n times.
+    Returns:
+        module name of the caller
+        a hashable key to be used to identify different callers
+    """
+    frame = sys._getframe(2)
+    while frame:
+        code = frame.f_code
+        if os.path.join("utils", "logger.") not in code.co_filename:
+            mod_name = frame.f_globals["__name__"]
+            if mod_name == "__main__":
+                mod_name = "detectron2"
+            return mod_name, (code.co_filename, frame.f_lineno, code.co_name)
+        frame = frame.f_back
+
+
+_LOG_COUNTER = Counter()
+
+
+def log_first_n(lvl, msg, n=1, name=None):
+    """
+    Log only for the first n times.
 
     Args:
         lvl (int): the logging level
         msg (str):
         n (int):
+        name (str): name of the logger to use. Will use the caller's module by default.
     """
-    _LOGGED_MSGS[msg] += 1
-    if _LOGGED_MSGS[msg] <= n:
-        caller_frame = inspect.currentframe().f_back
-        logger = logging.getLogger(caller_frame.f_globals["__name__"])
-        logger.log(lvl, msg)
+    caller_module, key = _find_caller()
+    _LOG_COUNTER[key] += 1
+    if _LOG_COUNTER[key] <= n:
+        logging.getLogger(name or caller_module).log(lvl, msg)
+
+
+def log_every_n(lvl, msg, n=1, name=None):
+    """
+    Log once per n times.
+
+    Args:
+        lvl (int): the logging level
+        msg (str):
+        n (int):
+        name (str): name of the logger to use. Will use the caller's module by default.
+    """
+    caller_module, key = _find_caller()
+    _LOG_COUNTER[key] += 1
+    if n == 1 or _LOG_COUNTER[key] % n == 1:
+        logging.getLogger(name or caller_module).log(lvl, msg)
