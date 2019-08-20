@@ -36,6 +36,7 @@ from detectron2.evaluation import (
     COCOEvaluator,
     COCOPanopticEvaluator,
     DatasetEvaluators,
+    LVISEvaluator,
     SemSegEvaluator,
     flatten_results_dict,
     inference_context,
@@ -84,6 +85,8 @@ def get_evaluator(cfg, dataset_name, output_folder):
             torch.cuda.device_count() >= comm.get_rank()
         ), "CityscapesEvaluator currently do not work with multiple machines."
         return CityscapesEvaluator(dataset_name)
+    if evaluator_type == "lvis":
+        return LVISEvaluator(dataset_name, cfg, True, output_folder)
     if len(evaluator_list) == 0:
         raise NotImplementedError(
             "no Evaluator for the dataset {} with the type {}".format(dataset_name, evaluator_type)

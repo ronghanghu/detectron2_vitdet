@@ -1,6 +1,4 @@
-import contextlib
 import copy
-import io
 import itertools
 import json
 import logging
@@ -10,8 +8,6 @@ import pickle
 from collections import OrderedDict
 import pycocotools.mask as mask_util
 import torch
-from pycocotools.coco import COCO
-from pycocotools.cocoeval import COCOeval
 from tabulate import tabulate
 
 import detectron2.utils.comm as comm
@@ -19,13 +15,15 @@ from detectron2.data import MetadataCatalog
 from detectron2.structures import Boxes, BoxMode, pairwise_iou
 from detectron2.utils.file_io import PathManager
 
+from lvis import LVIS, LVISEval, LVISResults
+
 from .evaluator import DatasetEvaluator
 
 
-class COCOEvaluator(DatasetEvaluator):
+class LVISEvaluator(DatasetEvaluator):
     """
-    Evaluate object proposal, instance detection/segmentation, keypoint detection
-    outputs using COCO's metrics and APIs.
+    Evaluate object proposal and instance detection/segmentation outputs using
+    LVIS's metrics and evaluation API.
     """
 
     def __init__(self, dataset_name, cfg, distributed, output_dir=None):
@@ -33,7 +31,7 @@ class COCOEvaluator(DatasetEvaluator):
         Args:
             dataset_name (str): name of the dataset to be evaluated.
                 It must have the following corresponding metadata:
-                    "json_file": the path to the COCO format annotation
+                    "json_file": the path to the LVIS format annotation
             cfg (CfgNode): config instance
             distributed (True): if True, will collect results from all ranks for evaluation.
                 Otherwise, will evaluate the results in the current process.
@@ -47,16 +45,13 @@ class COCOEvaluator(DatasetEvaluator):
         self._logger = logging.getLogger(__name__)
 
         self._metadata = MetadataCatalog.get(dataset_name)
-        with contextlib.redirect_stdout(io.StringIO()):
-            # TODO this requires calling this function from all ranks
-            json_file = comm.dist_get_local_path(self._metadata.json_file)
-            self._coco_api = COCO(json_file)
-
-        self._kpt_oks_sigmas = cfg.TEST.KEYPOINT_OKS_SIGMAS
+        # TODO this requires calling this function from all ranks
+        json_file = comm.dist_get_local_path(self._metadata.json_file)
+        self._lvis_api = LVIS(json_file)
 
     def reset(self):
         self._predictions = []
-        self._coco_results = []
+        self._lvis_results = []
 
     def _tasks_from_config(self, cfg):
         """
@@ -66,17 +61,15 @@ class COCOEvaluator(DatasetEvaluator):
         tasks = ("bbox",)
         if cfg.MODEL.MASK_ON:
             tasks = tasks + ("segm",)
-        if cfg.MODEL.KEYPOINT_ON:
-            tasks = tasks + ("keypoints",)
         return tasks
 
     def process(self, inputs, outputs):
         """
         Args:
-            inputs: the inputs to a COCO model (e.g., GeneralizedRCNN).
+            inputs: the inputs to a LVIS model (e.g., GeneralizedRCNN).
                 It is a list of dict. Each dict corresponds to an image and
                 contains keys like "height", "width", "file_name", "image_id".
-            outputs: the outputs of a COCO model. It is a list of dicts with key
+            outputs: the outputs of a LVIS model. It is a list of dicts with key
                 "instances" that contains :class:`Instances`.
         """
         for input, output in zip(inputs, outputs):
@@ -117,7 +110,7 @@ class COCOEvaluator(DatasetEvaluator):
                 return
 
         if len(self._predictions) == 0:
-            self._logger.warning("[COCOEvaluator] Did not receive valid predictions.")
+            self._logger.warning("[LVISEvaluator] Did not receive valid predictions.")
             return {}
 
         if self._output_dir:
@@ -138,30 +131,25 @@ class COCOEvaluator(DatasetEvaluator):
         Evaluate self._predictions on the given tasks.
         Fill self._results with the metrics of the tasks.
         """
-        self._logger.info("Preparing results for COCO format ...")
-        self._coco_results = list(itertools.chain(*[x["instances"] for x in self._predictions]))
+        self._logger.info("Preparing results in the LVIS format ...")
+        self._lvis_results = list(itertools.chain(*[x["instances"] for x in self._predictions]))
 
-        # unmap the category ids for COCO
-        if hasattr(self._metadata, "dataset_id_to_contiguous_id"):
-            reverse_id_mapping = {
-                v: k for k, v in self._metadata.dataset_id_to_contiguous_id.items()
-            }
-            for result in self._coco_results:
-                result["category_id"] = reverse_id_mapping[result["category_id"]]
+        # unmap the category ids for LVIS (from 0-indexed to 1-indexed)
+        for result in self._lvis_results:
+            result["category_id"] += 1
 
         if self._output_dir:
-            file_path = os.path.join(self._output_dir, "coco_instances_results.json")
+            file_path = os.path.join(self._output_dir, "lvis_instances_results.json")
             with PathManager.open(file_path, "w") as f:
-                f.write(json.dumps(self._coco_results))
+                f.write(json.dumps(self._lvis_results))
                 f.flush()
 
         self._logger.info("Evaluating predictions ...")
         for task in sorted(tasks):
-            res = _evaluate_predictions_on_coco(
-                self._coco_api,
-                self._coco_results,
+            res = _evaluate_predictions_on_lvis(
+                self._lvis_api,
+                self._lvis_results,
                 task,
-                kpt_oks_sigmas=self._kpt_oks_sigmas,
                 class_names=self._metadata.get("class_names"),
             )
             self._results[task] = res
@@ -196,7 +184,7 @@ class COCOEvaluator(DatasetEvaluator):
         for limit in [100, 1000]:
             for area, suffix in areas.items():
                 stats = _evaluate_box_proposals(
-                    self._predictions, self._coco_api, area=area, limit=limit
+                    self._predictions, self._lvis_api, area=area, limit=limit
                 )
                 key = "AR{}@{:d}".format(suffix, limit)
                 res[key] = float(stats["ar"].item() * 100)
@@ -219,10 +207,6 @@ def instances_to_json(instances, img_id):
     if has_mask:
         rles = instances.pred_masks_rle
 
-    has_keypoints = instances.has("pred_keypoints")
-    if has_keypoints:
-        keypoints = instances.pred_keypoints
-
     results = []
     for k in range(num_instance):
         result = {
@@ -233,23 +217,16 @@ def instances_to_json(instances, img_id):
         }
         if has_mask:
             result["segmentation"] = rles[k]
-        if has_keypoints:
-            # In COCO annotations,
-            # keypoints coordinates are pixel indices.
-            # However our predictions are floating point coordinates.
-            # Therefore we subtract 0.5 to be consistent with the annotation format.
-            keypoints[k][:, :2] -= 0.5
-            result["keypoints"] = keypoints[k].flatten().tolist()
         results.append(result)
     return results
 
 
 # inspired from Detectron:
 # https://github.com/facebookresearch/Detectron/blob/a6a835f5b8208c45d0dce217ce9bbda915f44df7/detectron/datasets/json_dataset_evaluator.py#L255 # noqa
-def _evaluate_box_proposals(dataset_predictions, coco_api, thresholds=None, area="all", limit=None):
+def _evaluate_box_proposals(dataset_predictions, lvis_api, thresholds=None, area="all", limit=None):
     """
     Evaluate detection proposal recall metrics. This function is a much
-    faster alternative to the official COCO API recall evaluation code. However,
+    faster alternative to the official LVIS API recall evaluation code. However,
     it produces slightly different results.
     """
     # Record max overlap value for each gt box
@@ -287,16 +264,14 @@ def _evaluate_box_proposals(dataset_predictions, coco_api, thresholds=None, area
         inds = predictions.objectness_logits.sort(descending=True)[1]
         predictions = predictions[inds]
 
-        ann_ids = coco_api.getAnnIds(imgIds=prediction_dict["image_id"])
-        anno = coco_api.loadAnns(ann_ids)
+        ann_ids = lvis_api.get_ann_ids(img_ids=[prediction_dict["image_id"]])
+        anno = lvis_api.load_anns(ann_ids)
         gt_boxes = [
-            BoxMode.convert(obj["bbox"], BoxMode.XYWH_ABS, BoxMode.XYXY_ABS)
-            for obj in anno
-            if obj["iscrowd"] == 0
+            BoxMode.convert(obj["bbox"], BoxMode.XYWH_ABS, BoxMode.XYXY_ABS) for obj in anno
         ]
         gt_boxes = torch.as_tensor(gt_boxes).reshape(-1, 4)  # guard against no boxes
         gt_boxes = Boxes(gt_boxes)
-        gt_areas = torch.as_tensor([obj["area"] for obj in anno if obj["iscrowd"] == 0])
+        gt_areas = torch.as_tensor([obj["area"] for obj in anno])
 
         if len(gt_boxes) == 0 or len(predictions) == 0:
             continue
@@ -355,9 +330,7 @@ def _evaluate_box_proposals(dataset_predictions, coco_api, thresholds=None, area
     }
 
 
-def _evaluate_predictions_on_coco(
-    coco_gt, coco_results, iou_type, kpt_oks_sigmas=None, class_names=None
-):
+def _evaluate_predictions_on_lvis(lvis_gt, lvis_results, iou_type, class_names=None):
     """
     Args:
         iou_type (str):
@@ -369,61 +342,25 @@ def _evaluate_predictions_on_coco(
         a dict of {metric name: score}
     """
     metrics = {
-        "bbox": ["AP", "AP50", "AP75", "APs", "APm", "APl"],
-        "segm": ["AP", "AP50", "AP75", "APs", "APm", "APl"],
-        "keypoints": ["AP", "AP50", "AP75", "APm", "APl"],
+        "bbox": ["AP", "AP50", "AP75", "APs", "APm", "APl", "APr", "APc", "APf"],
+        "segm": ["AP", "AP50", "AP75", "APs", "APm", "APl", "APr", "APc", "APf"],
     }[iou_type]
 
     logger = logging.getLogger(__name__)
 
-    if len(coco_results) == 0:  # cocoapi does not handle empty results very well
+    if len(lvis_results) == 0:  # TODO: check if needed
         logger.warn("No predictions from the model! Set scores to -1")
         return {metric: -1 for metric in metrics}
 
-    coco_dt = coco_gt.loadRes(coco_results)
-    coco_eval = COCOeval(coco_gt, coco_dt, iou_type)
-    # Use the COCO default keypoint OKS sigmas unless overrides are specified
-    if kpt_oks_sigmas:
-        coco_eval.params.kpt_oks_sigmas = np.array(kpt_oks_sigmas)
-    coco_eval.evaluate()
-    coco_eval.accumulate()
-    coco_eval.summarize()
+    lvis_results = LVISResults(lvis_gt, lvis_results)
+    lvis_eval = LVISEval(lvis_gt, lvis_results, iou_type)
+    lvis_eval.run()
+    lvis_eval.print_results()
 
-    # the standard metrics
-    results = {metric: float(coco_eval.stats[idx] * 100) for idx, metric in enumerate(metrics)}
+    # Pull the standard metrics from the LVIS results
+    results = lvis_eval.get_results()
+    results = {metric: float(results[metric] * 100) for metric in metrics}
     logger.info("Evaluation results for {}: \n".format(iou_type) + _create_small_table(results))
-
-    if class_names is None or len(class_names) <= 1:
-        return results
-    # Compute per-category AP
-    # from https://github.com/facebookresearch/Detectron/blob/a6a835f5b8208c45d0dce217ce9bbda915f44df7/detectron/datasets/json_dataset_evaluator.py#L222-L252 # noqa
-    precisions = coco_eval.eval["precision"]
-    # precision has dims (iou, recall, cls, area range, max dets)
-    assert len(class_names) == precisions.shape[2]
-
-    results_per_category = []
-    for idx, name in enumerate(class_names):
-        # area range index 0: all area ranges
-        # max dets index -1: typically 100 per image
-        precision = precisions[:, :, idx, 0, -1]
-        precision = precision[precision > -1]
-        ap = np.mean(precision) if precision.size else float("nan")
-        results_per_category.append(("{}".format(name), float(ap * 100)))
-
-    # tabulate it
-    N_COLS = min(6, len(results_per_category) * 2)
-    results_flatten = list(itertools.chain(*results_per_category))
-    results_2d = itertools.zip_longest(*[results_flatten[i::N_COLS] for i in range(N_COLS)])
-    table = tabulate(
-        results_2d,
-        tablefmt="pipe",
-        floatfmt=".3f",
-        headers=["category", "AP"] * (N_COLS // 2),
-        numalign="left",
-    )
-    logger.info("Per-category {} AP: \n".format(iou_type) + table)
-
-    results.update({"AP-" + name: ap for name, ap in results_per_category})
     return results
 
 
