@@ -107,7 +107,11 @@ def paste_masks_in_image_aligned(masks, boxes, image_shape, threshold):
 
             gy, gx = torch.meshgrid(img_y, img_x)
             ind = torch.stack([gx, gy], dim=-1).to(dtype=torch.float32, device=masks.device)
-            res = F.grid_sample(mask[None, None, :, :].to(dtype=torch.float32), ind[None, :, :, :])
+            res = F.grid_sample(
+                mask[None, None, :, :].to(dtype=torch.float32),
+                ind[None, :, :, :],
+                align_corners=True,
+            )
             if threshold >= 0:
                 res = (res >= threshold).to(dtype=torch.uint8)
             else:
@@ -135,7 +139,7 @@ def paste_masks_in_image_aligned(masks, boxes, image_shape, threshold):
             gy = img_y[:, :, None].expand(N_chunk, img_h, img_w)
             grid = torch.stack([gx, gy], dim=3)
 
-            img_masks = F.grid_sample(masks_chunk.to(dtype=torch.float32), grid)
+            img_masks = F.grid_sample(masks_chunk.to(dtype=torch.float32), grid, align_corners=True)
             if threshold >= 0:
                 img_masks = (img_masks >= threshold).to(dtype=torch.uint8)
             else:
