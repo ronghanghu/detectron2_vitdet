@@ -368,7 +368,7 @@ def _resample_data(
     grid_y = grid_h_expanded * dy_expanded + y0_expanded
     grid = torch.stack((grid_x, grid_y), dim=3)
     # resample Z from (N, C, H, W) into (N, C, Hout, Wout)
-    zresampled = F.grid_sample(z, grid, mode=mode, padding_mode=padding_mode, align_corners=True)
+    zresampled = F.grid_sample(z, grid, mode=mode, padding_mode=padding_mode)
     return zresampled
 
 

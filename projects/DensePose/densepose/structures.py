@@ -279,32 +279,16 @@ class DensePoseOutput(object):
             wsize, grid.size(1)
         )
         S_new = F.grid_sample(
-            S.unsqueeze(0),
-            torch.unsqueeze(grid, 0),
-            mode="bilinear",
-            padding_mode="border",
-            align_corners=True,
+            S.unsqueeze(0), torch.unsqueeze(grid, 0), mode="bilinear", padding_mode="border"
         ).squeeze(0)
         I_new = F.grid_sample(
-            I.unsqueeze(0),
-            torch.unsqueeze(grid, 0),
-            mode="bilinear",
-            padding_mode="border",
-            align_corners=True,
+            I.unsqueeze(0), torch.unsqueeze(grid, 0), mode="bilinear", padding_mode="border"
         ).squeeze(0)
         U_new = F.grid_sample(
-            U.unsqueeze(0),
-            torch.unsqueeze(grid, 0),
-            mode="bilinear",
-            padding_mode="border",
-            align_corners=True,
+            U.unsqueeze(0), torch.unsqueeze(grid, 0), mode="bilinear", padding_mode="border"
         ).squeeze(0)
         V_new = F.grid_sample(
-            V.unsqueeze(0),
-            torch.unsqueeze(grid, 0),
-            mode="bilinear",
-            padding_mode="border",
-            align_corners=True,
+            V.unsqueeze(0), torch.unsqueeze(grid, 0), mode="bilinear", padding_mode="border"
         ).squeeze(0)
         return S_new, I_new, U_new, V_new
 
