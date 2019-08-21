@@ -33,10 +33,11 @@ class CfgNode(_CfgNode):
 
         loaded_ver = loaded_cfg.get("VERSION", None)
         if loaded_ver is None:
-            # TODO: haven't officially started V0. Keep things the old way for now.
-            # logger.warning(
-            #     "Config '{}' has no VERSION! Assuming it to be compatible.".format(cfg_filename)
-            # )
+            logger.info(
+                "Config '{}' has no VERSION. Assuming it to be compatible with v{}.".format(
+                    cfg_filename, latest_ver
+                )
+            )
             loaded_ver = self.VERSION
         assert loaded_ver <= self.VERSION, "Cannot merge a v{} config into a v{} config.".format(
             loaded_ver, self.VERSION

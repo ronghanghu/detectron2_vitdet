@@ -1,3 +1,4 @@
+import logging
 import torch
 from torch import nn
 
@@ -24,18 +25,19 @@ class FrozenBatchNorm2d(nn.Module):
     The forward is implemented by `F.batch_norm(..., training=False)`.
     """
 
-    _version = 2
+    _version = 3
 
-    def __init__(self, num_features):
+    def __init__(self, num_features, eps=1e-5):
         super().__init__()
         self.num_features = num_features
+        self.eps = eps
         self.register_buffer("weight", torch.ones(num_features))
         self.register_buffer("bias", torch.zeros(num_features))
         self.register_buffer("running_mean", torch.zeros(num_features))
-        self.register_buffer("running_var", torch.ones(num_features))
+        self.register_buffer("running_var", torch.ones(num_features) - eps)
 
     def forward(self, x):
-        scale = self.weight * self.running_var.rsqrt()
+        scale = self.weight * (self.running_var + self.eps).rsqrt()
         bias = self.bias - self.running_mean * scale
         scale = scale.reshape(1, -1, 1, 1)
         bias = bias.reshape(1, -1, 1, 1)
@@ -54,12 +56,18 @@ class FrozenBatchNorm2d(nn.Module):
             if prefix + "running_var" not in state_dict:
                 state_dict[prefix + "running_var"] = torch.ones_like(self.running_var)
 
+        if version is not None and version < 3:
+            logger = logging.getLogger(__name__)
+            logger.info("FrozenBatchNorm {} is upgraded to version 3.".format(prefix.rstrip(".")))
+            # In version < 3, running_var are used without +eps.
+            state_dict[prefix + "running_var"] -= self.eps
+
         super()._load_from_state_dict(
             state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs
         )
 
     def __repr__(self):
-        return "FrozenBatchNorm2d(num_features={})".format(self.num_features)
+        return "FrozenBatchNorm2d(num_features={}, eps={})".format(self.num_features, self.eps)
 
     @classmethod
     def convert_frozen_batchnorm(cls, module):

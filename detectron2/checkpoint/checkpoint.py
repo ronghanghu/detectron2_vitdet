@@ -252,17 +252,13 @@ class PeriodicCheckpointer:
 
 
 def _strip_prefix_if_present(state_dict, prefix):
-    def strip_ordered_dict(dic):
-        keys = sorted(dic.keys())
-        if not all(key.startswith(prefix) for key in keys):
-            return
+    keys = sorted(state_dict.keys())
+    if not all(len(key) == 0 or key.startswith(prefix) for key in keys):
+        return
 
-        for key in list(dic.keys()):
-            value = dic.pop(key)
-            newkey = key[len(prefix) :]
-            dic[newkey] = value
-
-    strip_ordered_dict(state_dict)
+    for key in keys:
+        newkey = key[len(prefix) :]
+        state_dict[newkey] = state_dict.pop(key)
 
     # also strip the prefix in metadata, if any
     try:
@@ -270,4 +266,13 @@ def _strip_prefix_if_present(state_dict, prefix):
     except AttributeError:
         pass
     else:
-        strip_ordered_dict(metadata)
+        for key in list(metadata.keys()):
+            # for the metadata dict, the key can be:
+            # '': for the DDP module, which we want to remove
+            # 'module': for the actual model
+            # 'module.xx.xx': for the rest
+
+            if len(key) == 0:
+                continue
+            newkey = key[len(prefix) :]
+            metadata[newkey] = metadata.pop(key)
