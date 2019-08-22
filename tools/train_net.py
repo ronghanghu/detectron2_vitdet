@@ -19,6 +19,7 @@ import logging
 import os
 from collections import OrderedDict
 import torch
+from borc.nn.precise_bn import update_bn_stats
 from torch.nn.parallel import DistributedDataParallel
 
 import detectron2.utils.comm as comm
@@ -49,6 +50,7 @@ from detectron2.solver import build_lr_scheduler, build_optimizer
 from detectron2.utils.collect_env import collect_env_info
 from detectron2.utils.events import (
     CommonMetricPrinter,
+    EventStorage,
     JSONWriter,
     TensorboardXWriter,
     get_event_storage,
@@ -106,11 +108,22 @@ def do_test(cfg, model, is_final=True):
         list[result]: only on the main process, result for each DATASETS.TEST.
             Each result is a dict of dict. result[task][metric] is a float.
     """
+
     assert len(cfg.DATASETS.TEST)
     if isinstance(model, DistributedDataParallel):
         model = model.module
+
     torch.cuda.empty_cache()  # TODO check if it helps
     logger = logging.getLogger("detectron2.trainer")
+
+    if cfg.TEST.PRECISE_BN.ENABLED:
+        with EventStorage():  # capture events in a new storage to discard them
+            train_data = build_detection_train_loader(cfg)
+            logger.info(
+                "Running precise-BN for {} iterations ...".format(cfg.TEST.PRECISE_BN.NUM_ITER)
+                + "Note that this could produce different statistics every time."
+            )
+            update_bn_stats(model, train_data, cfg.TEST.PRECISE_BN.NUM_ITER)
 
     with inference_context(model):
         results = OrderedDict()
@@ -179,11 +192,9 @@ def create_after_step_hook(cfg, model, optimizer, scheduler, periodic_checkpoint
     """
 
     def after_step_callback(trainer):
-        if (
-            cfg.TEST.EVAL_PERIOD > 0
-            and (trainer.iter + 1) % cfg.TEST.EVAL_PERIOD == 0
-            and trainer.iter != trainer.max_iter - 1
-        ):
+        do_eval = cfg.TEST.EVAL_PERIOD > 0 and (trainer.iter + 1) % cfg.TEST.EVAL_PERIOD == 0
+
+        if do_eval:
             do_test(cfg, model, is_final=False)
             # Evaluation may take different time among workers.
             # A barrier make them start the next iteration together.
@@ -191,6 +202,8 @@ def create_after_step_hook(cfg, model, optimizer, scheduler, periodic_checkpoint
 
         trainer.storage.put_scalar("lr", optimizer.param_groups[0]["lr"], smoothing_hint=False)
         scheduler.step()
+        # Note: when precise BN is enabled, some checkpoints will have more precise
+        # statistics than others, if they are saved immediately after eval.
         periodic_checkpointer.step(trainer.iter)
 
     return hooks.CallbackHook(after_step=after_step_callback)
@@ -237,8 +250,6 @@ def do_train(cfg, model, resume=True):
         trainer_hooks.append(hooks.PeriodicWriter(writers))
     trainer.register_hooks(trainer_hooks)
     trainer.train(start_iter, max_iter)
-    with trainer.storage:
-        return do_test(cfg, model)
 
 
 def setup(args):

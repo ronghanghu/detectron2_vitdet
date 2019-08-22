@@ -47,6 +47,7 @@ class Conv2d(torch.nn.Conv2d):
         norm = kwargs.pop("norm", None)
         activation = kwargs.pop("activation", None)
         super().__init__(*args, **kwargs)
+
         self.norm = norm
         self.activation = activation
 

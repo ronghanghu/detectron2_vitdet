@@ -8,14 +8,13 @@ import pickle
 from collections import OrderedDict
 import pycocotools.mask as mask_util
 import torch
+from lvis import LVIS, LVISEval, LVISResults
 from tabulate import tabulate
 
 import detectron2.utils.comm as comm
 from detectron2.data import MetadataCatalog
 from detectron2.structures import Boxes, BoxMode, pairwise_iou
 from detectron2.utils.file_io import PathManager
-
-from lvis import LVIS, LVISEval, LVISResults
 
 from .evaluator import DatasetEvaluator
 

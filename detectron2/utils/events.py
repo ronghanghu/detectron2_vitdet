@@ -8,14 +8,14 @@ from borc.common.history_buffer import HistoryBuffer
 
 from detectron2.utils.file_io import PathManager
 
-_CURRENT_STORAGE = None
+_CURRENT_STORAGE_STACK = []
 
 
 def get_event_storage():
-    assert (
-        _CURRENT_STORAGE is not None
+    assert len(
+        _CURRENT_STORAGE_STACK
     ), "get_event_storage() has to be called inside a 'with EventStorage(...)' context!"
-    return _CURRENT_STORAGE
+    return _CURRENT_STORAGE_STACK[-1]
 
 
 class JSONWriter:
@@ -292,11 +292,9 @@ class EventStorage:
         return self._iter
 
     def __enter__(self):
-        global _CURRENT_STORAGE
-        assert _CURRENT_STORAGE is None, "Cannot nest two EventStorage!"
-        _CURRENT_STORAGE = self
+        _CURRENT_STORAGE_STACK.append(self)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        global _CURRENT_STORAGE
-        _CURRENT_STORAGE = None
+        assert _CURRENT_STORAGE_STACK[-1] == self
+        _CURRENT_STORAGE_STACK.pop()
