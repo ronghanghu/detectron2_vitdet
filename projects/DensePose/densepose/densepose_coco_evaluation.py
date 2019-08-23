@@ -16,10 +16,9 @@ import pickle
 import time
 from collections import defaultdict
 import scipy.spatial.distance as ssd
+from borc.common.file_io import PathManager
 from pycocotools import mask as maskUtils
 from scipy.io import loadmat
-
-from detectron2.utils.file_io import PathManager
 
 from .structures import DensePoseResult
 

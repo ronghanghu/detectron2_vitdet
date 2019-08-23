@@ -10,6 +10,7 @@ import pickle
 from collections import OrderedDict
 import pycocotools.mask as mask_util
 import torch
+from borc.common.file_io import PathManager
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 from tabulate import tabulate
@@ -17,7 +18,6 @@ from tabulate import tabulate
 import detectron2.utils.comm as comm
 from detectron2.data import MetadataCatalog
 from detectron2.structures import Boxes, BoxMode, pairwise_iou
-from detectron2.utils.file_io import PathManager
 
 from .evaluator import DatasetEvaluator
 

@@ -7,10 +7,10 @@ typical object detection data pipeline.
 import logging
 import numpy as np
 import torch
+from borc.common.file_io import PathManager
 from PIL import Image
 
 from detectron2.structures import BitMasks, Boxes, BoxMode, Instances, Keypoints, PolygonMasks
-from detectron2.utils.file_io import PathManager
 
 from . import transforms as T
 from .catalog import MetadataCatalog

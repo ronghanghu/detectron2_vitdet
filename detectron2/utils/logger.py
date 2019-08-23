@@ -2,9 +2,8 @@ import logging
 import os
 import sys
 from collections import Counter
+from borc.common.file_io import PathManager
 from termcolor import colored
-
-from detectron2.utils.file_io import PathManager
 
 
 class _ColorfulFormatter(logging.Formatter):

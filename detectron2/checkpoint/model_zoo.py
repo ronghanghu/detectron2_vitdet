@@ -1,6 +1,5 @@
 import logging
-
-from detectron2.utils.file_io import PathHandler, PathManager
+from borc.common.file_io import PathHandler, PathManager
 
 
 class ModelCatalog(object):

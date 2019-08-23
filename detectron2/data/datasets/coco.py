@@ -6,7 +6,7 @@ from PIL import Image
 
 from borc.common.timer import Timer
 from detectron2.structures import BoxMode
-from detectron2.utils.file_io import PathManager
+from borc.common.file_io import PathManager
 import detectron2.utils.comm as comm
 
 from .. import MetadataCatalog, DatasetCatalog

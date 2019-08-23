@@ -8,8 +8,7 @@ import logging
 import pickle
 import torch
 import torch.distributed as dist
-
-from detectron2.utils.file_io import PathManager
+from borc.common.file_io import PathManager
 
 _LOCAL_PROCESS_GROUP = None
 """

@@ -19,6 +19,8 @@ import logging
 import os
 from collections import OrderedDict
 import torch
+
+from borc.common.file_io import PathManager
 from borc.nn.precise_bn import update_bn_stats
 from torch.nn.parallel import DistributedDataParallel
 
@@ -55,7 +57,6 @@ from detectron2.utils.events import (
     TensorboardXWriter,
     get_event_storage,
 )
-from detectron2.utils.file_io import PathManager
 from detectron2.utils.logger import setup_logger
 
 

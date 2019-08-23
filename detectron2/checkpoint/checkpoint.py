@@ -2,10 +2,10 @@ import logging
 import numpy as np
 import os
 import torch
+from borc.common.file_io import PathManager
 from torch.nn.parallel import DataParallel, DistributedDataParallel
 
 import detectron2.utils.comm as comm
-from detectron2.utils.file_io import PathManager
 
 
 class Checkpointer(object):

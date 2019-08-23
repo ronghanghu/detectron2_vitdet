@@ -5,12 +5,12 @@ import logging
 import numpy as np
 import pickle
 import torch.utils.data
+from borc.common.file_io import PathManager
 from tabulate import tabulate
 from termcolor import colored
 
 from detectron2.structures import BoxMode
 from detectron2.utils.comm import get_world_size
-from detectron2.utils.file_io import PathManager
 
 from . import samplers
 from .catalog import DatasetCatalog, MetadataCatalog

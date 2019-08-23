@@ -1,9 +1,8 @@
 import copy
 import numpy as np
 import torch
+from borc.common.file_io import PathManager
 from PIL import Image
-
-from detectron2.utils.file_io import PathManager
 
 from . import detection_utils as utils
 from . import transforms as T

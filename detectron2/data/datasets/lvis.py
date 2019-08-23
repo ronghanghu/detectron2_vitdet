@@ -4,7 +4,7 @@ import os
 from borc.common.timer import Timer
 from detectron2.structures import BoxMode
 import detectron2.utils.comm as comm
-from detectron2.utils.file_io import PathManager
+from borc.common.file_io import PathManager
 from detectron2.data import DatasetCatalog, MetadataCatalog
 
 from .lvis_v0_5_categories import LVIS_CATEGORIES

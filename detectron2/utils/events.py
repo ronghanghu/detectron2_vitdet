@@ -4,9 +4,8 @@ import logging
 import os
 from collections import defaultdict
 import torch
+from borc.common.file_io import PathManager
 from borc.common.history_buffer import HistoryBuffer
-
-from detectron2.utils.file_io import PathManager
 
 _CURRENT_STORAGE_STACK = []
 

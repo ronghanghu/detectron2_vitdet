@@ -8,6 +8,7 @@ It is an example of how a user might use detectron2 for a new project.
 
 import logging
 import os
+from borc.common.file_io import PathManager
 from torch.nn.parallel import DistributedDataParallel
 
 import detectron2.utils.comm as comm
@@ -33,7 +34,6 @@ from detectron2.utils.events import (
     TensorboardXWriter,
     get_event_storage,
 )
-from detectron2.utils.file_io import PathManager
 from detectron2.utils.logger import setup_logger
 
 from densepose import DatasetMapper, DensePoseCOCOEvaluator, add_densepose_config
