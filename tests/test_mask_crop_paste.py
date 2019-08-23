@@ -12,17 +12,14 @@ from tabulate import tabulate
 from torch.nn import functional as F
 
 from detectron2.data import MetadataCatalog
-from detectron2.layers.paste_mask import (
+from detectron2.layers.mask_ops import (
     pad_masks,
     paste_mask_in_image,
     paste_masks_in_image_aligned,
     scale_boxes,
 )
-from detectron2.structures import Boxes, PolygonMasks
-from detectron2.structures.masks import (
-    batch_rasterize_full_image_polygons_within_box,
-    rasterize_polygons_within_box,
-)
+from detectron2.structures import BitMasks, Boxes, PolygonMasks
+from detectron2.structures.masks import batch_crop_and_resize_bitmask, rasterize_polygons_within_box
 
 
 """
@@ -74,7 +71,9 @@ def rasterize_polygons_with_grid_sample(
 
     full_image_bit_mask = torch.from_numpy(full_image_bit_mask)
     mask = F.grid_sample(
-        full_image_bit_mask[None, None, :, :].to(dtype=torch.float32), ind[None, :, :, :]
+        full_image_bit_mask[None, None, :, :].to(dtype=torch.float32),
+        ind[None, :, :, :],
+        align_corners=True,
     )
 
     return mask[0, 0] >= threshold
@@ -104,8 +103,10 @@ def process_annotation(ann, mask_side_len=28):
         "gridsample": rasterize_polygons_with_grid_sample(
             gt_full_image_bit_mask, gt_bbox, mask_side_len
         ),
-        "roialign": batch_rasterize_full_image_polygons_within_box(
-            PolygonMasks([[x.tolist() for x in gt_polygons]]),
+        "roialign": batch_crop_and_resize_bitmask(
+            BitMasks.from_polygon_masks(
+                PolygonMasks([[x.tolist() for x in gt_polygons]]), height, width
+            ),
             torch.from_numpy(gt_bbox[None, :].astype("float32")),
             mask_side_len,
         )[0],
