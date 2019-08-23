@@ -1,6 +1,6 @@
 _BASE_: "../Base-RCNN-C4.yaml"
 MODEL:
-  WEIGHT: "catalog://ImageNetPretrained/MSRA/R-50"
+  WEIGHT: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
   MASK_ON: True
 DATASETS:
   TRAIN: ("coco_2017_val_100",)
