@@ -98,24 +98,17 @@ def _get_global_gloo_group():
     Return a process group based on gloo backend, containing all the ranks
     The result is cached.
     """
-    return dist.new_group(backend="gloo")
-
-
-def _get_group_for_device(device):
-    """
-    Args:
-        device (str): cpu or cuda
-    """
-    assert device in ["cpu", "cuda"], device
-    assert not (device == "cuda" and dist.get_backend() != "nccl"), (device, dist.get_backend())
-    if device == "cpu" and dist.get_backend() == "nccl":
-        group = _get_global_gloo_group()
+    if dist.get_backend() == "nccl":
+        return dist.new_group(backend="gloo")
     else:
-        group = dist.group.WORLD
-    return group
+        return dist.group.WORLD
 
 
-def _serialize_to_tensor(data, device):
+def _serialize_to_tensor(data, group):
+    backend = dist.get_backend(group)
+    assert backend in ["gloo", "nccl"]
+    device = torch.device("cpu" if backend == "gloo" else "cuda")
+
     buffer = pickle.dumps(data)
     if len(buffer) > 1024 ** 3:
         logger = logging.getLogger(__name__)
@@ -135,7 +128,10 @@ def _pad_to_largest_tensor(tensor, group):
         list[int]: size of the tensor, on each rank
         Tensor: padded tensor that has the max size
     """
-    world_size = get_world_size()
+    world_size = dist.get_world_size(group=group)
+    assert (
+        world_size >= 1
+    ), "comm.gather/all_gather must be called from ranks within the given group!"
     local_size = torch.tensor([tensor.numel()], dtype=torch.int64, device=tensor.device)
     size_list = [
         torch.zeros([1], dtype=torch.int64, device=tensor.device) for _ in range(world_size)
@@ -153,31 +149,34 @@ def _pad_to_largest_tensor(tensor, group):
     return size_list, tensor
 
 
-def all_gather(data, device="cpu"):
+def all_gather(data, group=None):
     """
-    Run all_gather on arbitrary picklable data (not necessarily tensors)
-    across all ranks.
+    Run all_gather on arbitrary picklable data (not necessarily tensors).
 
     Args:
         data: any picklable object
-        device (str): either "cpu" or "cuda"
+        group: a torch process group. By default, will use a group which
+            contains all ranks on gloo backend.
 
     Returns:
         list[data]: list of data gathered from each rank
     """
-    world_size = get_world_size()
-    if world_size == 1:
+    if get_world_size() == 1:
+        return [data]
+    if group is None:
+        group = _get_global_gloo_group()
+    if dist.get_world_size(group) == 1:
         return [data]
 
-    group = _get_group_for_device(device)
-    device = torch.device(device)
-    tensor = _serialize_to_tensor(data, device)
+    tensor = _serialize_to_tensor(data, group)
 
     size_list, tensor = _pad_to_largest_tensor(tensor, group)
     max_size = max(size_list)
 
     # receiving Tensor from all ranks
-    tensor_list = [torch.empty((max_size,), dtype=torch.uint8, device=device) for _ in size_list]
+    tensor_list = [
+        torch.empty((max_size,), dtype=torch.uint8, device=tensor.device) for _ in size_list
+    ]
     dist.all_gather(tensor_list, tensor, group=group)
 
     data_list = []
@@ -188,36 +187,36 @@ def all_gather(data, device="cpu"):
     return data_list
 
 
-def gather(data, device="cpu", dst=0):
+def gather(data, dst=0, group=None):
     """
-    Run gather on arbitrary picklable data (not necessarily tensors)
-    across all ranks.
+    Run gather on arbitrary picklable data (not necessarily tensors).
 
     Args:
         data: any picklable object
-        device (str): either "cpu" or "cuda"
         dst (int): destination rank
+        group: a torch process group. By default, will use a group which
+            contains all ranks on gloo backend.
 
     Returns:
         list[data]: on dst, a list of data gathered from each rank. Otherwise,
             an empty list.
     """
-    world_size = get_world_size()
-    if world_size == 1:
+    if get_world_size() == 1:
         return [data]
-    rank = get_rank()
+    if group is None:
+        group = _get_global_gloo_group()
+    if dist.get_world_size(group=group) == 1:
+        return [data]
+    rank = dist.get_rank(group=group)
 
-    group = _get_group_for_device(device)
-    device = torch.device(device)
-    tensor = _serialize_to_tensor(data, device)
-
+    tensor = _serialize_to_tensor(data, group)
     size_list, tensor = _pad_to_largest_tensor(tensor, group)
 
     # receiving Tensor from all ranks
     if rank == dst:
         max_size = max(size_list)
         tensor_list = [
-            torch.empty((max_size,), dtype=torch.uint8, device=device) for _ in size_list
+            torch.empty((max_size,), dtype=torch.uint8, device=tensor.device) for _ in size_list
         ]
         dist.gather(tensor, tensor_list, dst=dst, group=group)
 
