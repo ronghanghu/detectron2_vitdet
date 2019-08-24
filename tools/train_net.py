@@ -19,7 +19,6 @@ import logging
 import os
 from collections import OrderedDict
 import torch
-
 from borc.common.file_io import PathManager
 from borc.nn.precise_bn import get_bn_modules, update_bn_stats
 from torch.nn.parallel import DistributedDataParallel

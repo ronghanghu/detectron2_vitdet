@@ -3,6 +3,8 @@ import logging
 import re
 import torch
 
+from .checkpoint import get_missing_parameters_message, get_unexpected_parameters_message
+
 
 def convert_basic_c2_names(original_keys):
     """
@@ -287,13 +289,8 @@ def align_and_update_state_dicts(model_state_dict, c2_state_dict):
     # print warnings about unmatched keys on both side
     unmatched_model_keys = [k for k in model_keys if k not in matched_model_keys]
     if len(unmatched_model_keys):
-        logger.warning(
-            "Keys in the model but not loaded from checkpoint: " + ", ".join(unmatched_model_keys)
-        )
+        logger.info(get_missing_parameters_message(unmatched_model_keys))
 
     unmatched_loaded_keys = [k for k in loaded_keys if k not in matched_loaded_keys]
     if len(unmatched_loaded_keys):
-        logger.warning(
-            "Keys in the checkpoint but not found in the model: "
-            + ", ".join([old_keys[x] for x in unmatched_loaded_keys])
-        )
+        logger.info(get_unexpected_parameters_message(old_keys[x] for x in unmatched_loaded_keys))

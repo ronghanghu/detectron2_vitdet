@@ -1,8 +1,10 @@
 import logging
 import numpy as np
 import os
+from collections import defaultdict
 import torch
 from borc.common.file_io import PathManager
+from termcolor import colored
 from torch.nn.parallel import DataParallel, DistributedDataParallel
 
 import detectron2.utils.comm as comm
@@ -179,15 +181,9 @@ class Checkpointer(object):
 
         incompatible = self.model.load_state_dict(checkpoint_state_dict, strict=False)
         if incompatible.missing_keys:
-            self.logger.warning(
-                "Keys in the model but not found in the checkpoint: "
-                + ", ".join(incompatible.missing_keys)
-            )
+            self.logger.info(get_missing_parameters_message(incompatible.missing_keys))
         if incompatible.unexpected_keys:
-            self.logger.warning(
-                "Keys in the checkpoint but not found in the model: "
-                + ", ".join(incompatible.unexpected_keys)
-            )
+            self.logger.info(get_unexpected_parameters_message(incompatible.unexpected_keys))
 
     def _convert_ndarray_to_tensor(self, state_dict):
         """
@@ -251,6 +247,40 @@ class PeriodicCheckpointer:
         return self.checkpointer.save(name, **kwargs)
 
 
+def get_missing_parameters_message(keys):
+    """
+    Get a logging-friendly message to report parameter names (keys) that are in
+    the model but not found in a checkpoint.
+
+    Args:
+        list[str]: List of keys that were not found in the checkpoint.
+
+    Returns:
+        str
+    """
+    groups = _group_checkpoint_keys(keys)
+    msg = "Some model parameters are not in the checkpoint:\n"
+    msg += "\n".join("  " + colored(k + _group_to_str(v), "blue") for k, v in groups.items())
+    return msg
+
+
+def get_unexpected_parameters_message(keys):
+    """
+    Get a logging-friendly message to report parameter names (keys) that are in
+    the checkpoint but not found in the model.
+
+    Args:
+        list[str]: List of keys that were not found in the model.
+
+    Returns:
+        str
+    """
+    groups = _group_checkpoint_keys(keys)
+    msg = "The checkpoint contains parameters not used by the model:\n"
+    msg += "\n".join("  " + colored(k + _group_to_str(v), "magenta") for k, v in groups.items())
+    return msg
+
+
 def _strip_prefix_if_present(state_dict, prefix):
     keys = sorted(state_dict.keys())
     if not all(len(key) == 0 or key.startswith(prefix) for key in keys):
@@ -276,3 +306,43 @@ def _strip_prefix_if_present(state_dict, prefix):
                 continue
             newkey = key[len(prefix) :]
             metadata[newkey] = metadata.pop(key)
+
+
+def _group_checkpoint_keys(keys):
+    """
+    Group keys based on common prefixes. A prefix is the string up to the final "." in each key.
+
+    Args:
+        keys (list[str]): list of parameter names, i.e. keys in the model checkpoint dict.
+
+    Returns:
+        dict[list]: keys with common prefixes are grouped into lists.
+    """
+    groups = defaultdict(list)
+    for key in keys:
+        pos = key.rfind(".")
+        if pos >= 0:
+            head, tail = key[:pos], [key[pos + 1 :]]
+        else:
+            head, tail = key, []
+        groups[head].extend(tail)
+    return groups
+
+
+def _group_to_str(group):
+    """
+    Format a group of parameter name suffixes into a loggable string.
+
+    Args:
+        group (list[str]): list of parameter name suffixes.
+
+    Returns:
+        str
+    """
+    if len(group) == 0:
+        return ""
+
+    if len(group) == 1:
+        return "." + group[0]
+
+    return ".{" + ", ".join(group) + "}"
