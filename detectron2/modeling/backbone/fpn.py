@@ -107,9 +107,8 @@ class FPN(Backbone):
                 ["p2", "p3", ..., "p6"].
         """
         # Reverse feature maps into top-down order (from low to high resolution)
-        x = self.bottom_up(x)
-        c5 = x["res5"]
-        x = [x[f] for f in self.in_features[::-1]]
+        bottom_up_features = self.bottom_up(x)
+        x = [bottom_up_features[f] for f in self.in_features[::-1]]
         results = []
         prev_features = self.lateral_convs[0](x[0])
         results.append(self.output_convs[0](prev_features))
@@ -125,6 +124,7 @@ class FPN(Backbone):
         # check to see if AP can be maintained while using the P5 layer instead.
         # If this is the case, remove if-statement and use P5 layer for top_block.
         if isinstance(self.top_block, LastLevelP6P7):
+            c5 = bottom_up_features["res5"]
             results.extend(self.top_block(c5))
         else:
             results.extend(self.top_block(results[-1]))
