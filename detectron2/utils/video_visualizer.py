@@ -109,6 +109,12 @@ class VideoVisualizer:
 
         return frame_visualizer.output
 
+    def draw_sem_seg_predictions(self, frame, predictions, area_limit=None):
+        # don't need to do anything special
+        frame_visualizer = Visualizer(frame, self.metadata)
+        frame_visualizer.draw_sem_seg_predictions(predictions, area_limit=None)
+        return frame_visualizer.output
+
     def _assign_colors(self, instances):
         """
         Naive tracking heuristics to assign same color to the same instance,

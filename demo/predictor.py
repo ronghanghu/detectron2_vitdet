@@ -74,9 +74,14 @@ class VisualizationDemo(object):
             if "instances" in predictions:
                 predictions = predictions["instances"].to(self.cpu_device)
                 vis_frame = video_visualizer.draw_instance_predictions(frame, predictions)
-            # TODO semantic / panoptic
+            if "sem_seg" in predictions:
+                vis_frame = video_visualizer.draw_sem_seg_predictions(
+                    frame,
+                    predictions=predictions["sem_seg"].argmax(dim=0).to(self.cpu_device),
+                    area_limit=self.stuff_area_threshold,
+                )
+            # TODO panoptic demo on videos is not supported yet
 
-            # Converts Matplotlib RGB format to OpenCV BGR format before visualizing
-            # output in window.
+            # Converts Matplotlib RGB format to OpenCV BGR format
             vis_frame = vis_frame.get_image()[:, :, ::-1]
             yield vis_frame

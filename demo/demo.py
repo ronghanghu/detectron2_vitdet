@@ -109,6 +109,8 @@ if __name__ == "__main__":
             assert not os.path.isfile(output_fname)
             output_file = cv2.VideoWriter(
                 filename=output_fname,
+                # some installation of opencv may not support x264 (due to its license),
+                # you can try other format (e.g. MPEG)
                 fourcc=cv2.VideoWriter_fourcc(*"x264"),
                 fps=float(frames_per_second),
                 frameSize=(width, height),
