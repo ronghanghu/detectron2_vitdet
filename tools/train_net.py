@@ -21,7 +21,7 @@ from collections import OrderedDict
 import torch
 
 from borc.common.file_io import PathManager
-from borc.nn.precise_bn import update_bn_stats
+from borc.nn.precise_bn import get_bn_modules, update_bn_stats
 from torch.nn.parallel import DistributedDataParallel
 
 import detectron2.utils.comm as comm
@@ -117,11 +117,11 @@ def do_test(cfg, model, is_final=True):
     torch.cuda.empty_cache()  # TODO check if it helps
     logger = logging.getLogger("detectron2.trainer")
 
-    if cfg.TEST.PRECISE_BN.ENABLED:
+    if cfg.TEST.PRECISE_BN.ENABLED and len(get_bn_modules(model)) > 0:
         with EventStorage():  # capture events in a new storage to discard them
             train_data = build_detection_train_loader(cfg)
             logger.info(
-                "Running precise-BN for {} iterations ...".format(cfg.TEST.PRECISE_BN.NUM_ITER)
+                "Running precise-BN for {} iterations... ".format(cfg.TEST.PRECISE_BN.NUM_ITER)
                 + "Note that this could produce different statistics every time."
             )
             update_bn_stats(model, train_data, cfg.TEST.PRECISE_BN.NUM_ITER)
