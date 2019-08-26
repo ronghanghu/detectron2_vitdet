@@ -1,3 +1,4 @@
+import copy
 import logging
 import numpy as np
 import os
@@ -11,44 +12,44 @@ import detectron2.utils.comm as comm
 
 
 class Checkpointer(object):
-    def __init__(self, model, optimizer=None, scheduler=None, save_dir="", save_to_disk=None):
+    """
+    A checkpointer that can save/load model as well as extra checkpointable objects.
+    """
+
+    def __init__(self, model, save_dir="", *, save_to_disk=None, **checkpointables):
         """
         Args:
             model (nn.Module):
-            optimizer:
-            scheduler:
-            save_dir (str): a directory to load and save checkpoint.
+            save_dir (str): a directory to save and find checkpoints.
             save_to_disk (bool): whether to do saving or not. By default, all
                 processes will do loading, but only the master process will do
                 saving.
+            checkpointables: any checkpointable objects, i.e., objects that
+                have the `state_dict()` and `load_state_dict()` method.
+                For example, it can be used like
+                `Checkpointer(model, "dir", optimizer=optimizer)`
         """
         if isinstance(model, (DistributedDataParallel, DataParallel)):
             model = model.module
         self.model = model
-        self.optimizer = optimizer
-        self.scheduler = scheduler
+        self.checkpointables = copy.copy(checkpointables)
+        self.logger = logging.getLogger(__name__)
         self.save_dir = save_dir
         if save_to_disk is None:
             save_to_disk = comm.is_main_process()
         self.save_to_disk = save_to_disk
-        self.logger = logging.getLogger(__name__)
 
     def save(self, name, **kwargs):
         """
-        kwargs: extra data to save, in addition to model, optimizer and scheduler
+        kwargs: extra arbitrary data to save
         """
-        if not self.save_dir:
-            return
-
-        if not self.save_to_disk:
+        if not self.save_dir or not self.save_to_disk:
             return
 
         data = {}
         data["model"] = self.model.state_dict()
-        if self.optimizer is not None:
-            data["optimizer"] = self.optimizer.state_dict()
-        if self.scheduler is not None:
-            data["scheduler"] = self.scheduler.state_dict()
+        for key, obj in self.checkpointables.items():
+            data[key] = obj.state_dict()
         data.update(kwargs)
 
         basename = "{}.pth".format(name)
@@ -68,7 +69,8 @@ class Checkpointer(object):
             path (str): path or url to the checkpoint. If empty, will not load anything.
 
         Returns:
-            dict: extra data loaded from the checkpoint, other than model, optimizer and scheduler.
+            dict: extra data loaded from the checkpoint that has not been processed.
+                For example, those saved with :meth:`.save(**extra_data)`.
         """
         if not path:
             # no checkpoint provided
@@ -81,12 +83,10 @@ class Checkpointer(object):
 
         checkpoint = self._load_file(path)
         self._load_model(checkpoint)
-        if "optimizer" in checkpoint and self.optimizer:
-            self.logger.info("Loading optimizer from {}".format(path))
-            self.optimizer.load_state_dict(checkpoint.pop("optimizer"))
-        if "scheduler" in checkpoint and self.scheduler:
-            self.logger.info("Loading scheduler from {}".format(path))
-            self.scheduler.load_state_dict(checkpoint.pop("scheduler"))
+        for key, obj in self.checkpointables.items():
+            if key in checkpoint:
+                self.logger.info("Loading {} from {}".format(key, path))
+                obj.load_state_dict(checkpoint.pop(key))
 
         # return any further checkpoint data
         return checkpoint

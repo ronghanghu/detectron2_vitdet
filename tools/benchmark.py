@@ -64,7 +64,7 @@ def benchmark_train(args):
             model, device_ids=[comm.get_local_rank()], broadcast_buffers=False
         )
     optimizer = build_optimizer(cfg, model)
-    checkpointer = DetectionCheckpointer(model, optimizer, None, save_to_disk=False)
+    checkpointer = DetectionCheckpointer(model, optimizer=optimizer)
     checkpointer.load(cfg.MODEL.WEIGHT)
 
     cfg.defrost()

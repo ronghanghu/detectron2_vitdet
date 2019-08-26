@@ -110,7 +110,8 @@ def create_after_step_hook(cfg, model, optimizer, scheduler, periodic_checkpoint
 
         trainer.storage.put_scalar("lr", optimizer.param_groups[0]["lr"], smoothing_hint=False)
         scheduler.step()
-        periodic_checkpointer.step(trainer.iter)
+        if comm.is_main_process():
+            periodic_checkpointer.step(trainer.iter)
 
     return hooks.CallbackHook(after_step=after_step_callback)
 
@@ -124,7 +125,9 @@ def do_train(cfg, model, resume=True):
     optimizer = build_optimizer(cfg, model)
     scheduler = build_lr_scheduler(cfg, optimizer)
 
-    checkpointer = DetectionCheckpointer(model, optimizer, scheduler, cfg.OUTPUT_DIR)
+    checkpointer = DetectionCheckpointer(
+        model, cfg.OUTPUT_DIR, optimizer=optimizer, scheduler=scheduler
+    )
     start_iter = checkpointer.resume_or_load(cfg.MODEL.WEIGHT, resume=resume).get("iteration", -1)
     # The checkpoint stores the training iteration that just finished, thus we start
     # at the next iteration (or iter zero if there's no checkpoint).
