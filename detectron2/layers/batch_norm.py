@@ -1,6 +1,10 @@
 import logging
 import torch
+import torch.distributed as dist
 from torch import nn
+from torch.autograd.function import Function
+
+from detectron2.utils import comm
 
 from .wrappers import BatchNorm2d
 
@@ -115,8 +119,54 @@ def get_norm(norm, out_channels):
             return None
         norm = {
             "BN": BatchNorm2d,
-            "SyncBN": nn.SyncBatchNorm,
+            "SyncBN": NaiveSyncBatchNorm,
             "FrozenBN": FrozenBatchNorm2d,
             "GN": lambda channels: nn.GroupNorm(32, channels),
+            "nnSyncBN": nn.SyncBatchNorm,  # keep for debugging
         }[norm]
     return norm(out_channels)
+
+
+class AllReduce(Function):
+    @staticmethod
+    def forward(ctx, input):
+        input_list = [torch.zeros_like(input) for k in range(dist.get_world_size())]
+        # Use allgather instead of allreduce since I don't trust in-place operations ..
+        dist.all_gather(input_list, input, async_op=False)
+        inputs = torch.stack(input_list, dim=0)
+        return torch.sum(inputs, dim=0)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        dist.all_reduce(grad_output, async_op=False)
+        return grad_output
+
+
+class NaiveSyncBatchNorm(nn.BatchNorm2d):
+    """
+    torch.nn.SyncBatchNorm has bugs. Use this before it is fixed.
+    """
+
+    def forward(self, input):
+        if comm.get_world_size() == 1 or not self.training:
+            return super().forward(input)
+
+        assert input.shape[0] > 0, "SyncBatchNorm does not support empty inputs"
+        C = input.shape[1]
+        mean = torch.mean(input, dim=[0, 2, 3])
+        meansqr = torch.mean(input * input, dim=[0, 2, 3])
+
+        vec = torch.cat([mean, meansqr], dim=0)
+        vec = AllReduce.apply(vec) * (1.0 / dist.get_world_size())
+
+        mean, meansqr = torch.split(vec, C)
+        var = meansqr - mean * mean
+        self.running_mean += self.momentum * (mean.detach() - self.running_mean)
+        self.running_var += self.momentum * (var.detach() - self.running_var)
+
+        invstd = torch.rsqrt(var + self.eps)
+        scale = self.weight * invstd
+        bias = self.bias - mean * scale
+        scale = scale.reshape(1, -1, 1, 1)
+        bias = bias.reshape(1, -1, 1, 1)
+        return input * scale + bias
