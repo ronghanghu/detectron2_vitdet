@@ -234,6 +234,7 @@ class ROIHeads(torch.nn.Module):
     def forward(self, images, features, proposals, targets=None):
         """
         Args:
+            images (ImageList):
             features (dict[str: Tensor]): input data as a mapping from feature
                 map name to tensor. Axis 0 represents the number of images `N` in
                 the input data; axes 1-3 are channels, height, and width, which may
@@ -268,7 +269,7 @@ class Res5ROIHeads(ROIHeads):
     """
 
     def __init__(self, cfg):
-        super(Res5ROIHeads, self).__init__(cfg)
+        super().__init__(cfg)
 
         assert len(self.in_features) == 1
 
@@ -412,8 +413,11 @@ class StandardROIHeads(ROIHeads):
     It's "standard" in a sense that there is no ROI transform sharing
     or feature sharing between tasks.
     The cropped rois go to separate branches (boxes and masks) directly.
+    This way, it is easier to make separate abstractions for different branches.
 
-    This class is used by FPN, C5 models, etc, and can be subclassed to implement more models.
+    This class is used by most models, such as FPN and C5.
+    To implement more models, you can subclass it and implement a different
+    :meth:`forward()` or a head.
     """
 
     def __init__(self, cfg):
@@ -515,37 +519,21 @@ class StandardROIHeads(ROIHeads):
         See :class:`ROIHeads.forward`.
         """
         del images
-
         if self.training:
             proposals = self.label_and_sample_proposals(proposals, targets)
         del targets
 
         features_list = [features[f] for f in self.in_features]
 
-        box_features = self.box_pooler(features_list, [x.proposal_boxes for x in proposals])
-        box_features = self.box_head(box_features)
-        pred_class_logits, pred_proposal_deltas = self.box_predictor(box_features)
-        del box_features
-
-        outputs = FastRCNNOutputs(
-            self.box2box_transform,
-            pred_class_logits,
-            pred_proposal_deltas,
-            proposals,
-            self.smooth_l1_beta,
-        )
-
         if self.training:
-            losses = outputs.losses()
+            losses = self._forward_box(features_list, proposals)
             # During training the proposals used by the box head are
             # used by the mask, keypoint (and densepose) heads.
             losses.update(self._forward_mask(features_list, proposals))
             losses.update(self._forward_keypoint(features_list, proposals))
             return proposals, losses
         else:
-            pred_instances, _ = outputs.inference(
-                self.test_score_thresh, self.test_nms_thresh, self.test_detections_per_img
-            )
+            pred_instances = self._forward_box(features_list, proposals)
             # During inference cascaded prediction is used: the mask and keypoints heads are only
             # applied to the top scoring box detections.
             pred_instances = self.forward_with_given_boxes(features, pred_instances)
@@ -554,6 +542,10 @@ class StandardROIHeads(ROIHeads):
     def forward_with_given_boxes(self, features, instances):
         """
         Use the given boxes in `instances` to produce other (non-box) per-ROI outputs.
+
+        This is useful for downstream tasks where a box is known, but need to obtain
+        other attributes (outputs of other heads).
+        Test-time augmentation also uses this.
 
         Args:
             features: same as in `forward()`
@@ -571,6 +563,41 @@ class StandardROIHeads(ROIHeads):
         instances = self._forward_mask(features, instances)
         instances = self._forward_keypoint(features, instances)
         return instances
+
+    def _forward_box(self, features, proposals):
+        """
+        Forward logic of the box prediction branch.
+
+        Args:
+            features (list[Tensor]): #level input features for box prediction
+            proposals (list[Instances]): the per-image object proposals with
+                their matching ground truth.
+                Each has fields "proposal_boxes", and "objectness_logits",
+                "gt_classes", "gt_boxes".
+
+        Returns:
+            In training, a dict of losses.
+            In inference, a list of `Instances`, the predicted instances.
+        """
+        box_features = self.box_pooler(features, [x.proposal_boxes for x in proposals])
+        box_features = self.box_head(box_features)
+        pred_class_logits, pred_proposal_deltas = self.box_predictor(box_features)
+        del box_features
+
+        outputs = FastRCNNOutputs(
+            self.box2box_transform,
+            pred_class_logits,
+            pred_proposal_deltas,
+            proposals,
+            self.smooth_l1_beta,
+        )
+        if self.training:
+            return outputs.losses()
+        else:
+            pred_instances, _ = outputs.inference(
+                self.test_score_thresh, self.test_nms_thresh, self.test_detections_per_img
+            )
+            return pred_instances
 
     def _forward_mask(self, features, instances):
         """

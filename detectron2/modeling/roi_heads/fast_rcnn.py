@@ -131,7 +131,7 @@ def fast_rcnn_inference(boxes, scores, image_shapes, score_thresh, nms_thresh, t
             all detections.
 
     Returns:
-        instances: (list[Instances]): A list of N box lists, one for each image in the batch,
+        instances: (list[Instances]): A list of N instances, one for each image in the batch,
             that stores the topk most confidence detections.
         kept_indices: (list[Tensor]): A list of 1D tensor of length of N, each element indicates
             the corresponding boxes/scores index in [0, Ri) from the input, for image i.
