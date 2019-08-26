@@ -74,7 +74,7 @@ class VisualizationDemo(object):
             if "instances" in predictions:
                 predictions = predictions["instances"].to(self.cpu_device)
                 vis_frame = video_visualizer.draw_instance_predictions(frame, predictions)
-            if "sem_seg" in predictions:
+            elif "sem_seg" in predictions:
                 vis_frame = video_visualizer.draw_sem_seg_predictions(
                     frame,
                     predictions=predictions["sem_seg"].argmax(dim=0).to(self.cpu_device),
