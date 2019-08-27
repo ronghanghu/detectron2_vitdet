@@ -3,11 +3,20 @@
 import datetime
 import logging
 import time
+from collections import Counter
 from borc.common.timer import Timer
+
+from detectron2.checkpoint import PeriodicCheckpointer as _PeriodicCheckpointer
 
 from .train_loop import HookBase
 
-__all__ = ["CallbackHook", "IterationTimer", "PeriodicWriter"]
+__all__ = [
+    "CallbackHook",
+    "IterationTimer",
+    "PeriodicWriter",
+    "PeriodicCheckpointer",
+    "LRScheduler",
+]
 
 
 """
@@ -135,3 +144,59 @@ class PeriodicWriter(HookBase):
         ):
             for writer in self._writers:
                 writer.write()
+
+
+class PeriodicCheckpointer(_PeriodicCheckpointer, HookBase):
+    """
+    Same as :class:`checkpoint.PeriodicCheckpointer`, but as a hook.
+
+    Note that when used as a hook,
+    it is unable to save additional data other than what's defined
+    by the given `checkpointer`.
+    """
+
+    def before_train(self):
+        self.max_iter = self.trainer.max_iter
+
+    def after_step(self):
+        # No way to use **kwargs
+        self.step(self.trainer.iter)
+
+
+class LRScheduler(HookBase):
+    """
+    A hook which executes a torch builtin LR scheduler and summarizes the LR.
+    """
+
+    def __init__(self, optimizer, scheduler):
+        """
+        Args:
+            optimizer (torch.optim.Optimizer):
+            scheduler (torch.optim._LRScheduler)
+        """
+        self._optimizer = optimizer
+        self._scheduler = scheduler
+
+        # NOTE: some heuristics on what LR to summarize
+        # summarize the param group with most parameters
+        largest_group = max(len(g["params"]) for g in optimizer.param_groups)
+
+        if largest_group == 1:
+            # If all groups have one parameter,
+            # then find the most common initial LR, and use it for summary
+            lr_count = Counter([g["lr"] for g in optimizer.param_groups])
+            lr = lr_count.most_common()[0][0]
+            for i, g in enumerate(optimizer.param_groups):
+                if g["lr"] == lr:
+                    self._best_param_group_id = i
+                    break
+        else:
+            for i, g in enumerate(optimizer.param_groups):
+                if len(g["params"]) == largest_group:
+                    self._best_param_group_id = i
+                    break
+
+    def after_step(self):
+        lr = self._optimizer.param_groups[self._best_param_group_id]["lr"]
+        self.trainer.storage.put_scalar("lr", lr, smoothing_hint=False)
+        self._scheduler.step()

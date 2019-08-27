@@ -12,7 +12,7 @@ from borc.common.file_io import PathManager
 from torch.nn.parallel import DistributedDataParallel
 
 import detectron2.utils.comm as comm
-from detectron2.checkpoint import DetectionCheckpointer, PeriodicCheckpointer
+from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.config import get_cfg
 from detectron2.data import build_detection_test_loader, build_detection_train_loader
 from detectron2.engine import SimpleTrainer, default_argument_parser, hooks, launch
@@ -91,10 +91,9 @@ def do_test(cfg, model, is_final=True):
     return results
 
 
-def create_after_step_hook(cfg, model, optimizer, scheduler, periodic_checkpointer):
+def create_after_step_hook(cfg, model):
     """
-    Create a hook that performs some pre-defined tasks used in this script
-    (evaluation, LR scheduling, checkpointing).
+    Create a evaluation hook
     """
 
     def after_step_callback(trainer):
@@ -107,11 +106,6 @@ def create_after_step_hook(cfg, model, optimizer, scheduler, periodic_checkpoint
             # Evaluation may take different time among workers.
             # A barrier make them start the next iteration together.
             comm.synchronize()
-
-        trainer.storage.put_scalar("lr", optimizer.param_groups[0]["lr"], smoothing_hint=False)
-        scheduler.step()
-        if comm.is_main_process():
-            periodic_checkpointer.step(trainer.iter)
 
     return hooks.CallbackHook(after_step=after_step_callback)
 
@@ -133,9 +127,6 @@ def do_train(cfg, model, resume=True):
     # at the next iteration (or iter zero if there's no checkpoint).
     start_iter += 1
     max_iter = cfg.SOLVER.MAX_ITER
-    periodic_checkpointer = PeriodicCheckpointer(
-        checkpointer, cfg.SOLVER.CHECKPOINT_PERIOD, max_iter=max_iter
-    )
 
     data_loader = build_detection_train_loader(
         cfg, mapper=DatasetMapper(cfg, True), start_iter=start_iter
@@ -144,7 +135,8 @@ def do_train(cfg, model, resume=True):
     trainer = SimpleTrainer(model, data_loader, optimizer)
     trainer_hooks = [
         hooks.IterationTimer(),
-        create_after_step_hook(cfg, model, optimizer, scheduler, periodic_checkpointer),
+        hooks.LRScheduler(optimizer, scheduler),
+        create_after_step_hook(cfg, model),
     ]
     if comm.is_main_process():
         writers = [
@@ -153,6 +145,7 @@ def do_train(cfg, model, resume=True):
             TensorboardXWriter(cfg.OUTPUT_DIR),
         ]
         trainer_hooks.append(hooks.PeriodicWriter(writers))
+        trainer_hooks.append(hooks.PeriodicCheckpointer(checkpointer, cfg.SOLVER.CHECKPOINT_PERIOD))
     trainer.register_hooks(trainer_hooks)
     trainer.train(start_iter, max_iter)
     with trainer.storage:

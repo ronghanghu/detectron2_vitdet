@@ -15,7 +15,6 @@ class Checkpointer(object):
     """
     A checkpointer that can save/load model as well as extra checkpointable objects.
     """
-
     def __init__(self, model, save_dir="", *, save_to_disk=None, **checkpointables):
         """
         Args:
@@ -217,7 +216,6 @@ class PeriodicCheckpointer:
             period (int): the period to save checkpoint.
             max_iter (int): maximum number of iterations.
                 When it is reached, a checkpoint named "model_final" will be saved.
-                Setting it to None will disable this feature.
         """
         self.checkpointer = checkpointer
         self.period = int(period)
