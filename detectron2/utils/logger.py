@@ -27,14 +27,20 @@ class _ColorfulFormatter(logging.Formatter):
 
 
 def setup_logger(
-    save_dir=None, distributed_rank=0, color=True, name="detectron2", abbrev_name="d2"
+    output=None, distributed_rank=0, *, color=True, name="detectron2", abbrev_name="d2"
 ):
     """
     Args:
-        save_dir (str): a directory to save log. If None, will not save log file.
+        output (str): a file name or a directory to save log. If None, will not save log file.
+            If ends with ".txt" or ".log", assumed to be a file name.
+            Otherwise, logs will be saved to `output/log.txt`.
         name (str): the root module name of this logger
         abbrev_name (str): an abbreviation of the module, to avoid long names in logs.
             Set to "" to not log the root module in logs.
+
+    Note:
+        If you want to reuse the detectron2-style logger for other modules,
+        avoid using the same output file: it may lead to conflict in writing.
     """
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
@@ -60,9 +66,14 @@ def setup_logger(
     ch.setFormatter(formatter)
     logger.addHandler(ch)
 
-    if save_dir:
-        PathManager.mkdirs(save_dir)
-        fh = logging.StreamHandler(PathManager.open(os.path.join(save_dir, "log.txt"), "a"))
+    if output is not None:
+        if output.endswith(".txt") or output.endswith(".log"):
+            filename = output
+        else:
+            filename = os.path.join(output, "log.txt")
+        PathManager.mkdirs(os.path.dirname(filename))
+
+        fh = logging.StreamHandler(PathManager.open(filename, "a"))
         fh.setLevel(logging.DEBUG)
         fh.setFormatter(plain_formatter)
         logger.addHandler(fh)
@@ -97,7 +108,7 @@ def _find_caller():
 _LOG_COUNTER = Counter()
 
 
-def log_first_n(lvl, msg, n=1, name=None):
+def log_first_n(lvl, msg, n=1, *, name=None):
     """
     Log only for the first n times.
 
@@ -113,7 +124,7 @@ def log_first_n(lvl, msg, n=1, name=None):
         logging.getLogger(name or caller_module).log(lvl, msg)
 
 
-def log_every_n(lvl, msg, n=1, name=None):
+def log_every_n(lvl, msg, n=1, *, name=None):
     """
     Log once per n times.
 

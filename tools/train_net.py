@@ -32,7 +32,7 @@ from detectron2.data import (
     build_detection_test_loader,
     build_detection_train_loader,
 )
-from detectron2.engine import SimpleTrainer, default_argument_parser, hooks, launch
+from detectron2.engine import SimpleTrainer, default_argument_parser, default_setup, hooks, launch
 from detectron2.evaluation import (
     CityscapesEvaluator,
     COCOEvaluator,
@@ -48,7 +48,6 @@ from detectron2.evaluation import (
 )
 from detectron2.modeling import DatasetMapperTTA, GeneralizedRCNNWithTTA, build_model
 from detectron2.solver import build_lr_scheduler, build_optimizer
-from detectron2.utils.collect_env import collect_env_info
 from detectron2.utils.events import (
     CommonMetricPrinter,
     EventStorage,
@@ -56,7 +55,6 @@ from detectron2.utils.events import (
     TensorboardXWriter,
     get_event_storage,
 )
-from detectron2.utils.logger import setup_logger
 
 
 def get_evaluator(cfg, dataset_name, output_folder):
@@ -185,15 +183,9 @@ def do_test(cfg, model, is_final=True):
     return results
 
 
-def create_after_step_hook(cfg, model):
-    """
-    Create a evaluation hook.
-    """
-
+def create_eval_hook(cfg, model):
     def after_step_callback(trainer):
-        do_eval = cfg.TEST.EVAL_PERIOD > 0 and (trainer.iter + 1) % cfg.TEST.EVAL_PERIOD == 0
-
-        if do_eval:
+        if cfg.TEST.EVAL_PERIOD > 0 and (trainer.iter + 1) % cfg.TEST.EVAL_PERIOD == 0:
             do_test(cfg, model, is_final=False)
             # Evaluation may take different time among workers.
             # A barrier make them start the next iteration together.
@@ -232,7 +224,7 @@ def do_train(cfg, model, resume=True):
     trainer_hooks = [
         hooks.IterationTimer(),
         hooks.LRScheduler(optimizer, scheduler),
-        create_after_step_hook(cfg, model),
+        create_eval_hook(cfg, model),
     ]
     if comm.is_main_process():
         writers = [
@@ -251,7 +243,7 @@ def do_train(cfg, model, resume=True):
 
 def setup(args):
     """
-    Create configs and setup logger from arguments and the given config file.
+    Create configs and perform basic setups.
     """
     cfg = get_cfg()
     cfg.merge_from_file(args.config_file)
@@ -259,30 +251,7 @@ def setup(args):
     cfg.freeze()
     # Enable hacky research that uses global config. You usually don't need it
     # set_global_cfg(cfg.GLOBAL)
-
-    output_dir = cfg.OUTPUT_DIR
-    if comm.is_main_process() and output_dir:
-        PathManager.mkdirs(output_dir)
-    comm.synchronize()
-
-    logger = setup_logger(output_dir, distributed_rank=comm.get_rank())
-    logger.info(
-        "Using {} GPUs per machine. Rank of current process: {}".format(
-            args.num_gpus, comm.get_rank()
-        )
-    )
-    logger.info(args)
-
-    logger.info("Environment info:\n" + collect_env_info())
-    with PathManager.open(args.config_file, "r") as f:
-        logger.info("Loaded config file {}:\n{}".format(args.config_file, f.read()))
-    logger.info("Running with full config:\n{}".format(cfg))
-    if comm.is_main_process() and output_dir:
-        # Other scripts may expect the name config.yaml and depend on this.
-        path = os.path.join(output_dir, "config.yaml")
-        with PathManager.open(path, "w") as f:
-            f.write(cfg.dump())
-        logger.info("Full config saved to {}".format(os.path.abspath(path)))
+    default_setup(cfg, args)
     return cfg
 
 

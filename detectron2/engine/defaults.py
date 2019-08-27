@@ -5,26 +5,31 @@ This file contains components with some default logic user may need in training 
 They will not work for everyeone, but but many users may find them useful.
 
 The behavior of functions/classes in this file is subject to change,
-since they are meant to represent the "common" default behavior people need in their projects.
+since they are meant to represent the "common default behavior" people need in their projects.
 """
 
 import argparse
 import os
 import torch
+from borc.common.file_io import PathManager
 
 import detectron2.data.transforms as T
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.data import MetadataCatalog
 from detectron2.modeling import build_model
+from detectron2.utils import comm
+from detectron2.utils.collect_env import collect_env_info
+from detectron2.utils.logger import setup_logger
 
-__all__ = ["default_argument_parser", "DefaultPredictor"]
+__all__ = ["default_argument_parser", "default_setup", "DefaultPredictor"]
 
 
 def default_argument_parser():
     """
+    Create a parser with some common arguments used by detectron2 users.
+
     Returns:
-        argparse.ArgumentParser: a parser with some common arguments use by
-            detectron2 users.
+        argparse.ArgumentParser:
     """
     parser = argparse.ArgumentParser(description="Detectron2 Training")
     parser.add_argument("--config-file", default="", metavar="FILE", help="path to config file")
@@ -52,6 +57,48 @@ def default_argument_parser():
         nargs=argparse.REMAINDER,
     )
     return parser
+
+
+def default_setup(cfg, args):
+    """
+    Perform some basic common setups at the beginning of a job, including:
+    1. Set up the detectron2 logger
+    2. Log basic information about environment, cmdline arguments, and config
+    3. Backup the config to the output directory
+
+    Args:
+        cfg (CfgNode): the full config to be used
+        args (argparse.NameSpace): the command line arguments to be logged
+
+    Note: this function contains a `synchronize` call.
+    """
+    output_dir = cfg.OUTPUT_DIR
+    if comm.is_main_process() and output_dir:
+        PathManager.mkdirs(output_dir)
+
+    logger = setup_logger(output_dir, distributed_rank=comm.get_rank())
+
+    logger.info(
+        "Rank of current process: {}. World size: {}".format(comm.get_rank(), comm.get_world_size())
+    )
+    logger.info("Environment info:\n" + collect_env_info())
+
+    logger.info("Command line arguments: " + str(args))
+    if hasattr(args, "config_file"):
+        logger.info(
+            "Contents of args.config_file={}:\n{}".format(
+                args.config_file, PathManager.open(args.config_file, "r").read()
+            )
+        )
+
+    logger.info("Running with full config:\n{}".format(cfg))
+    if comm.is_main_process() and output_dir:
+        # Note: some of our scripts may expect the existence of
+        # config.yaml in output directory
+        path = os.path.join(output_dir, "config.yaml")
+        with PathManager.open(path, "w") as f:
+            f.write(cfg.dump())
+        logger.info("Full config saved to {}".format(os.path.abspath(path)))
 
 
 class DefaultPredictor:

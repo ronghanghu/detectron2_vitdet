@@ -5,6 +5,8 @@ import PIL
 import torch
 from tabulate import tabulate
 
+__all__ = ["collect_env_info"]
+
 
 def collect_torch_env():
     try:
