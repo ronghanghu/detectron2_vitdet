@@ -1,9 +1,11 @@
+import itertools
 import numpy as np
 import torch
 import torch.nn.functional as F
 from borc.nn import smooth_l1_loss
+from torchvision.ops import boxes as box_ops
 
-from detectron2.layers import cat, nms
+from detectron2.layers import cat
 from detectron2.structures import Boxes, Instances, pairwise_iou
 from detectron2.utils.events import get_event_storage
 
@@ -83,104 +85,66 @@ def find_top_rpn_proposals(
             stores post_nms_topk object proposals for image i.
     """
     image_sizes = images.image_sizes  # in (h, w) order
+    num_images = len(image_sizes)
+    device = proposals[0].device
 
-    proposals = [
-        _find_top_rpn_proposals_single_feature_map(
-            proposals_i,
-            pred_objectness_logits_i,
-            image_sizes,
-            nms_thresh,
-            pre_nms_topk,
-            post_nms_topk,
-            min_box_side_len,
-        )
-        for proposals_i, pred_objectness_logits_i in zip(proposals, pred_objectness_logits)
-    ]  # (L, N) Instances.
-
-    if len(proposals) == 1:
-        # Single feature map, no need to merge
-        return proposals[0]
-
-    # Merge proposals from all levels within each image
-    proposals = list(zip(*proposals))  # transpose to (N, L) Instances
-    # concat proposals across feature maps
-    proposals = [Instances.cat(instances) for instances in proposals]  # cat to (N, ) Instances
-    num_images = len(proposals)
-
-    # In Detectron1, there was different behavior during training vs. testing.
-    # (https://github.com/facebookresearch/Detectron/issues/459)
-    # During training, topk is over the proposals from *all* images in the training batch.
-    # During testing, it is over the proposals for each image separately.
-    # As a result, the training behavior becomes batch-dependent,
-    # and the configuration "POST_NMS_TOPK_TRAIN" end up relying on the batch size.
-    # This bug is addressed in Detectron2 to make the behavior independent of batch size.
-    for i in range(num_images):
-        pred_objectness_logits = proposals[i].objectness_logits
-        topk = min(post_nms_topk, len(pred_objectness_logits))
-        _, inds_sorted = torch.topk(pred_objectness_logits, topk, dim=0, sorted=True)
-        proposals[i] = proposals[i][inds_sorted]
-    return proposals
-
-
-def _find_top_rpn_proposals_single_feature_map(
-    proposals,
-    pred_objectness_logits,
-    image_sizes,
-    nms_thresh,
-    pre_nms_topk,
-    post_nms_topk,
-    min_box_side_len,
-):
-    """
-    Select the `pre_nms_topk` highest scoring proposals, applies NMS, clip
-    proposals, remove small boxes, and finally return the `post_nms_topk`
-    highest scoring proposals from a single feature map.
-
-    Args:
-        image_sizes: N (height, width) tuples.
-        Otherwise, see `sample_rpn_proposals`.
-
-    Returns:
-        list[Instancess]: list of N Instances. Instances i stores post_nms_topk object
-            proposals for image i, with field "proposal_boxes" and "objectness_logits".
-    """
-    N, Hi_Wi_A = pred_objectness_logits.shape
-    device = pred_objectness_logits.device
-    assert proposals.shape[:2] == (N, Hi_Wi_A)
-
-    pre_nms_topk = min(pre_nms_topk, Hi_Wi_A)
-    pred_objectness_logits, topk_idx = pred_objectness_logits.topk(pre_nms_topk, dim=1)
-
-    batch_idx = torch.arange(N, device=device)[:, None]
-    proposals = proposals[batch_idx, topk_idx]  # shape is now (N, pre_nms_topk, 4)
-
-    result = []
-    for proposals_i, pred_objectness_logits_i, image_size_i in zip(
-        proposals, pred_objectness_logits, image_sizes
+    # 1. Select top-k anchor for every level and every image
+    topk_scores = []  # #lvl Tensor, each of shape N x topk
+    topk_proposals = []
+    level_ids = []  # #lvl Tensor, each of shape (topk,)
+    batch_idx = torch.arange(num_images, device=device)
+    for level_id, proposals_i, logits_i in zip(
+        itertools.count(), proposals, pred_objectness_logits
     ):
-        """
-        proposals_i: tensor of shape (topk, 4)
-        pred_objectness_logits_i: top-k pred_objectness_logits_i of shape (topk, )
-        image_size_i: image (height, width)
-        """
-        boxes = Boxes(proposals_i)
+        Hi_Wi_A = logits_i.shape[1]
+        num_proposals_i = min(pre_nms_topk, Hi_Wi_A)
 
-        boxes.clip(image_size_i)
-        keep = boxes.nonempty(
-            threshold=min_box_side_len
-        )  # is min_box_side_len still an interesting config or can we just use 0?
-        boxes = boxes[keep]
-        scores = pred_objectness_logits_i[keep]
-        keep = nms(boxes.tensor, scores, nms_thresh)
-        if post_nms_topk > 0:
-            # outputs of nms() are already sorted by scores
-            keep = keep[:post_nms_topk]
+        # sort is faster than topk (https://github.com/pytorch/pytorch/issues/22812)
+        # topk_scores_i, topk_idx = logits_i.topk(num_proposals_i, dim=1)
+        logits_i, idx = logits_i.sort(descending=True, dim=1)
+        topk_scores_i = logits_i[batch_idx, :num_proposals_i]
+        topk_idx = idx[batch_idx, :num_proposals_i]
 
-        instances = Instances(image_size_i)
-        instances.proposal_boxes = boxes[keep]
-        instances.objectness_logits = scores[keep]
-        result.append(instances)
-    return result
+        # each is N x topk
+        topk_proposals_i = proposals_i[batch_idx[:, None], topk_idx]  # N x topk x 4
+
+        topk_proposals.append(topk_proposals_i)
+        topk_scores.append(topk_scores_i)
+        level_ids.append(torch.full((num_proposals_i,), level_id, dtype=torch.int64, device=device))
+
+    # 2. Concat all levels together
+    topk_scores = cat(topk_scores, dim=1)
+    topk_proposals = cat(topk_proposals, dim=1)
+    level_ids = cat(level_ids, dim=0)
+
+    # 3. For each image, run a per-level NMS, and choose topk results.
+    results = []
+    for n, image_size in enumerate(image_sizes):
+        boxes = Boxes(topk_proposals[n])
+        scores_per_img = topk_scores[n]
+        boxes.clip(image_size)
+
+        # filter empty boxes
+        keep = boxes.nonempty(threshold=min_box_side_len)
+        lvl = level_ids
+        if keep.sum().item() != len(boxes):
+            boxes, scores_per_img, lvl = boxes[keep], scores_per_img[keep], level_ids[keep]
+
+        keep = box_ops.batched_nms(boxes.tensor, scores_per_img, lvl, nms_thresh)
+        # In Detectron1, there was different behavior during training vs. testing.
+        # (https://github.com/facebookresearch/Detectron/issues/459)
+        # During training, topk is over the proposals from *all* images in the training batch.
+        # During testing, it is over the proposals for each image separately.
+        # As a result, the training behavior becomes batch-dependent,
+        # and the configuration "POST_NMS_TOPK_TRAIN" end up relying on the batch size.
+        # This bug is addressed in Detectron2 to make the behavior independent of batch size.
+        keep = keep[:post_nms_topk]
+
+        res = Instances(image_size)
+        res.proposal_boxes = boxes[keep]
+        res.objectness_logits = scores_per_img[keep]
+        results.append(res)
+    return results
 
 
 def rpn_losses(

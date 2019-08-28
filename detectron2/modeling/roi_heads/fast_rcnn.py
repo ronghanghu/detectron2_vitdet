@@ -3,8 +3,9 @@ import torch
 from borc.nn import smooth_l1_loss
 from torch import nn
 from torch.nn import functional as F
+from torchvision.ops import boxes as box_ops
 
-from detectron2.layers import cat, nms
+from detectron2.layers import cat
 from detectron2.structures import Boxes, Instances
 from detectron2.utils.events import get_event_storage
 
@@ -159,49 +160,34 @@ def fast_rcnn_inference_single_image(
     Returns:
         Same as `fast_rcnn_inference`, but for only one image.
     """
-    num_fg_classes = scores.shape[1] - 1
+    scores = scores[:, :-1]
     num_bbox_reg_classes = boxes.shape[1] // 4
     # Convert to Boxes to use the `clip` function ...
     boxes = Boxes(boxes.reshape(-1, 4))
     boxes.clip(image_shape)
-    boxes = boxes.tensor.view(-1, num_bbox_reg_classes, 4)
+    boxes = boxes.tensor.view(-1, num_bbox_reg_classes, 4)  # R x C x 4
 
-    device = scores.device
-    results = []
-    # Apply threshold on detection probabilities and apply NMS
-    inds_all = scores > score_thresh
-    kept_indices_per_class = []
-    for j in range(num_fg_classes):
-        inds = inds_all[:, j].nonzero().squeeze(1)
-        scores_j = scores[inds, j]
-        if num_bbox_reg_classes == 1:  # class-agnostic regression
-            boxes_j = boxes[inds, 0, :]
-        else:
-            boxes_j = boxes[inds, j, :]
-        # image_size is not used, fill -1
-        keep = nms(boxes_j, scores_j, nms_thresh)
-        kept_indices_per_class.append(inds[keep])
-        boxes_j = boxes_j[keep]
-        num_labels = len(keep)
-        classes_j = torch.full((num_labels,), j, dtype=torch.int64, device=device)
+    # Filter results based on detection scores
+    filter_mask = scores > score_thresh  # R x K
+    # R' x 2. First column contains indices of the R predictions;
+    # Second column contains indices of classes.
+    filter_inds = filter_mask.nonzero()
+    if num_bbox_reg_classes == 1:
+        boxes = boxes[filter_inds[:, 0], 0]
+    else:
+        boxes = boxes[filter_mask]
+    scores = scores[filter_mask]
 
-        result_j = Instances(image_shape)
-        result_j.pred_boxes = Boxes(boxes_j)
-        result_j.scores = scores_j[keep]
-        result_j.pred_classes = classes_j
-        results.append(result_j)
+    # Apply per-class NMS
+    keep = box_ops.batched_nms(boxes, scores, filter_inds[:, 1], nms_thresh)
+    keep = keep[:topk_per_image]
+    boxes, scores, filter_inds = boxes[keep], scores[keep], filter_inds[keep]
 
-    results = Instances.cat(results)
-    kept_indices = cat(kept_indices_per_class)
-    number_of_detections = len(results)
-
-    # Only keep the top-scoring K boxes per image **over all classes**
-    if number_of_detections > topk_per_image > 0:
-        _, sorted_score_indices = torch.sort(results.scores)
-        indices_topk = sorted_score_indices[-topk_per_image:]
-        results = results[indices_topk]
-        kept_indices = kept_indices[indices_topk]
-    return results, kept_indices
+    result = Instances(image_shape)
+    result.pred_boxes = Boxes(boxes)
+    result.scores = scores
+    result.pred_classes = filter_inds[:, 1]
+    return result, filter_inds[:, 0]
 
 
 class FastRCNNOutputs(object):

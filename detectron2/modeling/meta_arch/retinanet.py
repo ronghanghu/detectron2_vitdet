@@ -1,11 +1,11 @@
 import logging
 import math
-from collections import defaultdict
 import torch
 from borc.nn import sigmoid_focal_loss_jit, smooth_l1_loss
 from torch import nn
+from torchvision.ops import boxes as box_ops
 
-from detectron2.layers import cat, nms
+from detectron2.layers import cat
 from detectron2.structures import Boxes, ImageList, Instances, pairwise_iou
 from detectron2.utils.logger import log_first_n
 
@@ -300,7 +300,9 @@ class RetinaNet(nn.Module):
         Returns:
             Same as `inference`, but for only one image.
         """
-        boxes_all = defaultdict(list)  # cls -> List[(tensor(k, 4), tensor(k))]
+        boxes_all = []
+        scores_all = []
+        class_idxs_all = []
 
         # Iterate over every feature level
         for box_cls_i, box_reg_i, anchors_i in zip(box_cls, box_regression, anchors):
@@ -327,43 +329,21 @@ class RetinaNet(nn.Module):
             # predict boxes
             predicted_boxes = self.box2box_transform.apply_deltas(box_reg_i, anchors_i.tensor)
 
-            # separately store predictions for each class in order to merge them later
-            for cls in torch.unique(classes_idxs):
-                cls = cls.item()
-                idxs = classes_idxs == cls
-                boxes = predicted_boxes[idxs]
-                probs = predicted_prob[idxs]
-                boxes_all[cls].append((boxes, probs))
+            boxes_all.append(predicted_boxes)
+            scores_all.append(predicted_prob)
+            class_idxs_all.append(classes_idxs)
 
-        # Combine predictions across all levels and retain the top scoring by class
-        results_per_anchor = []
-        for cls, boxes_and_scores in boxes_all.items():
-            # All Instance values need to be a Tensor or a `Box` object.
-            boxes, scores = zip(*boxes_and_scores)
-            boxes = torch.cat(boxes, 0).reshape(-1, 4)
-            scores = torch.cat(scores)
+        boxes_all, scores_all, class_idxs_all = [
+            cat(x) for x in [boxes_all, scores_all, class_idxs_all]
+        ]
+        keep = box_ops.batched_nms(boxes_all, scores_all, class_idxs_all, self.nms_threshold)
+        keep = keep[: self.max_detections_per_image]
 
-            keep_idxs = nms(boxes, scores, self.nms_threshold)
-
-            result = Instances(image_size)
-            result.pred_boxes = Boxes(boxes[keep_idxs])
-            result.scores = scores[keep_idxs]
-            result.pred_classes = torch.full_like(keep_idxs, cls)
-            results_per_anchor.append(result)
-
-        if results_per_anchor:
-            results = Instances.cat(results_per_anchor)
-        else:
-            results = Instances(image_size)
-            results.pred_boxes = Boxes(torch.zeros(0, 4))
-            results.scores = torch.zeros(0)
-            results.pred_classes = torch.zeros(0, dtype=torch.int64)
-
-        # Limit to max_detections_per_image detections **over all object classes**
-        if len(results) > self.max_detections_per_image > 0:
-            _, sorted_score_indices = torch.sort(results.scores)
-            results = results[sorted_score_indices[-self.max_detections_per_image :]]
-        return results
+        result = Instances(image_size)
+        result.pred_boxes = Boxes(boxes_all[keep])
+        result.scores = scores_all[keep]
+        result.pred_classes = class_idxs_all[keep]
+        return result
 
     def preprocess_image(self, batched_inputs):
         """
