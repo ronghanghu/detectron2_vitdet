@@ -51,7 +51,7 @@ After D15247032, all metadata should be associated with dataset splits by
 
 
 def register_coco_panoptic_separated(
-    name, metadata, image_root, panoptic_root, panoptic_json, semantic_root, instances_json
+    name, metadata, image_root, panoptic_root, panoptic_json, sem_seg_root, instances_json
 ):
     """
     Register a COCO panoptic segmentation dataset named `name`.
@@ -81,7 +81,7 @@ def register_coco_panoptic_separated(
         image_root (str): directory which contains all the images
         panoptic_root (str): directory which contains panoptic annotation images
         panoptic_json (str): path to the json panoptic annotation file
-        semantic_root (str): directory which contains all the ground truth segmentation annotations.
+        sem_seg_root (str): directory which contains all the ground truth segmentation annotations.
         instances_json (str): path to the json instance annotation file
     """
     panoptic_name = name + "_separated"
@@ -89,49 +89,49 @@ def register_coco_panoptic_separated(
         panoptic_name,
         lambda: merge_to_panoptic(
             load_coco_json(instances_json, image_root, panoptic_name),
-            load_sem_seg(semantic_root, image_root),
+            load_sem_seg(sem_seg_root, image_root),
         ),
     )
     MetadataCatalog.get(panoptic_name).set(
         panoptic_root=panoptic_root,
         image_root=image_root,
         panoptic_json=panoptic_json,
-        semantic_root=semantic_root,
+        sem_seg_root=sem_seg_root,
         json_file=instances_json,  # TODO rename
         evaluator_type="coco_panoptic_seg",
         **metadata
     )
 
     semantic_name = name + "_stuffonly"
-    DatasetCatalog.register(semantic_name, lambda: load_sem_seg(semantic_root, image_root))
+    DatasetCatalog.register(semantic_name, lambda: load_sem_seg(sem_seg_root, image_root))
     MetadataCatalog.get(semantic_name).set(
-        semantic_root=semantic_root,
+        sem_seg_root=sem_seg_root,
         image_root=image_root,
-        evaluator_type="semantic_seg",
+        evaluator_type="sem_seg",
         **metadata
     )
 
 
-def merge_to_panoptic(detection_dicts, semantic_segmentation_dicts):
+def merge_to_panoptic(detection_dicts, sem_seg_dicts):
     """
     Create dataset dicts for panoptic segmentation, by
     merging two dicts using "file_name" field to match their entries.
 
     Args:
         detection_dicts (list[dict]): lists of dicts for object detection or instance segmentation.
-        semantic_segmentation_dicts (list[dict]): lists of dicts for semantic segmentation.
+        sem_seg_dicts (list[dict]): lists of dicts for semantic segmentation.
 
     Returns:
         list[dict] (one per input image): Each dict contains all (key, value) pairs from dicts in
-            both detection_dicts and semantic_segmentation_dicts that correspond to the same image.
+            both detection_dicts and sem_seg_dicts that correspond to the same image.
             The function assumes that the same key in different dicts has the same value.
     """
     results = []
-    semseg_file_to_entry = {x["file_name"]: x for x in semantic_segmentation_dicts}
-    assert len(semseg_file_to_entry) > 0
+    sem_seg_file_to_entry = {x["file_name"]: x for x in sem_seg_dicts}
+    assert len(sem_seg_file_to_entry) > 0
 
     for det_dict in detection_dicts:
         dic = copy.copy(det_dict)
-        dic.update(semseg_file_to_entry[dic["file_name"]])
+        dic.update(sem_seg_file_to_entry[dic["file_name"]])
         results.append(dic)
     return results

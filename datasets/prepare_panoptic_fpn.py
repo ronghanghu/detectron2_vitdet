@@ -25,7 +25,7 @@ def _process_panoptic_to_semantic(input_panoptic, output_semantic, segments, id_
     Image.fromarray(output).save(output_semantic)
 
 
-def separate_coco_semantic_from_panoptic(panoptic_json, panoptic_root, semantic_root, categories):
+def separate_coco_semantic_from_panoptic(panoptic_json, panoptic_root, sem_seg_root, categories):
     """
     Create semantic segmentation annotations from panoptic segmentation
     annotations, to be used by PanopticFPN.
@@ -36,12 +36,12 @@ def separate_coco_semantic_from_panoptic(panoptic_json, panoptic_root, semantic_
     Args:
         panoptic_json (str): path to the panoptic json file, in COCO's format.
         panoptic_root (str): a directory with panoptic annotation files, in COCO's format.
-        semantic_root (str): a directory to output semantic annotation files
+        sem_seg_root (str): a directory to output semantic annotation files
         categories (list[dict]): category metadata. Each dict needs to have:
             "id": corresponds to the "category_id" in the json annotations
             "isthing": 0 or 1
     """
-    os.makedirs(semantic_root, exist_ok=True)
+    os.makedirs(sem_seg_root, exist_ok=True)
 
     stuff_ids = [k["id"] for k in categories if k["isthing"] == 0]
     thing_ids = [k["id"] for k in categories if k["isthing"] == 1]
@@ -63,10 +63,10 @@ def separate_coco_semantic_from_panoptic(panoptic_json, panoptic_root, semantic_
             file_name = anno["file_name"]
             segments = anno["segments_info"]
             input = os.path.join(panoptic_root, file_name)
-            output = os.path.join(semantic_root, file_name)
+            output = os.path.join(sem_seg_root, file_name)
             yield input, output, segments
 
-    print("Start writing to {} ...".format(semantic_root))
+    print("Start writing to {} ...".format(sem_seg_root))
     start = time.time()
     pool.starmap(
         functools.partial(_process_panoptic_to_semantic, id_map=id_map),

@@ -8,4 +8,4 @@ MODEL:
 DATASETS:
   TEST: ("coco_2017_val_100_panoptic_separated",)
 TEST:
-  EXPECTED_RESULTS: [["bbox", "AP", 46.34, 0.02], ["segm", "AP", 44.12, 0.02], ["semantic_seg", "mIoU", 40.41, 0.02]]  # noqa
+  EXPECTED_RESULTS: [["bbox", "AP", 46.34, 0.02], ["segm", "AP", 44.12, 0.02], ["sem_seg", "mIoU", 40.41, 0.02]]  # noqa

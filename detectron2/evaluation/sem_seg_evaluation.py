@@ -133,7 +133,7 @@ class SemSegEvaluator(DatasetEvaluator):
             file_path = os.path.join(self._output_dir, "sem_seg_evaluation.pth")
             with PathManager.open(file_path, "wb") as f:
                 torch.save(res, f)
-        results = OrderedDict({"semantic_seg": res})
+        results = OrderedDict({"sem_seg": res})
         self._logger.info(results)
         return results
 
