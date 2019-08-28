@@ -3,43 +3,45 @@
 #include <c10/cuda/CUDAGuard.h>
 #include <ATen/cuda/CUDAApplyUtils.cuh>
 
-
 // TODO make it in a common file
 #define CUDA_1D_KERNEL_LOOP(i, n)                            \
   for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < n; \
        i += blockDim.x * gridDim.x)
 
-
 template <typename T>
-__device__ T bilinear_interpolate(const T* bottom_data,
-    const int height, const int width,
-    T y, T x,
+__device__ T bilinear_interpolate(
+    const T* bottom_data,
+    const int height,
+    const int width,
+    T y,
+    T x,
     const int index /* index for debug only*/) {
-
   // deal with cases that inverse elements are out of feature map boundary
   if (y < -1.0 || y > height || x < -1.0 || x > width) {
-    //empty
+    // empty
     return 0;
   }
 
-  if (y <= 0) y = 0;
-  if (x <= 0) x = 0;
+  if (y <= 0)
+    y = 0;
+  if (x <= 0)
+    x = 0;
 
-  int y_low = (int) y;
-  int x_low = (int) x;
+  int y_low = (int)y;
+  int x_low = (int)x;
   int y_high;
   int x_high;
 
   if (y_low >= height - 1) {
     y_high = y_low = height - 1;
-    y = (T) y_low;
+    y = (T)y_low;
   } else {
     y_high = y_low + 1;
   }
 
   if (x_low >= width - 1) {
     x_high = x_low = width - 1;
-    x = (T) x_low;
+    x = (T)x_low;
   } else {
     x_high = x_low + 1;
   }
@@ -60,12 +62,18 @@ __device__ T bilinear_interpolate(const T* bottom_data,
 }
 
 template <typename T>
-__global__ void RoIAlignForward(const int nthreads, const T* bottom_data,
-    const T spatial_scale, const int channels,
-    const int height, const int width,
-    const int pooled_height, const int pooled_width,
+__global__ void RoIAlignForward(
+    const int nthreads,
+    const T* bottom_data,
+    const T spatial_scale,
+    const int channels,
+    const int height,
+    const int width,
+    const int pooled_height,
+    const int pooled_width,
     const int sampling_ratio,
-    const T* bottom_rois, T* top_data,
+    const T* bottom_rois,
+    T* top_data,
     bool aligned) {
   CUDA_1D_KERNEL_LOOP(index, nthreads) {
     // (n, c, ph, pw) is an element in the pooled output
@@ -86,31 +94,39 @@ __global__ void RoIAlignForward(const int nthreads, const T* bottom_data,
 
     T roi_width = roi_end_w - roi_start_w;
     T roi_height = roi_end_h - roi_start_h;
-    if (!aligned) {  // for backward-compatibility only
+    if (!aligned) { // for backward-compatibility only
       roi_width = max(roi_width, (T)1.);
       roi_height = max(roi_height, (T)1.);
     }
     T bin_size_h = static_cast<T>(roi_height) / static_cast<T>(pooled_height);
     T bin_size_w = static_cast<T>(roi_width) / static_cast<T>(pooled_width);
 
-    const T* offset_bottom_data = bottom_data + (roi_batch_ind * channels + c) * height * width;
+    const T* offset_bottom_data =
+        bottom_data + (roi_batch_ind * channels + c) * height * width;
 
     // We use roi_bin_grid to sample the grid and mimic integral
-    int roi_bin_grid_h = (sampling_ratio > 0) ? sampling_ratio : ceil(roi_height / pooled_height); // e.g., = 2
-    int roi_bin_grid_w = (sampling_ratio > 0) ? sampling_ratio : ceil(roi_width / pooled_width);
+    int roi_bin_grid_h = (sampling_ratio > 0)
+        ? sampling_ratio
+        : ceil(roi_height / pooled_height); // e.g., = 2
+    int roi_bin_grid_w =
+        (sampling_ratio > 0) ? sampling_ratio : ceil(roi_width / pooled_width);
 
     // We do average (integral) pooling inside a bin
     const T count = roi_bin_grid_h * roi_bin_grid_w; // e.g. = 4
 
     T output_val = 0.;
-    for (int iy = 0; iy < roi_bin_grid_h; iy ++) // e.g., iy = 0, 1
+    for (int iy = 0; iy < roi_bin_grid_h; iy++) // e.g., iy = 0, 1
     {
-      const T y = roi_start_h + ph * bin_size_h + static_cast<T>(iy + .5f) * bin_size_h / static_cast<T>(roi_bin_grid_h); // e.g., 0.5, 1.5
-      for (int ix = 0; ix < roi_bin_grid_w; ix ++)
-      {
-        const T x = roi_start_w + pw * bin_size_w + static_cast<T>(ix + .5f) * bin_size_w / static_cast<T>(roi_bin_grid_w);
+      const T y = roi_start_h + ph * bin_size_h +
+          static_cast<T>(iy + .5f) * bin_size_h /
+              static_cast<T>(roi_bin_grid_h); // e.g., 0.5, 1.5
+      for (int ix = 0; ix < roi_bin_grid_w; ix++) {
+        const T x = roi_start_w + pw * bin_size_w +
+            static_cast<T>(ix + .5f) * bin_size_w /
+                static_cast<T>(roi_bin_grid_w);
 
-        T val = bilinear_interpolate(offset_bottom_data, height, width, y, x, index);
+        T val = bilinear_interpolate(
+            offset_bottom_data, height, width, y, x, index);
         output_val += val;
       }
     }
@@ -120,39 +136,47 @@ __global__ void RoIAlignForward(const int nthreads, const T* bottom_data,
   }
 }
 
-
 template <typename T>
 __device__ void bilinear_interpolate_gradient(
-    const int height, const int width,
-    T y, T x,
-    T & w1, T & w2, T & w3, T & w4,
-    int & x_low, int & x_high, int & y_low, int & y_high,
+    const int height,
+    const int width,
+    T y,
+    T x,
+    T& w1,
+    T& w2,
+    T& w3,
+    T& w4,
+    int& x_low,
+    int& x_high,
+    int& y_low,
+    int& y_high,
     const int index /* index for debug only*/) {
-
   // deal with cases that inverse elements are out of feature map boundary
   if (y < -1.0 || y > height || x < -1.0 || x > width) {
-    //empty
+    // empty
     w1 = w2 = w3 = w4 = 0.;
     x_low = x_high = y_low = y_high = -1;
     return;
   }
 
-  if (y <= 0) y = 0;
-  if (x <= 0) x = 0;
+  if (y <= 0)
+    y = 0;
+  if (x <= 0)
+    x = 0;
 
-  y_low = (int) y;
-  x_low = (int) x;
+  y_low = (int)y;
+  x_low = (int)x;
 
   if (y_low >= height - 1) {
     y_high = y_low = height - 1;
-    y = (T) y_low;
+    y = (T)y_low;
   } else {
     y_high = y_low + 1;
   }
 
   if (x_low >= width - 1) {
     x_high = x_low = width - 1;
-    x = (T) x_low;
+    x = (T)x_low;
   } else {
     x_high = x_low + 1;
   }
@@ -174,10 +198,16 @@ __device__ void bilinear_interpolate_gradient(
 }
 
 template <typename T>
-__global__ void RoIAlignBackwardFeature(const int nthreads, const T* top_diff,
-    const int num_rois, const T spatial_scale,
-    const int channels, const int height, const int width,
-    const int pooled_height, const int pooled_width,
+__global__ void RoIAlignBackwardFeature(
+    const int nthreads,
+    const T* top_diff,
+    const int num_rois,
+    const T spatial_scale,
+    const int channels,
+    const int height,
+    const int width,
+    const int pooled_height,
+    const int pooled_width,
     const int sampling_ratio,
     T* bottom_diff,
     const T* bottom_rois,
@@ -201,39 +231,56 @@ __global__ void RoIAlignBackwardFeature(const int nthreads, const T* top_diff,
 
     T roi_width = roi_end_w - roi_start_w;
     T roi_height = roi_end_h - roi_start_h;
-    if (!aligned) {  // for backward-compatibility only
+    if (!aligned) { // for backward-compatibility only
       roi_width = max(roi_width, (T)1.);
       roi_height = max(roi_height, (T)1.);
     }
     T bin_size_h = static_cast<T>(roi_height) / static_cast<T>(pooled_height);
     T bin_size_w = static_cast<T>(roi_width) / static_cast<T>(pooled_width);
 
-    T* offset_bottom_diff = bottom_diff + (roi_batch_ind * channels + c) * height * width;
+    T* offset_bottom_diff =
+        bottom_diff + (roi_batch_ind * channels + c) * height * width;
 
-    int top_offset    = (n * channels + c) * pooled_height * pooled_width;
+    int top_offset = (n * channels + c) * pooled_height * pooled_width;
     const T* offset_top_diff = top_diff + top_offset;
     const T top_diff_this_bin = offset_top_diff[ph * pooled_width + pw];
 
     // We use roi_bin_grid to sample the grid and mimic integral
-    int roi_bin_grid_h = (sampling_ratio > 0) ? sampling_ratio : ceil(roi_height / pooled_height); // e.g., = 2
-    int roi_bin_grid_w = (sampling_ratio > 0) ? sampling_ratio : ceil(roi_width / pooled_width);
+    int roi_bin_grid_h = (sampling_ratio > 0)
+        ? sampling_ratio
+        : ceil(roi_height / pooled_height); // e.g., = 2
+    int roi_bin_grid_w =
+        (sampling_ratio > 0) ? sampling_ratio : ceil(roi_width / pooled_width);
 
     // We do average (integral) pooling inside a bin
     const T count = roi_bin_grid_h * roi_bin_grid_w; // e.g. = 4
 
-    for (int iy = 0; iy < roi_bin_grid_h; iy ++) // e.g., iy = 0, 1
+    for (int iy = 0; iy < roi_bin_grid_h; iy++) // e.g., iy = 0, 1
     {
-      const T y = roi_start_h + ph * bin_size_h + static_cast<T>(iy + .5f) * bin_size_h / static_cast<T>(roi_bin_grid_h); // e.g., 0.5, 1.5
-      for (int ix = 0; ix < roi_bin_grid_w; ix ++)
-      {
-        const T x = roi_start_w + pw * bin_size_w + static_cast<T>(ix + .5f) * bin_size_w / static_cast<T>(roi_bin_grid_w);
+      const T y = roi_start_h + ph * bin_size_h +
+          static_cast<T>(iy + .5f) * bin_size_h /
+              static_cast<T>(roi_bin_grid_h); // e.g., 0.5, 1.5
+      for (int ix = 0; ix < roi_bin_grid_w; ix++) {
+        const T x = roi_start_w + pw * bin_size_w +
+            static_cast<T>(ix + .5f) * bin_size_w /
+                static_cast<T>(roi_bin_grid_w);
 
         T w1, w2, w3, w4;
         int x_low, x_high, y_low, y_high;
 
-        bilinear_interpolate_gradient(height, width, y, x,
-            w1, w2, w3, w4,
-            x_low, x_high, y_low, y_high,
+        bilinear_interpolate_gradient(
+            height,
+            width,
+            y,
+            x,
+            w1,
+            w2,
+            w3,
+            w4,
+            x_low,
+            x_high,
+            y_low,
+            y_high,
             index);
 
         T g1 = top_diff_this_bin * w1 / count;
@@ -241,26 +288,29 @@ __global__ void RoIAlignBackwardFeature(const int nthreads, const T* top_diff,
         T g3 = top_diff_this_bin * w3 / count;
         T g4 = top_diff_this_bin * w4 / count;
 
-        if (x_low >= 0 && x_high >= 0 && y_low >= 0 && y_high >= 0)
-        {
-          atomicAdd(offset_bottom_diff + y_low * width + x_low, static_cast<T>(g1));
-          atomicAdd(offset_bottom_diff + y_low * width + x_high, static_cast<T>(g2));
-          atomicAdd(offset_bottom_diff + y_high * width + x_low, static_cast<T>(g3));
-          atomicAdd(offset_bottom_diff + y_high * width + x_high, static_cast<T>(g4));
+        if (x_low >= 0 && x_high >= 0 && y_low >= 0 && y_high >= 0) {
+          atomicAdd(
+              offset_bottom_diff + y_low * width + x_low, static_cast<T>(g1));
+          atomicAdd(
+              offset_bottom_diff + y_low * width + x_high, static_cast<T>(g2));
+          atomicAdd(
+              offset_bottom_diff + y_high * width + x_low, static_cast<T>(g3));
+          atomicAdd(
+              offset_bottom_diff + y_high * width + x_high, static_cast<T>(g4));
         } // if
       } // ix
     } // iy
   } // CUDA_1D_KERNEL_LOOP
 } // RoIAlignBackward
 
-
-at::Tensor ROIAlign_forward_cuda(const at::Tensor& input,
-                                 const at::Tensor& rois,
-                                 const float spatial_scale,
-                                 const int pooled_height,
-                                 const int pooled_width,
-                                 const int sampling_ratio,
-                                 bool aligned) {
+at::Tensor ROIAlign_forward_cuda(
+    const at::Tensor& input,
+    const at::Tensor& rois,
+    const float spatial_scale,
+    const int pooled_height,
+    const int pooled_width,
+    const int sampling_ratio,
+    bool aligned) {
   AT_ASSERTM(input.device().is_cuda(), "input must be a CUDA tensor");
   AT_ASSERTM(rois.device().is_cuda(), "rois must be a CUDA tensor");
   at::TensorArg input_t{input, "input", 1}, rois_t{rois, "rois", 2};
@@ -275,7 +325,8 @@ at::Tensor ROIAlign_forward_cuda(const at::Tensor& input,
   auto height = input.size(2);
   auto width = input.size(3);
 
-  auto output = at::empty({num_rois, channels, pooled_height, pooled_width}, input.options());
+  auto output = at::empty(
+      {num_rois, channels, pooled_height, pooled_width}, input.options());
   auto output_size = num_rois * pooled_height * pooled_width * channels;
   cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
@@ -289,18 +340,18 @@ at::Tensor ROIAlign_forward_cuda(const at::Tensor& input,
 
   AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "ROIAlign_forward", [&] {
     RoIAlignForward<scalar_t><<<grid, block, 0, stream>>>(
-         output_size,
-         input.contiguous().data_ptr<scalar_t>(),
-         spatial_scale,
-         channels,
-         height,
-         width,
-         pooled_height,
-         pooled_width,
-         sampling_ratio,
-         rois.contiguous().data_ptr<scalar_t>(),
-         output.data_ptr<scalar_t>(),
-         aligned);
+        output_size,
+        input.contiguous().data_ptr<scalar_t>(),
+        spatial_scale,
+        channels,
+        height,
+        width,
+        pooled_height,
+        pooled_width,
+        sampling_ratio,
+        rois.contiguous().data_ptr<scalar_t>(),
+        output.data_ptr<scalar_t>(),
+        aligned);
   });
   cudaDeviceSynchronize();
   AT_CUDA_CHECK(cudaGetLastError());
@@ -308,17 +359,18 @@ at::Tensor ROIAlign_forward_cuda(const at::Tensor& input,
 }
 
 // TODO remove the dependency on input and use instead its sizes -> save memory
-at::Tensor ROIAlign_backward_cuda(const at::Tensor& grad,
-                                  const at::Tensor& rois,
-                                  const float spatial_scale,
-                                  const int pooled_height,
-                                  const int pooled_width,
-                                  const int batch_size,
-                                  const int channels,
-                                  const int height,
-                                  const int width,
-                                  const int sampling_ratio,
-                                  bool aligned) {
+at::Tensor ROIAlign_backward_cuda(
+    const at::Tensor& grad,
+    const at::Tensor& rois,
+    const float spatial_scale,
+    const int pooled_height,
+    const int pooled_width,
+    const int batch_size,
+    const int channels,
+    const int height,
+    const int width,
+    const int sampling_ratio,
+    bool aligned) {
   AT_ASSERTM(grad.device().is_cuda(), "grad must be a CUDA tensor");
   AT_ASSERTM(rois.device().is_cuda(), "rois must be a CUDA tensor");
 
@@ -329,7 +381,8 @@ at::Tensor ROIAlign_backward_cuda(const at::Tensor& grad,
   at::cuda::CUDAGuard device_guard(grad.device());
 
   auto num_rois = rois.size(0);
-  auto grad_input = at::zeros({batch_size, channels, height, width}, grad.options());
+  auto grad_input =
+      at::zeros({batch_size, channels, height, width}, grad.options());
 
   cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
@@ -344,19 +397,19 @@ at::Tensor ROIAlign_backward_cuda(const at::Tensor& grad,
 
   AT_DISPATCH_FLOATING_TYPES(grad.scalar_type(), "ROIAlign_backward", [&] {
     RoIAlignBackwardFeature<scalar_t><<<grid, block, 0, stream>>>(
-         grad.numel(),
-         grad.contiguous().data_ptr<scalar_t>(),
-         num_rois,
-         spatial_scale,
-         channels,
-         height,
-         width,
-         pooled_height,
-         pooled_width,
-         sampling_ratio,
-         grad_input.data_ptr<scalar_t>(),
-         rois.contiguous().data_ptr<scalar_t>(),
-         aligned);
+        grad.numel(),
+        grad.contiguous().data_ptr<scalar_t>(),
+        num_rois,
+        spatial_scale,
+        channels,
+        height,
+        width,
+        pooled_height,
+        pooled_width,
+        sampling_ratio,
+        grad_input.data_ptr<scalar_t>(),
+        rois.contiguous().data_ptr<scalar_t>(),
+        aligned);
   });
   AT_CUDA_CHECK(cudaGetLastError());
   return grad_input;
