@@ -77,6 +77,7 @@ class DatasetMapper:
             )
         else:
             # Crop around an instance if there are instances in the image.
+            # USER: Remove if you don't use cropping
             if self.crop_gen:
                 crop_tfm = utils.gen_crop_transform_with_instance(
                     self.crop_gen.get_crop_size(image.shape[:2]),

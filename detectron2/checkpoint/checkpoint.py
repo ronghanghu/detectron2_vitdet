@@ -15,6 +15,7 @@ class Checkpointer(object):
     """
     A checkpointer that can save/load model as well as extra checkpointable objects.
     """
+
     def __init__(self, model, save_dir="", *, save_to_disk=None, **checkpointables):
         """
         Args:

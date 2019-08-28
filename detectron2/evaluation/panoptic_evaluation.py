@@ -33,7 +33,6 @@ class COCOPanopticEvaluator(DatasetEvaluator):
             v: k for k, v in self._metadata.dataset_id_to_contiguous_id.items()
         }
 
-        self._output_dir = output_dir
         self._predictions_json = os.path.join(output_dir, "predictions.json")
         self._predictions_dir = os.path.join(output_dir, "predictions")
 

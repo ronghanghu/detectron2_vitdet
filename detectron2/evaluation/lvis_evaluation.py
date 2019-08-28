@@ -113,6 +113,7 @@ class LVISEvaluator(DatasetEvaluator):
             return {}
 
         if self._output_dir:
+            PathManager.mkdirs(self._output_dir)
             file_path = os.path.join(self._output_dir, "instances_predictions.pth")
             with PathManager.open(file_path, "wb") as f:
                 torch.save(self._predictions, f)

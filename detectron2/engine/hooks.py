@@ -91,7 +91,7 @@ class IterationTimer(HookBase):
 
         if num_iter > 0 and total_time_minus_hooks > 0:
             # Speed is meaningful only after warmup
-            # NOTE this format is parsed by grep
+            # NOTE this format is parsed by grep in some scripts
             logger.info(
                 "Overall training speed: {} iterations in {} ({:.4f} s / it)".format(
                     num_iter,

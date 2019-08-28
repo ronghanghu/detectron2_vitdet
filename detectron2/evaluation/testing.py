@@ -31,8 +31,11 @@ def verify_results(cfg, results):
     Returns:
         bool: whether the verification succeeds or not
     """
-    ok = True
     expected_results = cfg.TEST.EXPECTED_RESULTS
+    if not len(expected_results):
+        return True
+
+    ok = True
     for task, metric, expected, tolerance in expected_results:
         actual = results[task][metric]
         if not np.isfinite(actual):

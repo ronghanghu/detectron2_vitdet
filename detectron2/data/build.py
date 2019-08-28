@@ -159,7 +159,16 @@ def print_instances_class_histogram(dataset_dicts, class_names):
         histogram += np.histogram(classes, bins=hist_bins)[0]
 
     N_COLS = min(6, len(class_names) * 2)
-    data = list(itertools.chain(*[[class_names[i], int(v)] for i, v in enumerate(histogram)]))
+
+    def short_name(x):
+        # make long class names shorter. useful for lvis
+        if len(x) > 13:
+            return x[:11] + ".."
+        return x
+
+    data = list(
+        itertools.chain(*[[short_name(class_names[i]), int(v)] for i, v in enumerate(histogram)])
+    )
     total_num_instances = sum(data[1::2])
     data.extend([None] * (N_COLS - (len(data) % N_COLS)))
     data.extend(["total", total_num_instances])

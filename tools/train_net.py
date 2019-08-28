@@ -19,7 +19,6 @@ import logging
 import os
 from collections import OrderedDict
 import torch
-from borc.common.file_io import PathManager
 from borc.nn.precise_bn import get_bn_modules, update_bn_stats
 from torch.nn.parallel import DistributedDataParallel
 
@@ -108,10 +107,7 @@ def do_test(cfg, model, is_final=True):
     """
 
     assert len(cfg.DATASETS.TEST)
-    if isinstance(model, DistributedDataParallel):
-        model = model.module
 
-    torch.cuda.empty_cache()  # TODO check if it helps
     logger = logging.getLogger("detectron2.trainer")
 
     if cfg.TEST.PRECISE_BN.ENABLED and len(get_bn_modules(model)) > 0:
@@ -128,9 +124,6 @@ def do_test(cfg, model, is_final=True):
         for dataset_name in cfg.DATASETS.TEST:
             if cfg.OUTPUT_DIR:
                 output_folder = os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
-                if comm.is_main_process():
-                    PathManager.mkdirs(output_folder)
-                comm.synchronize()
             else:
                 output_folder = None
 
@@ -147,9 +140,6 @@ def do_test(cfg, model, is_final=True):
                 # In the end of training, run an evaluation with TTA
                 if cfg.OUTPUT_DIR:
                     output_folder = os.path.join(cfg.OUTPUT_DIR, "inference_TTA", dataset_name)
-                    if comm.is_main_process():
-                        PathManager.mkdirs(output_folder)
-                    comm.synchronize()
                 else:
                     output_folder = None
 
@@ -186,7 +176,7 @@ def do_test(cfg, model, is_final=True):
 def create_eval_hook(cfg, model):
     def after_step_callback(trainer):
         if cfg.TEST.EVAL_PERIOD > 0 and (trainer.iter + 1) % cfg.TEST.EVAL_PERIOD == 0:
-            do_test(cfg, model, is_final=False)
+            do_test(cfg, model, is_final=trainer.iter + 1 == trainer.max_iter)
             # Evaluation may take different time among workers.
             # A barrier make them start the next iteration together.
             comm.synchronize()
@@ -206,10 +196,11 @@ def do_train(cfg, model, resume=True):
     checkpointer = DetectionCheckpointer(
         model, cfg.OUTPUT_DIR, optimizer=optimizer, scheduler=scheduler
     )
-    start_iter = checkpointer.resume_or_load(cfg.MODEL.WEIGHT, resume=resume).get("iteration", -1)
     # The checkpoint stores the training iteration that just finished, thus we start
     # at the next iteration (or iter zero if there's no checkpoint).
-    start_iter += 1
+    start_iter = (
+        checkpointer.resume_or_load(cfg.MODEL.WEIGHT, resume=resume).get("iteration", -1) + 1
+    )
     max_iter = cfg.SOLVER.MAX_ITER
 
     data_loader = build_detection_train_loader(cfg, start_iter=start_iter)
@@ -262,8 +253,9 @@ def main(args):
     logger.info("Model:\n{}".format(model))
 
     if args.eval_only:
-        checkpointer = DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR)
-        checkpointer.resume_or_load(cfg.MODEL.WEIGHT, resume=args.resume)
+        DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
+            cfg.MODEL.WEIGHT, resume=args.resume
+        )
         return do_test(cfg, model)
 
     if comm.get_world_size() > 1:

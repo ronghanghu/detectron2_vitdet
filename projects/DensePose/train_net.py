@@ -8,7 +8,6 @@ It is an example of how a user might use detectron2 for a new project.
 
 import logging
 import os
-from borc.common.file_io import PathManager
 from torch.nn.parallel import DistributedDataParallel
 
 import detectron2.utils.comm as comm
@@ -54,18 +53,11 @@ def do_test(cfg, model, is_final=True):
         list[result]: only on the main process, result for each DATASETS.TEST.
             Each result is a dict of dict. result[task][metric] is a float.
     """
-    assert len(cfg.DATASETS.TEST)
-    if isinstance(model, DistributedDataParallel):
-        model = model.module
-
     assert len(cfg.DATASETS.TEST) == 1, cfg.DATASETS.TEST
     with inference_context(model):
         dataset_name = cfg.DATASETS.TEST[0]
         if cfg.OUTPUT_DIR:
             output_folder = os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
-            if comm.is_main_process():
-                PathManager.mkdirs(output_folder)
-            comm.synchronize()
         else:
             output_folder = None
 
@@ -74,25 +66,24 @@ def do_test(cfg, model, is_final=True):
         )
         evaluator = get_evaluator(cfg, dataset_name, output_folder)
         results = inference_on_dataset(model, data_loader, evaluator)
-        if comm.is_main_process() and is_final:
-            print_csv_format(results)
+        if comm.is_main_process():
+            if is_final:
+                print_csv_format(results)
+                verify_results(cfg, results)
 
-    if is_final and cfg.TEST.EXPECTED_RESULTS and comm.is_main_process():
-        verify_results(cfg, results)
-
-    try:
-        storage = get_event_storage()
-    except Exception:
-        pass
-    else:
-        storage.put_scalars(**flatten_results_dict(results), smoothing_hint=False)
+            try:
+                storage = get_event_storage()
+            except Exception:
+                pass
+            else:
+                storage.put_scalars(**flatten_results_dict(results), smoothing_hint=False)
     return results
 
 
 def create_eval_hook(cfg, model):
     def after_step_callback(trainer):
         if cfg.TEST.EVAL_PERIOD > 0 and (trainer.iter + 1) % cfg.TEST.EVAL_PERIOD == 0:
-            do_test(cfg, model, is_final=False)
+            do_test(cfg, model, is_final=trainer.iter + 1 == trainer.max_iter)
             # Evaluation may take different time among workers.
             # A barrier make them start the next iteration together.
             comm.synchronize()
@@ -112,10 +103,11 @@ def do_train(cfg, model, resume=True):
     checkpointer = DetectionCheckpointer(
         model, cfg.OUTPUT_DIR, optimizer=optimizer, scheduler=scheduler
     )
-    start_iter = checkpointer.resume_or_load(cfg.MODEL.WEIGHT, resume=resume).get("iteration", -1)
     # The checkpoint stores the training iteration that just finished, thus we start
     # at the next iteration (or iter zero if there's no checkpoint).
-    start_iter += 1
+    start_iter = (
+        checkpointer.resume_or_load(cfg.MODEL.WEIGHT, resume=resume).get("iteration", -1) + 1
+    )
     max_iter = cfg.SOLVER.MAX_ITER
 
     data_loader = build_detection_train_loader(
@@ -138,8 +130,6 @@ def do_train(cfg, model, resume=True):
         trainer_hooks.append(hooks.PeriodicCheckpointer(checkpointer, cfg.SOLVER.CHECKPOINT_PERIOD))
     trainer.register_hooks(trainer_hooks)
     trainer.train(start_iter, max_iter)
-    with trainer.storage:
-        return do_test(cfg, model)
 
 
 def setup(args):
@@ -159,8 +149,9 @@ def main(args):
     logger.info("Model:\n{}".format(model))
 
     if args.eval_only:
-        checkpointer = DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR)
-        checkpointer.resume_or_load(cfg.MODEL.WEIGHT, resume=args.resume)
+        DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
+            cfg.MODEL.WEIGHT, resume=args.resume
+        )
         return do_test(cfg, model)
 
     if comm.get_world_size() > 1:
