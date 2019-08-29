@@ -2,8 +2,10 @@
 
 import datetime
 import logging
+import os
 import time
 from collections import Counter
+import torch
 from borc.common.timer import Timer
 
 from detectron2.checkpoint import PeriodicCheckpointer as _PeriodicCheckpointer
@@ -16,6 +18,7 @@ __all__ = [
     "PeriodicWriter",
     "PeriodicCheckpointer",
     "LRScheduler",
+    "AutogradProfiler",
 ]
 
 
@@ -200,3 +203,36 @@ class LRScheduler(HookBase):
         lr = self._optimizer.param_groups[self._best_param_group_id]["lr"]
         self.trainer.storage.put_scalar("lr", lr, smoothing_hint=False)
         self._scheduler.step()
+
+
+class AutogradProfiler(HookBase):
+    """
+    A hook which runs `torch.autograd.profiler.profile`.
+    """
+
+    def __init__(self, enable_predicate, output_dir, *, use_cuda=True):
+        """
+        Args:
+            enable_predicate (callable[trainer -> bool]): a function which takes a trainer,
+                and returns whether to enable the profiler.
+                It will be called once every step, and can be used to select which steps to profile.
+            output_dir (str): the output directory to dump tracing files.
+            use_cuda (bool): same as in `torch.autograd.profiler.profile`.
+        """
+        self._enable_predicate = enable_predicate
+        self._use_cuda = use_cuda
+        self._output_dir = output_dir
+
+    def before_step(self):
+        if self._enable_predicate(self.trainer):
+            self._profiler = torch.autograd.profiler.profile(use_cuda=self._use_cuda)
+            self._profiler.__enter__()
+        else:
+            self._profiler = None
+
+    def after_step(self):
+        if self._profiler is None:
+            return
+        self._profiler.__exit__(None, None, None)
+        out_file = os.path.join(self._output_dir, "tracing-{}.json".format(self.trainer.iter))
+        self._profiler.export_chrome_trace(out_file)

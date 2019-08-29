@@ -68,6 +68,8 @@ class TrainerBase:
     A subclass can implement what the loop is.
 
     Attributes:
+        iter(int): the current iteration.
+
         start_iter(int): The iteration to start with.
             By convention the minimum possible value is 0.
 
