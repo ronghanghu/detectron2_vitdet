@@ -1,4 +1,5 @@
 import torch
+import itertools
 
 from detectron2.layers import cat
 
@@ -152,12 +153,15 @@ class Instances:
         ret = Instances(image_size)
         for k in instance_lists[0]._fields.keys():
             values = [i.get(k) for i in instance_lists]
-            if isinstance(values[0], torch.Tensor):
+            v0 = values[0]
+            if isinstance(v0, torch.Tensor):
                 values = cat(values, dim=0)
-            elif isinstance(values[0], Boxes):
-                values = Boxes.cat(values)
+            elif isinstance(v0, list):
+                values = list(itertools.chain(*values))
+            elif hasattr(type(v0), "cat"):
+                values = type(v0).cat(values)
             else:
-                raise ValueError("Unsupported type {} for concatenation".format(type(values[0])))
+                raise ValueError("Unsupported type {} for concatenation".format(type(v0)))
             ret.set(k, values)
         return ret
 
