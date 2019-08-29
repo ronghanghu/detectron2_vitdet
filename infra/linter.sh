@@ -3,7 +3,7 @@
 # Run this script at project root by "./infra/linter.sh" before you commit
 
 echo "Running isort ..."
-isort -y -sp . --skip datasets --atomic
+isort -y --multi-line 3 --trailing-comma -sp . --skip datasets --atomic
 
 echo "Running black ..."
 black -l 100 .

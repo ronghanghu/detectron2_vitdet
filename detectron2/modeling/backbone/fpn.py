@@ -36,7 +36,8 @@ class FPN(Backbone):
                 FPN output, and the result will extend the result list. The top_block
                 further downsamples the feature map. It must have an attribute
                 "num_levels", meaning the number of extra FPN levels added by
-                this block.
+                this block, and "in_feature", which is a string representing
+                its input feature (e.g., p5).
         """
         super(FPN, self).__init__()
         assert isinstance(bottom_up, Backbone)
@@ -84,8 +85,10 @@ class FPN(Backbone):
         # Return feature names are "p<stage>", like ["p2", "p3", ..., "p6"]
         self._out_feature_strides = {"p{}".format(int(math.log2(s))): s for s in in_strides}
         # top block output feature maps.
-        for s in range(stage, stage + top_block.num_levels):
-            self._out_feature_strides["p{}".format(s + 1)] = 2 ** (s + 1)
+        if self.top_block is not None:
+            for s in range(stage, stage + self.top_block.num_levels):
+                self._out_feature_strides["p{}".format(s + 1)] = 2 ** (s + 1)
+
         self._out_features = list(self._out_feature_strides.keys())
         self._out_feature_channels = {k: out_channels for k in self._out_features}
         self._size_divisibility = in_strides[-1]
@@ -120,15 +123,12 @@ class FPN(Backbone):
             prev_features = lateral_features + top_down_features
             results.insert(0, output_conv(prev_features))
 
-        # TODO: After achieving initial RetinaNet benchmark results with C5,
-        # check to see if AP can be maintained while using the P5 layer instead.
-        # If this is the case, remove if-statement and use P5 layer for top_block.
-        if isinstance(self.top_block, LastLevelP6P7):
-            c5 = bottom_up_features["res5"]
-            results.extend(self.top_block(c5))
-        else:
-            results.extend(self.top_block(results[-1]))
-
+        if self.top_block is not None:
+            top_block_in_feature = bottom_up_features.get(self.top_block.in_feature, None)
+            if top_block_in_feature is None:
+                top_block_in_feature = results[self._out_features.index(self.top_block.in_feature)]
+            results.extend(self.top_block(top_block_in_feature))
+        assert len(self._out_features) == len(results)
         return dict(zip(self._out_features, results))
 
 
@@ -143,9 +143,15 @@ def _assert_strides_are_log2_contiguous(strides):
 
 
 class LastLevelMaxPool(nn.Module):
+    """
+    This module is used in the original FPN to generate a downsampled
+    P6 feature from P5.
+    """
+
     def __init__(self):
         super().__init__()
         self.num_levels = 1
+        self.in_feature = "p5"
 
     def forward(self, x):
         return [F.max_pool2d(x, kernel_size=1, stride=2, padding=0)]
@@ -153,12 +159,14 @@ class LastLevelMaxPool(nn.Module):
 
 class LastLevelP6P7(nn.Module):
     """
-    This module is used in RetinaNet to generate extra layers, P6 and P7.
+    This module is used in RetinaNet to generate extra layers, P6 and P7 from
+    C5 feature.
     """
 
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.num_levels = 2
+        self.in_feature = "res5"
         self.p6 = nn.Conv2d(in_channels, out_channels, 3, 2, 1)
         self.p7 = nn.Conv2d(out_channels, out_channels, 3, 2, 1)
         for module in [self.p6, self.p7]:
