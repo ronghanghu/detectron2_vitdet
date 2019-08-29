@@ -4,5 +4,6 @@ META_ARCH_REGISTRY = Registry("META_ARCH")  # noqa F401 isort:skip
 
 
 def build_model(cfg):
+    cfg = cfg.clone()
     meta_arch = cfg.MODEL.META_ARCHITECTURE
     return META_ARCH_REGISTRY.get(meta_arch)(cfg)
