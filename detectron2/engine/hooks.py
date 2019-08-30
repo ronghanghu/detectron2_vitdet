@@ -3,9 +3,11 @@
 import datetime
 import logging
 import os
+import tempfile
 import time
 from collections import Counter
 import torch
+from borc.common.file_io import PathManager
 from borc.common.timer import Timer
 
 from detectron2.checkpoint import PeriodicCheckpointer as _PeriodicCheckpointer
@@ -234,5 +236,17 @@ class AutogradProfiler(HookBase):
         if self._profiler is None:
             return
         self._profiler.__exit__(None, None, None)
-        out_file = os.path.join(self._output_dir, "tracing-{}.json".format(self.trainer.iter))
-        self._profiler.export_chrome_trace(out_file)
+        out_file = os.path.join(
+            self._output_dir, "profiler-trace-iter{}.json".format(self.trainer.iter)
+        )
+        if "://" not in out_file:
+            self._profiler.export_chrome_trace(out_file)
+        else:
+            # Support non-posix filesystems
+            with tempfile.TemporaryDirectory(prefix="detectron2_profiler") as d:
+                tmp_file = os.path.join(d, "tmp.json")
+                self._profiler.export_chrome_trace(tmp_file)
+                with open(tmp_file) as f:
+                    content = f.read()
+            with PathManager.open(out_file, "w") as f:
+                f.write(content)

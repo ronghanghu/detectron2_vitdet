@@ -1,9 +1,7 @@
-import torch
 import itertools
+import torch
 
 from detectron2.layers import cat
-
-from .boxes import Boxes
 
 
 class Instances:
