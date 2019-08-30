@@ -53,6 +53,9 @@ class COCOEvaluator(DatasetEvaluator):
             self._coco_api = COCO(json_file)
 
         self._kpt_oks_sigmas = cfg.TEST.KEYPOINT_OKS_SIGMAS
+        # Test set json files do not contain annotations (evaluation must be
+        # performed using the COCO evaluation server).
+        self._do_evaluation = len(self._coco_api.getAnnIds()) > 0
 
     def reset(self):
         self._predictions = []
@@ -152,9 +155,14 @@ class COCOEvaluator(DatasetEvaluator):
 
         if self._output_dir:
             file_path = os.path.join(self._output_dir, "coco_instances_results.json")
+            self._logger.info("Saving results to {}".format(file_path))
             with PathManager.open(file_path, "w") as f:
                 f.write(json.dumps(self._coco_results))
                 f.flush()
+
+        if not self._do_evaluation:
+            self._logger.info("Annotations are not available for evaluation.")
+            return
 
         self._logger.info("Evaluating predictions ...")
         for task in sorted(tasks):
@@ -190,6 +198,10 @@ class COCOEvaluator(DatasetEvaluator):
             }
             with PathManager.open(os.path.join(self._output_dir, "box_proposals.pkl"), "wb") as f:
                 pickle.dump(proposal_data, f)
+
+        if not self._do_evaluation:
+            self._logger.info("Annotations are not available for evaluation.")
+            return
 
         self._logger.info("Evaluating bbox proposals ...")
         res = {}

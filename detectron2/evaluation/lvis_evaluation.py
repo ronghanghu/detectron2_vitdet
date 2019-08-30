@@ -47,6 +47,9 @@ class LVISEvaluator(DatasetEvaluator):
         # TODO this requires calling this function from all ranks
         json_file = comm.dist_get_local_path(self._metadata.json_file)
         self._lvis_api = LVIS(json_file)
+        # Test set json files do not contain annotations (evaluation must be
+        # performed using the LVIS evaluation server).
+        self._do_evaluation = len(self._lvis_api.get_ann_ids()) > 0
 
     def reset(self):
         self._predictions = []
@@ -140,9 +143,14 @@ class LVISEvaluator(DatasetEvaluator):
 
         if self._output_dir:
             file_path = os.path.join(self._output_dir, "lvis_instances_results.json")
+            self._logger.info("Saving results to {}".format(file_path))
             with PathManager.open(file_path, "w") as f:
                 f.write(json.dumps(self._lvis_results))
                 f.flush()
+
+        if not self._do_evaluation:
+            self._logger.info("Annotations are not available for evaluation.")
+            return
 
         self._logger.info("Evaluating predictions ...")
         for task in sorted(tasks):
@@ -177,6 +185,10 @@ class LVISEvaluator(DatasetEvaluator):
             }
             with PathManager.open(os.path.join(self._output_dir, "box_proposals.pkl"), "wb") as f:
                 pickle.dump(proposal_data, f)
+
+        if not self._do_evaluation:
+            self._logger.info("Annotations are not available for evaluation.")
+            return
 
         self._logger.info("Evaluating bbox proposals ...")
         res = {}

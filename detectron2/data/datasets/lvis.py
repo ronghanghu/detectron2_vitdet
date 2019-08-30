@@ -120,8 +120,8 @@ def load_lvis_json(json_file, image_root, dataset_name=None):
         record["file_name"] = os.path.join(image_root, file_name)
         record["height"] = img_dict["height"]
         record["width"] = img_dict["width"]
-        record["not_exhaustive_category_ids"] = img_dict["not_exhaustive_category_ids"]
-        record["neg_category_ids"] = img_dict["neg_category_ids"]
+        record["not_exhaustive_category_ids"] = img_dict.get("not_exhaustive_category_ids", [])
+        record["neg_category_ids"] = img_dict.get("neg_category_ids", [])
         image_id = record["image_id"] = img_dict["id"]
 
         objs = []

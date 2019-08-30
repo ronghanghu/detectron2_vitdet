@@ -199,7 +199,7 @@ class GeneralizedRCNNWithTTA:
         )
 
         if not self.cfg.MODEL.MASK_ON:
-            return {"detector": merged_instances}
+            return {"instances": merged_instances}
 
         # 2. Use the detected boxes to obtain masks
         # 2.1: rescale the detected boxes
@@ -232,4 +232,4 @@ class GeneralizedRCNNWithTTA:
         output = outputs[0]
         output.pred_masks = avg_pred_masks
         output = detector_postprocess(output, height, width)
-        return {"detector": output}
+        return {"instances": output}

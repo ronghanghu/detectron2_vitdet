@@ -367,6 +367,7 @@ _PREDEFINED_SPLITS_LVIS = {
         "lvis_v0.5_train": ("coco/train2017", "lvis/lvis_v0.5_train.json"),
         "lvis_v0.5_val": ("coco/val2017", "lvis/lvis_v0.5_val.json"),
         "lvis_v0.5_val_rand_100": ("coco/val2017", "lvis/lvis_v0.5_val_rand_100.json"),
+        "lvis_v0.5_test": ("coco/test2017", "lvis/lvis_v0.5_image_info_test.json"),
     }
 }
 
