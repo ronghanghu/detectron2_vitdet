@@ -101,6 +101,9 @@ def benchmark_eval(args):
         while True:
             yield from DatasetFromList(dummy_data, copy=False)
 
+    for _ in range(5):  # warmup
+        model(dummy_data[0])
+
     max_iter = 400
     timer = Timer()
     with tqdm.tqdm(total=max_iter) as pbar:

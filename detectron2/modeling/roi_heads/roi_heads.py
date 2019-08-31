@@ -197,9 +197,6 @@ class ROIHeads(torch.nn.Module):
                 self.num_classes,
             )
 
-            num_fg_samples.append(sampled_fg_inds.numel())
-            num_bg_samples.append(sampled_bg_inds.numel())
-
             sampled_inds = torch.cat([sampled_fg_inds, sampled_bg_inds], dim=0)
 
             proposals_per_image = proposals_per_image[sampled_inds]
@@ -222,6 +219,8 @@ class ROIHeads(torch.nn.Module):
                 )
                 proposals_per_image.gt_boxes = gt_boxes
 
+            num_fg_samples.append(sampled_fg_inds.numel())
+            num_bg_samples.append(sampled_bg_inds.numel())
             proposals_with_gt.append(proposals_per_image)
 
         # Log the number of fg/bg samples that are selected for training ROI heads

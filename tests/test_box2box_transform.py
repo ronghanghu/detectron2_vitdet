@@ -15,9 +15,14 @@ class TestBox2BoxTransform(unittest.TestCase):
         b2b_tfm = Box2BoxTransform(weights=weights)
         src_boxes = random_boxes([10, 10, 20, 20], 1, 10)
         dst_boxes = random_boxes([10, 10, 20, 20], 1, 10)
-        deltas = b2b_tfm.get_deltas(src_boxes, dst_boxes)
-        dst_boxes_reconstructed = b2b_tfm.apply_deltas(deltas, src_boxes)
-        assert torch.allclose(dst_boxes, dst_boxes_reconstructed)
+
+        devices = [torch.device("cpu")]
+        if torch.cuda.is_available():
+            devices.append(torch.device("cuda"))
+        for device in devices:
+            deltas = b2b_tfm.get_deltas(src_boxes.to(device=device), dst_boxes.to(device=device))
+            dst_boxes_reconstructed = b2b_tfm.apply_deltas(deltas, src_boxes)
+            assert torch.allclose(dst_boxes, dst_boxes_reconstructed)
 
     def test_pairwise_iou(self):
         boxes1 = torch.tensor([[0.0, 0.0, 1.0, 1.0], [0.0, 0.0, 1.0, 1.0]])

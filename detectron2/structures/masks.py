@@ -36,8 +36,8 @@ def rasterize_polygons_within_box(polygons, box, mask_size):
     produce such targets.
 
     Args:
-        polygons (list[Tensor[float]]): a list of polygons, which represents an instance.
-        box: 4 elements
+        polygons (list[ndarray[float]]): a list of polygons, which represents an instance.
+        box: 4-element numpy array
         mask_size (int):
 
     Returns:
@@ -91,7 +91,8 @@ def batch_crop_and_resize(masks, boxes, mask_size):
         boxes = boxes.to(torch.device("cpu"))
 
         results = [
-            rasterize_polygons_within_box(mask, box, mask_size) for mask, box in zip(masks, boxes)
+            rasterize_polygons_within_box(mask, box.numpy(), mask_size)
+            for mask, box in zip(masks, boxes)
         ]
         """
         mask: list[list[float]], the polygons for one instance
@@ -211,7 +212,7 @@ class BitMasks:
             height, width (int)
         """
         if isinstance(polygon_masks, PolygonMasks):
-            polygon_masks = polygon_masks.numpy()
+            polygon_masks = polygon_masks.polygons
         masks = [polygons_to_bitmask(p, height, width) for p in polygon_masks]
         return BitMasks(torch.stack([torch.from_numpy(x) for x in masks]))
 
@@ -225,7 +226,7 @@ class PolygonMasks:
     This class stores the segmentation masks for all objects in one image, in the form of polygons.
 
     Attributes:
-        polygons: list[list[Tensor]]. Each Tensor is a float64 vector representing a polygon.
+        polygons: list[list[ndarray]]. Each ndarray is a float64 vector representing a polygon.
     """
 
     def __init__(self, polygons):
@@ -240,17 +241,19 @@ class PolygonMasks:
         """
         assert isinstance(polygons, list)
 
+        def _make_array(t):
+            # Use float64 for higher precision, because why not?
+            # Always put polygons on CPU (self.to is a no-op) since they
+            # are supposed to be small tensors.
+            # May need to change this assumption if GPU placement becomes useful
+            if isinstance(t, torch.Tensor):
+                t = t.cpu().numpy()
+            return t.astype("float64")
+
         def process_polygons(polygons_per_instance):
             assert isinstance(polygons_per_instance, list), type(polygons_per_instance)
             # transform the polygon to a tensor
-            polygons_per_instance = [
-                # Use float64 for higher precision, because why not?
-                # Always put polygons on CPU (self.to is a no-op) since they
-                # are supposed to be small tensors.
-                # May need to change this assumption if GPU placement becomes useful
-                torch.as_tensor(p, dtype=torch.float64).cpu()
-                for p in polygons_per_instance
-            ]
+            polygons_per_instance = [_make_array(p) for p in polygons_per_instance]
             for polygon in polygons_per_instance:
                 assert len(polygon) % 2 == 0 and len(polygon) >= 6
             return polygons_per_instance
@@ -272,7 +275,7 @@ class PolygonMasks:
             minxy = torch.as_tensor([float("inf"), float("inf")], dtype=torch.float32)
             maxxy = torch.zeros(2, dtype=torch.float32)
             for polygon in polygons_per_instance:
-                coords = polygon.view(-1, 2).to(dtype=torch.float32)
+                coords = torch.from_numpy(polygon).view(-1, 2).to(dtype=torch.float32)
                 minxy = torch.min(minxy, torch.min(coords, dim=0).values)
                 maxxy = torch.max(maxxy, torch.max(coords, dim=0).values)
             boxes[idx, :2] = minxy
@@ -307,20 +310,22 @@ class PolygonMasks:
             selected_polygons = self.polygons[item]
         elif isinstance(item, list):
             selected_polygons = [self.polygons[i] for i in item]
-        else:
-            # advanced indexing on a single dimension
-            if isinstance(item, torch.Tensor) and item.dtype == torch.bool:
+        elif isinstance(item, torch.Tensor):
+            # Polygons is a list, so we have to move the indices back to CPU.
+            if item.dtype == torch.bool:
                 assert item.dim() == 1, item.shape
-                item = item.nonzero()
-                item = item.squeeze(1) if item.numel() > 0 else item
-                item = item.tolist()
+                item = item.nonzero().squeeze(1).cpu().numpy().tolist()
+            elif item.dtype in [torch.int32, torch.int64]:
+                item = item.cpu().numpy().tolist()
+            else:
+                raise ValueError("Unsupported tensor dtype={} for indexing!".format(item.dtype))
             selected_polygons = [self.polygons[i] for i in item]
         return PolygonMasks(selected_polygons)
 
     def __iter__(self):
         """
         Yields:
-            list[Tensor]: the polygons for one instance. Each Tensor is a
+            list[ndarray]: the polygons for one instance. Each Tensor is a
                 float64 vector representing a polygon.
         """
         return iter(self.polygons)
@@ -332,10 +337,3 @@ class PolygonMasks:
 
     def __len__(self):
         return len(self.polygons)
-
-    def numpy(self):
-        """
-        Returns:
-            list[list[ndarray]]: the polygons in numpy ndarray format.
-        """
-        return [[x.numpy() for x in p] for p in self.polygons]
