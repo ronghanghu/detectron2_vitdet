@@ -175,8 +175,11 @@ def do_test(cfg, model, is_final=True):
 
 def create_eval_hook(cfg, model):
     def after_step_callback(trainer):
-        if cfg.TEST.EVAL_PERIOD > 0 and (trainer.iter + 1) % cfg.TEST.EVAL_PERIOD == 0:
-            do_test(cfg, model, is_final=trainer.iter + 1 == trainer.max_iter)
+        is_final = trainer.iter + 1 == trainer.max_iter
+        if is_final or (
+            cfg.TEST.EVAL_PERIOD > 0 and (trainer.iter + 1) % cfg.TEST.EVAL_PERIOD == 0
+        ):
+            do_test(cfg, model, is_final=is_final)
             # Evaluation may take different time among workers.
             # A barrier make them start the next iteration together.
             comm.synchronize()
