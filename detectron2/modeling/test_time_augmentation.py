@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from itertools import count
 import torch
 
+from detectron2.data.detection_utils import read_image
 from detectron2.data.transforms import ResizeShortestEdge
 from detectron2.structures import Instances
 
@@ -27,6 +28,7 @@ class DatasetMapperTTA:
         self.min_sizes = cfg.TEST.AUG_MIN_SIZES
         self.max_size = cfg.TEST.AUG_MAX_SIZE
         self.flip = cfg.TEST.AUG_FLIP
+        self.image_format = cfg.INPUT.FORMAT
 
     def __call__(self, dataset_dict):
         """
@@ -38,9 +40,12 @@ class DatasetMapperTTA:
                 The total number of dicts is ``len(min_sizes) * (2 if flip else 1)``.
         """
         ret = []
-        image = dataset_dict["image"]
+        if "image" not in dataset_dict:
+            numpy_image = read_image(dataset_dict["file_name"], self.image_format)
+        else:
+            numpy_image = dataset_dict["image"].permute(1, 2, 0).numpy().astype("uint8")
         for min_size in self.min_sizes:
-            image = np.copy(image)
+            image = np.copy(numpy_image)
             tfm = ResizeShortestEdge(min_size, self.max_size).get_transform(image)
             resized = tfm.apply_image(image)
             resized = torch.as_tensor(resized.transpose(2, 0, 1).astype("float32"))
@@ -64,13 +69,14 @@ class GeneralizedRCNNWithTTA:
     Its :meth:`__call__` method has the same interface as :meth:`GeneralizedRCNN.forward`.
     """
 
-    def __init__(self, cfg, model, tta_mapper, batch_size=3):
+    def __init__(self, cfg, model, tta_mapper=None, batch_size=3):
         """
         Args:
             cfg (CfgNode):
             model (GeneralizedRCNN): a GeneralizedRCNN to apply TTA on.
             tta_mapper (callable): takes a dataset dict and returns a list of
-                augmented versions of the dataset dict.
+                augmented versions of the dataset dict. Defaults to
+                `DatasetMapperTTA(cfg)`.
             batch_size (int): batch the augmented images into this batch size for inference.
         """
         assert isinstance(
@@ -84,6 +90,9 @@ class GeneralizedRCNNWithTTA:
 
         self.model = model
         assert not model.training
+
+        if tta_mapper is None:
+            tta_mapper = DatasetMapperTTA(cfg)
         self.tta_mapper = tta_mapper
         self.batch_size = batch_size
 
@@ -149,9 +158,6 @@ class GeneralizedRCNNWithTTA:
         Returns:
             dict: one output dict
         """
-        # The input image is transformed to a torch Tensor already, but we
-        # need numpy array for the augmentations.
-        input["image"] = input["image"].permute(1, 2, 0).numpy().astype("uint8")
         augmented_inputs = self.tta_mapper(input)
 
         do_hflip = [k.pop("horiz_flip", False) for k in augmented_inputs]

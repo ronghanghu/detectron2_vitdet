@@ -3,6 +3,8 @@ import logging
 import random
 import torch.utils.data as data
 
+from detectron2.utils.serialize import PicklableWrapper
+
 
 class MapDataset(data.Dataset):
     """
@@ -18,7 +20,7 @@ class MapDataset(data.Dataset):
 
     def __init__(self, dataset, map_func):
         self._dataset = dataset
-        self._map_func = map_func
+        self._map_func = PicklableWrapper(map_func)  # wrap so that a lambda will work
 
         self._rng = random.Random(42)
         self._fallback_candidates = set(range(len(dataset)))

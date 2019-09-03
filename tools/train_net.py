@@ -26,7 +26,6 @@ import detectron2.utils.comm as comm
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.config import get_cfg, set_global_cfg  # noqa
 from detectron2.data import (
-    DatasetMapper,
     MetadataCatalog,
     build_detection_test_loader,
     build_detection_train_loader,
@@ -45,7 +44,7 @@ from detectron2.evaluation import (
     print_csv_format,
     verify_results,
 )
-from detectron2.modeling import DatasetMapperTTA, GeneralizedRCNNWithTTA, build_model
+from detectron2.modeling import GeneralizedRCNNWithTTA, build_model
 from detectron2.solver import build_lr_scheduler, build_optimizer
 from detectron2.utils.events import (
     CommonMetricPrinter,
@@ -143,16 +142,12 @@ def do_test(cfg, model, is_final=True):
                 else:
                     output_folder = None
 
-                newcfg = cfg.clone()
-                newcfg.defrost()
-                newcfg.INPUT.MIN_SIZE_TEST = 0  # disable resizing
                 logger.info("Running inference with test-time augmentation ...")
-                data_loader = build_detection_test_loader(
-                    cfg, dataset_name, mapper=DatasetMapper(newcfg, is_train=False)
-                )
-                model = GeneralizedRCNNWithTTA(cfg, model, DatasetMapperTTA(cfg))
+                data_loader = build_detection_test_loader(cfg, dataset_name, mapper=lambda x: x)
                 evaluator = get_evaluator(cfg, dataset_name, output_folder)
-                results_per_dataset = inference_on_dataset(model, data_loader, evaluator)
+                results_per_dataset = inference_on_dataset(
+                    GeneralizedRCNNWithTTA(cfg, model), data_loader, evaluator
+                )
                 logger.info(
                     "Evaluation results on {} with test-time augmentation:".format(dataset_name)
                 )
