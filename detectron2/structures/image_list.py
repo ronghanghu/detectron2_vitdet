@@ -10,6 +10,9 @@ class ImageList(object):
     varying sizes) as a single tensor.
     This works by padding the images to the same size,
     and storing in a field the original sizes of each image
+
+    Attributes:
+        image_sizes (list[tuple[int, int]]): each tuple is (h, w)
     """
 
     def __init__(self, tensor, image_sizes):

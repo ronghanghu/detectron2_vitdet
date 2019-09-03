@@ -280,6 +280,18 @@ _C.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG = False
 # Type of pooling operation applied to the incoming feature map for each RoI
 _C.MODEL.ROI_BOX_HEAD.POOLER_TYPE = "ROIAlignV2"
 
+# ---------------------------------------------------------------------------- #
+# Cascaded Box Head
+# ---------------------------------------------------------------------------- #
+_C.MODEL.ROI_BOX_CASCADE_HEAD = CN()
+# The number of cascade stages is implicitly defined by the length of the following two configs.
+_C.MODEL.ROI_BOX_CASCADE_HEAD.BBOX_REG_WEIGHTS = (
+    (10.0, 10.0, 5.0, 5.0),
+    (20.0, 20.0, 10.0, 10.0),
+    (30.0, 30.0, 15.0, 15.0),
+)
+_C.MODEL.ROI_BOX_CASCADE_HEAD.IOUS = (0.5, 0.6, 0.7)
+
 
 # ---------------------------------------------------------------------------- #
 # Mask Head

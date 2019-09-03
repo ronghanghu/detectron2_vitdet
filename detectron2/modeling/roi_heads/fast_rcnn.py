@@ -208,7 +208,8 @@ class FastRCNNOutputs(object):
                 class-specific or class-agnostic storing the predicted deltas that
                 transform proposals into final box detections.
             proposals (list[Instances]): A list of N Instancess, where Instances i stores the
-                proposals for image i. When training, each Instances has ground-truth labels
+                proposals for image i, in the field "proposal_boxes".
+                When training, each Instances must have ground-truth labels
                 stored in the field "gt_classes" and "gt_boxes".
             smooth_l1_beta (float): The transition point between L1 and L2 loss in
                 the smooth L1 loss function. When set to 0, the loss becomes L1. When
@@ -222,6 +223,7 @@ class FastRCNNOutputs(object):
 
         # cat(..., dim=0) concatenates over all images in the batch
         self.proposals = Boxes.cat([p.proposal_boxes for p in proposals])
+        assert not self.proposals.tensor.requires_grad, "Proposals should not require gradients!"
         self.image_shapes = [x.image_size for x in proposals]
 
         # The following fields should exist only when training.

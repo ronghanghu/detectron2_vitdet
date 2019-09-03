@@ -183,7 +183,7 @@ class ROIHeads(torch.nn.Module):
             # Get the corresponding GT for each proposal
             if has_gt:
                 gt_classes = targets_per_image.gt_classes[matched_idxs]
-                # Label background (0 label)
+                # Label unmatched proposals (0 label from matcher) as background (label=num_classes)
                 gt_classes[proposals_labels == 0] = self.num_classes
                 # Label ignore proposals (-1 label)
                 gt_classes[proposals_labels == -1] = -1

@@ -40,6 +40,7 @@ class Matcher(object):
                 thus will be considered as true positives.
         """
         # Add -inf and +inf to first and last position in thresholds
+        thresholds = thresholds[:]
         thresholds.insert(0, -float("inf"))
         thresholds.append(float("inf"))
         assert all(low <= high for (low, high) in zip(thresholds[:-1], thresholds[1:]))
