@@ -3,6 +3,7 @@ from torch import nn
 from torch.autograd.function import Function
 
 from detectron2.structures import Boxes, Instances, pairwise_iou
+from detectron2.utils.events import get_event_storage
 
 from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher
@@ -113,9 +114,11 @@ class CascadeROIHeads(StandardROIHeads):
 
         if self.training:
             losses = {}
+            storage = get_event_storage()
             for stage, output in enumerate(head_outputs):
-                # loss: TODO storage
-                losses.update({k + "_stage{}".format(stage): v for k, v in output.losses().items()})
+                with storage.name_scope("stage{}".format(stage)):
+                    stage_losses = output.losses()
+                losses.update({k + "_stage{}".format(stage): v for k, v in stage_losses.items()})
             return losses
         else:
             # Each is a list[Tensor] of length #image. Each tensor is Ri x (K+1)
@@ -153,6 +156,7 @@ class CascadeROIHeads(StandardROIHeads):
         Returns:
             list[Instances]: the same proposals, but with fields "gt_classes" and "gt_boxes"
         """
+        num_fg_samples, num_bg_samples = [], []
         for proposals_per_image, targets_per_image in zip(proposals, targets):
             match_quality_matrix = pairwise_iou(
                 targets_per_image.gt_boxes, proposals_per_image.proposal_boxes
@@ -171,7 +175,20 @@ class CascadeROIHeads(StandardROIHeads):
                 )
             proposals_per_image.gt_classes = gt_classes
             proposals_per_image.gt_boxes = gt_boxes
-            # TODO storage
+
+            num_fg_samples.append((proposal_labels == 1).sum().item())
+            num_bg_samples.append(proposal_labels.numel() - num_fg_samples[-1])
+
+        # Log the number of fg/bg samples in each stage
+        storage = get_event_storage()
+        storage.put_scalar(
+            "stage{}/roi_head/num_fg_samples".format(stage),
+            sum(num_fg_samples) / len(num_fg_samples),
+        )
+        storage.put_scalar(
+            "stage{}/roi_head/num_bg_samples".format(stage),
+            sum(num_bg_samples) / len(num_bg_samples),
+        )
         return proposals
 
     def _run_stage(self, features, proposals, stage):

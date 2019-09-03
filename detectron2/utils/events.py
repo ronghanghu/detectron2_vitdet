@@ -3,6 +3,7 @@ import json
 import logging
 import os
 from collections import defaultdict
+from contextlib import contextmanager
 import torch
 from borc.common.file_io import PathManager
 from borc.common.history_buffer import HistoryBuffer
@@ -195,6 +196,7 @@ class EventStorage:
         self._smoothing_hints = {}
         self._latest_scalars = {}
         self._iter = start_iter
+        self._current_prefix = ""
 
     def put_scalar(self, name, value, smoothing_hint=True):
         """
@@ -209,6 +211,7 @@ class EventStorage:
                 It defaults to True because most scalars we save need to be smoothed to
                 provide any useful signal.
         """
+        name = self._current_prefix + name
         history = self._history[name]
         history.update(value, self._iter)
         self._latest_scalars[name] = value
@@ -297,3 +300,15 @@ class EventStorage:
     def __exit__(self, exc_type, exc_val, exc_tb):
         assert _CURRENT_STORAGE_STACK[-1] == self
         _CURRENT_STORAGE_STACK.pop()
+
+    @contextmanager
+    def name_scope(self, name):
+        """
+        Yields:
+            A context within which all the events added to this storage
+                will be prefixed by the name scope.
+        """
+        old_prefix = self._current_prefix
+        self._current_prefix = name.rstrip("/") + "/"
+        yield
+        self._current_prefix = old_prefix
