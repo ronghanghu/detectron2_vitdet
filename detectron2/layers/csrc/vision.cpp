@@ -1,4 +1,5 @@
 #include "ROIAlign/ROIAlign.h"
+#include "box_iou_rotated/box_iou_rotated.h"
 #include "deformable/deform_conv.h"
 
 namespace detectron2 {
@@ -29,8 +30,7 @@ std::string get_compiler_version() {
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("get_compiler_version", &get_compiler_version, "get_compiler_version");
 
-  m.def("roi_align_forward", &ROIAlign_forward, "ROIAlign_forward");
-  m.def("roi_align_backward", &ROIAlign_backward, "ROIAlign_backward");
+  m.def("box_iou_rotated", &box_iou_rotated, "IoU for rotated boxes");
 
   m.def("deform_conv_forward", &deform_conv_forward, "deform_conv_forward");
   m.def(
@@ -49,6 +49,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       "modulated_deform_conv_backward",
       &modulated_deform_conv_backward,
       "modulated_deform_conv_backward");
+
+  m.def("roi_align_forward", &ROIAlign_forward, "ROIAlign_forward");
+  m.def("roi_align_backward", &ROIAlign_backward, "ROIAlign_backward");
 }
 
 } // namespace detectron2
