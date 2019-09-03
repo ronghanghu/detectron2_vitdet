@@ -232,13 +232,15 @@ def gather(data, dst=0, group=None):
 
 def reduce_dict(input_dict, average=True):
     """
+    Reduce the values in the dictionary from all processes so that process with rank
+    0 has the reduced results.
+
     Args:
-        input_dict (dict): all the values will be reduced
+        input_dict (dict): inputs to be reduced. All the values must be scalar CUDA Tensor.
         average (bool): whether to do average or sum
 
-    Reduce the values in the dictionary from all processes so that process with rank
-    0 has the averaged results. Returns a dict with the same fields as
-    input_dict, after reduction.
+    Returns:
+        a dict with the same keys as input_dict, after reduction.
     """
     world_size = get_world_size()
     if world_size < 2:

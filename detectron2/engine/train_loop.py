@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
-
 import logging
+import numpy as np
 import time
 import weakref
 import torch
@@ -175,7 +175,7 @@ class SimpleTrainer(TrainerBase):
         assert self.model.training, "[SimpleTrainer] model was changed to eval mode!"
         start = time.perf_counter()
         data = next(self._data_loader_iter)
-        self.storage.put_scalars(data_time=time.perf_counter() - start)
+        data_time = time.perf_counter() - start
 
         loss_dict = self.model(data)
         losses = sum(loss for loss in loss_dict.values())
@@ -186,13 +186,23 @@ class SimpleTrainer(TrainerBase):
                 )
             )
 
-        # reduce losses over all GPUs for logging purposes
-        loss_dict_reduced = {k: v.item() for k, v in comm.reduce_dict(loss_dict).items()}
-        losses_reduced = sum(loss for loss in loss_dict_reduced.values())
+        # gather metrics among all workers for logging
+        metrics_dict = {k: v.detach().cpu().item() for k, v in loss_dict.items()}
+        metrics_dict["data_time"] = data_time
+        all_metrics_dict = comm.gather(metrics_dict)
+        if comm.is_main_process():
+            # data_time among workers can have high variance. The actual latency
+            # caused by data_time is the maximum among workers.
+            data_time = np.max([x.pop("data_time") for x in all_metrics_dict])
 
-        self.storage.put_scalars(total_loss=losses_reduced)
-        if len(loss_dict_reduced) > 1:
-            self.storage.put_scalars(**loss_dict_reduced)
+            metrics_dict = {
+                k: np.mean([x[k] for x in all_metrics_dict]) for k in all_metrics_dict[0].keys()
+            }
+            total_losses_reduced = sum(loss for loss in metrics_dict.values())
+
+            self.storage.put_scalars(data_time=data_time, total_loss=total_losses_reduced)
+            if len(metrics_dict) > 1:
+                self.storage.put_scalars(**metrics_dict)
 
         self.optimizer.zero_grad()
         losses.backward()

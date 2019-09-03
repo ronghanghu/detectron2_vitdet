@@ -26,10 +26,11 @@ class GeneralizedRCNN(nn.Module):
         super().__init__()
 
         self.device = torch.device(cfg.MODEL.DEVICE)
-
         self.backbone = build_backbone(cfg)
         self.proposal_generator = build_proposal_generator(cfg)
         self.roi_heads = build_roi_heads(cfg)
+        # not elegant. Allow downstream to use `model.cfg` to access computed attributes
+        self.cfg = cfg
 
         assert len(cfg.MODEL.PIXEL_MEAN) == len(cfg.MODEL.PIXEL_STD)
         num_channels = len(cfg.MODEL.PIXEL_MEAN)
