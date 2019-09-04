@@ -3,9 +3,8 @@ import torch
 from borc.nn import smooth_l1_loss
 from torch import nn
 from torch.nn import functional as F
-from torchvision.ops import boxes as box_ops
 
-from detectron2.layers import cat
+from detectron2.layers import batched_nms, cat
 from detectron2.structures import Boxes, Instances
 from detectron2.utils.events import get_event_storage
 
@@ -179,7 +178,7 @@ def fast_rcnn_inference_single_image(
     scores = scores[filter_mask]
 
     # Apply per-class NMS
-    keep = box_ops.batched_nms(boxes, scores, filter_inds[:, 1], nms_thresh)
+    keep = batched_nms(boxes, scores, filter_inds[:, 1], nms_thresh)
     keep = keep[:topk_per_image]
     boxes, scores, filter_inds = boxes[keep], scores[keep], filter_inds[keep]
 

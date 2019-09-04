@@ -3,9 +3,8 @@ import math
 import torch
 from borc.nn import sigmoid_focal_loss_jit, smooth_l1_loss
 from torch import nn
-from torchvision.ops import boxes as box_ops
 
-from detectron2.layers import cat
+from detectron2.layers import batched_nms, cat
 from detectron2.structures import Boxes, ImageList, Instances, pairwise_iou
 from detectron2.utils.logger import log_first_n
 
@@ -336,7 +335,7 @@ class RetinaNet(nn.Module):
         boxes_all, scores_all, class_idxs_all = [
             cat(x) for x in [boxes_all, scores_all, class_idxs_all]
         ]
-        keep = box_ops.batched_nms(boxes_all, scores_all, class_idxs_all, self.nms_threshold)
+        keep = batched_nms(boxes_all, scores_all, class_idxs_all, self.nms_threshold)
         keep = keep[: self.max_detections_per_image]
 
         result = Instances(image_size)

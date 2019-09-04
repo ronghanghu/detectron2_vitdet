@@ -3,9 +3,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from borc.nn import smooth_l1_loss
-from torchvision.ops import boxes as box_ops
 
-from detectron2.layers import cat
+from detectron2.layers import batched_nms, cat
 from detectron2.structures import Boxes, Instances, pairwise_iou
 from detectron2.utils.events import get_event_storage
 
@@ -130,7 +129,7 @@ def find_top_rpn_proposals(
         if keep.sum().item() != len(boxes):
             boxes, scores_per_img, lvl = boxes[keep], scores_per_img[keep], level_ids[keep]
 
-        keep = box_ops.batched_nms(boxes.tensor, scores_per_img, lvl, nms_thresh)
+        keep = batched_nms(boxes.tensor, scores_per_img, lvl, nms_thresh)
         # In Detectron1, there was different behavior during training vs. testing.
         # (https://github.com/facebookresearch/Detectron/issues/459)
         # During training, topk is over the proposals from *all* images in the training batch.
