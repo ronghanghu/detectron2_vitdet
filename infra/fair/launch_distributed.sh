@@ -4,7 +4,7 @@
 #
 # srun -o /path/to/logs/%j.%t.%N.out -e /path/to/logs/%j.%t.%N.err \
 #    --gres=gpu:8 --mem 200GB -N 2 -p uninterrupted -t 2880 -J TwoNodeFPN2x \
-#   ./infra/fair/launch_distributed.sh --config-file configs/e2e_mask_rcnn_R_50_FPN_1x.yaml \
+#   ./infra/fair/launch_distributed.sh --config-file configs/mask_rcnn_R_50_FPN_1x.yaml \
 #   SOLVER.IMS_PER_BATCH 32 SOLVER.BASE_LR 0.04
 #
 # Note that the above command changes the batch size & learning rate, but not the training

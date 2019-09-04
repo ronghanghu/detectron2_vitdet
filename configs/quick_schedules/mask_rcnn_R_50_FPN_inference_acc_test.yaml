@@ -1,4 +1,4 @@
-_BASE_: "../e2e_mask_rcnn_R_50_FPN_1x.yaml"
+_BASE_: "../mask_rcnn_R_50_FPN_1x.yaml"
 MODEL:
   WEIGHT: "detectron2://e2e_mask_rcnn_R_50_FPN_1x/111801949/model_final_05dc3b6ea7b1da199fafd3b58defdaae.pkl"
 DATASETS:

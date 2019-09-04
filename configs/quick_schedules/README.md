@@ -10,7 +10,7 @@ Reference devgpu configuration:
  - 2x M40 (12GB)
  - buck build @mode/dev-nosan
 
-configs/quick_schedules/e2e_mask_rcnn_R_50_C4_inference_acc_test.yaml
+configs/quick_schedules/mask_rcnn_R_50_C4_inference_acc_test.yaml
 ```
 # Before https://github.com/fairinternal/detectron2/pull/84
 Total inference time: 0:00:30.808294 (0.6161658811569214 s / img per device, on 2 devices)
@@ -18,7 +18,7 @@ Total inference time: 0:00:30.808294 (0.6161658811569214 s / img per device, on 
 Total inference time: 0:00:36.952044 (0.7390408849716187 s / img per device, on 2 devices)
 ```
 
-configs/quick_schedules/e2e_mask_rcnn_R_50_FPN_inference_acc_test.yaml
+configs/quick_schedules/mask_rcnn_R_50_FPN_inference_acc_test.yaml
 ```
 # Before https://github.com/fairinternal/detectron2/pull/84
 Total inference time: 0:00:21.773355 (0.435467095375061 s / img per device, on 2 devices)

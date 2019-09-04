@@ -12,10 +12,10 @@ We provide a simple demo that illustrates how you can use `detectron2` for infer
 ```bash
 cd demo
 # use input files:
-python demo.py --config-file ../configs/quick_schedules/e2e_mask_rcnn_R_50_FPN_inference_acc_test.yaml \
+python demo.py --config-file ../configs/quick_schedules/mask_rcnn_R_50_FPN_inference_acc_test.yaml \
   --input /path/to/images*.jpg --output /path/to/output/directory
 # use webcam:
-python demo.py --config-file ../configs/quick_schedules/e2e_mask_rcnn_R_50_FPN_inference_acc_test.yaml --webcam
+python demo.py --config-file ../configs/quick_schedules/mask_rcnn_R_50_FPN_inference_acc_test.yaml --webcam
 ```
 
 ### Single GPU training
