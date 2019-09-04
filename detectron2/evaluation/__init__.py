@@ -4,4 +4,4 @@ from .evaluator import DatasetEvaluator, DatasetEvaluators, inference_context, i
 from .lvis_evaluation import LVISEvaluator
 from .panoptic_evaluation import COCOPanopticEvaluator
 from .sem_seg_evaluation import SemSegEvaluator
-from .testing import flatten_results_dict, print_csv_format, verify_results
+from .testing import print_csv_format, verify_results

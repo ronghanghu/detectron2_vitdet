@@ -17,7 +17,6 @@ You may want to write your own script with your datasets and other customization
 
 import logging
 import os
-from collections import OrderedDict
 import torch
 from borc.nn.precise_bn import get_bn_modules, update_bn_stats
 from torch.nn.parallel import DistributedDataParallel
@@ -38,7 +37,6 @@ from detectron2.evaluation import (
     DatasetEvaluators,
     LVISEvaluator,
     SemSegEvaluator,
-    flatten_results_dict,
     inference_context,
     inference_on_dataset,
     print_csv_format,
@@ -51,7 +49,6 @@ from detectron2.utils.events import (
     EventStorage,
     JSONWriter,
     TensorboardXWriter,
-    get_event_storage,
 )
 
 
@@ -101,11 +98,14 @@ def do_test(cfg, model, is_final=True):
             format and will run verification.
 
     Returns:
-        list[result]: only on the main process, result for each DATASETS.TEST.
-            Each result is a dict of dict. result[task][metric] is a float.
+        A dict of dicts. result[task][metric] is a float.
     """
-
-    assert len(cfg.DATASETS.TEST)
+    assert len(cfg.DATASETS.TEST) == 1, (
+        "The current do_test is only implemented for one test set. "
+        "Write a for-loop if you'd like to evaluate more datasets."
+    )
+    dataset_name = cfg.DATASETS.TEST[0]
+    assert cfg.OUTPUT_DIR
 
     logger = logging.getLogger("detectron2.trainer")
 
@@ -119,67 +119,27 @@ def do_test(cfg, model, is_final=True):
             update_bn_stats(model, train_data, cfg.TEST.PRECISE_BN.NUM_ITER)
 
     with inference_context(model):
-        results = OrderedDict()
-        for dataset_name in cfg.DATASETS.TEST:
-            if cfg.OUTPUT_DIR:
-                output_folder = os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
-            else:
-                output_folder = None
+        output_folder = os.path.join(cfg.OUTPUT_DIR, "inference")
 
-            # NOTE: creating evaluator after dataset is loaded as there might be dependency.
-            data_loader = build_detection_test_loader(cfg, dataset_name)
+        # NOTE: creating evaluator after dataset is loaded as there might be dependency.
+        data_loader = build_detection_test_loader(cfg, dataset_name)
+        evaluator = get_evaluator(cfg, dataset_name, output_folder)
+        results = inference_on_dataset(model, data_loader, evaluator)
+
+        if is_final and cfg.TEST.AUG_ON:
+            # In the end of training, run an evaluation with TTA
+            # Only support some R-CNN models.
+            output_folder = os.path.join(cfg.OUTPUT_DIR, "inference_TTA")
+
+            logger.info("Running inference with test-time augmentation ...")
+            data_loader = build_detection_test_loader(cfg, dataset_name, mapper=lambda x: x)
             evaluator = get_evaluator(cfg, dataset_name, output_folder)
-            results_per_dataset = inference_on_dataset(model, data_loader, evaluator)
-            if comm.is_main_process():
-                results[dataset_name] = results_per_dataset
-                if is_final:
-                    print_csv_format(results_per_dataset)
+            inference_on_dataset(GeneralizedRCNNWithTTA(cfg, model), data_loader, evaluator)
 
-            if is_final and cfg.TEST.AUG_ON:  # TODO make this logic simpler
-                # In the end of training, run an evaluation with TTA
-                if cfg.OUTPUT_DIR:
-                    output_folder = os.path.join(cfg.OUTPUT_DIR, "inference_TTA", dataset_name)
-                else:
-                    output_folder = None
-
-                logger.info("Running inference with test-time augmentation ...")
-                data_loader = build_detection_test_loader(cfg, dataset_name, mapper=lambda x: x)
-                evaluator = get_evaluator(cfg, dataset_name, output_folder)
-                results_per_dataset = inference_on_dataset(
-                    GeneralizedRCNNWithTTA(cfg, model), data_loader, evaluator
-                )
-                logger.info(
-                    "Evaluation results on {} with test-time augmentation:".format(dataset_name)
-                )
-                if comm.is_main_process():
-                    print_csv_format(results_per_dataset)
-
-    if is_final and cfg.TEST.EXPECTED_RESULTS and comm.is_main_process():
-        assert len(results) == 1, "Results verification only supports one dataset!"
-        verify_results(cfg, results[cfg.DATASETS.TEST[0]])
-
-    try:
-        storage = get_event_storage()
-    except Exception:  # do_test may be called outside training
-        pass
-    else:
-        storage.put_scalars(**flatten_results_dict(results), smoothing_hint=False)
-
+    if is_final and comm.is_main_process():
+        print_csv_format(results)
+        verify_results(cfg, results)
     return results
-
-
-def create_eval_hook(cfg, model):
-    def after_step_callback(trainer):
-        is_final = trainer.iter + 1 == trainer.max_iter
-        if is_final or (
-            cfg.TEST.EVAL_PERIOD > 0 and (trainer.iter + 1) % cfg.TEST.EVAL_PERIOD == 0
-        ):
-            do_test(cfg, model, is_final=is_final)
-            # Evaluation may take different time among workers.
-            # A barrier make them start the next iteration together.
-            comm.synchronize()
-
-    return hooks.CallbackHook(after_step=after_step_callback)
 
 
 def do_train(cfg, model, resume=True):
@@ -213,7 +173,9 @@ def do_train(cfg, model, resume=True):
     trainer_hooks = [
         hooks.IterationTimer(),
         hooks.LRScheduler(optimizer, scheduler),
-        create_eval_hook(cfg, model),
+        hooks.EvalHook(
+            cfg.TEST.EVAL_PERIOD, lambda: do_test(cfg, model, trainer.iter + 1 == max_iter)
+        ),
     ]
     if comm.is_main_process():
         writers = [

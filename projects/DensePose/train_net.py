@@ -18,7 +18,6 @@ from detectron2.engine import SimpleTrainer, default_argument_parser, default_se
 from detectron2.evaluation import (
     COCOEvaluator,
     DatasetEvaluators,
-    flatten_results_dict,
     inference_context,
     inference_on_dataset,
     print_csv_format,
@@ -26,12 +25,7 @@ from detectron2.evaluation import (
 )
 from detectron2.modeling import build_model
 from detectron2.solver import build_lr_scheduler, build_optimizer
-from detectron2.utils.events import (
-    CommonMetricPrinter,
-    JSONWriter,
-    TensorboardXWriter,
-    get_event_storage,
-)
+from detectron2.utils.events import CommonMetricPrinter, JSONWriter, TensorboardXWriter
 
 from densepose import DatasetMapper, DensePoseCOCOEvaluator, add_densepose_config
 
@@ -50,45 +44,22 @@ def do_test(cfg, model, is_final=True):
             format and will run verification.
 
     Returns:
-        list[result]: only on the main process, result for each DATASETS.TEST.
-            Each result is a dict of dict. result[task][metric] is a float.
+        A dict of dict. result[task][metric] is a float.
     """
     assert len(cfg.DATASETS.TEST) == 1, cfg.DATASETS.TEST
     with inference_context(model):
         dataset_name = cfg.DATASETS.TEST[0]
-        if cfg.OUTPUT_DIR:
-            output_folder = os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
-        else:
-            output_folder = None
+        output_folder = os.path.join(cfg.OUTPUT_DIR, "inference")
 
         data_loader = build_detection_test_loader(
             cfg, dataset_name, mapper=DatasetMapper(cfg, False)
         )
         evaluator = get_evaluator(cfg, dataset_name, output_folder)
         results = inference_on_dataset(model, data_loader, evaluator)
-        if comm.is_main_process():
-            if is_final:
-                print_csv_format(results)
-                verify_results(cfg, results)
-
-            try:
-                storage = get_event_storage()
-            except Exception:
-                pass
-            else:
-                storage.put_scalars(**flatten_results_dict(results), smoothing_hint=False)
+        if comm.is_main_process() and is_final:
+            print_csv_format(results)
+            verify_results(cfg, results)
     return results
-
-
-def create_eval_hook(cfg, model):
-    def after_step_callback(trainer):
-        if cfg.TEST.EVAL_PERIOD > 0 and (trainer.iter + 1) % cfg.TEST.EVAL_PERIOD == 0:
-            do_test(cfg, model, is_final=trainer.iter + 1 == trainer.max_iter)
-            # Evaluation may take different time among workers.
-            # A barrier make them start the next iteration together.
-            comm.synchronize()
-
-    return hooks.CallbackHook(after_step=after_step_callback)
 
 
 def do_train(cfg, model, resume=True):
@@ -118,7 +89,9 @@ def do_train(cfg, model, resume=True):
     trainer_hooks = [
         hooks.IterationTimer(),
         hooks.LRScheduler(optimizer, scheduler),
-        create_eval_hook(cfg, model),
+        hooks.EvalHook(
+            cfg.TEST.EVAL_PERIOD, lambda: do_test(cfg, model, trainer.iter + 1 == max_iter)
+        ),
     ]
     if comm.is_main_process():
         writers = [

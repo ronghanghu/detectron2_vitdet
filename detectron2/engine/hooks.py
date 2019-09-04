@@ -10,7 +10,9 @@ import torch
 from borc.common.file_io import PathManager
 from borc.common.timer import Timer
 
+import detectron2.utils.comm as comm
 from detectron2.checkpoint import PeriodicCheckpointer as _PeriodicCheckpointer
+from detectron2.evaluation.testing import flatten_results_dict
 
 from .train_loop import HookBase
 
@@ -21,6 +23,7 @@ __all__ = [
     "PeriodicCheckpointer",
     "LRScheduler",
     "AutogradProfiler",
+    "EvalHook",
 ]
 
 
@@ -50,6 +53,10 @@ class CallbackHook(HookBase):
     def after_train(self):
         if self._after_train:
             self._after_train(self.trainer)
+        # The functions may be closures that hold reference to the trainer
+        # Therefore, delete them to avoid circular reference.
+        del self._before_train, self._after_train
+        del self._before_step, self._after_step
 
     def before_step(self):
         if self._before_step:
@@ -250,3 +257,44 @@ class AutogradProfiler(HookBase):
                     content = f.read()
             with PathManager.open(out_file, "w") as f:
                 f.write(content)
+
+
+class EvalHook(HookBase):
+    """
+    Run an evaluation function periodically, and at the end of training.
+    """
+
+    def __init__(self, eval_period, eval_function):
+        """
+        Args:
+            eval_period (int): the period to run `eval_function`.
+            eval_function (callable): a function which takes no arguments, and
+                returns a nested dict of evaluation metrics.
+
+        Note:
+            This hook must be enabled in all workers.
+            If you would like only certain workers to perform evaluation,
+            give other workers a no-op function (`eval_function=lambda: None`).
+        """
+        self._period = eval_period
+        self._func = eval_function
+
+    def after_step(self):
+        next_iter = self.trainer.iter + 1
+        is_final = next_iter == self.trainer.max_iter
+        if is_final or (self._period > 0 and next_iter % self._period == 0):
+            results = self._func()
+
+            if results:
+                self.trainer.storage.put_scalars(
+                    **flatten_results_dict(results), smoothing_hint=False
+                )
+
+            # Evaluation may take different time among workers.
+            # A barrier make them start the next iteration together.
+            comm.synchronize()
+
+    def after_train(self):
+        # func is likely a closure that holds reference to the trainer
+        # therefore we clean it to avoid circular reference in the end
+        del self._func
