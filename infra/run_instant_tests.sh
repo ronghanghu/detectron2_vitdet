@@ -6,7 +6,7 @@ NUM_GPUS=2
 
 CFG_LIST=( "${@:1}" )
 if [ ${#CFG_LIST[@]} -eq 0 ]; then
-  CFG_LIST=( ./configs/quick_schedules/*inference_acc_test.yaml )
+  CFG_LIST=( ./configs/quick_schedules/*instant_test.yaml )
 fi
 
 echo "========================================================================"

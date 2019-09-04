@@ -7,6 +7,9 @@ DATASETS:
   TEST: ("coco_2017_val_100",)
   PROPOSAL_FILES_TEST: ("detectron2://rpn_R_50_FPN_1x_inference/113323222/output/inference/coco_2017_val/box_proposals_ce43fe07beb4ef26197ee9478ab02d39.pkl",)
 SOLVER:
-  BASE_LR: 0.02
+  BASE_LR: 0.005
   STEPS: (30,)
   MAX_ITER: 40
+  IMS_PER_BATCH: 4
+DATALOADER:
+  NUM_WORKERS: 2

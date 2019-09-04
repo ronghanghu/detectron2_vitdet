@@ -254,6 +254,11 @@ def build_detection_train_loader(cfg, mapper=None, start_iter=0):
     ), "SOLVER.IMS_PER_BATCH ({}) must be divisible by the number of GPUs ({}) used.".format(
         images_per_batch, num_gpus
     )
+    assert (
+        images_per_batch >= num_gpus
+    ), "SOLVER.IMS_PER_BATCH ({}) must be larger than the number of GPUs ({}) used.".format(
+        images_per_batch, num_gpus
+    )
     images_per_gpu = images_per_batch // num_gpus
     logger = logging.getLogger(__name__)
 
