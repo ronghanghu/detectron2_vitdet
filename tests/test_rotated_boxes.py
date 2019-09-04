@@ -1,10 +1,9 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
-
 import math
 import unittest
-
-from borc.common.benchmark import benchmark
 import torch
+from borc.common.benchmark import benchmark
+
 from detectron2.layers.rotated_boxes import pairwise_iou_rotated
 
 
