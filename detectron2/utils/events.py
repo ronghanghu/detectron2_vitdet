@@ -74,7 +74,7 @@ class JSONWriter:
 
     def write(self):
         storage = get_event_storage()
-        to_save = {"iteration": storage.iteration}
+        to_save = {"iteration": storage.iter}
         to_save.update(storage.latest_with_smoothing_hint(self._window_size))
         self._file_handle.write(json.dumps(to_save, sort_keys=True) + "\n")
         self._file_handle.flush()
@@ -108,7 +108,7 @@ class TensorboardXWriter:
     def write(self):
         storage = get_event_storage()
         for k, v in storage.latest_with_smoothing_hint(self._window_size).items():
-            self._writer.add_scalar(k, v, storage.iteration)
+            self._writer.add_scalar(k, v, storage.iter)
 
     def __del__(self):
         if hasattr(self, "_writer"):  # doesn't exist when the code fails at import
@@ -134,7 +134,7 @@ class CommonMetricPrinter:
 
     def write(self):
         storage = get_event_storage()
-        iteration = storage.iteration
+        iteration = storage.iter
 
         data_time, time = None, None
         eta_string = "N/A"
@@ -290,7 +290,12 @@ class EventStorage:
         self._latest_scalars = {}
 
     @property
+    def iter(self):
+        return self._iter
+
+    @property
     def iteration(self):
+        # for backward compatibility
         return self._iter
 
     def __enter__(self):
