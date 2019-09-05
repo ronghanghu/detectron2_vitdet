@@ -76,6 +76,9 @@ def default_setup(cfg, args):
     if comm.is_main_process() and output_dir:
         PathManager.mkdirs(output_dir)
 
+    setup_logger(
+        os.path.join(output_dir, "borc.log"), distributed_rank=comm.get_rank(), name="borc"
+    )
     logger = setup_logger(output_dir, distributed_rank=comm.get_rank())
 
     logger.info(

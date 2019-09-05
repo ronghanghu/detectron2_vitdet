@@ -8,7 +8,6 @@ import logging
 import pickle
 import torch
 import torch.distributed as dist
-from borc.common.file_io import PathManager
 
 _LOCAL_PROCESS_GROUP = None
 """
@@ -76,20 +75,6 @@ def synchronize():
     if world_size == 1:
         return
     dist.barrier()
-
-
-def dist_get_local_path(f):
-    """
-    Calls `PathManager.get_local_path` in a network-friendly manner when using
-    distributed training.
-    """
-    if is_main_process():
-        PathManager.get_local_path(f)
-    synchronize()
-    if get_local_rank() == 0:
-        PathManager.get_local_path(f)
-    synchronize()
-    return PathManager.get_local_path(f)
 
 
 @functools.lru_cache()

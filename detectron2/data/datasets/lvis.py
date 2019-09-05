@@ -3,7 +3,6 @@ import os
 
 from borc.common.timer import Timer
 from detectron2.structures import BoxMode
-import detectron2.utils.comm as comm
 from borc.common.file_io import PathManager
 from detectron2.data import DatasetCatalog, MetadataCatalog
 
@@ -60,8 +59,6 @@ def load_lvis_json(json_file, image_root, dataset_name=None):
     json_file = PathManager.get_local_path(json_file)
 
     timer = Timer()
-    # TODO this requires calling this function from all ranks
-    json_file = comm.dist_get_local_path(json_file)
     lvis_api = LVIS(json_file)
     if timer.seconds() > 1:
         logger.info("Loading {} takes {:.2f} seconds.".format(json_file, timer.seconds()))

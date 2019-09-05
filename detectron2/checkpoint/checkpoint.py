@@ -78,7 +78,7 @@ class Checkpointer(object):
             return {}
         self.logger.info("Loading checkpoint from {}".format(path))
         if not os.path.isfile(path):
-            path = comm.dist_get_local_path(path)
+            path = PathManager.get_local_path(path)
             assert os.path.isfile(path), "Checkpoint {} not found!".format(path)
 
         checkpoint = self._load_file(path)

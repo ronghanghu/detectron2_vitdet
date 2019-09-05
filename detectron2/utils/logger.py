@@ -27,7 +27,7 @@ class _ColorfulFormatter(logging.Formatter):
 
 
 def setup_logger(
-    output=None, distributed_rank=0, *, color=True, name="detectron2", abbrev_name="d2"
+    output=None, distributed_rank=0, *, color=True, name="detectron2", abbrev_name=None
 ):
     """
     Args:
@@ -37,40 +37,47 @@ def setup_logger(
         name (str): the root module name of this logger
         abbrev_name (str): an abbreviation of the module, to avoid long names in logs.
             Set to "" to not log the root module in logs.
+            By default, will abbreviate "detectron2" to "d2" and leave other
+            modules unchanged.
 
     Note:
         If you want to reuse the detectron2-style logger for other modules,
-        avoid using the same output file: it may lead to conflict in writing.
+        avoid using the same output file: it may lead to conflicts in writing.
     """
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
     logger.propagate = False
-    # don't log results to files for non-master processes
-    # TODO can create separate log files for subprocesses to facilitate debugging
-    if distributed_rank > 0:
-        return logger
-    ch = logging.StreamHandler(stream=sys.stdout)
-    ch.setLevel(logging.DEBUG)
+
+    if abbrev_name is None:
+        abbrev_name = "d2" if name == "detectron2" else name
+
     plain_formatter = logging.Formatter(
         "[%(asctime)s] %(name)s %(levelname)s: %(message)s", datefmt="%m/%d %H:%M:%S"
     )
-    if color:
-        formatter = _ColorfulFormatter(
-            colored("[%(asctime)s %(name)s]: ", "green") + "%(message)s",
-            datefmt="%m/%d %H:%M:%S",
-            root_name=name,
-            abbrev_name=str(abbrev_name),
-        )
-    else:
-        formatter = plain_formatter
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
+    # stdout logging: master only
+    if distributed_rank == 0:
+        ch = logging.StreamHandler(stream=sys.stdout)
+        ch.setLevel(logging.DEBUG)
+        if color:
+            formatter = _ColorfulFormatter(
+                colored("[%(asctime)s %(name)s]: ", "green") + "%(message)s",
+                datefmt="%m/%d %H:%M:%S",
+                root_name=name,
+                abbrev_name=str(abbrev_name),
+            )
+        else:
+            formatter = plain_formatter
+        ch.setFormatter(formatter)
+        logger.addHandler(ch)
 
+    # file logging: all workers
     if output is not None:
         if output.endswith(".txt") or output.endswith(".log"):
             filename = output
         else:
             filename = os.path.join(output, "log.txt")
+        if distributed_rank > 0:
+            filename = filename + ".rank{}".format(distributed_rank)
         PathManager.mkdirs(os.path.dirname(filename))
 
         fh = logging.StreamHandler(PathManager.open(filename, "a"))

@@ -44,8 +44,7 @@ class LVISEvaluator(DatasetEvaluator):
         self._logger = logging.getLogger(__name__)
 
         self._metadata = MetadataCatalog.get(dataset_name)
-        # TODO this requires calling this function from all ranks
-        json_file = comm.dist_get_local_path(self._metadata.json_file)
+        json_file = PathManager.get_local_path(self._metadata.json_file)
         self._lvis_api = LVIS(json_file)
         # Test set json files do not contain annotations (evaluation must be
         # performed using the LVIS evaluation server).

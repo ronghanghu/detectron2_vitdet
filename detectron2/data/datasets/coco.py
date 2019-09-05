@@ -7,7 +7,6 @@ from PIL import Image
 from borc.common.timer import Timer
 from detectron2.structures import BoxMode
 from borc.common.file_io import PathManager
-import detectron2.utils.comm as comm
 
 from .. import MetadataCatalog, DatasetCatalog
 
@@ -44,8 +43,7 @@ def load_coco_json(json_file, image_root, dataset_name=None):
 
     timer = Timer()
     with contextlib.redirect_stdout(io.StringIO()):
-        # TODO this requires calling this function from all ranks
-        json_file = comm.dist_get_local_path(json_file)
+        json_file = PathManager.get_local_path(json_file)
         coco_api = COCO(json_file)
     if timer.seconds() > 1:
         logger.info("Loading {} takes {:.2f} seconds.".format(json_file, timer.seconds()))
