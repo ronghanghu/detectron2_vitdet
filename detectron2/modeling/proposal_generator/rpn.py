@@ -4,7 +4,7 @@ from torch import nn
 
 from detectron2.utils.registry import Registry
 
-from ..anchor_generator import build_anchor_generator
+from ..anchor_generator import DefaultAnchorGenerator
 from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher
 from .build import PROPOSAL_GENERATOR_REGISTRY
@@ -123,7 +123,13 @@ class RPN(nn.Module):
         }
         self.boundary_threshold = cfg.MODEL.RPN.BOUNDARY_THRESH
 
-        self.anchor_generator = build_anchor_generator(cfg)
+        feature_strides = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_STRIDES)
+
+        self.anchor_generator = DefaultAnchorGenerator(
+            cfg.MODEL.RPN.ANCHOR_SIZES,
+            cfg.MODEL.RPN.ANCHOR_ASPECT_RATIOS,
+            [feature_strides[f] for f in self.in_features],
+        )
         self.box2box_transform = Box2BoxTransform(weights=cfg.MODEL.RPN.BBOX_REG_WEIGHTS)
         self.anchor_matcher = Matcher(
             cfg.MODEL.RPN.IOU_THRESHOLDS, cfg.MODEL.RPN.IOU_LABELS, allow_low_quality_matches=True

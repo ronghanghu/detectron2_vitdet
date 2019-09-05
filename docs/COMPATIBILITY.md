@@ -24,8 +24,6 @@ The major differences are:
 
   In Detectron, the anchors were quantized and do not have accurate areas (https://github.com/facebookresearch/Detectron/issues/227).
 	In Detectron2, the anchors are center-aligned to feature grid points and not quantized.
-	You can enable the old behavior with `ANCHOR_GENERATOR.NAME="OriginalRPNAnchorGenerator"`.
-	But we may remove the old behavior in the future.
 
 - Classification layer has different ordering of classes.
 

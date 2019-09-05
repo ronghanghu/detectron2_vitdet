@@ -8,7 +8,7 @@ from detectron2.layers import batched_nms, cat
 from detectron2.structures import Boxes, ImageList, Instances, pairwise_iou
 from detectron2.utils.logger import log_first_n
 
-from ..anchor_generator import build_anchor_generator
+from ..anchor_generator import DefaultAnchorGenerator
 from ..backbone import build_backbone
 from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher
@@ -73,7 +73,6 @@ class RetinaNet(nn.Module):
 
         self.backbone = build_backbone(cfg)
         self.head = RetinaNetHead(cfg)
-        self.anchor_generator = build_anchor_generator(cfg)
 
         # fmt: off
         self.num_classes              = cfg.MODEL.RETINANET.NUM_CLASSES
@@ -88,6 +87,13 @@ class RetinaNet(nn.Module):
         self.nms_threshold            = cfg.MODEL.RETINANET.INFERENCE_NMS_THRESHOLD
         self.max_detections_per_image = cfg.TEST.DETECTIONS_PER_IMG
         # fmt: on
+
+        feature_strides = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_STRIDES)
+        self.anchor_generator = DefaultAnchorGenerator(
+            cfg.MODEL.RETINANET.ANCHOR_SIZES,
+            cfg.MODEL.RETINANET.ANCHOR_ASPECT_RATIOS,
+            [feature_strides[f] for f in self.in_features],
+        )
 
         # Matching and loss
         self.box2box_transform = Box2BoxTransform(weights=cfg.MODEL.RPN.BBOX_REG_WEIGHTS)

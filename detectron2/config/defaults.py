@@ -150,6 +150,7 @@ _C.MODEL.PROPOSAL_GENERATOR.MIN_SIZE = 0
 # ---------------------------------------------------------------------------- #
 # Anchor generator options
 # ---------------------------------------------------------------------------- #
+# TODO remove later
 _C.MODEL.ANCHOR_GENERATOR = CN()
 # The generator can be any name in the ANCHOR_GENERATOR registry
 _C.MODEL.ANCHOR_GENERATOR.NAME = "DefaultAnchorGenerator"

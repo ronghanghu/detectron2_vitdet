@@ -6,8 +6,6 @@ MODEL:
     OUT_FEATURES: ["res3", "res4", "res5"]
   FPN:
     IN_FEATURES: ["res3", "res4", "res5"]
-  ANCHOR_GENERATOR:
-    NAME: "RetinaNetAnchorGenerator"
   RETINANET:
     IOU_THRESHOLDS: [0.4, 0.5]
     IOU_LABELS: [0, -1, 1]
