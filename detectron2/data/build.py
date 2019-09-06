@@ -16,6 +16,7 @@ from . import samplers
 from .catalog import DatasetCatalog, MetadataCatalog
 from .common import DatasetFromList, MapDataset
 from .dataset_mapper import DatasetMapper
+from .detection_utils import check_metadata_consistency
 
 """
 This file contains the default logic to build a dataloader for training or testing.
@@ -91,11 +92,11 @@ def filter_images_with_few_keypoints(dataset_dicts, min_keypoints_per_image):
 
 def load_proposals_into_dataset(dataset_dicts, proposal_file):
     """
-    Load precomputed proposals into the dataset.
+    Load precomputed object proposals into the dataset.
 
     Args:
         dataset_dicts (list[dict]): annotations in Detectron2 Dataset format.
-        proposal_file (str): file path of pre-computed proposals.
+        proposal_file (str): file path of pre-computed proposals, in pkl format.
 
     Returns:
         list[dict]: the same format as dataset_dicts, but added proposal field.
@@ -260,7 +261,6 @@ def build_detection_train_loader(cfg, mapper=None, start_iter=0):
         images_per_batch, num_gpus
     )
     images_per_gpu = images_per_batch // num_gpus
-    logger = logging.getLogger(__name__)
 
     assert len(cfg.DATASETS.TRAIN)
     dataset_dicts = [DatasetCatalog.get(dataset_name) for dataset_name in cfg.DATASETS.TRAIN]
@@ -286,22 +286,8 @@ def build_detection_train_loader(cfg, mapper=None, start_iter=0):
                 dataset_dicts = filter_images_with_few_keypoints(dataset_dicts, min_kp)
 
         try:
-            class_names_per_dataset = [
-                MetadataCatalog.get(d).class_names for d in cfg.DATASETS.TRAIN
-            ]
-            for idx, class_names in enumerate(class_names_per_dataset):
-                if class_names != class_names_per_dataset[0]:
-                    logger.error(
-                        "class_names for dataset {} is {}".format(
-                            cfg.DATASETS.TRAIN[idx], str(class_names)
-                        )
-                    )
-                    logger.error(
-                        "class_names for dataset {} is {}".format(
-                            cfg.DATASETS.TRAIN[0], str(class_names_per_dataset[0])
-                        )
-                    )
-                    raise ValueError("Training on several datasets with different class names!")
+            class_names = MetadataCatalog.get(cfg.DATASETS.TRAIN[0]).class_names
+            check_metadata_consistency("class_names", cfg.DATASETS.TRAIN)
             print_instances_class_histogram(dataset_dicts, class_names)
         except AttributeError:  # class names are not available for this dataset
             pass

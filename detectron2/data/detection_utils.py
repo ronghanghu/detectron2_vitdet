@@ -259,28 +259,14 @@ def create_keypoint_hflip_indices(dataset_names):
         ndarray[int]: a vector of size=#keypoints, storing the
         horizontally-flipped keypoint indices.
     """
-    names_per_dataset = [MetadataCatalog.get(ds).keypoint_names for ds in dataset_names]
+
+    check_metadata_consistency("keypoint_names", dataset_names)
+    check_metadata_consistency("keypoint_flip_map", dataset_names)
+
+    meta = MetadataCatalog.get(dataset_names[0])
+    names = meta.keypoint_names
     # TODO flip -> hflip
-    flip_maps_per_dataset = [MetadataCatalog.get(ds).keypoint_flip_map for ds in dataset_names]
-
-    logger = logging.getLogger(__name__)
-
-    def _check_consistent(name, entries_per_dataset):
-        for idx, entry in enumerate(entries_per_dataset):
-            if entry != entries_per_dataset[0]:
-                logger.error("{} for dataset {} is {}".format(name, dataset_names[idx], str(entry)))
-                logger.error(
-                    "{} for dataset {} is {}".format(
-                        name, dataset_names[0], str(entries_per_dataset[0])
-                    )
-                )
-                raise ValueError("Training on several datasets with different '{}'!".format(name))
-
-    _check_consistent("keypoint_names", names_per_dataset)
-    _check_consistent("keypoint_flip_map", flip_maps_per_dataset)
-
-    names = names_per_dataset[0]
-    flip_map = dict(flip_maps_per_dataset[0])
+    flip_map = dict(meta.keypoint_flip_map)
     flip_map.update({v: k for k, v in flip_map.items()})
     flipped_names = [i if i not in flip_map else flip_map[i] for i in names]
     flip_indices = [names.index(i) for i in flipped_names]
@@ -309,6 +295,35 @@ def gen_crop_transform_with_instance(crop_size, image_size, instance):
     y0 = np.random.randint(min_yx[0], max_yx[0] + 1)
     x0 = np.random.randint(min_yx[1], max_yx[1] + 1)
     return T.CropTransform(x0, y0, crop_size[1], crop_size[0])
+
+
+def check_metadata_consistency(key, dataset_names):
+    """
+    Check that the datasets have consistent metadata.
+
+    Args:
+        key (str): a metadata key
+        dataset_names (list[str]): a list of dataset names
+
+    Raises:
+        AttributeError: if the key does not exist in the metadata
+        ValueError: if the given datasets do not have the same metadata values defined by key
+    """
+    if len(dataset_names) == 0:
+        return
+    logger = logging.getLogger(__name__)
+    entries_per_dataset = [getattr(MetadataCatalog.get(d), key) for d in dataset_names]
+    for idx, entry in enumerate(entries_per_dataset):
+        if entry != entries_per_dataset[0]:
+            logger.error(
+                "Metadata '{}' for dataset '{}' is '{}'".format(key, dataset_names[idx], str(entry))
+            )
+            logger.error(
+                "Metadata '{}' for dataset '{}' is '{}'".format(
+                    key, dataset_names[0], str(entries_per_dataset[0])
+                )
+            )
+            raise ValueError("Datasets have different metadata '{}'!".format(key))
 
 
 def build_transform_gen(cfg, is_train):
