@@ -1,5 +1,4 @@
 import copy
-import logging
 
 from detectron2.data import DatasetCatalog, MetadataCatalog
 from .coco import load_coco_json, load_sem_seg
@@ -34,17 +33,6 @@ def register_coco_instances(name, metadata, json_file, image_root):
 
     # 2. Optionally, add metadata about this dataset,
     # since they might be useful in evaluation, visualization or logging
-    if isinstance(metadata, str):
-        # TODO for BC only. Remove this after a while
-        metadata = {"dataset_name": metadata}
-        logger = logging.getLogger(__name__)
-        logger.warn(
-            """
-After D15247032, all metadata should be associated with dataset splits by
-`register_coco_instances(name, metadata, ...)`.
-`register_coco_instances(name, dataset_name, ...)` is deprecated since
-"dataset_name" is no longer useful.  """
-        )
     MetadataCatalog.get(name).set(
         json_file=json_file, image_root=image_root, evaluator_type="coco", **metadata
     )
