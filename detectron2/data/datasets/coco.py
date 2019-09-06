@@ -42,8 +42,8 @@ def load_coco_json(json_file, image_root, dataset_name=None):
     from pycocotools.coco import COCO
 
     timer = Timer()
+    json_file = PathManager.get_local_path(json_file)
     with contextlib.redirect_stdout(io.StringIO()):
-        json_file = PathManager.get_local_path(json_file)
         coco_api = COCO(json_file)
     if timer.seconds() > 1:
         logger.info("Loading {} takes {:.2f} seconds.".format(json_file, timer.seconds()))
