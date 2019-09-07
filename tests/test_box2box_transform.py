@@ -20,7 +20,9 @@ class TestBox2BoxTransform(unittest.TestCase):
         if torch.cuda.is_available():
             devices.append(torch.device("cuda"))
         for device in devices:
-            deltas = b2b_tfm.get_deltas(src_boxes.to(device=device), dst_boxes.to(device=device))
+            src_boxes = src_boxes.to(device=device)
+            dst_boxes = dst_boxes.to(device=device)
+            deltas = b2b_tfm.get_deltas(src_boxes, dst_boxes)
             dst_boxes_reconstructed = b2b_tfm.apply_deltas(deltas, src_boxes)
             assert torch.allclose(dst_boxes, dst_boxes_reconstructed)
 
