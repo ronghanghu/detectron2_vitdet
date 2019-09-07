@@ -18,7 +18,7 @@ You may want to write your own script with your datasets and other customization
 import logging
 import os
 import torch
-from borc.nn.precise_bn import get_bn_modules, update_bn_stats
+from borc.nn.precise_bn import get_bn_modules
 from torch.nn.parallel import DistributedDataParallel
 
 import detectron2.utils.comm as comm
@@ -44,12 +44,7 @@ from detectron2.evaluation import (
 )
 from detectron2.modeling import GeneralizedRCNNWithTTA, build_model
 from detectron2.solver import build_lr_scheduler, build_optimizer
-from detectron2.utils.events import (
-    CommonMetricPrinter,
-    EventStorage,
-    JSONWriter,
-    TensorboardXWriter,
-)
+from detectron2.utils.events import CommonMetricPrinter, JSONWriter, TensorboardXWriter
 
 
 def get_evaluator(cfg, dataset_name, output_folder):
@@ -106,17 +101,7 @@ def do_test(cfg, model, is_final=True):
     )
     dataset_name = cfg.DATASETS.TEST[0]
     assert cfg.OUTPUT_DIR
-
-    logger = logging.getLogger("detectron2.trainer")
-
-    if cfg.TEST.PRECISE_BN.ENABLED and len(get_bn_modules(model)) > 0:
-        with EventStorage():  # capture events in a new storage to discard them
-            train_data = build_detection_train_loader(cfg)
-            logger.info(
-                "Running precise-BN for {} iterations... ".format(cfg.TEST.PRECISE_BN.NUM_ITER)
-                + "Note that this could produce different statistics every time."
-            )
-            update_bn_stats(model, train_data, cfg.TEST.PRECISE_BN.NUM_ITER)
+    logger = logging.getLogger("detectron2.train")
 
     with inference_context(model):
         output_folder = os.path.join(cfg.OUTPUT_DIR, "inference")
@@ -173,6 +158,18 @@ def do_train(cfg, model, resume=True):
     trainer_hooks = [
         hooks.IterationTimer(),
         hooks.LRScheduler(optimizer, scheduler),
+        hooks.PreciseBN(
+            # Run at the same freq as (but before) evaluation.
+            # Note: if checkpointing has a different frequency, some checkpoints may
+            # have more precise statistics than others.
+            cfg.TEST.EVAL_PERIOD,
+            model,
+            # Build a new data loader to not affect training
+            build_detection_train_loader(cfg),
+            cfg.TEST.PRECISE_BN.NUM_ITER,
+        )
+        if cfg.TEST.PRECISE_BN.ENABLED and get_bn_modules(model)
+        else None,
         hooks.EvalHook(
             cfg.TEST.EVAL_PERIOD, lambda: do_test(cfg, model, trainer.iter + 1 == max_iter)
         ),
@@ -184,8 +181,6 @@ def do_train(cfg, model, resume=True):
             TensorboardXWriter(cfg.OUTPUT_DIR),
         ]
         trainer_hooks.append(hooks.PeriodicWriter(writers))
-        # Note: when precise BN is enabled, some checkpoints will have more precise
-        # statistics than others, if they are saved immediately after eval.
         trainer_hooks.append(hooks.PeriodicCheckpointer(checkpointer, cfg.SOLVER.CHECKPOINT_PERIOD))
 
     trainer.register_hooks(trainer_hooks)

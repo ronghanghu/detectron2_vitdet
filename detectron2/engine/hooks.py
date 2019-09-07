@@ -9,10 +9,12 @@ from collections import Counter
 import torch
 from borc.common.file_io import PathManager
 from borc.common.timer import Timer
+from borc.nn.precise_bn import get_bn_modules, update_bn_stats
 
 import detectron2.utils.comm as comm
 from detectron2.checkpoint import PeriodicCheckpointer as _PeriodicCheckpointer
 from detectron2.evaluation.testing import flatten_results_dict
+from detectron2.utils.events import EventStorage
 
 from .train_loop import HookBase
 
@@ -24,6 +26,7 @@ __all__ = [
     "LRScheduler",
     "AutogradProfiler",
     "EvalHook",
+    "PreciseBN",
 ]
 
 
@@ -99,7 +102,7 @@ class IterationTimer(HookBase):
         total_time_minus_hooks = self._total_timer.seconds()
         hook_time = total_time - total_time_minus_hooks
 
-        num_iter = self.trainer.max_iter - self.trainer.start_iter - self._warmup_iter
+        num_iter = self.trainer.iter + 1 - self.trainer.start_iter - self._warmup_iter
 
         if num_iter > 0 and total_time_minus_hooks > 0:
             # Speed is meaningful only after warmup
@@ -298,3 +301,76 @@ class EvalHook(HookBase):
         # func is likely a closure that holds reference to the trainer
         # therefore we clean it to avoid circular reference in the end
         del self._func
+
+
+class PreciseBN(HookBase):
+    """
+    The standard implementation of BatchNorm uses EMA in inference, which is
+    sometimes suboptimal.
+    This class computes the true average of statistics rather than the moving average,
+    and put true averages to every BN layer in the given model.
+    """
+
+    def __init__(self, period, model, data_loader, num_iter):
+        """
+        Args:
+            period (int): the period this hook is run, or 0 to not run during training.
+                The hook will always run in the end of training.
+            model (nn.Module): a module whose all BN layers in training mode will be
+                updated by precise BN.
+                Note that user is responsible for ensuring the BN layers to be
+                updated are in training mode when this hook is triggered.
+            data_loader (iterable): it will produce data to be run by `model(data)`.
+            num_iter (int): number of iterations used to compute the precise
+                statistics.
+        """
+        self._logger = logging.getLogger(__name__)
+        if len(get_bn_modules(model)) == 0:
+            self._logger.info(
+                "PreciseBN is disabled because model does not contain BN layers in training mode."
+            )
+            self._disabled = True
+            return
+
+        self._model = model
+        self._data_loader = data_loader
+        self._num_iter = num_iter
+        self._period = period
+        self._disabled = False
+
+        self._data_iter = None
+
+    def after_step(self):
+        next_iter = self.trainer.iter + 1
+        is_final = next_iter == self.trainer.max_iter
+        if is_final or (self._period > 0 and next_iter % self._period == 0):
+            self.update_stats()
+
+    def update_stats(self):
+        """
+        Update the model with precise statistics. Users can manually call this method.
+        """
+        if self._disabled:
+            return
+
+        if self._data_iter is None:
+            self._data_iter = iter(self._data_loader)
+
+        num_iter = 0
+
+        def data_loader():
+            nonlocal num_iter
+            num_iter += 1
+            if num_iter % 100 == 0:
+                self._logger.info(
+                    "Running precise-BN ... {}/{} iterations.".format(num_iter, self._num_iter)
+                )
+            # This way we can reuse the same iterator
+            yield next(self._data_iter)
+
+        with EventStorage():  # capture events in a new storage to discard them
+            self._logger.info(
+                "Running precise-BN for {} iterations...  ".format(self._num_iter)
+                + "Note that this could produce different statistics every time."
+            )
+            update_bn_stats(self._model, data_loader(), self._num_iter)

@@ -66,6 +66,7 @@ class TrainerBase:
 
     The only assumption we made here is: the training runs in a loop.
     A subclass can implement what the loop is.
+    We made no assumptions about the existence of dataloader, optimizer, model, etc.
 
     Attributes:
         iter(int): the current iteration.
@@ -87,8 +88,9 @@ class TrainerBase:
         they are registered.
 
         Args:
-            hooks (list[HookBase]): list of hooks
+            hooks (list[Optional[HookBase]]): list of hooks
         """
+        hooks = [h for h in hooks if h is not None]
         for h in hooks:
             assert isinstance(h, HookBase)
             # To avoid circular reference, hooks and trainer cannot own each other.
@@ -177,9 +179,15 @@ class SimpleTrainer(TrainerBase):
     def run_step(self):
         assert self.model.training, "[SimpleTrainer] model was changed to eval mode!"
         start = time.perf_counter()
+        """
+        If your want to do something with the data, you can wrap the dataloader.
+        """
         data = next(self._data_loader_iter)
         data_time = time.perf_counter() - start
 
+        """
+        If your want to do something with the losses, you can wrap the model.
+        """
         loss_dict = self.model(data)
         losses = sum(loss for loss in loss_dict.values())
         if not torch.isfinite(losses).all():
@@ -211,7 +219,7 @@ class SimpleTrainer(TrainerBase):
         losses.backward()
 
         """
-        Gradient clipping or other processing, if needed, can be done
-        by a custom optimizer which wraps another's step() method.
+        If you need gradient clipping/scaling or other processing, you can
+        wrap the optimizer with your custom `step()` method.
         """
         self.optimizer.step()

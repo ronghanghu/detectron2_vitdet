@@ -98,8 +98,8 @@ https://github.com/abseil/abseil-py/blob/master/absl/logging/__init__.py
 def _find_caller():
     """
     Returns:
-        module name of the caller
-        a hashable key to be used to identify different callers
+        str: module name of the caller
+        tuple: a hashable key to be used to identify different callers
     """
     frame = sys._getframe(2)
     while frame:
@@ -115,7 +115,7 @@ def _find_caller():
 _LOG_COUNTER = Counter()
 
 
-def log_first_n(lvl, msg, n=1, *, name=None):
+def log_first_n(lvl, msg, n=1, *, name=None, key="caller"):
     """
     Log only for the first n times.
 
@@ -124,10 +124,29 @@ def log_first_n(lvl, msg, n=1, *, name=None):
         msg (str):
         n (int):
         name (str): name of the logger to use. Will use the caller's module by default.
+        key (str or tuple[str]): the string(s) can be one of "caller" or
+            "message", which defines how to identify duplicated logs.
+            For example, if called with `n=1, key="caller"`, this function
+            will only log the first call from the same caller, regardless of
+            the message content.
+            If called with `n=1, key="message"`, this function will log the
+            same content only once, even if they are called from different places.
+            If called with `n=1, key=("caller", "message")`, this function
+            will not log only if the same caller has logged the same message before.
     """
-    caller_module, key = _find_caller()
-    _LOG_COUNTER[key] += 1
-    if _LOG_COUNTER[key] <= n:
+    if isinstance(key, str):
+        key = (key,)
+    assert len(key) > 0
+
+    caller_module, caller_key = _find_caller()
+    hash_key = ()
+    if "caller" in key:
+        hash_key = hash_key + caller_key
+    if "message" in key:
+        hash_key = hash_key + (msg,)
+
+    _LOG_COUNTER[hash_key] += 1
+    if _LOG_COUNTER[hash_key] <= n:
         logging.getLogger(name or caller_module).log(lvl, msg)
 
 

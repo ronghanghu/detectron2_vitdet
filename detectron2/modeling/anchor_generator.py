@@ -123,9 +123,9 @@ class DefaultAnchorGenerator(nn.Module):
         """
 
         # This is different from the anchor generator defined in the original Faster R-CNN
-        # code (and in Detectron as well). They yield the same AP, however the old version
-        # defines cell anchors in a less natural way with a shift relative to the feature
-        # grid and quantization that results in slightly different sizes for different aspect ratios.
+        # code or Detectron. They yield the same AP, however the old version defines cell
+        # anchors in a less natural way with a shift relative to the feature grid and
+        # quantization that results in slightly different sizes for different aspect ratios.
         # See also https://github.com/facebookresearch/Detectron/issues/227
 
         anchors = []

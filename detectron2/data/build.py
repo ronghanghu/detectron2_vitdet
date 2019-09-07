@@ -11,6 +11,7 @@ from termcolor import colored
 
 from detectron2.structures import BoxMode
 from detectron2.utils.comm import get_world_size
+from detectron2.utils.logger import log_first_n
 
 from . import samplers
 from .catalog import DatasetCatalog, MetadataCatalog
@@ -181,10 +182,11 @@ def print_instances_class_histogram(dataset_dicts, class_names):
         numalign="left",
         stralign="center",
     )
-    logger = logging.getLogger(__name__)
-    logger.info(
+    log_first_n(
+        logging.INFO,
         "Distribution of training instances among all {} categories:\n".format(num_classes)
-        + colored(table, "cyan")
+        + colored(table, "cyan"),
+        key="message",
     )
 
 
