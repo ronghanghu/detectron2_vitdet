@@ -248,19 +248,19 @@ def build_detection_train_loader(cfg, mapper=None, start_iter=0):
     Returns:
         a torch DataLoader object
     """
-    num_gpus = get_world_size()
+    num_workers = get_world_size()
     images_per_batch = cfg.SOLVER.IMS_PER_BATCH
     assert (
-        images_per_batch % num_gpus == 0
-    ), "SOLVER.IMS_PER_BATCH ({}) must be divisible by the number of GPUs ({}) used.".format(
-        images_per_batch, num_gpus
+        images_per_batch % num_workers == 0
+    ), "SOLVER.IMS_PER_BATCH ({}) must be divisible by the number of workers ({}).".format(
+        images_per_batch, num_workers
     )
     assert (
-        images_per_batch >= num_gpus
-    ), "SOLVER.IMS_PER_BATCH ({}) must be larger than the number of GPUs ({}) used.".format(
-        images_per_batch, num_gpus
+        images_per_batch >= num_workers
+    ), "SOLVER.IMS_PER_BATCH ({}) must be larger than the number of workers ({}).".format(
+        images_per_batch, num_workers
     )
-    images_per_gpu = images_per_batch // num_gpus
+    images_per_worker = images_per_batch // num_workers
 
     assert len(cfg.DATASETS.TRAIN)
     dataset_dicts = [DatasetCatalog.get(dataset_name) for dataset_name in cfg.DATASETS.TRAIN]
@@ -304,7 +304,7 @@ def build_detection_train_loader(cfg, mapper=None, start_iter=0):
 
     sampler = samplers.TrainingSampler(len(dataset), seed=start_iter)
     batch_sampler = build_batch_data_sampler(
-        sampler, images_per_gpu, group_bin_edges, aspect_ratios
+        sampler, images_per_worker, group_bin_edges, aspect_ratios
     )
 
     data_loader = torch.utils.data.DataLoader(
@@ -351,7 +351,7 @@ def build_detection_test_loader(cfg, dataset_name, mapper=None):
     dataset = MapDataset(dataset, mapper)
 
     sampler = samplers.InferenceSampler(len(dataset))
-    # Always use 1 image per GPU during inference since this is the
+    # Always use 1 image per worker during inference since this is the
     # standard when reporting inference time in papers.
     batch_sampler = torch.utils.data.sampler.BatchSampler(sampler, 1, drop_last=False)
 

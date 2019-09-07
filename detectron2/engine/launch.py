@@ -16,7 +16,6 @@ def launch(main_func, num_gpus_per_machine, num_machines=1, machine_rank=0, dist
         machine_rank (int): the rank of this machine (one per machine)
         args (tuple): arguments passed to main_func
     """
-    assert num_gpus_per_machine <= torch.cuda.device_count()
     world_size = num_machines * num_gpus_per_machine
     if world_size > 1:
         # https://github.com/pytorch/pytorch/pull/14391
@@ -46,6 +45,8 @@ def _distributed_worker(
     # synchronize is needed here to prevent a possible timeout after calling init_process_group
     # See: https://github.com/facebookresearch/maskrcnn-benchmark/issues/172
     comm.synchronize()
+
+    assert num_gpus_per_machine <= torch.cuda.device_count()
     torch.cuda.set_device(local_rank)
 
     # Setup the local process group (which contains ranks within the same machine)
