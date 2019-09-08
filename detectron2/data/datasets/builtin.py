@@ -333,24 +333,6 @@ _PREDEFINED_SPLITS_COCO["coco_person"] = {
 }
 
 
-# our internal coco-format jsons for cityscapes. TODO removed them at release
-# NOTE: it has different order of class label
-_PREDEFINED_SPLITS_COCO["cityscapes"] = {
-    "cityscapes_fine_instanceonly_seg_train_cocostyle": (
-        "cityscapes/images",
-        "cityscapes/annotations/instancesonly_gtFine_train.json",
-    ),
-    "cityscapes_fine_instanceonly_seg_val_cocostyle": (
-        "cityscapes/images",
-        "cityscapes/annotations/instancesonly_filtered_gtFine_val.json",
-    ),
-    "cityscapes_fine_instanceonly_seg_test_cocostyle": (
-        "cityscapes/images",
-        "cityscapes/annotations/instancesonly_gtFine_test.json",
-    ),
-}
-
-
 for dataset_name, splits_per_dataset in _PREDEFINED_SPLITS_COCO.items():
     for key, (image_root, json_file) in splits_per_dataset.items():
         # Assume pre-defined datasets live in `./datasets`.
