@@ -392,6 +392,15 @@ def _evaluate_predictions_on_coco(
         logger.warn("No predictions from the model! Set scores to -1")
         return {metric: -1 for metric in metrics}
 
+    if iou_type == "segm":
+        coco_results = copy.deepcopy(coco_results)
+        # When evaluating mask AP, if the results contain bbox, cocoapi will
+        # use the box area as the area of the instance, instead of the mask area.
+        # This leads to a different definition of small/medium/large.
+        # We remove the bbox field to let mask AP use mask area.
+        for c in coco_results:
+            c.pop("bbox", None)
+
     coco_dt = coco_gt.loadRes(coco_results)
     coco_eval = COCOeval(coco_gt, coco_dt, iou_type)
     # Use the COCO default keypoint OKS sigmas unless overrides are specified
