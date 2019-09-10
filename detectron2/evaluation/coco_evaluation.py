@@ -18,6 +18,7 @@ from tabulate import tabulate
 import detectron2.utils.comm as comm
 from detectron2.data import MetadataCatalog
 from detectron2.structures import Boxes, BoxMode, pairwise_iou
+from detectron2.utils.logger import create_small_table
 
 from .evaluator import DatasetEvaluator
 
@@ -212,7 +213,7 @@ class COCOEvaluator(DatasetEvaluator):
                 )
                 key = "AR{}@{:d}".format(suffix, limit)
                 res[key] = float(stats["ar"].item() * 100)
-        self._logger.info("Proposal metrics: \n" + _create_small_table(res))
+        self._logger.info("Proposal metrics: \n" + create_small_table(res))
         self._results["box_proposals"] = res
 
 
@@ -412,7 +413,7 @@ def _evaluate_predictions_on_coco(
 
     # the standard metrics
     results = {metric: float(coco_eval.stats[idx] * 100) for idx, metric in enumerate(metrics)}
-    logger.info("Evaluation results for {}: \n".format(iou_type) + _create_small_table(results))
+    logger.info("Evaluation results for {}: \n".format(iou_type) + create_small_table(results))
 
     if class_names is None or len(class_names) <= 1:
         return results
@@ -446,22 +447,3 @@ def _evaluate_predictions_on_coco(
 
     results.update({"AP-" + name: ap for name, ap in results_per_category})
     return results
-
-
-def _create_small_table(res):
-    """
-    Args:
-        res (dict): a result dictionary of only a few items.
-
-    Since res is small, print keys as headers.
-    """
-    keys, values = tuple(zip(*res.items()))
-    table = tabulate(
-        [values],
-        headers=keys,
-        tablefmt="pipe",
-        floatfmt=".3f",
-        stralign="center",
-        numalign="center",
-    )
-    return table

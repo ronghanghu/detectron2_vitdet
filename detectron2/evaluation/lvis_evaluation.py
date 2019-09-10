@@ -10,12 +10,13 @@ import pycocotools.mask as mask_util
 import torch
 from borc.common.file_io import PathManager
 from lvis import LVIS, LVISEval, LVISResults
-from tabulate import tabulate
 
 import detectron2.utils.comm as comm
 from detectron2.data import MetadataCatalog
 from detectron2.structures import Boxes, BoxMode, pairwise_iou
+from detectron2.utils.logger import create_small_table
 
+from .coco_evaluation import instances_to_json
 from .evaluator import DatasetEvaluator
 
 
@@ -199,37 +200,8 @@ class LVISEvaluator(DatasetEvaluator):
                 )
                 key = "AR{}@{:d}".format(suffix, limit)
                 res[key] = float(stats["ar"].item() * 100)
-        self._logger.info("Proposal metrics: \n" + _create_small_table(res))
+        self._logger.info("Proposal metrics: \n" + create_small_table(res))
         self._results["box_proposals"] = res
-
-
-def instances_to_json(instances, img_id):
-    num_instance = len(instances)
-    if num_instance == 0:
-        return []
-
-    boxes = instances.pred_boxes.tensor.numpy()
-    boxes = BoxMode.convert(boxes, BoxMode.XYXY_ABS, BoxMode.XYWH_ABS)
-    boxes = boxes.tolist()
-    scores = instances.scores.tolist()
-    classes = instances.pred_classes.tolist()
-
-    has_mask = instances.has("pred_masks_rle")
-    if has_mask:
-        rles = instances.pred_masks_rle
-
-    results = []
-    for k in range(num_instance):
-        result = {
-            "image_id": img_id,
-            "category_id": classes[k],
-            "bbox": boxes[k],
-            "score": scores[k],
-        }
-        if has_mask:
-            result["segmentation"] = rles[k]
-        results.append(result)
-    return results
 
 
 # inspired from Detectron:
@@ -363,6 +335,15 @@ def _evaluate_predictions_on_lvis(lvis_gt, lvis_results, iou_type, class_names=N
         logger.warn("No predictions from the model! Set scores to -1")
         return {metric: -1 for metric in metrics}
 
+    if iou_type == "segm":
+        lvis_results = copy.deepcopy(lvis_results)
+        # When evaluating mask AP, if the results contain bbox, LVIS API will
+        # use the box area as the area of the instance, instead of the mask area.
+        # This leads to a different definition of small/medium/large.
+        # We remove the bbox field to let mask AP use mask area.
+        for c in lvis_results:
+            c.pop("bbox", None)
+
     lvis_results = LVISResults(lvis_gt, lvis_results)
     lvis_eval = LVISEval(lvis_gt, lvis_results, iou_type)
     lvis_eval.run()
@@ -371,24 +352,5 @@ def _evaluate_predictions_on_lvis(lvis_gt, lvis_results, iou_type, class_names=N
     # Pull the standard metrics from the LVIS results
     results = lvis_eval.get_results()
     results = {metric: float(results[metric] * 100) for metric in metrics}
-    logger.info("Evaluation results for {}: \n".format(iou_type) + _create_small_table(results))
+    logger.info("Evaluation results for {}: \n".format(iou_type) + create_small_table(results))
     return results
-
-
-def _create_small_table(res):
-    """
-    Args:
-        res (dict): a result dictionary of only a few items.
-
-    Since res is small, print keys as headers.
-    """
-    keys, values = tuple(zip(*res.items()))
-    table = tabulate(
-        [values],
-        headers=keys,
-        tablefmt="pipe",
-        floatfmt=".3f",
-        stralign="center",
-        numalign="center",
-    )
-    return table

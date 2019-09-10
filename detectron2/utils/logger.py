@@ -3,6 +3,7 @@ import os
 import sys
 from collections import Counter
 from borc.common.file_io import PathManager
+from tabulate import tabulate
 from termcolor import colored
 
 
@@ -164,3 +165,26 @@ def log_every_n(lvl, msg, n=1, *, name=None):
     _LOG_COUNTER[key] += 1
     if n == 1 or _LOG_COUNTER[key] % n == 1:
         logging.getLogger(name or caller_module).log(lvl, msg)
+
+
+def create_small_table(small_dict):
+    """
+    Create a small table using the keys of small_dict as headers. This is only
+    suitable for small dictionaries.
+
+    Args:
+        small_dict (dict): a result dictionary of only a few items.
+
+    Returns:
+        str: the table as a string.
+    """
+    keys, values = tuple(zip(*small_dict.items()))
+    table = tabulate(
+        [values],
+        headers=keys,
+        tablefmt="pipe",
+        floatfmt=".3f",
+        stralign="center",
+        numalign="center",
+    )
+    return table
