@@ -108,7 +108,7 @@ class TrainerBase:
         logger = logging.getLogger(__name__)
         logger.info("Starting training from iteration {}".format(start_iter))
 
-        self.start_iter = start_iter
+        self.iter = self.start_iter = start_iter
         self.max_iter = max_iter
 
         with EventStorage(start_iter) as self.storage:
