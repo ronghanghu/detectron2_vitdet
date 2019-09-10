@@ -141,7 +141,10 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
             # actually contains bugs that, together with certain ways of using COCO API,
             # can trigger this assertion.
             assert anno["image_id"] == image_id
-            assert anno.get("ignore", 0) == 0
+
+            # skip instances labeled as ignore
+            if anno.get("ignore", 0) == 1:
+                continue
 
             obj = {
                 field: anno[field]
