@@ -1,4 +1,4 @@
-_BASE_: "Base-RCNN-FPN.yaml"
+_BASE_: "../Base-RCNN-FPN.yaml"
 MODEL:
   WEIGHT: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
   MASK_ON: False
@@ -12,5 +12,3 @@ DATASETS:
   PROPOSAL_FILES_TRAIN: ("detectron2://rpn_R_50_FPN_1x_inference/113323222/output/inference/coco_2017_train/box_proposals_030afcc26519628409442b6c9657c510.pkl", )
   TEST: ("coco_2017_val",)
   PROPOSAL_FILES_TEST: ("detectron2://rpn_R_50_FPN_1x_inference/113323222/output/inference/coco_2017_val/box_proposals_ce43fe07beb4ef26197ee9478ab02d39.pkl", )
-DATALOADER:
-  NUM_WORKERS: 2

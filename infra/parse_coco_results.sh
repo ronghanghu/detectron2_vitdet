@@ -22,6 +22,9 @@ echo "Inference speed: $inferencespeed s/it"
 memory=$(grep -o 'max mem: [0-9]*' "$LOG" | tail -n1 | grep -o '[0-9]*')
 echo "Training memory: $memory MB"
 
+echo "Easy to copypaste:"
+echo "$trainspeed","$inferencespeed","$memory"
+
 echo "------------------------------"
 
 # INFO [12/26 17:26:32] engine.coco_evaluation: copypaste: Task: bbox
@@ -32,8 +35,4 @@ echo "------------------------------"
 # INFO [12/26 17:26:32] engine.coco_evaluation: copypaste: 0.0014,0.0021,0.0016,0.0005,0.0016,0.0011
 
 echo "COCO Results:"
-grep -o 'copypaste:.*' "$LOG"
-
-echo
-echo "Easy to copypaste:"
-grep -o 'copypaste:.*' "$LOG" | cut -d ' ' -f 2 | sed -n "3~3p"
+grep -o 'copypaste:.*' "$LOG" | cut -d ' ' -f 2-

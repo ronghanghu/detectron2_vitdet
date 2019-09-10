@@ -1,6 +1,9 @@
-_BASE_: "../fast_rcnn_R_50_FPN_1x.yaml"
+_BASE_: "../COCO-Detection/fast_rcnn_R_50_FPN_1x.yaml"
 MODEL:
   WEIGHT: "detectron2://fast_rcnn_R_50_FPN_1x/111812509/model_final_6f22b6e06cb67f3bae138e6dd8692fa7.pkl"
+  ROI_BOX_HEAD:
+    POOLER_SAMPLING_RATIO: 2
+    POOLER_TYPE: "ROIAlign"
 DATASETS:
   TEST: ("coco_2017_val_100",)
 TEST:

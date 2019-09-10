@@ -5,6 +5,12 @@ MODEL:
   MASK_ON: True
   RESNETS:
     DEPTH: 50
+  ROI_BOX_HEAD:
+    POOLER_SAMPLING_RATIO: 2
+    POOLER_TYPE: "ROIAlign"
+  ROI_MASK_HEAD:
+    POOLER_SAMPLING_RATIO: 2
+    POOLER_TYPE: "ROIAlign"
 DATASETS:
   TEST: ("coco_2017_val_100_panoptic_separated",)
 TEST:

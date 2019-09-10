@@ -1,4 +1,4 @@
-_BASE_: "Base-RetinaNet.yaml"
+_BASE_: "../Base-RetinaNet.yaml"
 MODEL:
   WEIGHT: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
   RESNETS:

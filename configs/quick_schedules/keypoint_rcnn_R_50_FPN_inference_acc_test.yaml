@@ -1,6 +1,12 @@
-_BASE_: "../keypoint_rcnn_R_50_FPN_1x.yaml"
+_BASE_: "../COCO-Keypoints/keypoint_rcnn_R_50_FPN_1x.yaml"
 MODEL:
   WEIGHT: "detectron2://e2e_keypoint_rcnn_R_50_FPN_1x/123575517/model_final_ffbe15387579c09891d9ba15e7b3786f.pkl"
+  ROI_BOX_HEAD:
+    POOLER_SAMPLING_RATIO: 2
+    POOLER_TYPE: "ROIAlign"
+  ROI_KEYPOINT_HEAD:
+    POOLER_SAMPLING_RATIO: 2
+    POOLER_TYPE: "ROIAlign"
 DATASETS:
   TRAIN: ()
   TEST: ("keypoints_coco_2017_val_100",)

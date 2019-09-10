@@ -1,6 +1,12 @@
-_BASE_: "../mask_rcnn_R_50_DC5_1x.yaml"
+_BASE_: "../COCO-InstanceSegmentation/mask_rcnn_R_50_DC5_1x.yaml"
 MODEL:
   WEIGHT: "detectron2://e2e_mask_rcnn_R_50_DC5_1x/111802619/model_final_74048812947983ad784f8a3ccff02f6a.pkl"
+  ROI_BOX_HEAD:
+    POOLER_SAMPLING_RATIO: 2
+    POOLER_TYPE: "ROIAlign"
+  ROI_MASK_HEAD:
+    POOLER_SAMPLING_RATIO: 2
+    POOLER_TYPE: "ROIAlign"
 DATASETS:
   TEST: ("coco_2017_val_100",)
 TEST:

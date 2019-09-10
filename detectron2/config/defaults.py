@@ -265,6 +265,9 @@ _C.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS = (10.0, 10.0, 5.0, 5.0)
 _C.MODEL.ROI_BOX_HEAD.SMOOTH_L1_BETA = 0.0
 _C.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION = 14
 _C.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO = 0
+# Type of pooling operation applied to the incoming feature map for each RoI
+_C.MODEL.ROI_BOX_HEAD.POOLER_TYPE = "ROIAlignV2"
+
 _C.MODEL.ROI_BOX_HEAD.NUM_FC = 0
 # Hidden layer dimension for FC layers in the RoI box head
 _C.MODEL.ROI_BOX_HEAD.FC_DIM = 1024
@@ -278,8 +281,6 @@ _C.MODEL.ROI_BOX_HEAD.NORM = ""
 # _C.MODEL.ROI_BOX_HEAD.COMPUTED_INPUT_SIZE = (channel, height, width)
 # Whether to use class agnostic for bbox regression
 _C.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG = False
-# Type of pooling operation applied to the incoming feature map for each RoI
-_C.MODEL.ROI_BOX_HEAD.POOLER_TYPE = "ROIAlignV2"
 
 # ---------------------------------------------------------------------------- #
 # Cascaded Box Head

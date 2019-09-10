@@ -15,3 +15,6 @@ SOLVER:
   MAX_ITER: 7000
 TEST:
   EXPECTED_RESULTS: [["sem_seg", "mIoU", 76.51, 1.0], ["sem_seg", "mACC", 83.25, 1.0]]
+INPUT:
+  # no scale augmentation
+  MIN_SIZE_TRAIN: (800, )

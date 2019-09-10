@@ -1,4 +1,4 @@
-_BASE_: "../fast_rcnn_R_50_FPN_1x.yaml"
+_BASE_: "../COCO-Detection/fast_rcnn_R_50_FPN_1x.yaml"
 MODEL:
   WEIGHT: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
 DATASETS:
