@@ -465,7 +465,7 @@ def _extract_single_tensors_from_matches(proposals_with_targets):
         i_img.extend([i] * len(i_with_dp_img))
         n += n_i
     # concatenate all data into a single tensor
-    if n:
+    if (n > 0) and (len(i_with_dp_all) > 0):
         i_gt = torch.cat(i_gt_all, 0).long()
         x_norm = torch.cat(x_norm_all, 0)
         y_norm = torch.cat(y_norm_all, 0)
