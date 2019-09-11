@@ -756,7 +756,7 @@ class Visualizer:
 
         m = masks_or_polygons
         if isinstance(m, PolygonMasks):
-            return m.numpy()
+            return m.polygons
         else:
             return [to_polygons(p) for p in masks_or_polygons]
 
