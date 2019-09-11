@@ -9,6 +9,9 @@ MODEL:
     NAME: "PrecomputedProposals"
 DATASETS:
   TRAIN: ("coco_2017_train",)
-  PROPOSAL_FILES_TRAIN: ("detectron2://rpn_R_50_FPN_1x_inference/113323222/output/inference/coco_2017_train/box_proposals_030afcc26519628409442b6c9657c510.pkl", )
+  PROPOSAL_FILES_TRAIN: ("detectron2://COCO-Detection/rpn_R_50_FPN_1x/137258492/coco_2017_train_box_proposals_21bc3a.pkl", )
   TEST: ("coco_2017_val",)
-  PROPOSAL_FILES_TEST: ("detectron2://rpn_R_50_FPN_1x_inference/113323222/output/inference/coco_2017_val/box_proposals_ce43fe07beb4ef26197ee9478ab02d39.pkl", )
+  PROPOSAL_FILES_TEST: ("detectron2://COCO-Detection/rpn_R_50_FPN_1x/137258492/coco_2017_val_box_proposals_ee0dad.pkl", )
+DATALOADER:
+  # proposals are part of the dataset_dicts, and take a lot of RAM
+  NUM_WORKERS: 2

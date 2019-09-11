@@ -1,10 +1,7 @@
 _BASE_: "../COCO-Detection/fast_rcnn_R_50_FPN_1x.yaml"
 MODEL:
-  WEIGHT: "detectron2://fast_rcnn_R_50_FPN_1x/111812509/model_final_6f22b6e06cb67f3bae138e6dd8692fa7.pkl"
-  ROI_BOX_HEAD:
-    POOLER_SAMPLING_RATIO: 2
-    POOLER_TYPE: "ROIAlign"
+  WEIGHT: "detectron2://COCO-Detection/fast_rcnn_R_50_FPN_1x/137635226/model_final_e5f7ce.pkl"
 DATASETS:
   TEST: ("coco_2017_val_100",)
 TEST:
-  EXPECTED_RESULTS: [["bbox", "AP", 44.04, 0.02]]
+  EXPECTED_RESULTS: [["bbox", "AP", 45.70, 0.02]]
