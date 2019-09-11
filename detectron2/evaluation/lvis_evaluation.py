@@ -9,7 +9,6 @@ from collections import OrderedDict
 import pycocotools.mask as mask_util
 import torch
 from borc.common.file_io import PathManager
-from lvis import LVIS, LVISEval, LVISResults
 
 import detectron2.utils.comm as comm
 from detectron2.data import MetadataCatalog
@@ -37,6 +36,8 @@ class LVISEvaluator(DatasetEvaluator):
                 Otherwise, will evaluate the results in the current process.
             output_dir (str): optional, an output directory to dump results.
         """
+        from lvis import LVIS
+
         self._tasks = self._tasks_from_config(cfg)
         self._distributed = distributed
         self._output_dir = output_dir
@@ -343,6 +344,8 @@ def _evaluate_predictions_on_lvis(lvis_gt, lvis_results, iou_type, class_names=N
         # We remove the bbox field to let mask AP use mask area.
         for c in lvis_results:
             c.pop("bbox", None)
+
+    from lvis import LVISEval, LVISResults
 
     lvis_results = LVISResults(lvis_gt, lvis_results)
     lvis_eval = LVISEval(lvis_gt, lvis_results, iou_type)

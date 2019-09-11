@@ -220,6 +220,13 @@ class LRScheduler(HookBase):
 class AutogradProfiler(HookBase):
     """
     A hook which runs `torch.autograd.profiler.profile`.
+
+    Note:
+        When used together with NCCL on older version of GPUs,
+        autograd profiler may cause deadlock because it unnecessarily allocates
+        memory on every device it sees. The memory management calls, if
+        interleaved with NCCL calls, lead to deadlock on GPUs that do not
+        support `cudaLaunchCooperativeKernelMultiDevice`.
     """
 
     def __init__(self, enable_predicate, output_dir, *, use_cuda=True):
