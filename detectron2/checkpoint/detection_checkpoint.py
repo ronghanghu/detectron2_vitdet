@@ -117,12 +117,12 @@ class DetectionCheckpointer(Checkpointer):
                 data["model"] = _convert_rpn_name(data["model"])
                 return data
             else:
-                # assume file is from Caffe2
+                # assume file is from Caffe2 / Detectron1 model zoo
                 if "blobs" in data:
                     # Detection models have "blobs", but ImageNet models don't
                     data = data["blobs"]
                 data = {k: v for k, v in data.items() if not k.endswith("_momentum")}
-                return {"model": data, "__author__": "Caffe2"}
+                return {"model": data, "__author__": "Caffe2", "matching_heuristics": True}
 
         loaded = super()._load_file(f)  # load native pth checkpoint
         if "model" not in loaded:
@@ -132,11 +132,15 @@ class DetectionCheckpointer(Checkpointer):
         return loaded
 
     def _load_model(self, checkpoint):
-        if checkpoint.get("__author__", None) == "Caffe2":
+        if checkpoint.get("matching_heuristics", False):
             self._convert_ndarray_to_tensor(checkpoint["model"])
-            # convert caffe2 weights by name-matching heuristics
+            # convert weights by name-matching heuristics
             model_state_dict = self.model.state_dict()
-            align_and_update_state_dicts(model_state_dict, checkpoint["model"])
+            align_and_update_state_dicts(
+                model_state_dict,
+                checkpoint["model"],
+                c2_conversion=checkpoint.get("__author__", None) == "Caffe2",
+            )
             checkpoint["model"] = model_state_dict
         # for non-caffe2 models, use standard ways to load it
         super()._load_model(checkpoint)

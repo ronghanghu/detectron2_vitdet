@@ -175,9 +175,9 @@ def convert_c2_detectron_names(weights):
     assert len(original_keys) == len(layer_keys)
 
     new_weights = {}
-    new_keys_to_old_keys = {}
+    new_keys_to_original_keys = {}
     for orig, renamed in zip(original_keys, layer_keys):
-        new_keys_to_old_keys[renamed] = orig
+        new_keys_to_original_keys[renamed] = orig
         if renamed.startswith("bbox_pred.") or renamed.startswith("mask_head.predictor."):
             # remove the meaningless prediction weight for background class
             new_start_idx = 4 if renamed.startswith("bbox_pred.") else 1
@@ -198,15 +198,17 @@ def convert_c2_detectron_names(weights):
         else:
             new_weights[renamed] = weights[orig]
 
-    return new_weights, new_keys_to_old_keys
+    return new_weights, new_keys_to_original_keys
 
 
 # Note the current matching is not symmetric.
 # it assumes model_state_dict will have longer names.
-def align_and_update_state_dicts(model_state_dict, c2_state_dict):
+def align_and_update_state_dicts(model_state_dict, ckpt_state_dict, c2_conversion=True):
     """
     Match names between the two state-dict, and update the values of model_state_dict in-place with
-    copies of the matched tensor in c2_state_dict.
+    copies of the matched tensor in ckpt_state_dict.
+    If `c2_conversion==True`, `ckpt_state_dict` is assumed to be a Caffe2
+    model and will be renamed at first.
 
     Strategy: suppose that the models that we will create will have prefixes appended
     to each of its keys, for example due to an extra level of nesting that the original
@@ -222,75 +224,85 @@ def align_and_update_state_dicts(model_state_dict, c2_state_dict):
     backbone[0].body.res2.conv1.weight to res2.conv1.weight.
     """
     model_keys = sorted(list(model_state_dict.keys()))
-    loaded_state_dict, old_keys = convert_c2_detectron_names(c2_state_dict)
-    loaded_keys = sorted(list(loaded_state_dict.keys()))
+    if c2_conversion:
+        ckpt_state_dict, original_keys = convert_c2_detectron_names(ckpt_state_dict)
+        # original_keys: the name in the original dict (before renaming)
+    else:
+        original_keys = {x: x for x in ckpt_state_dict.keys()}
+    ckpt_keys = sorted(list(ckpt_state_dict.keys()))
 
     def match(a, b):
-        # Matched loaded_key should be a complete (starts with '.') suffix.
+        # Matched ckpt_key should be a complete (starts with '.') suffix.
         # For example, roi_heads.mesh_head.whatever_conv1 does not match conv1,
         # but matches whatever_conv1 or mesh_head.whatever_conv1.
         return a == b or a.endswith("." + b)
 
     # get a matrix of string matches, where each (i, j) entry correspond to the size of the
-    # loaded_key string, if it matches
-    match_matrix = [len(j) if match(i, j) else 0 for i in model_keys for j in loaded_keys]
-    match_matrix = torch.as_tensor(match_matrix).view(len(model_keys), len(loaded_keys))
+    # ckpt_key string, if it matches
+    match_matrix = [len(j) if match(i, j) else 0 for i in model_keys for j in ckpt_keys]
+    match_matrix = torch.as_tensor(match_matrix).view(len(model_keys), len(ckpt_keys))
     # use the matched one with longest size in case of multiple matches
     max_match_size, idxs = match_matrix.max(1)
     # remove indices that correspond to no-match
     idxs[max_match_size == 0] = -1
 
     # used for logging
-    max_size = max(len(key) for key in model_keys) if model_keys else 1
-    max_size_loaded = max(len(key) for key in loaded_keys) if loaded_keys else 1
+    max_len_model = max(len(key) for key in model_keys) if model_keys else 1
+    max_len_ckpt = max(len(key) for key in ckpt_keys) if ckpt_keys else 1
     log_str_template = "{: <{}} loaded from {: <{}} of shape {}"
     logger = logging.getLogger(__name__)
-    # matched_pairs (matched loaded key --> matched model key)
+    # matched_pairs (matched checkpoint key --> matched model key)
     matched_keys = {}
-    for idx_new, idx_old in enumerate(idxs.tolist()):
-        if idx_old == -1:
+    for idx_model, idx_ckpt in enumerate(idxs.tolist()):
+        if idx_ckpt == -1:
             continue
-        key = model_keys[idx_new]
-        key_old = loaded_keys[idx_old]
-        loaded_value = loaded_state_dict[key_old]
-        shape_in_model = model_state_dict[key].shape
+        key_model = model_keys[idx_model]
+        key_ckpt = ckpt_keys[idx_ckpt]
+        value_ckpt = ckpt_state_dict[key_ckpt]
+        shape_in_model = model_state_dict[key_model].shape
 
-        if shape_in_model != loaded_value.shape:
+        if shape_in_model != value_ckpt.shape:
             logger.warning(
                 "Shape of {} in checkpoint is {}, while shape of {} in model is {}.".format(
-                    key_old, loaded_value.shape, key, shape_in_model
+                    key_ckpt, value_ckpt.shape, key_model, shape_in_model
                 )
             )
             logger.warning(
                 "{} will not be loaded. Please double check and see if this is desired.".format(
-                    key_old
+                    key_ckpt
                 )
             )
             continue
 
-        model_state_dict[key] = loaded_value.clone()
-        if key_old in matched_keys:
+        model_state_dict[key_model] = value_ckpt.clone()
+        if key_ckpt in matched_keys:  # already added to matched_keys
             logger.error(
                 "Ambiguity found for {} in checkpoint!"
                 "It matches at least two keys in the model ({} and {}).".format(
-                    key_old, key, matched_keys[key_old]
+                    key_ckpt, key_model, matched_keys[key_ckpt]
                 )
             )
             raise ValueError("Cannot match one checkpoint key to multiple keys in the model.")
 
-        matched_keys[key_old] = key
+        matched_keys[key_ckpt] = key_model
         logger.info(
             log_str_template.format(
-                key, max_size, old_keys[key_old], max_size_loaded, tuple(shape_in_model)
+                key_model,
+                max_len_model,
+                original_keys[key_ckpt],
+                max_len_ckpt,
+                tuple(shape_in_model),
             )
         )
     matched_model_keys = matched_keys.values()
-    matched_loaded_keys = matched_keys.keys()
+    matched_ckpt_keys = matched_keys.keys()
     # print warnings about unmatched keys on both side
     unmatched_model_keys = [k for k in model_keys if k not in matched_model_keys]
     if len(unmatched_model_keys):
         logger.info(get_missing_parameters_message(unmatched_model_keys))
 
-    unmatched_loaded_keys = [k for k in loaded_keys if k not in matched_loaded_keys]
-    if len(unmatched_loaded_keys):
-        logger.info(get_unexpected_parameters_message(old_keys[x] for x in unmatched_loaded_keys))
+    unmatched_ckpt_keys = [k for k in ckpt_keys if k not in matched_ckpt_keys]
+    if len(unmatched_ckpt_keys):
+        logger.info(
+            get_unexpected_parameters_message(original_keys[x] for x in unmatched_ckpt_keys)
+        )
