@@ -25,5 +25,3 @@ MODEL:
 DATASETS:
   TRAIN: ("keypoints_coco_2017_train",)
   TEST: ("keypoints_coco_2017_val",)
-INPUT:
-  MIN_SIZE_TRAIN: (640, 672, 704, 736, 768, 800)
