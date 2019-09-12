@@ -18,7 +18,7 @@ from .build import META_ARCH_REGISTRY
 __all__ = ["RetinaNet"]
 
 
-def _permute_to_N_HWA_K(tensor, K):
+def permute_to_N_HWA_K(tensor, K):
     """
     Transpose/reshape a tensor from (N, (A x K), H, W) to (N, (HxWxA), K)
     """
@@ -30,34 +30,25 @@ def _permute_to_N_HWA_K(tensor, K):
     return tensor
 
 
-def _reshape_predictions(box_cls, box_regression):
+def permute_all_cls_and_box_to_N_HWA_K_and_concat(box_cls, box_delta, num_classes=80):
     """
     Rearrange the tensor layout from the network output, i.e.:
     list[Tensor]: #lvl tensors of shape (N, A x K, Hi, Wi)
     to per-image predictions, i.e.:
     Tensor: of shape (N x sum(Hi x Wi x A), K)
     """
-    box_cls_flattened = []
-    box_regression_flattened = []
     # for each feature level, permute the outputs to make them be in the
     # same format as the labels. Note that the labels are computed for
     # all feature levels concatenated, so we keep the same representation
-    # for the objectness and the box_regression
-    for box_cls_per_level, box_regression_per_level in zip(box_cls, box_regression):
-        N, AxK, H, W = box_cls_per_level.shape
-        A = box_regression_per_level.shape[1] // 4
-        K = AxK // A
-        box_cls_per_level = _permute_to_N_HWA_K(box_cls_per_level, K)
-        box_cls_flattened.append(box_cls_per_level)
-
-        box_regression_per_level = _permute_to_N_HWA_K(box_regression_per_level, 4)
-        box_regression_flattened.append(box_regression_per_level)
+    # for the objectness and the box_delta
+    box_cls_flattened = [permute_to_N_HWA_K(x, num_classes) for x in box_cls]
+    box_delta_flattened = [permute_to_N_HWA_K(x, 4) for x in box_delta]
     # concatenate on the first dimension (representing the feature levels), to
     # take into account the way the labels were generated (with all feature maps
     # being concatenated as well)
-    box_cls = cat(box_cls_flattened, dim=1).view(-1, K)
-    box_regression = cat(box_regression_flattened, dim=1).view(-1, 4)
-    return box_cls, box_regression
+    box_cls = cat(box_cls_flattened, dim=1).view(-1, num_classes)
+    box_delta = cat(box_delta_flattened, dim=1).view(-1, 4)
+    return box_cls, box_delta
 
 
 @META_ARCH_REGISTRY.register()
@@ -136,14 +127,14 @@ class RetinaNet(nn.Module):
 
         features = self.backbone(images.tensor)
         features = [features[f] for f in self.in_features]
-        box_cls, box_regression = self.head(features)
+        box_cls, box_delta = self.head(features)
         anchors = self.anchor_generator(images, features)
 
         if self.training:
             gt_classes, gt_anchors_reg_deltas = self.get_ground_truth(anchors, gt_instances)
-            return self.losses(gt_classes, gt_anchors_reg_deltas, box_cls, box_regression)
+            return self.losses(gt_classes, gt_anchors_reg_deltas, box_cls, box_delta)
         else:
-            results = self.inference(box_cls, box_regression, anchors, images)
+            results = self.inference(box_cls, box_delta, anchors, images)
             processed_results = []
             for results_per_image, input_per_image, image_size in zip(
                 results, batched_inputs, images.image_sizes
@@ -169,8 +160,8 @@ class RetinaNet(nn.Module):
                 storing the loss. Used during training only. The dict keys are:
                 "loss_cls" and "loss_box_reg"
         """
-        pred_class_logits, pred_anchor_deltas = _reshape_predictions(
-            pred_class_logits, pred_anchor_deltas
+        pred_class_logits, pred_anchor_deltas = permute_all_cls_and_box_to_N_HWA_K_and_concat(
+            pred_class_logits, pred_anchor_deltas, self.num_classes
         )  # Shapes: (N x R, K) and (N x R, 4), respectively.
 
         gt_classes = gt_classes.flatten()
@@ -259,10 +250,10 @@ class RetinaNet(nn.Module):
 
         return torch.stack(gt_classes), torch.stack(gt_anchors_deltas)
 
-    def inference(self, box_cls, box_regression, anchors, images):
+    def inference(self, box_cls, box_delta, anchors, images):
         """
         Arguments:
-            box_cls, box_regression: Same as the output of :meth:`RetinaNetHead.forward`
+            box_cls, box_delta: Same as the output of :meth:`RetinaNetHead.forward`
             anchors (list[list[Boxes]]): a list of #images elements. Each is a
                 list of #feature level Boxes. The Boxes contain anchors of this
                 image on the specific feature level.
@@ -274,21 +265,21 @@ class RetinaNet(nn.Module):
         assert len(anchors) == len(images)
         results = []
 
-        box_cls = [_permute_to_N_HWA_K(x, self.num_classes) for x in box_cls]
-        box_regression = [_permute_to_N_HWA_K(x, 4) for x in box_regression]
+        box_cls = [permute_to_N_HWA_K(x, self.num_classes) for x in box_cls]
+        box_delta = [permute_to_N_HWA_K(x, 4) for x in box_delta]
         # list[Tensor], one per level, each has shape (N, Hi x Wi x A, K or 4)
 
         for img_idx, anchors_per_image in enumerate(anchors):
             image_size = images.image_sizes[img_idx]
             box_cls_per_image = [box_cls_per_level[img_idx] for box_cls_per_level in box_cls]
-            box_reg_per_image = [box_reg_per_level[img_idx] for box_reg_per_level in box_regression]
+            box_reg_per_image = [box_reg_per_level[img_idx] for box_reg_per_level in box_delta]
             results_per_image = self.inference_single_image(
                 box_cls_per_image, box_reg_per_image, anchors_per_image, tuple(image_size)
             )
             results.append(results_per_image)
         return results
 
-    def inference_single_image(self, box_cls, box_regression, anchors, image_size):
+    def inference_single_image(self, box_cls, box_delta, anchors, image_size):
         """
         Single-image inference. Return bounding-box detection results by thresholding
         on scores and applying non-maximum suppression (NMS).
@@ -296,7 +287,7 @@ class RetinaNet(nn.Module):
         Arguments:
             box_cls (list[Tensor]): list of #feature levels. Each entry contains
                 tensor of size (H x W x A, K)
-            box_regression (list[Tensor]): Same shape as 'box_cls' except that K becomes 4.
+            box_delta (list[Tensor]): Same shape as 'box_cls' except that K becomes 4.
             anchors (list[Boxes]): list of #feature levels. Each entry contains
                 a Boxes object, which contains all the anchors for that
                 image in that feature level.
@@ -310,7 +301,7 @@ class RetinaNet(nn.Module):
         class_idxs_all = []
 
         # Iterate over every feature level
-        for box_cls_i, box_reg_i, anchors_i in zip(box_cls, box_regression, anchors):
+        for box_cls_i, box_reg_i, anchors_i in zip(box_cls, box_delta, anchors):
             # (HxWxAxK,)
             box_cls_i = box_cls_i.flatten().sigmoid_()
 

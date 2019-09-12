@@ -135,6 +135,9 @@ _C.MODEL.FPN.OUT_CHANNELS = 256
 # Options: "" (no norm), "GN"
 _C.MODEL.FPN.NORM = ""
 
+# Types for fusing the FPN top-down and lateral features. Can be either "sum" or "avg"
+_C.MODEL.FPN.FUSE_TYPE = "sum"
+
 
 # ---------------------------------------------------------------------------- #
 # Proposal generator options

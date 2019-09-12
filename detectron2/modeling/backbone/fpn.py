@@ -18,7 +18,9 @@ class FPN(Backbone):
     It creates pyramid features built on top of some input feature maps.
     """
 
-    def __init__(self, bottom_up, in_features, out_channels, norm="", top_block=None):
+    def __init__(
+        self, bottom_up, in_features, out_channels, norm="", top_block=None, fuse_type="sum"
+    ):
         """
         Args:
             bottom_up (Backbone): module representing the bottom up subnetwork.
@@ -38,6 +40,9 @@ class FPN(Backbone):
                 "num_levels", meaning the number of extra FPN levels added by
                 this block, and "in_feature", which is a string representing
                 its input feature (e.g., p5).
+            fuse_type (str): types for fusing the top down features and the lateral
+                ones. It can be "sum" (default), which sums up element-wise; or "avg",
+                which takes the element-wise mean of the two.
         """
         super(FPN, self).__init__()
         assert isinstance(bottom_up, Backbone)
@@ -92,6 +97,8 @@ class FPN(Backbone):
         self._out_features = list(self._out_feature_strides.keys())
         self._out_feature_channels = {k: out_channels for k in self._out_features}
         self._size_divisibility = in_strides[-1]
+        assert fuse_type in {"avg", "sum"}
+        self._fuse_type = fuse_type
 
     @property
     def size_divisibility(self):
@@ -121,6 +128,8 @@ class FPN(Backbone):
             top_down_features = F.interpolate(prev_features, scale_factor=2, mode="nearest")
             lateral_features = lateral_conv(features)
             prev_features = lateral_features + top_down_features
+            if self._fuse_type == "avg":
+                prev_features /= 2
             results.insert(0, output_conv(prev_features))
 
         if self.top_block is not None:
@@ -196,6 +205,7 @@ def build_resnet_fpn_backbone(cfg):
         out_channels=out_channels,
         norm=cfg.MODEL.FPN.NORM,
         top_block=LastLevelMaxPool(),
+        fuse_type=cfg.MODEL.FPN.FUSE_TYPE,
     )
     return backbone
 
@@ -219,5 +229,6 @@ def build_retinanet_resnet_fpn_backbone(cfg):
         out_channels=out_channels,
         norm=cfg.MODEL.FPN.NORM,
         top_block=LastLevelP6P7(in_channels_p6p7, out_channels),
+        fuse_type=cfg.MODEL.FPN.FUSE_TYPE,
     )
     return backbone
