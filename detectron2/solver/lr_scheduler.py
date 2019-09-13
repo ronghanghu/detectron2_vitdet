@@ -42,6 +42,10 @@ class WarmupMultiStepLR(torch.optim.lr_scheduler._LRScheduler):
             for base_lr in self.base_lrs
         ]
 
+    def _compute_values(self):
+        # The new interface
+        return self.get_lr()
+
 
 class WarmupCosineLR(torch.optim.lr_scheduler._LRScheduler):
     def __init__(
@@ -76,6 +80,9 @@ class WarmupCosineLR(torch.optim.lr_scheduler._LRScheduler):
             for base_lr in self.base_lrs
         ]
 
+    def _compute_values(self):
+        # The new interface
+        return self.get_lr()
 
 def _get_warmup_factor_at_iter(method, iter, warmup_iters, warmup_factor):
     """
