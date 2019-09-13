@@ -8,7 +8,6 @@ import itertools
 import json
 import logging
 import os
-import pprint
 from collections import OrderedDict
 import torch
 from pycocotools import coco
@@ -18,6 +17,7 @@ from detectron2.data import MetadataCatalog
 from detectron2.evaluation import DatasetEvaluator
 from detectron2.structures import BoxMode
 from detectron2.utils.comm import all_gather, is_main_process, synchronize
+from detectron2.utils.logger import create_small_table
 
 from .densepose_coco_evaluation import DensePoseCocoEval
 
@@ -140,5 +140,5 @@ def _evaluate_predictions_on_coco(coco_gt, coco_results):
 
     # the standard metrics
     results = {metric: float(coco_eval.stats[idx] * 100) for idx, metric in enumerate(metrics)}
-    logger.info("Evaluation results for densepose: \n" + pprint.pformat(results))
+    logger.info("Evaluation results for densepose: \n" + create_small_table(results))
     return results

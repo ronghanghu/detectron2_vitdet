@@ -26,6 +26,7 @@ from detectron2.evaluation import (
 from detectron2.modeling import build_model
 from detectron2.solver import build_lr_scheduler, build_optimizer
 from detectron2.utils.events import CommonMetricPrinter, JSONWriter, TensorboardXWriter
+from detectron2.utils.logger import setup_logger
 
 from densepose import DatasetMapper, DensePoseCOCOEvaluator, add_densepose_config
 
@@ -112,6 +113,8 @@ def setup(args):
     cfg.merge_from_list(args.opts)
     cfg.freeze()
     default_setup(cfg, args)
+    # Setup logger for DensePose
+    setup_logger(output=cfg.OUTPUT_DIR, distributed_rank=comm.get_rank(), name='densepose')
     return cfg
 
 
