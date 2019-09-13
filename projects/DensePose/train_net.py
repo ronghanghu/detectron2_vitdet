@@ -114,7 +114,7 @@ def setup(args):
     cfg.freeze()
     default_setup(cfg, args)
     # Setup logger for DensePose
-    setup_logger(output=cfg.OUTPUT_DIR, distributed_rank=comm.get_rank(), name='densepose')
+    setup_logger(output=cfg.OUTPUT_DIR, distributed_rank=comm.get_rank(), name="densepose")
     return cfg
 
 

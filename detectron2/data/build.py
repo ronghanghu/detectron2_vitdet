@@ -305,7 +305,17 @@ def build_detection_train_loader(cfg, mapper=None, start_iter=0):
         mapper = DatasetMapper(cfg, True)
     dataset = MapDataset(dataset, mapper)
 
-    sampler = samplers.TrainingSampler(len(dataset))
+    sampler_name = cfg.DATALOADER.SAMPLER_TRAIN
+    logger = logging.getLogger(__name__)
+    logger.info("Using training sampler {}".format(sampler_name))
+    if sampler_name == "TrainingSampler":
+        sampler = samplers.TrainingSampler(len(dataset))
+    elif sampler_name == "RepeatFactorTrainingSampler":
+        sampler = samplers.RepeatFactorTrainingSampler(
+            dataset_dicts, cfg.DATALOADER.REPEAT_THRESHOLD
+        )
+    else:
+        raise ValueError("Unknown training sampler: {}".format(sampler_name))
     batch_sampler = build_batch_data_sampler(
         sampler, images_per_worker, group_bin_edges, aspect_ratios
     )

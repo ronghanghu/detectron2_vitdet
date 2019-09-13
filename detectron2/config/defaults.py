@@ -106,6 +106,10 @@ _C.DATALOADER.NUM_WORKERS = 4
 # is compatible. This groups portrait images together, and landscape images
 # are not batched with portrait images.
 _C.DATALOADER.ASPECT_RATIO_GROUPING = True
+# Options: TrainingSampler, RepeatFactorTrainingSampler
+_C.DATALOADER.SAMPLER_TRAIN = "TrainingSampler"
+# Repeat threshold for RepeatFactorTrainingSampler
+_C.DATALOADER.REPEAT_THRESHOLD = 0.0
 
 
 # ---------------------------------------------------------------------------- #
