@@ -19,6 +19,7 @@ from detectron2.data import MetadataCatalog
 from detectron2.modeling import build_model
 from detectron2.utils import comm
 from detectron2.utils.collect_env import collect_env_info
+from detectron2.utils.env import seed_all_rng
 from detectron2.utils.logger import setup_logger
 
 __all__ = ["default_argument_parser", "default_setup", "DefaultPredictor"]
@@ -76,14 +77,11 @@ def default_setup(cfg, args):
     if comm.is_main_process() and output_dir:
         PathManager.mkdirs(output_dir)
 
-    setup_logger(
-        os.path.join(output_dir, "borc.log"), distributed_rank=comm.get_rank(), name="borc"
-    )
-    logger = setup_logger(output_dir, distributed_rank=comm.get_rank())
+    rank = comm.get_rank()
+    setup_logger(os.path.join(output_dir, "borc.log"), distributed_rank=rank, name="borc")
+    logger = setup_logger(output_dir, distributed_rank=rank)
 
-    logger.info(
-        "Rank of current process: {}. World size: {}".format(comm.get_rank(), comm.get_world_size())
-    )
+    logger.info("Rank of current process: {}. World size: {}".format(rank, comm.get_world_size()))
     logger.info("Environment info:\n" + collect_env_info())
 
     logger.info("Command line arguments: " + str(args))
@@ -102,6 +100,9 @@ def default_setup(cfg, args):
         with PathManager.open(path, "w") as f:
             f.write(cfg.dump())
         logger.info("Full config saved to {}".format(os.path.abspath(path)))
+
+    # make sure each worker has a different, yet deterministic seed if specified
+    seed_all_rng(None if cfg.SEED < 0 else cfg.SEED + rank)
 
 
 class DefaultPredictor:

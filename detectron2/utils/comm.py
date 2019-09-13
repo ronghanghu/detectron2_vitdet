@@ -5,6 +5,7 @@ This is useful when doing distributed training.
 
 import functools
 import logging
+import numpy as np
 import pickle
 import torch
 import torch.distributed as dist
@@ -213,6 +214,20 @@ def gather(data, dst=0, group=None):
     else:
         dist.gather(tensor, [], dst=dst, group=group)
         return []
+
+
+def shared_random_seed():
+    """
+    Returns:
+        int: a random number that is the same across all workers.
+            If workers need a shared RNG, they can use this shared seed to
+            create one.
+
+    All workers must call this function, otherwise it will deadlock.
+    """
+    ints = np.random.randint(2 ** 31)
+    all_ints = all_gather(ints)
+    return all_ints[0]
 
 
 def reduce_dict(input_dict, average=True):

@@ -11,6 +11,7 @@ from termcolor import colored
 
 from detectron2.structures import BoxMode
 from detectron2.utils.comm import get_world_size
+from detectron2.utils.env import seed_all_rng
 from detectron2.utils.logger import log_first_n
 
 from . import samplers
@@ -304,7 +305,7 @@ def build_detection_train_loader(cfg, mapper=None, start_iter=0):
         mapper = DatasetMapper(cfg, True)
     dataset = MapDataset(dataset, mapper)
 
-    sampler = samplers.TrainingSampler(len(dataset), seed=start_iter)
+    sampler = samplers.TrainingSampler(len(dataset))
     batch_sampler = build_batch_data_sampler(
         sampler, images_per_worker, group_bin_edges, aspect_ratios
     )
@@ -314,6 +315,7 @@ def build_detection_train_loader(cfg, mapper=None, start_iter=0):
         num_workers=cfg.DATALOADER.NUM_WORKERS,
         batch_sampler=batch_sampler,
         collate_fn=trivial_batch_collator,
+        worker_init_fn=worker_init_reset_seed,
     )
     return data_loader
 
@@ -371,3 +373,7 @@ def trivial_batch_collator(batch):
     A batch collator that does nothing.
     """
     return batch
+
+
+def worker_init_reset_seed(worker_id):
+    seed_all_rng(np.random.randint(2 ** 31) + worker_id)

@@ -1,4 +1,5 @@
 import itertools
+from typing import Optional
 import torch
 from torch.utils.data.sampler import Sampler
 
@@ -15,22 +16,23 @@ class TrainingSampler(Sampler):
     where `indices` is an infinite stream of indices consisting of
     `shuffle(range(size)) + suhffle(range(size)) + ...` (if shuffle is True)
     or `range(size) + range(size) + ...` (if shuffle is False)
-
-    The sequence of shuffle is deterministic so that this class always produces the same
-    sequence of indices.
     """
 
-    def __init__(self, size: int, shuffle: bool = True, seed: int = -42):
+    def __init__(self, size: int, shuffle: bool = True, seed: Optional[int] = None):
         """
         Args:
             size (int): the total number of data of the underlying dataset to sample from
             shuffle (bool): whether to shuffle the indices or not
-            seed (int): The initial seed of the shuffle.
+            seed (int): the initial seed of the shuffle. Must be the same
+                across all workers. If None, will use a random seed shared
+                among workers (require synchronization among all workers).
         """
         self._size = size
         assert size > 0
         self._shuffle = shuffle
-        self._seed = seed
+        if seed is None:
+            seed = comm.shared_random_seed()
+        self._seed = int(seed)
 
         self._rank = comm.get_rank()
         self._world_size = comm.get_world_size()

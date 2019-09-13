@@ -60,20 +60,11 @@ class TransformGen(metaclass=ABCMeta):
     When this assumption is not true, you need to create the transforms by your own.
     """
 
-    def __init__(self):
-        self.reset()
-
     def _init(self, params=None):
         if params:
             for k, v in params.items():
                 if k != "self" and not k.startswith("_"):
                     setattr(self, k, v)
-
-    def reset(self):
-        """ reset rng and other state """
-        # TODO check if this has duplicate state between processes.
-        # self.rng = get_rng(self)
-        self.rng = np.random.RandomState()
 
     @abstractmethod
     def get_transform(self, img):
@@ -87,7 +78,7 @@ class TransformGen(metaclass=ABCMeta):
             low, high = 0, low
         if size is None:
             size = []
-        return self.rng.uniform(low, high, size)
+        return np.random.uniform(low, high, size)
 
     def __repr__(self):
         """
@@ -202,9 +193,9 @@ class ResizeShortestEdge(TransformGen):
         h, w = img.shape[:2]
 
         if self.is_range:
-            size = self.rng.randint(self.short_edge_length[0], self.short_edge_length[1] + 1)
+            size = np.random.randint(self.short_edge_length[0], self.short_edge_length[1] + 1)
         else:
-            size = self.rng.choice(self.short_edge_length)
+            size = np.random.choice(self.short_edge_length)
 
         scale = size * 1.0 / min(h, w)
         if h < w:
@@ -241,8 +232,8 @@ class RandomCrop(TransformGen):
         h, w = img.shape[:2]
         croph, cropw = self.get_crop_size((h, w))
         assert h >= croph and w >= cropw, "Shape computation in {} has bugs.".format(self)
-        h0 = self.rng.randint(h - croph + 1)
-        w0 = self.rng.randint(w - cropw + 1)
+        h0 = np.random.randint(h - croph + 1)
+        w0 = np.random.randint(w - cropw + 1)
         return CropTransform(w0, h0, cropw, croph)
 
     def get_crop_size(self, image_size):
@@ -296,11 +287,11 @@ class RandomExtent(TransformGen):
         src_rect = np.array([-0.5 * img_w, -0.5 * img_h, 0.5 * img_w, 0.5 * img_h])
 
         # Apply a random scaling to the src_rect.
-        src_rect *= self.rng.uniform(self.scale_range[0], self.scale_range[1])
+        src_rect *= np.random.uniform(self.scale_range[0], self.scale_range[1])
 
         # Apply a random shift to the coordinates origin.
-        src_rect[0::2] += self.shift_range[0] * img_w * (self.rng.rand() - 0.5)
-        src_rect[1::2] += self.shift_range[1] * img_h * (self.rng.rand() - 0.5)
+        src_rect[0::2] += self.shift_range[0] * img_w * (np.random.rand() - 0.5)
+        src_rect[1::2] += self.shift_range[1] * img_h * (np.random.rand() - 0.5)
 
         # Map src_rect coordinates into image coordinates (center at corner).
         src_rect[0::2] += 0.5 * img_w
@@ -334,7 +325,7 @@ class RandomContrast(TransformGen):
         self._init(locals())
 
     def get_transform(self, img):
-        w = self.rng.uniform(self.intensity_min, self.intensity_max)
+        w = np.random.uniform(self.intensity_min, self.intensity_max)
         return BlendTransform(src_image=img.mean(), src_weight=1 - w, dst_weight=w)
 
 
@@ -360,7 +351,7 @@ class RandomBrightness(TransformGen):
         self._init(locals())
 
     def get_transform(self, img):
-        w = self.rng.uniform(self.intensity_min, self.intensity_max)
+        w = np.random.uniform(self.intensity_min, self.intensity_max)
         return BlendTransform(src_image=0, src_weight=1 - w, dst_weight=w)
 
 
@@ -387,7 +378,7 @@ class RandomSaturation(TransformGen):
 
     def get_transform(self, img):
         assert img.shape[-1] == 3, "Saturation only works on RGB images"
-        w = self.rng.uniform(self.intensity_min, self.intensity_max)
+        w = np.random.uniform(self.intensity_min, self.intensity_max)
         grayscale = img.dot([0.299, 0.587, 0.114])[:, :, np.newaxis]
         return BlendTransform(src_image=grayscale, src_weight=1 - w, dst_weight=w)
 
