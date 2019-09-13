@@ -156,7 +156,7 @@ class CommonMetricPrinter:
         else:
             max_mem_mb = None
 
-        # NOTE: max mem is parsed by grep in "parse_coco_results.sh"
+        # NOTE: max_mem is parsed by grep in "parse_coco_results.sh"
         self.logger.info(
             """\
 eta: {eta}  iter: {iter}  {losses}  \
@@ -175,7 +175,7 @@ lr: {lr}  {memory}\
                 time="time: {:.4f}".format(time) if time is not None else "",
                 data_time="data_time: {:.4f}".format(data_time) if data_time is not None else "",
                 lr=lr,
-                memory="max mem: {:.0f}M".format(max_mem_mb) if max_mem_mb is not None else "",
+                memory="max_mem: {:.0f}M".format(max_mem_mb) if max_mem_mb is not None else "",
             )
         )
 
