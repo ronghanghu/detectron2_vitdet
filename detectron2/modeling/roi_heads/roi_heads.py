@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 from torch import nn
-from torch.nn import functional as F
 
 from detectron2.structures import Boxes, Instances, pairwise_iou
 from detectron2.utils.events import get_event_storage
@@ -347,7 +346,7 @@ class Res5ROIHeads(ROIHeads):
         box_features = self._shared_roi_transform(
             [features[f] for f in self.in_features], proposal_boxes
         )
-        feature_pooled = F.avg_pool2d(box_features, 7)  # gap
+        feature_pooled = box_features.mean(dim=[2, 3])  # pooled to 1x1
         pred_class_logits, pred_proposal_deltas = self.box_predictor(feature_pooled)
         del feature_pooled
 
