@@ -1,3 +1,4 @@
+import functools
 import logging
 import os
 import sys
@@ -40,10 +41,6 @@ def setup_logger(
             Set to "" to not log the root module in logs.
             By default, will abbreviate "detectron2" to "d2" and leave other
             modules unchanged.
-
-    Note:
-        If you want to reuse the detectron2-style logger for other modules,
-        avoid using the same output file: it may lead to conflicts in writing.
     """
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
@@ -81,12 +78,19 @@ def setup_logger(
             filename = filename + ".rank{}".format(distributed_rank)
         PathManager.mkdirs(os.path.dirname(filename))
 
-        fh = logging.StreamHandler(PathManager.open(filename, "a"))
+        fh = logging.StreamHandler(_cached_log_stream(filename))
         fh.setLevel(logging.DEBUG)
         fh.setFormatter(plain_formatter)
         logger.addHandler(fh)
 
     return logger
+
+
+# cache the opened file object, so that different calls to `setup_logger`
+# with the same file name can safely write to the same file.
+@functools.lru_cache(maxsize=None)
+def _cached_log_stream(filename):
+    return PathManager.open(filename, "a")
 
 
 """
