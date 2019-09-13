@@ -16,6 +16,7 @@ def get_densepose_metadata():
 SPLITS = {
     "densepose_coco_2014_train": ("coco/train2014", "coco/annotations/densepose_train2014.json"),
     "densepose_coco_2014_minival": ("coco/val2014", "coco/annotations/densepose_minival2014.json"),
+    "densepose_coco_2014_minival_100": ("coco/val2014", "coco/annotations/densepose_minival2014_100.json"),
     "densepose_coco_2014_valminusminival": (
         "coco/val2014",
         "coco/annotations/densepose_valminusminival2014.json",
