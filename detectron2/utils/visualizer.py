@@ -3,6 +3,7 @@ import numpy as np
 from enum import Enum, unique
 import cv2
 import matplotlib.colors as mc
+import io
 import matplotlib.pyplot as plt
 import pycocotools.mask as mask_util
 import torch
@@ -125,10 +126,12 @@ class VisImage:
               The shape is scaled w.r.t the input image using the given `scale` argument.
         """
         canvas = self.fig.canvas
-        canvas.draw()
-        buffer = np.frombuffer(canvas.tostring_rgb(), dtype="uint8")
+
+        buf = io.BytesIO()
+        canvas.print_rgba(buf)
+        buffer = np.frombuffer(buf.getvalue(), dtype="uint8")
         num_cols, num_rows = canvas.get_width_height()
-        visualized_image = buffer.reshape(num_rows, num_cols, 3)
+        visualized_image = buffer.reshape(num_rows, num_cols, 4)[:, :, :3]
         plt.close()
         return visualized_image
 

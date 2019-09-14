@@ -284,7 +284,7 @@ def _get_builtin_metadata(dataset_name):
     raise KeyError("No built-in metadata for dataset {}".format(dataset_name))
 
 
-# ==== Predefined instance detection/segmentation datasets and splits ==========
+# ==== Predefined datasets and splits for COCO ==========
 
 
 # Some predefined datasets in COCO format
@@ -333,15 +333,61 @@ _PREDEFINED_SPLITS_COCO["coco_person"] = {
 }
 
 
-for dataset_name, splits_per_dataset in _PREDEFINED_SPLITS_COCO.items():
-    for key, (image_root, json_file) in splits_per_dataset.items():
-        # Assume pre-defined datasets live in `./datasets`.
-        register_coco_instances(
-            key,
-            _get_builtin_metadata(dataset_name),
-            os.path.join("datasets", json_file) if "://" not in json_file else json_file,
-            os.path.join("datasets", image_root),
+_PREDEFINED_SPLITS_COCO_PANOPTIC = {
+    "coco_2017_train_panoptic": (
+        # This is the original panoptic annotation directory
+        "coco/panoptic_train2017",
+        "coco/annotations/panoptic_train2017.json",
+        # This directory contains semantic annotations that are
+        # converted from panoptic annotations.
+        # It is used by PanopticFPN.
+        # You can use the script at detectron2/datasets/prepare_panoptic_fpn.py
+        # to create these directories.
+        "coco/panoptic_stuff_train2017",
+    ),
+    "coco_2017_val_panoptic": (
+        "coco/panoptic_val2017",
+        "coco/annotations/panoptic_val2017.json",
+        "coco/panoptic_stuff_val2017",
+    ),
+    "coco_2017_val_100_panoptic": (
+        "coco/panoptic_val2017_100",
+        "coco/annotations/panoptic_val2017_100.json",
+        "coco/panoptic_stuff_val2017_100",
+    ),
+}
+
+
+def register_all_coco(dirname="datasets"):
+    for dataset_name, splits_per_dataset in _PREDEFINED_SPLITS_COCO.items():
+        for key, (image_root, json_file) in splits_per_dataset.items():
+            # Assume pre-defined datasets live in `./datasets`.
+            register_coco_instances(
+                key,
+                _get_builtin_metadata(dataset_name),
+                os.path.join(dirname, json_file) if "://" not in json_file else json_file,
+                os.path.join(dirname, image_root),
+            )
+
+    for (
+        prefix,
+        (panoptic_root, panoptic_json, semantic_root),
+    ) in _PREDEFINED_SPLITS_COCO_PANOPTIC.items():
+        prefix_instances = prefix[: -len("_panoptic")]
+        instances_meta = MetadataCatalog.get(prefix_instances)
+        image_root, instances_json = instances_meta.image_root, instances_meta.json_file
+        register_coco_panoptic_separated(
+            prefix,
+            _get_builtin_metadata("coco_panoptic_separated"),
+            image_root,
+            os.path.join(dirname, panoptic_root),
+            os.path.join(dirname, panoptic_json),
+            os.path.join(dirname, semantic_root),
+            instances_json,
         )
+
+
+# ==== Predefined datasets and splits for LVIS ==========
 
 
 _PREDEFINED_SPLITS_LVIS = {
@@ -354,15 +400,16 @@ _PREDEFINED_SPLITS_LVIS = {
 }
 
 
-for dataset_name, splits_per_dataset in _PREDEFINED_SPLITS_LVIS.items():
-    for key, (image_root, json_file) in splits_per_dataset.items():
-        # Assume pre-defined datasets live in `./datasets`.
-        register_lvis_instances(
-            key,
-            get_lvis_instances_meta(dataset_name),
-            os.path.join("datasets", json_file) if "://" not in json_file else json_file,
-            os.path.join("datasets", image_root),
-        )
+def register_all_lvis(dirname="datasets"):
+    for dataset_name, splits_per_dataset in _PREDEFINED_SPLITS_LVIS.items():
+        for key, (image_root, json_file) in splits_per_dataset.items():
+            # Assume pre-defined datasets live in `./datasets`.
+            register_lvis_instances(
+                key,
+                get_lvis_instances_meta(dataset_name),
+                os.path.join(dirname, json_file) if "://" not in json_file else json_file,
+                os.path.join(dirname, image_root),
+            )
 
 
 # ==== Predefined splits for raw cityscapes images ===========
@@ -379,61 +426,25 @@ _RAW_CITYSCAPES_SPLITS = {
         "cityscapes/gtFine/test",
     ),
 }
-for key, (image_dir, gt_dir) in _RAW_CITYSCAPES_SPLITS.items():
-    meta = _get_builtin_metadata("cityscapes")
-    image_dir = os.path.join("datasets", image_dir)
-    gt_dir = os.path.join("datasets", gt_dir)
-    DatasetCatalog.register(
-        key,
-        lambda x=image_dir, y=gt_dir: load_cityscapes_instances(
-            x, y, from_json=True, to_polygons=True
-        ),
-    )
-    MetadataCatalog.get(key).set(
-        image_dir=image_dir, gt_dir=gt_dir, evaluator_type="cityscapes", **meta
-    )
 
 
-# ==== Predefined panoptic segmentation datasets and splits ==========
+def register_all_cityscapes(dirname="datasets"):
+    for key, (image_dir, gt_dir) in _RAW_CITYSCAPES_SPLITS.items():
+        meta = _get_builtin_metadata("cityscapes")
+        image_dir = os.path.join(dirname, image_dir)
+        gt_dir = os.path.join(dirname, gt_dir)
+        DatasetCatalog.register(
+            key,
+            lambda x=image_dir, y=gt_dir: load_cityscapes_instances(
+                x, y, from_json=True, to_polygons=True
+            ),
+        )
+        MetadataCatalog.get(key).set(
+            image_dir=image_dir, gt_dir=gt_dir, evaluator_type="cityscapes", **meta
+        )
 
 
-_PREDEFINED_SPLITS_COCO_PANOPTIC = {
-    "coco_2017_train_panoptic": (
-        # This is the original panoptic annotation directory
-        "coco/panoptic_train2017",
-        "coco/annotations/panoptic_train2017.json",
-        # This directory contains semantic annotations that are
-        # converted from panoptic annotations.
-        # It is used by PanopticFPN.
-        # You can use the script at datasets/prepare_panoptic_fpn.py
-        # to create these directories.
-        "coco/panoptic_stuff_train2017",
-    ),
-    "coco_2017_val_panoptic": (
-        "coco/panoptic_val2017",
-        "coco/annotations/panoptic_val2017.json",
-        "coco/panoptic_stuff_val2017",
-    ),
-    "coco_2017_val_100_panoptic": (
-        "coco/panoptic_val2017_100",
-        "coco/annotations/panoptic_val2017_100.json",
-        "coco/panoptic_stuff_val2017_100",
-    ),
-}
-
-for (
-    prefix,
-    (panoptic_root, panoptic_json, semantic_root),
-) in _PREDEFINED_SPLITS_COCO_PANOPTIC.items():
-    prefix_instances = prefix[: -len("_panoptic")]
-    instances_meta = MetadataCatalog.get(prefix_instances)
-    image_root, instances_json = instances_meta.image_root, instances_meta.json_file
-    register_coco_panoptic_separated(
-        prefix,
-        _get_builtin_metadata("coco_panoptic_separated"),
-        image_root,
-        os.path.join("datasets", panoptic_root),
-        os.path.join("datasets", panoptic_json),
-        os.path.join("datasets", semantic_root),
-        instances_json,
-    )
+# Register them all under "./datasets"
+register_all_coco()
+register_all_lvis()
+register_all_cityscapes()

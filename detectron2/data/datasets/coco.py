@@ -23,7 +23,8 @@ __all__ = ["load_coco_json", "load_sem_seg"]
 def load_coco_json(json_file, image_root, dataset_name=None):
     """
     Load a json file with COCO's instances annotation format.
-    Currently only supports instance detection/segmentation annotations.
+    Currently supports instance detection, instance segmentation,
+    person keypoints and densepose annotations.
 
     Args:
         json_file (str): full path to the json file in COCO instances annotation format.

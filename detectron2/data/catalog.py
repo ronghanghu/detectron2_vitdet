@@ -62,6 +62,13 @@ class DatasetCatalog(object):
         """
         return list(DatasetCatalog._REGISTERED.keys())
 
+    @staticmethod
+    def clear():
+        """
+        Remove all registered dataset.
+        """
+        DatasetCatalog._REGISTERED.clear()
+
 
 class Metadata(types.SimpleNamespace):
     """

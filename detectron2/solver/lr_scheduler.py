@@ -84,6 +84,7 @@ class WarmupCosineLR(torch.optim.lr_scheduler._LRScheduler):
         # The new interface
         return self.get_lr()
 
+
 def _get_warmup_factor_at_iter(method, iter, warmup_iters, warmup_factor):
     """
     Return the learning rate warmup factor at a specific iteration.
