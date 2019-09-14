@@ -305,7 +305,6 @@ class RPNOutputs(object):
             pos_idx, neg_idx = subsample_labels(
                 label, self.batch_size_per_image, self.positive_fraction, 0
             )
-            assert pos_idx.numel() > 0, "There must be positive anchors!"
             # Fill with the ignore label (-1), then set positive and negative labels
             label.fill_(-1)
             label.scatter_(0, pos_idx, 1)

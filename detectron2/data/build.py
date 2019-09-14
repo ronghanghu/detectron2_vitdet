@@ -29,7 +29,7 @@ __all__ = ["build_detection_train_loader", "build_detection_test_loader"]
 
 def filter_images_with_only_crowd_annotations(dataset_dicts):
     """
-    Filter out images with only crowd annotations
+    Filter out images with none annotations or only crowd annotations
     (i.e., images without non-crowd annotations).
     A common training-time preprocessing on COCO dataset.
 
@@ -230,6 +230,51 @@ def build_batch_data_sampler(
     return batch_sampler
 
 
+def get_detection_dataset_dicts(
+    dataset_names, filter_empty=True, min_keypoints=0, proposal_files=None
+):
+    """
+    Load and prepare dataset dicts for instance detection/segmentation and semantic segmentation.
+
+    Args:
+        dataset_names (list[str]): a list of dataset names
+        filter_empty (bool): whether to filter out images without instance annotations
+        min_keypoints (int): filter out images with fewer keypoints than
+            `min_keypoints`. Set to 0 to do nothing.
+        proposal_files (list[str]): if given, a list of object proposal files
+            that match each dataset in `dataset_names`.
+    """
+    assert len(dataset_names)
+    dataset_dicts = [DatasetCatalog.get(dataset_name) for dataset_name in dataset_names]
+
+    if proposal_files is not None:
+        assert len(dataset_names) == len(proposal_files)
+        # load precomputed proposals from proposal files
+        dataset_dicts = [
+            load_proposals_into_dataset(dataset_i_dicts, proposal_file)
+            for dataset_i_dicts, proposal_file in zip(dataset_dicts, proposal_files)
+        ]
+
+    dataset_dicts = list(itertools.chain.from_iterable(dataset_dicts))
+
+    has_instances = "annotations" in dataset_dicts[0]
+    # Keep images without instance-level GT if the dataset has semantic labels.
+    if filter_empty and has_instances and "sem_seg_file_name" not in dataset_dicts[0]:
+        dataset_dicts = filter_images_with_only_crowd_annotations(dataset_dicts)
+
+    if min_keypoints > 0 and has_instances:
+        dataset_dicts = filter_images_with_few_keypoints(dataset_dicts, min_keypoints)
+
+    if has_instances:
+        try:
+            class_names = MetadataCatalog.get(dataset_names[0]).class_names
+            check_metadata_consistency("class_names", dataset_names)
+            print_instances_class_histogram(dataset_dicts, class_names)
+        except AttributeError:  # class names are not available for this dataset
+            pass
+    return dataset_dicts
+
+
 def build_detection_train_loader(cfg, mapper=None, start_iter=0):
     """
     A data loader is created by the following steps:
@@ -265,35 +310,14 @@ def build_detection_train_loader(cfg, mapper=None, start_iter=0):
     )
     images_per_worker = images_per_batch // num_workers
 
-    assert len(cfg.DATASETS.TRAIN)
-    dataset_dicts = [DatasetCatalog.get(dataset_name) for dataset_name in cfg.DATASETS.TRAIN]
-    if cfg.MODEL.LOAD_PROPOSALS:
-        assert len(cfg.DATASETS.TRAIN) == len(cfg.DATASETS.PROPOSAL_FILES_TRAIN)
-        # load precomputed proposals from proposal files
-        dataset_dicts = [
-            load_proposals_into_dataset(dataset_i_dicts, proposal_file)
-            for dataset_i_dicts, proposal_file in zip(
-                dataset_dicts, cfg.DATASETS.PROPOSAL_FILES_TRAIN
-            )
-        ]
-
-    dataset_dicts = list(itertools.chain.from_iterable(dataset_dicts))
-
-    if "annotations" in dataset_dicts[0]:
-        # TODO: Do not filter out images without instance-level GT if a model has both semantic and
-        # instance heads. Currently instance-level head cannot handle empty GT.
-        dataset_dicts = filter_images_with_only_crowd_annotations(dataset_dicts)
-        if cfg.MODEL.KEYPOINT_ON:
-            min_kp = cfg.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE
-            if min_kp > 0:
-                dataset_dicts = filter_images_with_few_keypoints(dataset_dicts, min_kp)
-
-        try:
-            class_names = MetadataCatalog.get(cfg.DATASETS.TRAIN[0]).class_names
-            check_metadata_consistency("class_names", cfg.DATASETS.TRAIN)
-            print_instances_class_histogram(dataset_dicts, class_names)
-        except AttributeError:  # class names are not available for this dataset
-            pass
+    dataset_dicts = get_detection_dataset_dicts(
+        cfg.DATASETS.TRAIN,
+        filter_empty=True,
+        min_keypoints=cfg.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE
+        if cfg.MODEL.KEYPOINT_ON
+        else 0,
+        proposal_files=cfg.DATASETS.PROPOSAL_FILES_TRAIN if cfg.MODEL.LOAD_PROPOSALS else None,
+    )
     dataset = DatasetFromList(dataset_dicts, copy=False)
 
     # Bin edges for batching images with similar aspect ratios. If ASPECT_RATIO_GROUPING
@@ -347,17 +371,15 @@ def build_detection_test_loader(cfg, dataset_name, mapper=None):
         DataLoader: a torch DataLoader, that loads the given detection
             dataset, with test-time transformation and batching.
     """
-    dataset_dicts = DatasetCatalog.get(dataset_name)
-
-    if cfg.MODEL.LOAD_PROPOSALS:
-        assert len(cfg.DATASETS.PROPOSAL_FILES_TEST) == len(cfg.DATASETS.TEST)
-        assert dataset_name in cfg.DATASETS.TEST, "{} not in cfg.DATASETS.TEST!".format(
-            dataset_name
-        )
-        dataset_index = list(cfg.DATASETS.TEST).index(dataset_name)
-        proposal_file = cfg.DATASETS.PROPOSAL_FILES_TEST[dataset_index]
-        # load precomputed proposals from proposal files
-        dataset_dicts = load_proposals_into_dataset(dataset_dicts, proposal_file)
+    dataset_dicts = get_detection_dataset_dicts(
+        [dataset_name],
+        filter_empty=False,
+        proposal_files=[
+            cfg.DATASETS.PROPOSAL_FILES_TEST[list(cfg.DATASETS.TEST).index(dataset_name)]
+        ]
+        if cfg.MODEL.LOAD_PROPOSALS
+        else None,
+    )
 
     dataset = DatasetFromList(dataset_dicts)
     if mapper is None:
