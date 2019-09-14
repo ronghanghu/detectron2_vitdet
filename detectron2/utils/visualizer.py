@@ -9,7 +9,7 @@ import torch
 from matplotlib.lines import Line2D
 from matplotlib.patches import Polygon
 
-from detectron2.structures import Boxes, BoxMode, PolygonMasks
+from detectron2.structures import Boxes, BoxMode, Keypoints, PolygonMasks
 
 from .colormap import random_color
 
@@ -368,7 +368,7 @@ class Visualizer:
                 level to all the polygon that compose the instance, and the third level
                 to the polygon coordinates. The third level is either a Tensor or a numpy
                 array that should have the format of [x0, y0, x1, y1, ..., xn, yn] (n >= 3).
-            keypoints (array like): an array-like object of shape (N, K, 3),
+            keypoints (Keypoint or array like): an array-like object of shape (N, K, 3),
                 where the N is the number of instances and K is the number of keypoints.
                 The last dimension corresponds to (x, y, visibility or score).
             assigned_colors (list[matplotlib.colors]): a list of colors, where each color
@@ -393,7 +393,7 @@ class Visualizer:
                 assert len(keypoints) == num_instances
             else:
                 num_instances = len(keypoints)
-            keypoints = np.asarray(keypoints)
+            keypoints = self._convert_keypoints(keypoints)
         if labels is not None:
             assert len(labels) == num_instances
         if assigned_colors is None:
@@ -759,6 +759,12 @@ class Visualizer:
             return m.polygons
         else:
             return [to_polygons(p) for p in masks_or_polygons]
+
+    def _convert_keypoints(self, keypoints):
+        if isinstance(keypoints, Keypoints):
+            keypoints = keypoints.tensor
+        keypoints = np.asarray(keypoints)
+        return keypoints
 
     def get_output(self):
         """
