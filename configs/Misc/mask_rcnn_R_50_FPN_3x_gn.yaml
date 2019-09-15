@@ -1,4 +1,4 @@
-_BASE_: "Base-RCNN-FPN.yaml"
+_BASE_: "../Base-RCNN-FPN.yaml"
 MODEL:
   WEIGHT: "catalog://ImageNetPretrained/FAIR/R-50-GN"
   MASK_ON: True
@@ -16,5 +16,6 @@ MODEL:
   ROI_MASK_HEAD:
     NORM: "GN"
 SOLVER:
-  STEPS: (120000, 160000)
-  MAX_ITER: 180000
+  # 3x schedule
+  STEPS: (210000, 250000)
+  MAX_ITER: 270000

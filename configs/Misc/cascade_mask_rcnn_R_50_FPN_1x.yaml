@@ -1,15 +1,12 @@
-_BASE_: "Base-RCNN-FPN.yaml"
+_BASE_: "../Base-RCNN-FPN.yaml"
 MODEL:
   WEIGHT: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
   MASK_ON: True
   RESNETS:
     DEPTH: 50
-  ROI_BOX_HEAD:
-    POOLER_TYPE: ROIAlignV2
-    CLS_AGNOSTIC_BBOX_REG: True
-  ROI_MASK_HEAD:
-    POOLER_TYPE: ROIAlignV2
   ROI_HEADS:
     NAME: CascadeROIHeads
+  ROI_BOX_HEAD:
+    CLS_AGNOSTIC_BBOX_REG: True
   RPN:
     POST_NMS_TOPK_TRAIN: 2000
