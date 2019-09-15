@@ -555,6 +555,9 @@ _C.OUTPUT_DIR = "./output"
 # Set seed to positive to use a fixed seed. Note that a fixed seed does not
 # guarantee fully deterministic behavior.
 _C.SEED = -1
+# Benchmark different cudnn algorithms. It has large overhead for about 10k
+# iterations. It usually hurts total time, but can benefit for certain models.
+_C.CUDNN_BENCHMARK = False
 
 # global config is for quick hack purposes.
 # You can set them in command line or config files,
