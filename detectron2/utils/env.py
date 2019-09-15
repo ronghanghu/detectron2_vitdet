@@ -1,7 +1,7 @@
 import importlib
 import importlib.util
-import numpy as np
 import logging
+import numpy as np
 import os
 import random
 import sys

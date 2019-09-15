@@ -1,6 +1,7 @@
 #include "ROIAlign/ROIAlign.h"
 #include "box_iou_rotated/box_iou_rotated.h"
 #include "deformable/deform_conv.h"
+#include "nms_rotated/nms_rotated.h"
 
 namespace detectron2 {
 
@@ -49,6 +50,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       "modulated_deform_conv_backward",
       &modulated_deform_conv_backward,
       "modulated_deform_conv_backward");
+
+  m.def("nms_rotated", &nms_rotated, "NMS for rotated boxes");
 
   m.def("roi_align_forward", &ROIAlign_forward, "ROIAlign_forward");
   m.def("roi_align_backward", &ROIAlign_backward, "ROIAlign_backward");

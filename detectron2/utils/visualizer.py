@@ -1,9 +1,9 @@
 import colorsys
+import io
 import numpy as np
 from enum import Enum, unique
 import cv2
 import matplotlib.colors as mc
-import io
 import matplotlib.pyplot as plt
 import pycocotools.mask as mask_util
 import torch
