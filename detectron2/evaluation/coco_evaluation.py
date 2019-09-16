@@ -251,6 +251,7 @@ def instances_to_json(instances, img_id):
             # keypoints coordinates are pixel indices.
             # However our predictions are floating point coordinates.
             # Therefore we subtract 0.5 to be consistent with the annotation format.
+            # This is the inverse of data loading logic in `datasets/coco.py`.
             keypoints[k][:, :2] -= 0.5
             result["keypoints"] = keypoints[k].flatten().tolist()
         results.append(result)

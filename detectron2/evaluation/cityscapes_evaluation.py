@@ -16,7 +16,9 @@ class CityscapesEvaluator(DatasetEvaluator):
     """
     Evaluate instance segmentation results using cityscapes API.
 
-    Note: does not work in distributed training for now
+    Note:
+        * It does not work in multi-machine distributed training.
+        * It contains a synchronization, therefore has to be used on all ranks.
     """
 
     def __init__(self, dataset_name):

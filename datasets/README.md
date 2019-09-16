@@ -9,14 +9,10 @@ You can link the original datasets to this directory.
 ```
 coco/
   annotations/
-    instances_train2017.json
-    instances_val2017.json
-    person_keypoints_train2017.json
-    person_keypoints_val2017.json
-  train2017/
+    instances_{train,val}2017.json
+    person_keypoints_{train,val}2017.json
+  {train,val}2017/
     # image files that are mentioned in the corresponding json
-  val2017/
-    # image files that are mentioned in corresponding json
 ```
 
 You can use the 2014 version of the dataset as well.
@@ -28,15 +24,21 @@ which you can download with `./prepare_for_tests.sh`.
 ```
 coco/
   annotations/
-    panoptic_train2017.json
-    panoptic_val2017.json
-  panoptic_train2017/
-    # png annotations
-  panoptic_val2017/
+    panoptic_{train,val}2017.json
+  panoptic_{train,val}2017/
     # png annotations
 ```
 
 Then, run `./prepare_panoptic_fpn.py`, to extract semantic annotations from panoptic annotations.
+
+## Expected dataset structure for LVIS instance detection/segmentation:
+```
+coco/
+  {train,val,test}2017/
+lvis/
+  lvis_v0.5_{train,val}.json
+	lvis_v0.5_image_info_test.json
+```
 
 ## Expected dataset structure for cityscapes:
 ```
@@ -52,4 +54,12 @@ cityscapes/
     train/
     val/
     test/
+```
+
+## Expected dataset structure for Pascal VOC:
+```
+VOC20{07,12}/
+  Annotations/
+	ImageSets/
+	JPEGImages/
 ```

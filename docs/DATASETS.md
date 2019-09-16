@@ -17,16 +17,15 @@ can read from "file_name" if "image" is not available.
 + sem_seg: semantic segmentation ground truth in a 2D numpy array. Values in the array represent
  		semantic labels.
 + height, width: integer. The size of image.
-+ image_id (str): a string to identify this image.
-		Each dataset may use it for different purposes.
++ image_id (str): a string to identify this image. Mainly used during evaluation to identify the
+		image. Each dataset may use it for different purposes.
 + annotations (list[dict]): the per-instance annotations of every
 		instance in this image. Each annotation dict may contain:
-	+ iscrowd: 0 or 1. Whether this instance is labeled as COCO's "crowd region".
 	+ bbox (list[float]): list of 4 numbers representing the bounding box of the instance.
 	+ bbox_mode (int): the format of bbox.
 			It must be a member of [detectron2.structures.BoxMode](detectron2/structures/boxes.py).
 		  Currently only supports `BoxMode.XYXY_ABS` and `BoxMode.XYWH_ABS`.
-	+ category_id (int): a __positive__ integer in the range [1, num_categories].
+	+ category_id (int): an integer in the range [0, num_categories).
 	+ segmentation (list[list[float]] or dict):
 		+ For `list[list[float]]`, it represents the polygons of
 			each object part. Each `list[float]` is one polygon in the
@@ -42,6 +41,7 @@ can read from "file_name" if "image" is not available.
 
 				Note that the coordinate annotations in COCO format are integers in range [0, H-1 or W-1].
 				They are added by 0.5 to become absolute coordinates.
+	+ iscrowd: 0 or 1. Whether this instance is labeled as COCO's "crowd region". Optional.
 + proposal_boxes (array): 2D numpy array with shape (K, 4). K precomputed proposal boxes for this image.
 + proposal_objectness_logits (array): numpy array with shape (K, ), which corresponds to the objectness
         logits of proposals in 'propopsal_boxes'.

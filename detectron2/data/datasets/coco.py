@@ -143,9 +143,7 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
             # can trigger this assertion.
             assert anno["image_id"] == image_id
 
-            # skip instances labeled as ignore
-            if anno.get("ignore", 0) == 1:
-                continue
+            assert anno.get("ignore", 0) == 0
 
             obj = {
                 field: anno[field]

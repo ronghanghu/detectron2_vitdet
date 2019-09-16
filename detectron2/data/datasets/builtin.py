@@ -22,6 +22,7 @@ from detectron2.data import MetadataCatalog, DatasetCatalog
 from .register_coco import register_coco_instances, register_coco_panoptic_separated
 from .lvis import register_lvis_instances, get_lvis_instances_meta
 from .cityscapes import load_cityscapes_instances
+from .pascal_voc import register_pascal_voc
 
 # All coco categories, together with their nice-looking visualization colors
 # It's from https://github.com/cocodataset/panopticapi/blob/master/panoptic_coco_categories.json
@@ -358,15 +359,15 @@ _PREDEFINED_SPLITS_COCO_PANOPTIC = {
 }
 
 
-def register_all_coco(dirname="datasets"):
+def register_all_coco(root="datasets"):
     for dataset_name, splits_per_dataset in _PREDEFINED_SPLITS_COCO.items():
         for key, (image_root, json_file) in splits_per_dataset.items():
             # Assume pre-defined datasets live in `./datasets`.
             register_coco_instances(
                 key,
                 _get_builtin_metadata(dataset_name),
-                os.path.join(dirname, json_file) if "://" not in json_file else json_file,
-                os.path.join(dirname, image_root),
+                os.path.join(root, json_file) if "://" not in json_file else json_file,
+                os.path.join(root, image_root),
             )
 
     for (
@@ -380,9 +381,9 @@ def register_all_coco(dirname="datasets"):
             prefix,
             _get_builtin_metadata("coco_panoptic_separated"),
             image_root,
-            os.path.join(dirname, panoptic_root),
-            os.path.join(dirname, panoptic_json),
-            os.path.join(dirname, semantic_root),
+            os.path.join(root, panoptic_root),
+            os.path.join(root, panoptic_json),
+            os.path.join(root, semantic_root),
             instances_json,
         )
 
@@ -400,15 +401,15 @@ _PREDEFINED_SPLITS_LVIS = {
 }
 
 
-def register_all_lvis(dirname="datasets"):
+def register_all_lvis(root="datasets"):
     for dataset_name, splits_per_dataset in _PREDEFINED_SPLITS_LVIS.items():
         for key, (image_root, json_file) in splits_per_dataset.items():
             # Assume pre-defined datasets live in `./datasets`.
             register_lvis_instances(
                 key,
                 get_lvis_instances_meta(dataset_name),
-                os.path.join(dirname, json_file) if "://" not in json_file else json_file,
-                os.path.join(dirname, image_root),
+                os.path.join(root, json_file) if "://" not in json_file else json_file,
+                os.path.join(root, image_root),
             )
 
 
@@ -428,11 +429,11 @@ _RAW_CITYSCAPES_SPLITS = {
 }
 
 
-def register_all_cityscapes(dirname="datasets"):
+def register_all_cityscapes(root="datasets"):
     for key, (image_dir, gt_dir) in _RAW_CITYSCAPES_SPLITS.items():
         meta = _get_builtin_metadata("cityscapes")
-        image_dir = os.path.join(dirname, image_dir)
-        gt_dir = os.path.join(dirname, gt_dir)
+        image_dir = os.path.join(root, image_dir)
+        gt_dir = os.path.join(root, gt_dir)
         DatasetCatalog.register(
             key,
             lambda x=image_dir, y=gt_dir: load_cityscapes_instances(
@@ -444,7 +445,25 @@ def register_all_cityscapes(dirname="datasets"):
         )
 
 
+# ==== Predefined splits for PASCAL VOC ===========
+def register_all_pascal_voc(root="datasets"):
+    SPLITS = [
+        ("voc_2007_trainval", "VOC2007", "trainval"),
+        ("voc_2007_train", "VOC2007", "train"),
+        ("voc_2007_val", "VOC2007", "val"),
+        ("voc_2007_test", "VOC2007", "test"),
+        ("voc_2012_trainval", "VOC2012", "trainval"),
+        ("voc_2012_train", "VOC2012", "train"),
+        ("voc_2012_val", "VOC2012", "val"),
+    ]
+    for name, dirname, split in SPLITS:
+        year = 2007 if "2007" in name else 2012
+        register_pascal_voc(name, os.path.join(root, dirname), split, year)
+        MetadataCatalog.get(name).evaluator_type = "pascal_voc"
+
+
 # Register them all under "./datasets"
 register_all_coco()
 register_all_lvis()
 register_all_cityscapes()
+register_all_pascal_voc()
