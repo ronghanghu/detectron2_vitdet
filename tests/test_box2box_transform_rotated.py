@@ -1,7 +1,10 @@
+import logging
 import unittest
 import torch
 
 from detectron2.modeling.box_regression import Box2BoxTransformRotated
+
+logger = logging.getLogger(__name__)
 
 
 def random_rotated_boxes(mean_box, std_length, std_angle, N):
@@ -25,7 +28,7 @@ class TestBox2BoxTransformRotated(unittest.TestCase):
             dst_boxes = dst_boxes.to(device=device)
             deltas = b2b_transform.get_deltas(src_boxes, dst_boxes)
             dst_boxes_reconstructed = b2b_transform.apply_deltas(deltas, src_boxes)
-            assert torch.allclose(dst_boxes, dst_boxes_reconstructed)
+            assert torch.allclose(dst_boxes, dst_boxes_reconstructed, atol=1e-5)
 
 
 if __name__ == "__main__":
