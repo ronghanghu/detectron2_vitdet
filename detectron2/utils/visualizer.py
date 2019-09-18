@@ -251,7 +251,13 @@ class Visualizer:
 
         return self.output
 
-    def draw_panoptic_seg_predictions(self, panoptic_seg, segments_info, area_limit=None):
+    def draw_panoptic_seg_predictions(
+        self,
+        panoptic_seg,
+        segments_info,
+        area_limit=None,
+        alpha=0.9
+    ):
         """
         Draw panoptic prediction results on an image.
 
@@ -273,7 +279,6 @@ class Visualizer:
         sorted_idxs = np.argsort(-areas)
         segment_ids, areas = segment_ids[sorted_idxs], areas[sorted_idxs]
 
-        alpha = 0.9
         edge_color = [x / 255 for x in _OFF_WHITE]
 
         # draw mask for all semantic segments first i.e. "stuff"
