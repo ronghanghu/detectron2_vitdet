@@ -1,6 +1,6 @@
 _BASE_: "../COCO-Detection/retinanet_R_50_FPN_1x.yaml"
 MODEL:
-  WEIGHT: "detectron2://COCO-Detection/retinanet_R_50_FPN_1x/137593951/model_final_b796dc.pkl"
+  WEIGHTS: "detectron2://COCO-Detection/retinanet_R_50_FPN_1x/137593951/model_final_b796dc.pkl"
 DATASETS:
   TEST: ("coco_2017_val_100",)
 TEST:

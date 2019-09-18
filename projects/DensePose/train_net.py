@@ -74,7 +74,7 @@ def do_train(cfg, model, resume=True):
     # The checkpoint stores the training iteration that just finished, thus we start
     # at the next iteration (or iter zero if there's no checkpoint).
     start_iter = (
-        checkpointer.resume_or_load(cfg.MODEL.WEIGHT, resume=resume).get("iteration", -1) + 1
+        checkpointer.resume_or_load(cfg.MODEL.WEIGHTS, resume=resume).get("iteration", -1) + 1
     )
     max_iter = cfg.SOLVER.MAX_ITER
 
@@ -122,7 +122,7 @@ def main(args):
 
     if args.eval_only:
         DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
-            cfg.MODEL.WEIGHT, resume=args.resume
+            cfg.MODEL.WEIGHTS, resume=args.resume
         )
         return do_test(cfg, model)
 

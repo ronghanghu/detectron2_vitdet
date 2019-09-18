@@ -4,7 +4,7 @@ from torch import nn
 
 from detectron2.utils.registry import Registry
 
-from ..anchor_generator import DefaultAnchorGenerator
+from ..anchor_generator import build_anchor_generator
 from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher
 from .build import PROPOSAL_GENERATOR_REGISTRY
@@ -41,17 +41,13 @@ def shared_rpn_head_num_cell_anchors(cfg):
     That's why the length of index [0] for anchor sizes and aspect ratios is
     correct (even though it ignores the other indices).
     """
-    anchor_sizes = cfg.MODEL.RPN.ANCHOR_SIZES
-    # Check that all levels use the same number of anchor sizes
-    if len(anchor_sizes) > 1:
-        for c in anchor_sizes:
-            assert len(c) == len(anchor_sizes[0])
-    anchor_aspect_ratios = cfg.MODEL.RPN.ANCHOR_ASPECT_RATIOS
-    # Check that all levels use the same number of aspect ratios
-    if len(anchor_aspect_ratios) > 1:
-        for c in anchor_aspect_ratios:
-            assert len(c) == len(anchor_aspect_ratios[0])
-    return len(anchor_sizes[0]) * len(anchor_aspect_ratios[0])
+    feature_strides = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_STRIDES)
+    in_strides = [feature_strides[f] for f in cfg.MODEL.RPN.IN_FEATURES]
+    cfg.MODEL.ANCHOR_GENERATOR.COMPUTED_INPUT_STRIDES = in_strides
+
+    num_cell_anchors = build_anchor_generator(cfg).num_cell_anchors
+    assert len(set(num_cell_anchors)) == 1
+    return num_cell_anchors[0]
 
 
 @RPN_HEAD_REGISTRY.register()
@@ -110,6 +106,7 @@ class RPN(nn.Module):
         self.batch_size_per_image    = cfg.MODEL.RPN.BATCH_SIZE_PER_IMAGE
         self.positive_fraction       = cfg.MODEL.RPN.POSITIVE_FRACTION
         self.smooth_l1_beta          = cfg.MODEL.RPN.SMOOTH_L1_BETA
+        self.loss_weight             = cfg.MODEL.RPN.LOSS_WEIGHT
         # fmt: on
 
         # Map from self.training state to train/test settings
@@ -124,12 +121,10 @@ class RPN(nn.Module):
         self.boundary_threshold = cfg.MODEL.RPN.BOUNDARY_THRESH
 
         feature_strides = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_STRIDES)
+        in_strides = [feature_strides[f] for f in self.in_features]
+        cfg.MODEL.ANCHOR_GENERATOR.COMPUTED_INPUT_STRIDES = in_strides
+        self.anchor_generator = build_anchor_generator(cfg)
 
-        self.anchor_generator = DefaultAnchorGenerator(
-            cfg.MODEL.RPN.ANCHOR_SIZES,
-            cfg.MODEL.RPN.ANCHOR_ASPECT_RATIOS,
-            [feature_strides[f] for f in self.in_features],
-        )
         self.box2box_transform = Box2BoxTransform(weights=cfg.MODEL.RPN.BBOX_REG_WEIGHTS)
         self.anchor_matcher = Matcher(
             cfg.MODEL.RPN.IOU_THRESHOLDS, cfg.MODEL.RPN.IOU_LABELS, allow_low_quality_matches=True
@@ -173,7 +168,7 @@ class RPN(nn.Module):
         )
 
         if self.training:
-            losses = outputs.losses()
+            losses = {k: v * self.loss_weight for k, v in outputs.losses().items()}
         else:
             losses = {}
 

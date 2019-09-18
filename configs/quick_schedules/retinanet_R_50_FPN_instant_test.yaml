@@ -1,6 +1,6 @@
 _BASE_: "../COCO-Detection/retinanet_R_50_FPN_1x.yaml"
 MODEL:
-  WEIGHT: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
+  WEIGHTS: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
 DATASETS:
   TRAIN: ("coco_2017_val_100",)
   TEST: ("coco_2017_val_100",)

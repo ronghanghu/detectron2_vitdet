@@ -127,7 +127,7 @@ class DefaultPredictor:
         self.metadata = MetadataCatalog.get(cfg.DATASETS.TEST[0])
 
         checkpointer = DetectionCheckpointer(self.model)
-        checkpointer.load(cfg.MODEL.WEIGHT)
+        checkpointer.load(cfg.MODEL.WEIGHTS)
 
         self.transform_gen = T.ResizeShortestEdge(
             [cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST]

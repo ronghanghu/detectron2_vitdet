@@ -26,9 +26,9 @@ class DatasetMapperTTA:
     """
 
     def __init__(self, cfg):
-        self.min_sizes = cfg.TEST.AUG_MIN_SIZES
-        self.max_size = cfg.TEST.AUG_MAX_SIZE
-        self.flip = cfg.TEST.AUG_FLIP
+        self.min_sizes = cfg.TEST.AUG.MIN_SIZES
+        self.max_size = cfg.TEST.AUG.MAX_SIZE
+        self.flip = cfg.TEST.AUG.FLIP
         self.image_format = cfg.INPUT.FORMAT
 
     def __call__(self, dataset_dict):
@@ -201,8 +201,8 @@ class GeneralizedRCNNWithTTA(nn.Module):
             all_scores_2d,
             (height, width),
             1e-8,
-            self.cfg.MODEL.ROI_HEADS.NMS,
-            self.cfg.TEST.DETECTIONS_PER_IMG,
+            self.cfg.MODEL.ROI_HEADS.NMS_THRESH_TEST,
+            self.cfg.TEST.DETECTIONS_PER_IMAGE,
         )
 
         if not self.cfg.MODEL.MASK_ON:

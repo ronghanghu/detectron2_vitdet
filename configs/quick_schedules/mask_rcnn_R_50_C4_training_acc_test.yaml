@@ -1,6 +1,6 @@
 _BASE_: "../Base-RCNN-C4.yaml"
 MODEL:
-  WEIGHT: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
+  WEIGHTS: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
   ROI_HEADS:
     BATCH_SIZE_PER_IMAGE: 256
   MASK_ON: True

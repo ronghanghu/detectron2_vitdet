@@ -16,7 +16,7 @@ from .config import CfgNode as CN
 
 _C = CN()
 
-_C.VERSION = 1
+_C.VERSION = 2
 
 _C.MODEL = CN()
 _C.MODEL.LOAD_PROPOSALS = False
@@ -28,7 +28,7 @@ _C.MODEL.META_ARCHITECTURE = "GeneralizedRCNN"
 # If the WEIGHT starts with a catalog://, like :R-50, the code will look for
 # the path in ModelCatalog. Else, it will use it as the specified absolute
 # path
-_C.MODEL.WEIGHT = ""
+_C.MODEL.WEIGHTS = ""
 
 # Values to be used for image normalization (BGR order)
 # Default values are the mean pixel value from ImageNet: [103.53, 116.28, 123.675]
@@ -157,10 +157,27 @@ _C.MODEL.PROPOSAL_GENERATOR.MIN_SIZE = 0
 # ---------------------------------------------------------------------------- #
 # Anchor generator options
 # ---------------------------------------------------------------------------- #
-# TODO remove later
 _C.MODEL.ANCHOR_GENERATOR = CN()
 # The generator can be any name in the ANCHOR_GENERATOR registry
 _C.MODEL.ANCHOR_GENERATOR.NAME = "DefaultAnchorGenerator"
+# anchor sizes given in absolute pixels w.r.t. the scaled network input.
+# Format: list of lists of sizes. SIZES[i] specifies the list of sizes
+# to use for IN_FEATURES[i]; len(SIZES) == len(IN_FEATURES) must be true,
+# or len(SIZES) == 1 is true and size list SIZES[0] is used for all
+# IN_FEATURES.
+_C.MODEL.ANCHOR_GENERATOR.SIZES = [[32, 64, 128, 256, 512]]
+# Anchor aspect ratios.
+# Format is list of lists of sizes. ASPECT_RATIOS[i] specifies the list of aspect ratios
+# to use for IN_FEATURES[i]; len(ASPECT_RATIOS) == len(IN_FEATURES) must be true,
+# or len(ASPECT_RATIOS) == 1 is true and aspect ratio list ASPECT_RATIOS[0] is used
+# for all IN_FEATURES.
+_C.MODEL.ANCHOR_GENERATOR.ASPECT_RATIOS = [[0.5, 1.0, 2.0]]
+# list[int], the stride for each input feature map where anchors will be created.
+# _C.MODEL.ANCHOR_GENERATOR.COMPUTED_INPUT_STRIDES = [stride1, stride2, ...]
+# Anchor angles.
+# list[float], the angle in degrees, for each input feature map.
+# ANGLES[i] specifies the list of angles for IN_FEATURES[i].
+_C.MODEL.ANCHOR_GENERATOR.ANGLES = [[]]
 
 
 # ---------------------------------------------------------------------------- #
@@ -172,18 +189,6 @@ _C.MODEL.RPN.HEAD_NAME = "StandardRPNHead"  # used by RPN_HEAD_REGISTRY
 # Names of the input feature maps to be used by RPN
 # e.g., ["p2", "p3", "p4", "p5", "p6"] for FPN
 _C.MODEL.RPN.IN_FEATURES = ["res4"]
-# RPN anchor sizes given in absolute pixels w.r.t. the scaled network input.
-# Format: list of lists of sizes. ANCHOR_SIZES[i] specifies the list of sizes
-# to use for IN_FEATURES[i]; len(ANCHOR_SIZES) == len(IN_FEATURES) must be true,
-# or len(ANCHOR_SIZES) == 1 is true and size list ANCHOR_SIZES[0] is used for all
-# IN_FEATURES.
-_C.MODEL.RPN.ANCHOR_SIZES = [[32, 64, 128, 256, 512]]
-# RPN anchor aspect ratios.
-# Format is list of lists of sizes. ANCHOR_ASPECT_RATIOS[i] specifies the list of aspect ratios
-# to use for IN_FEATURES[i]; len(ANCHOR_ASPECT_RATIOS) == len(IN_FEATURES) must be true,
-# or len(ANCHOR_ASPECT_RATIOS) == 1 is true and aspect ratio list ANCHOR_ASPECT_RATIOS[0] is used
-# for all IN_FEATURES.
-_C.MODEL.RPN.ANCHOR_ASPECT_RATIOS = [[0.5, 1.0, 2.0]]
 # Remove RPN anchors that go outside the image by BOUNDARY_THRESH pixels
 # Set to -1 or a large value, e.g. 100000, to disable pruning anchors
 _C.MODEL.RPN.BOUNDARY_THRESH = -1
@@ -206,6 +211,7 @@ _C.MODEL.RPN.POSITIVE_FRACTION = 0.5
 _C.MODEL.RPN.BBOX_REG_WEIGHTS = (1.0, 1.0, 1.0, 1.0)
 # The transition point from L1 to L2 loss. Set to 0.0 to make the loss simply L1.
 _C.MODEL.RPN.SMOOTH_L1_BETA = 0.0
+_C.MODEL.RPN.LOSS_WEIGHT = 1.0
 # Number of top scoring RPN proposals to keep before applying NMS
 # When FPN is used, this is *per FPN level* (not total)
 _C.MODEL.RPN.PRE_NMS_TOPK_TRAIN = 12000
@@ -252,10 +258,10 @@ _C.MODEL.ROI_HEADS.POSITIVE_FRACTION = 0.25
 # detections that will slow down inference post processing steps (like NMS)
 # A default threshold of 0.0 increases AP by ~0.2-0.3 but significantly slows down
 # inference.
-_C.MODEL.ROI_HEADS.SCORE_THRESH = 0.05
+_C.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.05
 # Overlap threshold used for non-maximum suppression (suppress boxes with
 # IoU >= this threshold)
-_C.MODEL.ROI_HEADS.NMS = 0.5
+_C.MODEL.ROI_HEADS.NMS_THRESH_TEST = 0.5
 
 
 # ---------------------------------------------------------------------------- #
@@ -281,7 +287,8 @@ _C.MODEL.ROI_BOX_HEAD.FC_DIM = 1024
 _C.MODEL.ROI_BOX_HEAD.NUM_CONV = 0
 # Channel dimension for Conv layers in the RoI box head
 _C.MODEL.ROI_BOX_HEAD.CONV_DIM = 256
-# Normalization method for the convolution layers. Options: "" (no norm), "GN".
+# Normalization method for the convolution layers.
+# Options: "" (no norm), "GN", "SyncBN".
 _C.MODEL.ROI_BOX_HEAD.NORM = ""
 # The caller of box head is responsible to fill this computed attribute
 # about the input size of the box head.
@@ -311,7 +318,8 @@ _C.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION = 14
 _C.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO = 0
 _C.MODEL.ROI_MASK_HEAD.NUM_CONV = 0  # The number of convs in the mask head
 _C.MODEL.ROI_MASK_HEAD.CONV_DIM = 256
-# Normalization method for the convolution layers. Options: "" (no norm), "GN".
+# Normalization method for the convolution layers.
+# Options: "" (no norm), "GN", "SyncBN".
 _C.MODEL.ROI_MASK_HEAD.NORM = ""
 # The caller of mask head is responsible to fill this computed attribute
 # about the input size of the mask head.
@@ -377,20 +385,17 @@ _C.MODEL.SEM_SEG_HEAD.CONVS_DIM = 128
 _C.MODEL.SEM_SEG_HEAD.COMMON_STRIDE = 4
 # Normalization method for the convolution layers. Options: "" (no norm), "GN".
 _C.MODEL.SEM_SEG_HEAD.NORM = "GN"
+_C.MODEL.SEM_SEG_HEAD.LOSS_WEIGHT = 1.0
 
 _C.MODEL.PANOPTIC_FPN = CN()
-# Scaling of losses from semantic segmentation head.
-_C.MODEL.PANOPTIC_FPN.SEMANTIC_LOSS_SCALE = 1.0
-# Scaling of losses from instance segmentation head.
-_C.MODEL.PANOPTIC_FPN.INSTANCE_LOSS_SCALE = 1.0
-# Scaling of losses from RPN.
-_C.MODEL.PANOPTIC_FPN.RPN_LOSS_SCALE = 1.0
+# Scaling of all losses from instance detection / segmentation head.
+_C.MODEL.PANOPTIC_FPN.INSTANCE_LOSS_WEIGHT = 1.0
 
 # options when combining instance & semantic segmentation outputs
-_C.MODEL.PANOPTIC_FPN.COMBINE_ON = True
-_C.MODEL.PANOPTIC_FPN.COMBINE_OVERLAP_THRESHOLD = 0.5
-_C.MODEL.PANOPTIC_FPN.COMBINE_STUFF_AREA_LIMIT = 4096
-_C.MODEL.PANOPTIC_FPN.COMBINE_INSTANCES_CONFIDENCE_THRESHOLD = 0.5
+_C.MODEL.PANOPTIC_FPN.COMBINE = CN({"ENABLED": True})
+_C.MODEL.PANOPTIC_FPN.COMBINE.OVERLAP_THRESH = 0.5
+_C.MODEL.PANOPTIC_FPN.COMBINE.STUFF_AREA_LIMIT = 4096
+_C.MODEL.PANOPTIC_FPN.COMBINE.INSTANCES_CONFIDENCE_THRESH = 0.5
 
 
 # ---------------------------------------------------------------------------- #
@@ -401,14 +406,6 @@ _C.MODEL.RETINANET = CN()
 # This is the number of foreground classes.
 _C.MODEL.RETINANET.NUM_CLASSES = 80
 
-# Anchor aspect ratios to use
-_C.MODEL.RETINANET.ANCHOR_ASPECT_RATIOS = [[0.5, 1.0, 2.0]]
-_C.MODEL.RETINANET.ANCHOR_STRIDES = [[8, 16, 32, 64, 128]]
-# In a yaml file, this can be written as:
-# ANCHOR_SIZES: !!python/object/apply:eval ["[[x, x * 2**(1.0/3), x * 2**(2.0/3) ] for x in [32, 64, 128, 256, 512 ]]"]  # noqa
-_C.MODEL.RETINANET.ANCHOR_SIZES = [
-    [x, x * 2 ** (1.0 / 3), x * 2 ** (2.0 / 3)] for x in [32, 64, 128, 256, 512]
-]
 _C.MODEL.RETINANET.IN_FEATURES = ["p3", "p4", "p5", "p6", "p7"]
 
 # Convolutions to use in the cls and bbox tower
@@ -429,9 +426,9 @@ _C.MODEL.RETINANET.PRIOR_PROB = 0.01
 
 # Inference cls score threshold, only anchors with score > INFERENCE_TH are
 # considered for inference (to improve speed)
-_C.MODEL.RETINANET.INFERENCE_SCORE_THRESHOLD = 0.05
-_C.MODEL.RETINANET.INFERENCE_TOPK_CANDIDATES = 1000
-_C.MODEL.RETINANET.INFERENCE_NMS_THRESHOLD = 0.5
+_C.MODEL.RETINANET.SCORE_THRESH_TEST = 0.05
+_C.MODEL.RETINANET.TOPK_CANDIDATES_TEST = 1000
+_C.MODEL.RETINANET.NMS_THRESH_TEST = 0.5
 
 # Weights on (dx, dy, dw, dh) for normalizing Retinanet anchor regression targets
 _C.MODEL.RETINANET.BBOX_REG_WEIGHTS = (1.0, 1.0, 1.0, 1.0)
@@ -455,10 +452,11 @@ _C.MODEL.RESNETS.OUT_FEATURES = ["res4"]  # res4 for C4 backbone, res2..5 for FP
 # Number of groups to use; 1 ==> ResNet; > 1 ==> ResNeXt
 _C.MODEL.RESNETS.NUM_GROUPS = 1
 
-# Options: FrozenBN, GN
+# Options: FrozenBN, GN, "SyncBN", "BN"
 _C.MODEL.RESNETS.NORM = "FrozenBN"
 
-# Baseline width of each group
+# Baseline width of each group.
+# Scaling this parameters will scale the width of all bottleneck layers.
 _C.MODEL.RESNETS.WIDTH_PER_GROUP = 64
 
 # Place the stride 2 conv on the 1x1 filter
@@ -468,6 +466,7 @@ _C.MODEL.RESNETS.STRIDE_IN_1X1 = True
 # Apply dilation in stage "res5"
 _C.MODEL.RESNETS.RES5_DILATION = 1
 
+# Output width of res2. Scaling this parameters will scale the width of all 1x1 convs in ResNet
 _C.MODEL.RESNETS.RES2_OUT_CHANNELS = 256
 _C.MODEL.RESNETS.STEM_OUT_CHANNELS = 64
 
@@ -537,12 +536,13 @@ _C.TEST.EVAL_PERIOD = 0
 _C.TEST.KEYPOINT_OKS_SIGMAS = []
 # Maximum number of detections to return per image during inference (100 is
 # based on the limit established for the COCO dataset).
-_C.TEST.DETECTIONS_PER_IMG = 100
+_C.TEST.DETECTIONS_PER_IMAGE = 100
 
-_C.TEST.AUG_ON = False
-_C.TEST.AUG_MIN_SIZES = (400, 500, 600, 700, 800, 900, 1000, 1100, 1200)
-_C.TEST.AUG_MAX_SIZE = 4000
-_C.TEST.AUG_FLIP = True
+_C.TEST.AUG = CN({"ENABLED": False})
+_C.TEST.AUG.MIN_SIZES = (400, 500, 600, 700, 800, 900, 1000, 1100, 1200)
+_C.TEST.AUG.MAX_SIZE = 4000
+_C.TEST.AUG.FLIP = True
+
 _C.TEST.PRECISE_BN = CN({"ENABLED": False})
 _C.TEST.PRECISE_BN.NUM_ITER = 200
 

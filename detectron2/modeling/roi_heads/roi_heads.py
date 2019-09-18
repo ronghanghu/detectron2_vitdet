@@ -112,9 +112,9 @@ class ROIHeads(torch.nn.Module):
         # fmt: off
         self.batch_size_per_image     = cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE
         self.positive_sample_fraction = cfg.MODEL.ROI_HEADS.POSITIVE_FRACTION
-        self.test_score_thresh        = cfg.MODEL.ROI_HEADS.SCORE_THRESH
-        self.test_nms_thresh          = cfg.MODEL.ROI_HEADS.NMS
-        self.test_detections_per_img  = cfg.TEST.DETECTIONS_PER_IMG
+        self.test_score_thresh        = cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST
+        self.test_nms_thresh          = cfg.MODEL.ROI_HEADS.NMS_THRESH_TEST
+        self.test_detections_per_img  = cfg.TEST.DETECTIONS_PER_IMAGE
         self.in_features              = cfg.MODEL.ROI_HEADS.IN_FEATURES
         self.num_classes              = cfg.MODEL.ROI_HEADS.NUM_CLASSES
         self.feature_strides          = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_STRIDES)

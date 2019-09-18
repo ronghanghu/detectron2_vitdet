@@ -65,7 +65,7 @@ def benchmark_train(args):
         )
     optimizer = build_optimizer(cfg, model)
     checkpointer = DetectionCheckpointer(model, optimizer=optimizer)
-    checkpointer.load(cfg.MODEL.WEIGHT)
+    checkpointer.load(cfg.MODEL.WEIGHTS)
 
     cfg.defrost()
     cfg.DATALOADER.NUM_WORKERS = 0
@@ -90,7 +90,7 @@ def benchmark_eval(args):
     model = build_model(cfg)
     model.eval()
     logger.info("Model:\n{}".format(model))
-    DetectionCheckpointer(model).load(cfg.MODEL.WEIGHT)
+    DetectionCheckpointer(model).load(cfg.MODEL.WEIGHTS)
 
     cfg.defrost()
     cfg.DATALOADER.NUM_WORKERS = 0

@@ -4,6 +4,8 @@ MODEL:
     NAME: "build_retinanet_resnet_fpn_backbone"
   RESNETS:
     OUT_FEATURES: ["res3", "res4", "res5"]
+  ANCHOR_GENERATOR:
+    SIZES: !!python/object/apply:eval ["[[x, x * 2**(1.0/3), x * 2**(2.0/3) ] for x in [32, 64, 128, 256, 512 ]]"]
   FPN:
     IN_FEATURES: ["res3", "res4", "res5"]
   RETINANET:

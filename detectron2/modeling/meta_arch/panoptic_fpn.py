@@ -26,17 +26,14 @@ class PanopticFPN(nn.Module):
 
         self.device = torch.device(cfg.MODEL.DEVICE)
 
-        # weights for all losses
-        self.semantic_loss_scale = cfg.MODEL.PANOPTIC_FPN.SEMANTIC_LOSS_SCALE
-        self.instance_loss_scale = cfg.MODEL.PANOPTIC_FPN.INSTANCE_LOSS_SCALE
-        self.rpn_loss_scale = cfg.MODEL.PANOPTIC_FPN.RPN_LOSS_SCALE
+        self.instance_loss_weight = cfg.MODEL.PANOPTIC_FPN.INSTANCE_LOSS_WEIGHT
 
         # options when combining instance & semantic outputs
-        self.combine_on = cfg.MODEL.PANOPTIC_FPN.COMBINE_ON
-        self.combine_overlap_threshold = cfg.MODEL.PANOPTIC_FPN.COMBINE_OVERLAP_THRESHOLD
-        self.combine_stuff_area_limit = cfg.MODEL.PANOPTIC_FPN.COMBINE_STUFF_AREA_LIMIT
+        self.combine_on = cfg.MODEL.PANOPTIC_FPN.COMBINE.ENABLED
+        self.combine_overlap_threshold = cfg.MODEL.PANOPTIC_FPN.COMBINE.OVERLAP_THRESH
+        self.combine_stuff_area_limit = cfg.MODEL.PANOPTIC_FPN.COMBINE.STUFF_AREA_LIMIT
         self.combine_instances_confidence_threshold = (
-            cfg.MODEL.PANOPTIC_FPN.COMBINE_INSTANCES_CONFIDENCE_THRESHOLD
+            cfg.MODEL.PANOPTIC_FPN.COMBINE.INSTANCES_CONFIDENCE_THRESH
         )
 
         self.backbone = build_backbone(cfg)
@@ -68,7 +65,7 @@ class PanopticFPN(nn.Module):
                 contains the following keys:
                 "instances": see :meth:`GeneralizedRCNN.forward` for its format.
                 "sem_seg": see :meth:`SemanticSegmentor.forward` for its format.
-                "panoptic_seg": available when `PANOPTIC_FPN.COMBINE_ON`.
+                "panoptic_seg": available when `PANOPTIC_FPN.COMBINE.ENABLED`.
                     See the return value of
                     :func:`combine_semantic_and_instance_outputs` for its format.
         """
@@ -102,9 +99,9 @@ class PanopticFPN(nn.Module):
 
         if self.training:
             losses = {}
-            losses.update({k: v * self.semantic_loss_scale for k, v in sem_seg_losses.items()})
-            losses.update({k: v * self.instance_loss_scale for k, v in detector_losses.items()})
-            losses.update({k: v * self.rpn_loss_scale for k, v in proposal_losses.items()})
+            losses.update(sem_seg_losses)
+            losses.update({k: v * self.instance_loss_weight for k, v in detector_losses.items()})
+            losses.update(proposal_losses)
             return losses
 
         processed_results = []

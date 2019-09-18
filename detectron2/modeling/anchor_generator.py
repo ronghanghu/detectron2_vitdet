@@ -4,6 +4,9 @@ import torch
 from torch import nn
 
 from detectron2.structures import Boxes, RotatedBoxes
+from detectron2.utils.registry import Registry
+
+ANCHOR_GENERATOR_REGISTRY = Registry("ANCHOR_GENERATOR")
 
 
 class BufferList(nn.Module):
@@ -41,28 +44,33 @@ def _create_grid_offsets(size, stride, device):
     return shift_x, shift_y
 
 
+@ANCHOR_GENERATOR_REGISTRY.register()
 class DefaultAnchorGenerator(nn.Module):
     """
     For a set of image sizes and feature maps, computes a set of anchors.
     """
 
-    def __init__(self, sizes, aspect_ratios, strides):
-        """
-        Args:
-            sizes (list[list[int]]): sizes[i] is the list of anchor sizes to use
-                for the i-th feature map. If len(sizes) == 1, then the same list of
-                anchor sizes, given by sizes[0], is used for all feature maps. Anchor
-                sizes are given in absolute lengths in units of the input image;
-                they do not dynamically scale if the input image size changes.
-            aspect_ratios (list[list[float]]): aspect_ratios[i] is the list of
-                anchor aspect ratios to use for the i-th feature map. If
-                len(aspect_ratios) == 1, then the same list of anchor aspect ratios,
-                given by aspect_ratios[0], is used for all feature maps.
-            strides (list[int]): stride of each input feature.
-        """
+    def __init__(self, cfg):
         super().__init__()
-        self.strides = strides
-        self.num_features = len(strides)
+        # fmt: off
+        sizes         = cfg.MODEL.ANCHOR_GENERATOR.SIZES
+        aspect_ratios = cfg.MODEL.ANCHOR_GENERATOR.ASPECT_RATIOS
+        self.strides  = cfg.MODEL.ANCHOR_GENERATOR.COMPUTED_INPUT_STRIDES
+        # fmt: on
+        """
+        sizes (list[list[int]]): sizes[i] is the list of anchor sizes to use
+            for the i-th feature map. If len(sizes) == 1, then the same list of
+            anchor sizes, given by sizes[0], is used for all feature maps. Anchor
+            sizes are given in absolute lengths in units of the input image;
+            they do not dynamically scale if the input image size changes.
+        aspect_ratios (list[list[float]]): aspect_ratios[i] is the list of
+            anchor aspect ratios to use for the i-th feature map. If
+            len(aspect_ratios) == 1, then the same list of anchor aspect ratios,
+            given by aspect_ratios[0], is used for all feature maps.
+        strides (list[int]): stride of each input feature.
+        """
+
+        self.num_features = len(self.strides)
         self.cell_anchors = self._calculate_anchors(sizes, aspect_ratios)
 
     def _calculate_anchors(self, sizes, aspect_ratios):
@@ -90,7 +98,7 @@ class DefaultAnchorGenerator(nn.Module):
                 location, on that feature map.
                 For example, if at every pixel we use anchors of 3 aspect
                 ratios and 5 sizes, the number of anchors is 15.
-                (See also RPN.ANCHOR_SIZES and RPN.ANCHOR_ASPECT_RATIOS in config)
+                (See also ANCHOR_GENERATOR.SIZES and ANCHOR_GENERATOR.ASPECT_RATIOS in config)
 
                 In standard RPN models, `num_cell_anchors` on every feature map is the same.
         """
@@ -163,15 +171,22 @@ class DefaultAnchorGenerator(nn.Module):
         return anchors
 
 
-class RRPNAnchorGenerator(nn.Module):
+@ANCHOR_GENERATOR_REGISTRY.register()
+class RotatedAnchorGenerator(nn.Module):
     """
     The anchor generator used by Rotated RPN (RRPN).
     """
 
-    def __init__(self, sizes, aspect_ratios, angles, strides):
+    def __init__(self, cfg):
         super().__init__()
-        self.strides = strides
-        self.num_features = len(strides)
+        # fmt: off
+        sizes         = cfg.MODEL.ANCHOR_GENERATOR.SIZES
+        aspect_ratios = cfg.MODEL.ANCHOR_GENERATOR.ASPECT_RATIOS
+        angles        = cfg.MODEL.ANCHOR_GENERATOR.ANGLES
+        self.strides  = cfg.MODEL.ANCHOR_GENERATOR.COMPUTED_INPUT_STRIDES
+        # fmt: on
+
+        self.num_features = len(self.strides)
         self.cell_anchors = self._calculate_anchors(sizes, aspect_ratios, angles, self.strides)
 
     def _calculate_anchors(self, sizes, aspect_ratios, angles, feature_strides):
@@ -282,3 +297,8 @@ class RRPNAnchorGenerator(nn.Module):
 
         anchors = [copy.deepcopy(anchors_in_image) for _ in range(len(image_list))]
         return anchors
+
+
+def build_anchor_generator(cfg):
+    anchor_generator = cfg.MODEL.ANCHOR_GENERATOR.NAME
+    return ANCHOR_GENERATOR_REGISTRY.get(anchor_generator)(cfg)

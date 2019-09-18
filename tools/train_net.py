@@ -112,7 +112,7 @@ def do_test(cfg, model, is_final=True):
     evaluator = get_evaluator(cfg, dataset_name, output_folder)
     results = inference_on_dataset(model, data_loader, evaluator)
 
-    if is_final and cfg.TEST.AUG_ON:
+    if is_final and cfg.TEST.AUG.ENABLED:
         # In the end of training, run an evaluation with TTA
         # Only support some R-CNN models.
         output_folder = os.path.join(cfg.OUTPUT_DIR, "inference_TTA")
@@ -143,7 +143,7 @@ def do_train(cfg, model, resume=True):
     # The checkpoint stores the training iteration that just finished, thus we start
     # at the next iteration (or iter zero if there's no checkpoint).
     start_iter = (
-        checkpointer.resume_or_load(cfg.MODEL.WEIGHT, resume=resume).get("iteration", -1) + 1
+        checkpointer.resume_or_load(cfg.MODEL.WEIGHTS, resume=resume).get("iteration", -1) + 1
     )
     max_iter = cfg.SOLVER.MAX_ITER
 
@@ -210,7 +210,7 @@ def main(args):
 
     if args.eval_only:
         DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
-            cfg.MODEL.WEIGHT, resume=args.resume
+            cfg.MODEL.WEIGHTS, resume=args.resume
         )
         return do_test(cfg, model)
 

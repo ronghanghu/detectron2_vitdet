@@ -2,7 +2,7 @@ _BASE_: "../Base-DensePose-RCNN.yaml"
 INPUT:
   MIN_SIZE_TRAIN: (640, 672, 704, 736, 768, 800)
 MODEL:
-  WEIGHT: "catalog://ImageNetPretrained/MSRA/R-50"
+  WEIGHTS: "catalog://ImageNetPretrained/MSRA/R-50"
   DENSEPOSE_ON: True
   ROI_HEADS:
     NUM_CLASSES: 1

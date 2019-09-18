@@ -17,8 +17,8 @@ def setup_cfg(args):
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
     # Set score_threshold for builtin models
-    cfg.MODEL.RETINANET.INFERENCE_SCORE_THRESHOLD = args.confidence_threshold
-    cfg.MODEL.ROI_HEADS.SCORE_THRESH = args.confidence_threshold
+    cfg.MODEL.RETINANET.SCORE_THRESH_TEST = args.confidence_threshold
+    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = args.confidence_threshold
     cfg.freeze()
     return cfg
 

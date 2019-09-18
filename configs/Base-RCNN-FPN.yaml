@@ -6,10 +6,11 @@ MODEL:
     OUT_FEATURES: ["res2", "res3", "res4", "res5"]
   FPN:
     IN_FEATURES: ["res2", "res3", "res4", "res5"]
+  ANCHOR_GENERATOR:
+    SIZES: [[32], [64], [128], [256], [512]]  # One size for each in feature map
+    ASPECT_RATIOS: [[0.5, 1.0, 2.0]]  # Three aspect ratios (same for all in feature maps)
   RPN:
     IN_FEATURES: ["p2", "p3", "p4", "p5", "p6"]
-    ANCHOR_SIZES: [[32], [64], [128], [256], [512]]  # One size for each in feature map
-    ANCHOR_ASPECT_RATIOS: [[0.5, 1.0, 2.0]]  # Three aspect ratios (same for all in feature maps)
     PRE_NMS_TOPK_TRAIN: 2000  # Per FPN level
     PRE_NMS_TOPK_TEST: 1000  # Per FPN level
     # Detectron1 uses 2000 proposals per-batch,

@@ -109,6 +109,7 @@ class SemSegFPNHead(nn.Module):
         conv_dims             = cfg.MODEL.SEM_SEG_HEAD.CONVS_DIM
         self.common_stride    = cfg.MODEL.SEM_SEG_HEAD.COMMON_STRIDE
         norm                  = cfg.MODEL.SEM_SEG_HEAD.NORM
+        self.loss_weight      = cfg.MODEL.SEM_SEG_HEAD.LOSS_WEIGHT
         # fmt: on
 
         self.scale_heads = []
@@ -151,8 +152,9 @@ class SemSegFPNHead(nn.Module):
 
         if self.training:
             losses = {}
-            losses["loss_sem_seg"] = F.cross_entropy(
-                x, targets, reduction="mean", ignore_index=self.ignore_value
+            losses["loss_sem_seg"] = (
+                F.cross_entropy(x, targets, reduction="mean", ignore_index=self.ignore_value)
+                * self.loss_weight
             )
             return [], losses
         else:

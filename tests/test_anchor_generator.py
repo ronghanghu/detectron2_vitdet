@@ -3,7 +3,7 @@ import unittest
 import torch
 
 from detectron2.config import get_cfg
-from detectron2.modeling.anchor_generator import DefaultAnchorGenerator, RRPNAnchorGenerator
+from detectron2.modeling.anchor_generator import DefaultAnchorGenerator, RotatedAnchorGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -11,17 +11,11 @@ logger = logging.getLogger(__name__)
 class TestAnchorGenerator(unittest.TestCase):
     def test_default_anchor_generator(self):
         cfg = get_cfg()
-        cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_STRIDES = (("stage3", 4),)
-        cfg.MODEL.RPN.IN_FEATURES = ["stage3"]
-        cfg.MODEL.RPN.ANCHOR_SIZES = [[32, 64]]
-        cfg.MODEL.RPN.ANCHOR_ASPECT_RATIOS = [[0.25, 1, 4]]
-        feature_strides = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_STRIDES)
+        cfg.MODEL.ANCHOR_GENERATOR.SIZES = [[32, 64]]
+        cfg.MODEL.ANCHOR_GENERATOR.ASPECT_RATIOS = [[0.25, 1, 4]]
+        cfg.MODEL.ANCHOR_GENERATOR.COMPUTED_INPUT_STRIDES = [4]
 
-        anchor_generator = DefaultAnchorGenerator(
-            cfg.MODEL.RPN.ANCHOR_SIZES,
-            cfg.MODEL.RPN.ANCHOR_ASPECT_RATIOS,
-            [feature_strides[f] for f in cfg.MODEL.RPN.IN_FEATURES],
-        )
+        anchor_generator = DefaultAnchorGenerator(cfg)
 
         num_images = 2
         # It's possible to infer strides from image size instead of config in the future.
@@ -30,7 +24,7 @@ class TestAnchorGenerator(unittest.TestCase):
         images = [1 for i in range(num_images)]
         # only the last two dimensions of features matter here
         features = {"stage3": torch.rand(14, 96, 1, 2)}
-        anchors = anchor_generator(images, [features[f] for f in cfg.MODEL.RPN.IN_FEATURES])
+        anchors = anchor_generator(images, [features["stage3"]])
         expected_anchor_tensor = torch.tensor(
             [
                 [-32.0, -8.0, 32.0, 8.0],
@@ -53,18 +47,11 @@ class TestAnchorGenerator(unittest.TestCase):
 
     def test_rrpn_anchor_generator(self):
         cfg = get_cfg()
-        cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_STRIDES = (("stage3", 4),)
-        cfg.MODEL.RPN.IN_FEATURES = ["stage3"]
-        cfg.MODEL.RPN.ANCHOR_SIZES = [[32, 64]]
-        cfg.MODEL.RPN.ANCHOR_ASPECT_RATIOS = [[0.25, 1, 4]]
-        cfg.MODEL.RPN.ANCHOR_ANGLES = [[0, 45]]
-        feature_strides = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_STRIDES)
-        anchor_generator = RRPNAnchorGenerator(
-            cfg.MODEL.RPN.ANCHOR_SIZES,
-            cfg.MODEL.RPN.ANCHOR_ASPECT_RATIOS,
-            cfg.MODEL.RPN.ANCHOR_ANGLES,
-            [feature_strides[f] for f in cfg.MODEL.RPN.IN_FEATURES],
-        )
+        cfg.MODEL.ANCHOR_GENERATOR.SIZES = [[32, 64]]
+        cfg.MODEL.ANCHOR_GENERATOR.ASPECT_RATIOS = [[0.25, 1, 4]]
+        cfg.MODEL.ANCHOR_GENERATOR.ANGLES = [[0, 45]]
+        cfg.MODEL.ANCHOR_GENERATOR.COMPUTED_INPUT_STRIDES = [4]
+        anchor_generator = RotatedAnchorGenerator(cfg)
 
         num_images = 2
         # It's possible to infer strides from image size instead of config in the future.
@@ -73,7 +60,7 @@ class TestAnchorGenerator(unittest.TestCase):
         images = [1 for i in range(num_images)]
         # only the last two dimensions of features matter here
         features = {"stage3": torch.rand(14, 96, 1, 2)}
-        anchors = anchor_generator(images, [features[f] for f in cfg.MODEL.RPN.IN_FEATURES])
+        anchors = anchor_generator(images, [features["stage3"]])
         expected_anchor_tensor = torch.tensor(
             [
                 [0.0, 0.0, 64.0, 16.0, 0.0],

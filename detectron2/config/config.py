@@ -33,12 +33,9 @@ class CfgNode(_CfgNode):
 
         loaded_ver = loaded_cfg.get("VERSION", None)
         if loaded_ver is None:
-            logger.info(
-                "Config '{}' has no VERSION. Assuming it to be compatible with v{}.".format(
-                    cfg_filename, latest_ver
-                )
-            )
-            loaded_ver = self.VERSION
+            from .compat import guess_version
+
+            loaded_ver = guess_version(loaded_cfg, cfg_filename)
         assert loaded_ver <= self.VERSION, "Cannot merge a v{} config into a v{} config.".format(
             loaded_ver, self.VERSION
         )

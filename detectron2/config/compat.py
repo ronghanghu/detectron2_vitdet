@@ -20,6 +20,8 @@ Instructions to bump version:
        functions are consistent.
 """
 
+import logging
+
 from .config import CfgNode as CN
 from .defaults import _C
 
@@ -75,14 +77,152 @@ def downgrade_config(cfg, to_version):
     return cfg
 
 
-class ConverterV1:
-    @staticmethod
-    def upgrade(cfg):
-        cfg.MODEL.RPN.HEAD_NAME = cfg.MODEL.RPN_HEAD.NAME
-        del cfg["MODEL"]["RPN_HEAD"]
+def guess_version(cfg, filename):
+    """
+    Guess the version of a partial config where the VERSION field is not specified.
+    Returns the version, or the latest if cannot make a guess.
 
-    @staticmethod
-    def downgrade(cfg):
-        cfg.MODEL.RPN_HEAD = CN()
-        cfg.MODEL.RPN_HEAD.NAME = cfg.MODEL.RPN.HEAD_NAME
-        del cfg["MODEL"]["RPN"]["HEAD_NAME"]
+    This makes it easier for users to migrate.
+    """
+    logger = logging.getLogger(__name__)
+
+    def _has(name):
+        name = name.split(".")
+        cur = cfg
+        for n in name:
+            if n not in cur:
+                return False
+            cur = cur[n]
+        return True
+
+    # Most users' partial configs have "MODEL.WEIGHT", so guess on it
+    ret = None
+    if _has("MODEL.WEIGHT") or _has("TEST.AUG_ON"):
+        ret = 1
+
+    if ret is not None:
+        logger.warning("Config '{}' has no VERSION. Assuming it to be v{}.".format(filename, ret))
+    else:
+        ret = _C.VERSION
+        logger.warning(
+            "Config '{}' has no VERSION. Assuming it to be compatible with latest v{}.".format(
+                filename, ret
+            )
+        )
+    return ret
+
+
+def _rename(cfg, old, new):
+    old_keys = old.split(".")
+    new_keys = new.split(".")
+
+    def _set(key_seq, val):
+        cur = cfg
+        for k in key_seq[:-1]:
+            if k not in cur:
+                cur[k] = CN()
+            cur = cur[k]
+        cur[key_seq[-1]] = val
+
+    def _get(key_seq):
+        cur = cfg
+        for k in key_seq:
+            cur = cur[k]
+        return cur
+
+    def _del(key_seq):
+        cur = cfg
+        for k in key_seq[:-1]:
+            cur = cur[k]
+        del cur[key_seq[-1]]
+        if len(cur) == 0 and len(key_seq) > 1:
+            _del(key_seq[:-1])
+
+    _set(new_keys, _get(old_keys))
+    _del(old_keys)
+
+
+class _RenameConverter:
+    """
+    A converter that handles simple rename.
+    """
+
+    RENAME = []  # list of tuples of (old name, new name)
+
+    @classmethod
+    def upgrade(cls, cfg):
+        for old, new in cls.RENAME:
+            _rename(cfg, old, new)
+
+    @classmethod
+    def downgrade(cls, cfg):
+        for old, new in cls.RENAME[::-1]:
+            _rename(cfg, new, old)
+
+
+class ConverterV1(_RenameConverter):
+    RENAME = [("MODEL.RPN_HEAD.NAME", "MODEL.RPN.HEAD_NAME")]
+
+
+class ConverterV2(_RenameConverter):
+    """
+    A large bulk of rename, before public release.
+    """
+
+    RENAME = [
+        ("MODEL.WEIGHT", "MODEL.WEIGHTS"),
+        ("MODEL.PANOPTIC_FPN.SEMANTIC_LOSS_SCALE", "MODEL.SEM_SEG_HEAD.LOSS_WEIGHT"),
+        ("MODEL.PANOPTIC_FPN.RPN_LOSS_SCALE", "MODEL.RPN.LOSS_WEIGHT"),
+        ("MODEL.PANOPTIC_FPN.INSTANCE_LOSS_SCALE", "MODEL.PANOPTIC_FPN.INSTANCE_LOSS_WEIGHT"),
+        ("MODEL.PANOPTIC_FPN.COMBINE_ON", "MODEL.PANOPTIC_FPN.COMBINE.ENABLED"),
+        (
+            "MODEL.PANOPTIC_FPN.COMBINE_OVERLAP_THRESHOLD",
+            "MODEL.PANOPTIC_FPN.COMBINE.OVERLAP_THRESH",
+        ),
+        (
+            "MODEL.PANOPTIC_FPN.COMBINE_STUFF_AREA_LIMIT",
+            "MODEL.PANOPTIC_FPN.COMBINE.STUFF_AREA_LIMIT",
+        ),
+        (
+            "MODEL.PANOPTIC_FPN.COMBINE_INSTANCES_CONFIDENCE_THRESHOLD",
+            "MODEL.PANOPTIC_FPN.COMBINE.INSTANCES_CONFIDENCE_THRESH",
+        ),
+        ("MODEL.ROI_HEADS.SCORE_THRESH", "MODEL.ROI_HEADS.SCORE_THRESH_TEST"),
+        ("MODEL.ROI_HEADS.NMS", "MODEL.ROI_HEADS.NMS_THRESH_TEST"),
+        ("MODEL.RETINANET.INFERENCE_SCORE_THRESHOLD", "MODEL.RETINANET.SCORE_THRESH_TEST"),
+        ("MODEL.RETINANET.INFERENCE_TOPK_CANDIDATES", "MODEL.RETINANET.TOPK_CANDIDATES_TEST"),
+        ("MODEL.RETINANET.INFERENCE_NMS_THRESHOLD", "MODEL.RETINANET.NMS_THRESH_TEST"),
+        ("TEST.DETECTIONS_PER_IMG", "TEST.DETECTIONS_PER_IMAGE"),
+        ("TEST.AUG_ON", "TEST.AUG.ENABLED"),
+        ("TEST.AUG_MIN_SIZES", "TEST.AUG.MIN_SIZES"),
+        ("TEST.AUG_MAX_SIZE", "TEST.AUG.MAX_SIZE"),
+        ("TEST.AUG_FLIP", "TEST.AUG.FLIP"),
+    ]
+
+    @classmethod
+    def upgrade(cls, cfg):
+        super().upgrade(cfg)
+
+        if cfg.MODEL.META_ARCHITECTURE == "RetinaNet":
+            _rename(
+                cfg, "MODEL.RETINANET.ANCHOR_ASPECT_RATIOS", "MODEL.ANCHOR_GENERATOR.ASPECT_RATIOS"
+            )
+            _rename(cfg, "MODEL.RETINANET.ANCHOR_SIZES", "MODEL.ANCHOR_GENERATOR.SIZES")
+            del cfg["MODEL"]["RPN"]["ANCHOR_SIZES"]
+            del cfg["MODEL"]["RPN"]["ANCHOR_ASPECT_RATIOS"]
+        else:
+            _rename(cfg, "MODEL.RPN.ANCHOR_ASPECT_RATIOS", "MODEL.ANCHOR_GENERATOR.ASPECT_RATIOS")
+            _rename(cfg, "MODEL.RPN.ANCHOR_SIZES", "MODEL.ANCHOR_GENERATOR.SIZES")
+            del cfg["MODEL"]["RETINANET"]["ANCHOR_SIZES"]
+            del cfg["MODEL"]["RETINANET"]["ANCHOR_ASPECT_RATIOS"]
+        del cfg["MODEL"]["RETINANET"]["ANCHOR_STRIDES"]
+
+    @classmethod
+    def downgrade(cls, cfg):
+        super().downgrade(cfg)
+
+        _rename(cfg, "MODEL.ANCHOR_GENERATOR.ASPECT_RATIOS", "MODEL.RPN.ANCHOR_ASPECT_RATIOS")
+        _rename(cfg, "MODEL.ANCHOR_GENERATOR.SIZES", "MODEL.RPN.ANCHOR_SIZES")
+        cfg.MODEL.RETINANET.ANCHOR_ASPECT_RATIOS = cfg.MODEL.RPN.ANCHOR_ASPECT_RATIOS
+        cfg.MODEL.RETINANET.ANCHOR_SIZES = cfg.MODEL.RPN.ANCHOR_SIZES
+        cfg.MODEL.RETINANET.ANCHOR_STRIDES = []  # this is not used anywhere in any version

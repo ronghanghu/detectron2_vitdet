@@ -8,7 +8,7 @@ from detectron2.layers import batched_nms, cat
 from detectron2.structures import Boxes, ImageList, Instances, pairwise_iou
 from detectron2.utils.logger import log_first_n
 
-from ..anchor_generator import DefaultAnchorGenerator
+from ..anchor_generator import build_anchor_generator
 from ..backbone import build_backbone
 from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher
@@ -62,9 +62,6 @@ class RetinaNet(nn.Module):
 
         self.device = torch.device(cfg.MODEL.DEVICE)
 
-        self.backbone = build_backbone(cfg)
-        self.head = RetinaNetHead(cfg)
-
         # fmt: off
         self.num_classes              = cfg.MODEL.RETINANET.NUM_CLASSES
         self.in_features              = cfg.MODEL.RETINANET.IN_FEATURES
@@ -73,18 +70,20 @@ class RetinaNet(nn.Module):
         self.focal_loss_gamma         = cfg.MODEL.RETINANET.FOCAL_LOSS_GAMMA
         self.smooth_l1_loss_beta      = cfg.MODEL.RETINANET.SMOOTH_L1_LOSS_BETA
         # Inference parameters:
-        self.score_threshold          = cfg.MODEL.RETINANET.INFERENCE_SCORE_THRESHOLD
-        self.topk_candidates          = cfg.MODEL.RETINANET.INFERENCE_TOPK_CANDIDATES
-        self.nms_threshold            = cfg.MODEL.RETINANET.INFERENCE_NMS_THRESHOLD
-        self.max_detections_per_image = cfg.TEST.DETECTIONS_PER_IMG
+        self.score_threshold          = cfg.MODEL.RETINANET.SCORE_THRESH_TEST
+        self.topk_candidates          = cfg.MODEL.RETINANET.TOPK_CANDIDATES_TEST
+        self.nms_threshold            = cfg.MODEL.RETINANET.NMS_THRESH_TEST
+        self.max_detections_per_image = cfg.TEST.DETECTIONS_PER_IMAGE
         # fmt: on
 
+        self.backbone = build_backbone(cfg)
+
         feature_strides = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_STRIDES)
-        self.anchor_generator = DefaultAnchorGenerator(
-            cfg.MODEL.RETINANET.ANCHOR_SIZES,
-            cfg.MODEL.RETINANET.ANCHOR_ASPECT_RATIOS,
-            [feature_strides[f] for f in self.in_features],
-        )
+        in_strides = [feature_strides[f] for f in self.in_features]
+        cfg.MODEL.ANCHOR_GENERATOR.COMPUTED_INPUT_STRIDES = in_strides
+        self.anchor_generator = build_anchor_generator(cfg)
+
+        self.head = RetinaNetHead(cfg)  # it also calls `build_anchor_generator`
 
         # Matching and loss
         self.box2box_transform = Box2BoxTransform(weights=cfg.MODEL.RPN.BBOX_REG_WEIGHTS)
@@ -365,13 +364,12 @@ class RetinaNetHead(nn.Module):
         num_classes      = cfg.MODEL.RETINANET.NUM_CLASSES
         num_convs        = cfg.MODEL.RETINANET.NUM_CONVS
         prior_prob       = cfg.MODEL.RETINANET.PRIOR_PROB
-        num_anchors      = len(cfg.MODEL.RETINANET.ANCHOR_ASPECT_RATIOS[0]) * \
-            len(cfg.MODEL.RETINANET.ANCHOR_SIZES[0])
+        num_anchors      = build_anchor_generator(cfg).num_cell_anchors
         # fmt: on
-        # aspect ratio list ANCHOR_ASPECT_RATIOS[0] is used for all IN_FEATURES.
         assert (
-            len(cfg.MODEL.RETINANET.ANCHOR_ASPECT_RATIOS) == 1
-        ), "Using different aspect ratios between levels is not currently supported!"
+            len(set(num_anchors)) == 1
+        ), "Using different number of anchors between levels is not currently supported!"
+        num_anchors = num_anchors[0]
 
         cls_subnet = []
         bbox_subnet = []
