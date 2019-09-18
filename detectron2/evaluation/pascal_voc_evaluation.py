@@ -70,7 +70,8 @@ class PascalVOCEvaluator(DatasetEvaluator):
         del all_predictions
 
         self._logger.info(
-            "Evaluating {} using {} metric. Note that results do not use the official Matlab API.".format(
+            "Evaluating {} using {} metric. "
+            "Note that results do not use the official Matlab API.".format(
                 self._dataset_name, 2007 if self._is_2007 else 2012
             )
         )

@@ -3,6 +3,7 @@ import numpy as np
 from contextlib import contextmanager
 from itertools import count
 import torch
+from torch import nn
 
 from detectron2.data.detection_utils import read_image
 from detectron2.data.transforms import ResizeShortestEdge
@@ -63,7 +64,7 @@ class DatasetMapperTTA:
         return ret
 
 
-class GeneralizedRCNNWithTTA:
+class GeneralizedRCNNWithTTA(nn.Module):
     """
     A GeneralizedRCNN with test-time augmentation enabled.
     Its :meth:`__call__` method has the same interface as :meth:`GeneralizedRCNN.forward`.
@@ -79,6 +80,7 @@ class GeneralizedRCNNWithTTA:
                 `DatasetMapperTTA(cfg)`.
             batch_size (int): batch the augmented images into this batch size for inference.
         """
+        super().__init__()
         assert isinstance(
             model, GeneralizedRCNN
         ), "TTA is only supported on GeneralizedRCNN. Got a model of type {}".format(type(model))
@@ -89,7 +91,6 @@ class GeneralizedRCNNWithTTA:
         ), "TTA for pre-computed proposals is not supported yet"
 
         self.model = model
-        assert not model.training
 
         if tta_mapper is None:
             tta_mapper = DatasetMapperTTA(cfg)

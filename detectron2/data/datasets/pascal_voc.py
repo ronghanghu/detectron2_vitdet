@@ -53,7 +53,7 @@ def load_voc_instances(dirname: str, split: str):
             # Based on limited experiments, they don't hurt accuracy.
             # difficult = int(obj.find("difficult").text)
             # if difficult == 1:
-                # continue
+            # continue
             bbox = obj.find("bndbox")
             bbox = [float(bbox.find(x).text) for x in ["xmin", "ymin", "xmax", "ymax"]]
             # Original annotations are integers in the range [1, W or H]

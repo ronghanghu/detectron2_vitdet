@@ -79,16 +79,20 @@ class DatasetEvaluators(DatasetEvaluator):
 
 def inference_on_dataset(model, data_loader, evaluator):
     """
-    Run model on the data_loader and evaluate the results.
+    Run model (in eval mode) on the data_loader and evaluate the metrics with evaluator.
 
     Args:
-        model: a callable which takes an object from `data_loader` and returns some outputs
+        model: a callable which takes an object from `data_loader` and returns some outputs.
+            It will be temporarily set to `eval` mode.
+
+            If you wish to evaluate a model in `training` mode instead, you can
+            wrap the given model and override its behavior of `.eval()` and `.train()`.
         data_loader: an iterable object with a length.
             The elements it generates will be the inputs to the model.
         evaluator (DatasetEvaluator): the evaluator to run
 
     Returns:
-        The return vaule of `evaluator.evalute()`
+        The return value of `evaluator.evalute()`
     """
     num_devices = torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
     logger = logging.getLogger(__name__)
@@ -100,29 +104,25 @@ def inference_on_dataset(model, data_loader, evaluator):
     logging_interval = 50
     num_warmup = min(5, logging_interval - 1, total - 1)
     start_time = time.time()
-    for idx, inputs in enumerate(data_loader):
-        if idx == num_warmup:
-            start_time = time.time()
+    with inference_context(model), torch.no_grad():
+        for idx, inputs in enumerate(data_loader):
+            if idx == num_warmup:
+                start_time = time.time()
 
-        with torch.no_grad():
             outputs = model(inputs)
-        evaluator.process(inputs, outputs)
+            evaluator.process(inputs, outputs)
 
-        if (idx + 1) % logging_interval == 0:
-            duration = time.time() - start_time
-            seconds_per_img = duration / (idx + 1 - num_warmup)
-            logger.info(
-                "Inference done {}/{}. {:.4f} s / img. ETA={}".format(
-                    idx + 1,
-                    total,
-                    seconds_per_img,
-                    str(
-                        datetime.timedelta(
-                            seconds=int(seconds_per_img * (total - num_warmup) - duration)
-                        )
-                    ),
+            if (idx + 1) % logging_interval == 0:
+                duration = time.time() - start_time
+                seconds_per_img = duration / (idx + 1 - num_warmup)
+                eta = datetime.timedelta(
+                    seconds=int(seconds_per_img * (total - num_warmup) - duration)
                 )
-            )
+                logger.info(
+                    "Inference done {}/{}. {:.4f} s / img. ETA={}".format(
+                        idx + 1, total, seconds_per_img, str(eta)
+                    )
+                )
 
     # Measure the time only for this worker (before the synchronization barrier)
     total_time = int(time.time() - start_time)

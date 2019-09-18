@@ -18,7 +18,6 @@ from detectron2.engine import SimpleTrainer, default_argument_parser, default_se
 from detectron2.evaluation import (
     COCOEvaluator,
     DatasetEvaluators,
-    inference_context,
     inference_on_dataset,
     print_csv_format,
     verify_results,
@@ -48,18 +47,15 @@ def do_test(cfg, model, is_final=True):
         A dict of dict. result[task][metric] is a float.
     """
     assert len(cfg.DATASETS.TEST) == 1, cfg.DATASETS.TEST
-    with inference_context(model):
-        dataset_name = cfg.DATASETS.TEST[0]
-        output_folder = os.path.join(cfg.OUTPUT_DIR, "inference")
+    dataset_name = cfg.DATASETS.TEST[0]
+    output_folder = os.path.join(cfg.OUTPUT_DIR, "inference")
 
-        data_loader = build_detection_test_loader(
-            cfg, dataset_name, mapper=DatasetMapper(cfg, False)
-        )
-        evaluator = get_evaluator(cfg, dataset_name, output_folder)
-        results = inference_on_dataset(model, data_loader, evaluator)
-        if comm.is_main_process() and is_final:
-            print_csv_format(results)
-            verify_results(cfg, results)
+    data_loader = build_detection_test_loader(cfg, dataset_name, mapper=DatasetMapper(cfg, False))
+    evaluator = get_evaluator(cfg, dataset_name, output_folder)
+    results = inference_on_dataset(model, data_loader, evaluator)
+    if comm.is_main_process() and is_final:
+        print_csv_format(results)
+        verify_results(cfg, results)
     return results
 
 

@@ -38,7 +38,6 @@ from detectron2.evaluation import (
     LVISEvaluator,
     PascalVOCEvaluator,
     SemSegEvaluator,
-    inference_context,
     inference_on_dataset,
     print_csv_format,
     verify_results,
@@ -106,23 +105,22 @@ def do_test(cfg, model, is_final=True):
     assert cfg.OUTPUT_DIR
     logger = logging.getLogger("detectron2.train")
 
-    with inference_context(model):
-        output_folder = os.path.join(cfg.OUTPUT_DIR, "inference")
+    output_folder = os.path.join(cfg.OUTPUT_DIR, "inference")
 
-        # NOTE: creating evaluator after dataset is loaded as there might be dependency.
-        data_loader = build_detection_test_loader(cfg, dataset_name)
+    # NOTE: creating evaluator after dataset is loaded as there might be dependency.
+    data_loader = build_detection_test_loader(cfg, dataset_name)
+    evaluator = get_evaluator(cfg, dataset_name, output_folder)
+    results = inference_on_dataset(model, data_loader, evaluator)
+
+    if is_final and cfg.TEST.AUG_ON:
+        # In the end of training, run an evaluation with TTA
+        # Only support some R-CNN models.
+        output_folder = os.path.join(cfg.OUTPUT_DIR, "inference_TTA")
+
+        logger.info("Running inference with test-time augmentation ...")
+        data_loader = build_detection_test_loader(cfg, dataset_name, mapper=lambda x: x)
         evaluator = get_evaluator(cfg, dataset_name, output_folder)
-        results = inference_on_dataset(model, data_loader, evaluator)
-
-        if is_final and cfg.TEST.AUG_ON:
-            # In the end of training, run an evaluation with TTA
-            # Only support some R-CNN models.
-            output_folder = os.path.join(cfg.OUTPUT_DIR, "inference_TTA")
-
-            logger.info("Running inference with test-time augmentation ...")
-            data_loader = build_detection_test_loader(cfg, dataset_name, mapper=lambda x: x)
-            evaluator = get_evaluator(cfg, dataset_name, output_folder)
-            inference_on_dataset(GeneralizedRCNNWithTTA(cfg, model), data_loader, evaluator)
+        inference_on_dataset(GeneralizedRCNNWithTTA(cfg, model), data_loader, evaluator)
 
     if is_final and comm.is_main_process():
         print_csv_format(results)
