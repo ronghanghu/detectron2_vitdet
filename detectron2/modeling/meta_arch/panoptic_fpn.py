@@ -187,6 +187,7 @@ def combine_semantic_and_instance_outputs(
                 "id": current_segment_id,
                 "isthing": True,
                 "category_id": instance_results.pred_classes[inst_id].item(),
+                "instance_id": inst_id.item(),
             }
         )
 
@@ -196,13 +197,19 @@ def combine_semantic_and_instance_outputs(
         if semantic_label == 0:  # 0 is a special "thing" class
             continue
         mask = (semantic_results == semantic_label) & (panoptic_seg == 0)
-        if mask.sum() < stuff_area_limit:
+        mask_area = mask.sum().item()
+        if mask_area < stuff_area_limit:
             continue
 
         current_segment_id += 1
         panoptic_seg[mask] = current_segment_id
         segments_info.append(
-            {"id": current_segment_id, "isthing": False, "category_id": semantic_label}
+            {
+                "id": current_segment_id,
+                "isthing": False,
+                "category_id": semantic_label,
+                "area": mask_area,
+            }
         )
 
     return panoptic_seg, segments_info
