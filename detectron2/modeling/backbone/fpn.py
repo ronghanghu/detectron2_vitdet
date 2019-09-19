@@ -196,7 +196,7 @@ class LastLevelP6P7(nn.Module):
 
 
 @BACKBONE_REGISTRY.register()
-def build_resnet_fpn_backbone(cfg):
+def build_resnet_fpn_backbone(cfg, input_shape: ShapeSpec):
     """
     Args:
         cfg: a detectron2 CfgNode
@@ -204,7 +204,7 @@ def build_resnet_fpn_backbone(cfg):
     Returns:
         backbone (Backbone): backbone module, must be a subclass of :class:`Backbone`.
     """
-    bottom_up = build_resnet_backbone(cfg)
+    bottom_up = build_resnet_backbone(cfg, input_shape)
     in_features = cfg.MODEL.FPN.IN_FEATURES
     out_channels = cfg.MODEL.FPN.OUT_CHANNELS
     backbone = FPN(
@@ -219,7 +219,7 @@ def build_resnet_fpn_backbone(cfg):
 
 
 @BACKBONE_REGISTRY.register()
-def build_retinanet_resnet_fpn_backbone(cfg):
+def build_retinanet_resnet_fpn_backbone(cfg, input_shape: ShapeSpec):
     """
     Args:
         cfg: a detectron2 CfgNode
@@ -227,7 +227,7 @@ def build_retinanet_resnet_fpn_backbone(cfg):
     Returns:
         backbone (Backbone): backbone module, must be a subclass of :class:`Backbone`.
     """
-    bottom_up = build_resnet_backbone(cfg)
+    bottom_up = build_resnet_backbone(cfg, input_shape)
     in_features = cfg.MODEL.FPN.IN_FEATURES
     out_channels = cfg.MODEL.FPN.OUT_CHANNELS
     in_channels_p6p7 = bottom_up.out_feature_channels["res5"]

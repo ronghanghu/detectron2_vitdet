@@ -401,7 +401,7 @@ class ResNet(Backbone):
 
 
 @BACKBONE_REGISTRY.register()
-def build_resnet_backbone(cfg):
+def build_resnet_backbone(cfg, input_shape):
     """
     Create a ResNet instance from config.
 
@@ -411,7 +411,7 @@ def build_resnet_backbone(cfg):
     # need registration of new blocks/stems?
     norm = cfg.MODEL.RESNETS.NORM
     stem = BasicStem(
-        in_channels=len(cfg.MODEL.PIXEL_MEAN),
+        in_channels=input_shape.channels,
         out_channels=cfg.MODEL.RESNETS.STEM_OUT_CHANNELS,
         norm=norm,
     )
