@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
 """
-This file contains components with some default logic user may need in training / testing.
-They will not work for everyeone, but but many users may find them useful.
+This file contains components with some default boilerplate logic user may need
+in training / testing. They will not work for everyeone, but many users may find them useful.
 
 The behavior of functions/classes in this file is subject to change,
 since they are meant to represent the "common default behavior" people need in their projects.
@@ -70,8 +70,6 @@ def default_setup(cfg, args):
     Args:
         cfg (CfgNode): the full config to be used
         args (argparse.NameSpace): the command line arguments to be logged
-
-    Note: this function contains a `synchronize` call.
     """
     output_dir = cfg.OUTPUT_DIR
     if comm.is_main_process() and output_dir:
@@ -130,7 +128,7 @@ class DefaultPredictor:
         checkpointer.load(cfg.MODEL.WEIGHTS)
 
         self.transform_gen = T.ResizeShortestEdge(
-            [cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST]
+            [cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST], cfg.INPUT.MAX_SIZE_TEST
         )
 
         self.input_format = cfg.INPUT.FORMAT

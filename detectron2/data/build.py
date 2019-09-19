@@ -275,7 +275,7 @@ def get_detection_dataset_dicts(
     return dataset_dicts
 
 
-def build_detection_train_loader(cfg, mapper=None, start_iter=0):
+def build_detection_train_loader(cfg, mapper=None):
     """
     A data loader is created by the following steps:
 
@@ -290,8 +290,6 @@ def build_detection_train_loader(cfg, mapper=None, start_iter=0):
         mapper (callable): a callable which takes a sample (dict) from dataset and
             returns the format to be consumed by the model.
             By default it will be `DatasetMapper(cfg, True)`.
-        start_iter (int): the iteration number to start training with.
-            It is useful when resuming training: it will affect which sample to start loading.
 
     Returns:
         a torch DataLoader object

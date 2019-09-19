@@ -78,9 +78,7 @@ def do_train(cfg, model, resume=True):
     )
     max_iter = cfg.SOLVER.MAX_ITER
 
-    data_loader = build_detection_train_loader(
-        cfg, mapper=DatasetMapper(cfg, True), start_iter=start_iter
-    )
+    data_loader = build_detection_train_loader(cfg, mapper=DatasetMapper(cfg, True))
 
     trainer = SimpleTrainer(model, data_loader, optimizer)
     trainer_hooks = [

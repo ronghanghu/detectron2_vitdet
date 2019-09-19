@@ -147,7 +147,7 @@ def do_train(cfg, model, resume=True):
     )
     max_iter = cfg.SOLVER.MAX_ITER
 
-    data_loader = build_detection_train_loader(cfg, start_iter=start_iter)
+    data_loader = build_detection_train_loader(cfg)
 
     """
     Here we use a pre-defined training loop (the trainer) with hooks to run the training.
