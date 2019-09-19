@@ -1,7 +1,9 @@
 import numpy as np
+from typing import Dict
 import torch
 from torch import nn
 
+from detectron2.layers import ShapeSpec
 from detectron2.structures import Boxes, Instances, pairwise_iou
 from detectron2.utils.events import get_event_storage
 from detectron2.utils.registry import Registry
@@ -20,9 +22,9 @@ from .mask_head import build_mask_head, mask_rcnn_inference, mask_rcnn_loss
 ROI_HEADS_REGISTRY = Registry("ROI_HEADS")
 
 
-def build_roi_heads(cfg):
+def build_roi_heads(cfg, input_shape):
     name = cfg.MODEL.ROI_HEADS.NAME
-    return ROI_HEADS_REGISTRY.get(name)(cfg)
+    return ROI_HEADS_REGISTRY.get(name)(cfg, input_shape)
 
 
 def select_foreground_proposals(proposals, bg_label):
@@ -106,7 +108,7 @@ class ROIHeads(torch.nn.Module):
     It can have many variants, implemented as subclasses of this class.
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, input_shape: Dict[str, ShapeSpec]):
         super(ROIHeads, self).__init__()
 
         # fmt: off
@@ -117,8 +119,8 @@ class ROIHeads(torch.nn.Module):
         self.test_detections_per_img  = cfg.TEST.DETECTIONS_PER_IMAGE
         self.in_features              = cfg.MODEL.ROI_HEADS.IN_FEATURES
         self.num_classes              = cfg.MODEL.ROI_HEADS.NUM_CLASSES
-        self.feature_strides          = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_STRIDES)
-        self.feature_channels         = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_CHANNELS)
+        self.feature_strides          = {k: v.stride for k, v in input_shape.items()}
+        self.feature_channels         = {k: v.channels for k, v in input_shape.items()}
         self.cls_agnostic_bbox_reg    = cfg.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG
         self.smooth_l1_beta           = cfg.MODEL.ROI_BOX_HEAD.SMOOTH_L1_BETA
         # fmt: on
@@ -266,8 +268,8 @@ class Res5ROIHeads(ROIHeads):
     the per-region feature computation by a Res5 block.
     """
 
-    def __init__(self, cfg):
-        super().__init__(cfg)
+    def __init__(self, cfg, input_shape):
+        super().__init__(cfg, input_shape)
 
         assert len(self.in_features) == 1
 
@@ -294,13 +296,10 @@ class Res5ROIHeads(ROIHeads):
         )
 
         if self.mask_on:
-            cfg = cfg.clone()
-            cfg.MODEL.ROI_MASK_HEAD.COMPUTED_INPUT_SIZE = (
-                out_channels,
-                pooler_resolution,
-                pooler_resolution,
+            self.mask_head = build_mask_head(
+                cfg,
+                ShapeSpec(channels=out_channels, width=pooler_resolution, height=pooler_resolution),
             )
-            self.mask_head = build_mask_head(cfg)
 
     def build_res5_block(self, cfg):
         # fmt: off
@@ -418,8 +417,8 @@ class StandardROIHeads(ROIHeads):
     :meth:`forward()` or a head.
     """
 
-    def __init__(self, cfg):
-        super(StandardROIHeads, self).__init__(cfg)
+    def __init__(self, cfg, input_shape):
+        super(StandardROIHeads, self).__init__(cfg, input_shape)
         self._init_box_head(cfg)
         self._init_mask_head(cfg)
         self._init_keypoint_head(cfg)
@@ -439,19 +438,15 @@ class StandardROIHeads(ROIHeads):
         assert len(set(in_channels)) == 1, in_channels
         in_channels = in_channels[0]
 
-        cfg = cfg.clone()
         self.box_pooler = ROIPooler(
             output_size=pooler_resolution,
             scales=pooler_scales,
             sampling_ratio=sampling_ratio,
             pooler_type=box_pooler_type,
         )
-        cfg.MODEL.ROI_BOX_HEAD.COMPUTED_INPUT_SIZE = (
-            in_channels,
-            pooler_resolution,
-            pooler_resolution,
+        self.box_head = build_box_head(
+            cfg, ShapeSpec(channels=in_channels, height=pooler_resolution, width=pooler_resolution)
         )
-        self.box_head = build_box_head(cfg)
 
         self.box_predictor = FastRCNNOutputLayers(
             self.box_head.output_size, self.num_classes, self.cls_agnostic_bbox_reg
@@ -476,13 +471,12 @@ class StandardROIHeads(ROIHeads):
             sampling_ratio=mask_sampling_ratio,
             pooler_type=mask_pooler_type,
         )
-        cfg = cfg.clone()
-        cfg.MODEL.ROI_MASK_HEAD.COMPUTED_INPUT_SIZE = (
-            in_channels,
-            mask_pooler_resolution,
-            mask_pooler_resolution,
+        self.mask_head = build_mask_head(
+            cfg,
+            ShapeSpec(
+                channels=in_channels, width=mask_pooler_resolution, height=mask_pooler_resolution
+            ),
         )
-        self.mask_head = build_mask_head(cfg)
 
     def _init_keypoint_head(self, cfg):
         # fmt: off
@@ -505,12 +499,14 @@ class StandardROIHeads(ROIHeads):
             sampling_ratio=keypoint_sampling_ratio,
             pooler_type=keypoint_pooler_type,
         )
-        cfg.MODEL.ROI_KEYPOINT_HEAD.COMPUTED_INPUT_SIZE = (
-            in_channels,
-            keypoint_pooler_resolution,
-            keypoint_pooler_resolution,
+        self.keypoint_head = build_keypoint_head(
+            cfg,
+            ShapeSpec(
+                channels=in_channels,
+                width=keypoint_pooler_resolution,
+                height=keypoint_pooler_resolution,
+            ),
         )
-        self.keypoint_head = build_keypoint_head(cfg)
 
     def forward(self, images, features, proposals, targets=None):
         """

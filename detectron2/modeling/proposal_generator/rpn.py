@@ -1,7 +1,9 @@
+from typing import Dict, List
 import torch
 import torch.nn.functional as F
 from torch import nn
 
+from detectron2.layers import ShapeSpec
 from detectron2.utils.registry import Registry
 
 from ..anchor_generator import build_anchor_generator
@@ -13,25 +15,9 @@ from .rpn_outputs import RPNOutputs, find_top_rpn_proposals
 RPN_HEAD_REGISTRY = Registry("RPN_HEAD")
 
 
-def build_rpn_head(cfg):
+def build_rpn_head(cfg, input_shape):
     name = cfg.MODEL.RPN.HEAD_NAME
-    return RPN_HEAD_REGISTRY.get(name)(cfg)
-
-
-def shared_rpn_head_in_channels(cfg):
-    """
-    This function calculates the number of in channels of RPN Head and is
-    specific to the case in which the RPN head shares conv layers over all
-    feature map levels. That's why there's a check that all channel counts
-    are the same.
-    """
-    in_features = cfg.MODEL.RPN.IN_FEATURES
-    feature_channels = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_CHANNELS)
-    in_feature_channels = [feature_channels[f] for f in in_features]
-    # Check all channel counts are equal
-    for c in in_feature_channels:
-        assert c == in_feature_channels[0]
-    return in_feature_channels[0]
+    return RPN_HEAD_REGISTRY.get(name)(cfg, input_shape)
 
 
 def shared_rpn_head_num_cell_anchors(cfg):
@@ -41,13 +27,17 @@ def shared_rpn_head_num_cell_anchors(cfg):
     That's why the length of index [0] for anchor sizes and aspect ratios is
     correct (even though it ignores the other indices).
     """
-    feature_strides = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_STRIDES)
-    in_strides = [feature_strides[f] for f in cfg.MODEL.RPN.IN_FEATURES]
-    cfg.MODEL.ANCHOR_GENERATOR.COMPUTED_INPUT_STRIDES = in_strides
-
-    num_cell_anchors = build_anchor_generator(cfg).num_cell_anchors
-    assert len(set(num_cell_anchors)) == 1
-    return num_cell_anchors[0]
+    anchor_sizes = cfg.MODEL.ANCHOR_GENERATOR.SIZES
+    # Check that all levels use the same number of anchor sizes
+    if len(anchor_sizes) > 1:
+        for c in anchor_sizes:
+            assert len(c) == len(anchor_sizes[0])
+    anchor_aspect_ratios = cfg.MODEL.ANCHOR_GENERATOR.ASPECT_RATIOS
+    # Check that all levels use the same number of aspect ratios
+    if len(anchor_aspect_ratios) > 1:
+        for c in anchor_aspect_ratios:
+            assert len(c) == len(anchor_aspect_ratios[0])
+    return len(anchor_sizes[0]) * len(anchor_aspect_ratios[0])
 
 
 @RPN_HEAD_REGISTRY.register()
@@ -59,10 +49,13 @@ class StandardRPNHead(nn.Module):
     each anchor into an object proposal.
     """
 
-    def __init__(self, cfg):
-        super(StandardRPNHead, self).__init__()
+    def __init__(self, cfg, input_shape: List[ShapeSpec]):
+        super().__init__()
 
-        in_channels = shared_rpn_head_in_channels(cfg)
+        in_channels = [s.channels for s in input_shape]
+        assert len(set(in_channels)) == 1
+        in_channels = in_channels[0]
+
         num_cell_anchors = shared_rpn_head_num_cell_anchors(cfg)
 
         # 3x3 conv for the hidden representation
@@ -96,8 +89,8 @@ class RPN(nn.Module):
     RPN subnetwork.
     """
 
-    def __init__(self, cfg):
-        super(RPN, self).__init__()
+    def __init__(self, cfg, input_shape: Dict[str, ShapeSpec]):
+        super().__init__()
 
         # fmt: off
         self.min_box_side_len        = cfg.MODEL.PROPOSAL_GENERATOR.MIN_SIZE
@@ -120,16 +113,14 @@ class RPN(nn.Module):
         }
         self.boundary_threshold = cfg.MODEL.RPN.BOUNDARY_THRESH
 
-        feature_strides = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_STRIDES)
-        in_strides = [feature_strides[f] for f in self.in_features]
-        cfg.MODEL.ANCHOR_GENERATOR.COMPUTED_INPUT_STRIDES = in_strides
-        self.anchor_generator = build_anchor_generator(cfg)
-
+        self.anchor_generator = build_anchor_generator(
+            cfg, [input_shape[f] for f in self.in_features]
+        )
         self.box2box_transform = Box2BoxTransform(weights=cfg.MODEL.RPN.BBOX_REG_WEIGHTS)
         self.anchor_matcher = Matcher(
             cfg.MODEL.RPN.IOU_THRESHOLDS, cfg.MODEL.RPN.IOU_LABELS, allow_low_quality_matches=True
         )
-        self.rpn_head = build_rpn_head(cfg)
+        self.rpn_head = build_rpn_head(cfg, [input_shape[f] for f in self.in_features])
 
     def forward(self, images, features, gt_instances=None):
         """

@@ -3,7 +3,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from detectron2.layers import Conv2d, ConvTranspose2d, cat, get_norm
+from detectron2.layers import Conv2d, ConvTranspose2d, ShapeSpec, cat, get_norm
 from detectron2.structures import batch_crop_and_resize
 from detectron2.utils.events import get_event_storage
 from detectron2.utils.registry import Registry
@@ -133,10 +133,9 @@ class MaskRCNNConvUpsampleHead(nn.Module):
     A mask head with several conv layers, plus an upsample layer (with `ConvTranspose2d`).
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, input_shape: ShapeSpec):
         """
         The following attributes are parsed from config:
-            input channels from ROI_MASK_HEAD.COMPUTED_INPUT_SIZE
             num_conv: the number of conv layers
             conv_dim: the dimension of the conv layers
             norm: normalization for the conv layers
@@ -148,7 +147,7 @@ class MaskRCNNConvUpsampleHead(nn.Module):
         conv_dims         = cfg.MODEL.ROI_MASK_HEAD.CONV_DIM
         self.norm         = cfg.MODEL.ROI_MASK_HEAD.NORM
         num_conv          = cfg.MODEL.ROI_MASK_HEAD.NUM_CONV
-        input_channels    = cfg.MODEL.ROI_MASK_HEAD.COMPUTED_INPUT_SIZE[0]
+        input_channels    = input_shape.channels
         cls_agnostic_mask = cfg.MODEL.ROI_MASK_HEAD.CLS_AGNOSTIC_MASK
         # fmt: on
 
@@ -193,6 +192,6 @@ class MaskRCNNConvUpsampleHead(nn.Module):
         return self.predictor(x)
 
 
-def build_mask_head(cfg):
+def build_mask_head(cfg, input_shape):
     name = cfg.MODEL.ROI_MASK_HEAD.NAME
-    return ROI_MASK_HEAD_REGISTRY.get(name)(cfg)
+    return ROI_MASK_HEAD_REGISTRY.get(name)(cfg, input_shape)

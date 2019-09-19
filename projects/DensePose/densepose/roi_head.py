@@ -22,8 +22,8 @@ class DensePoseROIHeads(StandardROIHeads):
     A Standard ROIHeads which contains an addition of DensePose head.
     """
 
-    def __init__(self, cfg):
-        super().__init__(cfg)
+    def __init__(self, cfg, input_shape):
+        super().__init__(cfg, input_shape)
         self._init_densepose_head(cfg)
 
     def _init_densepose_head(self, cfg):

@@ -1,5 +1,7 @@
 import torch
 
+from detectron2.layers import ShapeSpec
+
 from .backbone import (
     BACKBONE_REGISTRY,
     FPN,

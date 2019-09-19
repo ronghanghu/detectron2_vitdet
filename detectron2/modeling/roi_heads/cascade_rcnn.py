@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from torch.autograd.function import Function
 
+from detectron2.layers import ShapeSpec
 from detectron2.structures import Boxes, Instances, pairwise_iou
 from detectron2.utils.events import get_event_storage
 
@@ -46,17 +47,14 @@ class CascadeROIHeads(StandardROIHeads):
         assert len(set(in_channels)) == 1, in_channels
         in_channels = in_channels[0]
 
-        cfg = cfg.clone()
-        cfg.MODEL.ROI_BOX_HEAD.COMPUTED_INPUT_SIZE = (
-            in_channels,
-            pooler_resolution,
-            pooler_resolution,
-        )
         self.box_pooler = ROIPooler(
             output_size=pooler_resolution,
             scales=pooler_scales,
             sampling_ratio=sampling_ratio,
             pooler_type=box_pooler_type,
+        )
+        pooled_shape = ShapeSpec(
+            channels=in_channels, width=pooler_resolution, height=pooler_resolution
         )
 
         self.box_head = nn.ModuleList()
@@ -64,7 +62,7 @@ class CascadeROIHeads(StandardROIHeads):
         self.box2box_transform = []
         self.proposal_matchers = []
         for k in range(self.num_cascade_stages):
-            box_head = build_box_head(cfg)
+            box_head = build_box_head(cfg, pooled_shape)
             self.box_head.append(box_head)
             self.box_predictor.append(
                 FastRCNNOutputLayers(

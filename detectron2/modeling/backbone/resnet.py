@@ -4,7 +4,14 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from detectron2.layers import Conv2d, DeformConv, FrozenBatchNorm2d, ModulatedDeformConv, get_norm
+from detectron2.layers import (
+    Conv2d,
+    DeformConv,
+    FrozenBatchNorm2d,
+    ModulatedDeformConv,
+    ShapeSpec,
+    get_norm,
+)
 
 from .backbone import Backbone
 from .build import BACKBONE_REGISTRY
@@ -324,11 +331,9 @@ class ResNet(Backbone):
             stages (list[list[ResNetBlock]]): several (typically 4) stages,
                 each contains multiple :class:`ResNetBlockBase`.
             num_classes (None or int): if None, will not perform classification.
-            out_features (iterable[str]): name of the layers whose outputs should
+            out_features (list[str]): name of the layers whose outputs should
                 be returned in forward. Can be anything in "stem", "linear", or "res2" ...
-                If None, will return the output of the last layer. Note that the
-                outputs will always be returned in the same order as they are in the
-                model, regardless of their order in `out_features`.
+                If None, will return the output of the last layer.
         """
         super(ResNet, self).__init__()
         self.stem = stem
@@ -385,6 +390,14 @@ class ResNet(Backbone):
             if "linear" in self._out_features:
                 outputs["linear"] = x
         return outputs
+
+    def output_shape(self):
+        return {
+            name: ShapeSpec(
+                channels=self._out_feature_channels[name], stride=self._out_feature_strides[name]
+            )
+            for name in self._out_features
+        }
 
 
 @BACKBONE_REGISTRY.register()

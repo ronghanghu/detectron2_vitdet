@@ -2,8 +2,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from detectron2 import layers
-from detectron2.layers import Conv2d, cat
+from detectron2.layers import Conv2d, ConvTranspose2d, ShapeSpec, cat, interpolate
 from detectron2.structures import heatmaps_to_keypoints
 from detectron2.utils.events import get_event_storage
 from detectron2.utils.registry import Registry
@@ -13,9 +12,9 @@ _TOTAL_SKIPPED = 0
 ROI_KEYPOINT_HEAD_REGISTRY = Registry("ROI_KEYPOINT_HEAD")
 
 
-def build_keypoint_head(cfg):
+def build_keypoint_head(cfg, input_shape):
     name = cfg.MODEL.ROI_KEYPOINT_HEAD.NAME
-    return ROI_KEYPOINT_HEAD_REGISTRY.get(name)(cfg)
+    return ROI_KEYPOINT_HEAD_REGISTRY.get(name)(cfg, input_shape)
 
 
 def keypoint_rcnn_loss(pred_keypoint_logits, instances, normalizer):
@@ -113,10 +112,9 @@ class KRCNNConvDeconvUpsampleHead(nn.Module):
     a transpose convolution and bilinear interpolation for upsampling.
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, input_shape: ShapeSpec):
         """
         The following attributes are parsed from config:
-            in_channels: from ROI_KEYPOINT_HEAD.COMPUTED_INPUT_SIZE
             conv_dims: an iterable of output channel counts for each conv in the head
                          e.g. (512, 512, 512) for three convs outputting 512 channels.
             num_keypoints: number of keypoint heatmaps to predicts, determines the number of
@@ -129,7 +127,7 @@ class KRCNNConvDeconvUpsampleHead(nn.Module):
         up_scale      = 2
         conv_dims     = cfg.MODEL.ROI_KEYPOINT_HEAD.CONV_DIMS
         num_keypoints = cfg.MODEL.ROI_KEYPOINT_HEAD.NUM_KEYPOINTS
-        in_channels   = cfg.MODEL.ROI_KEYPOINT_HEAD.COMPUTED_INPUT_SIZE[0]
+        in_channels   = input_shape.channels
         # fmt: on
 
         self.blocks = []
@@ -140,7 +138,7 @@ class KRCNNConvDeconvUpsampleHead(nn.Module):
             in_channels = layer_channels
 
         deconv_kernel = 4
-        self.score_lowres = layers.ConvTranspose2d(
+        self.score_lowres = ConvTranspose2d(
             in_channels, num_keypoints, deconv_kernel, stride=2, padding=deconv_kernel // 2 - 1
         )
         self.up_scale = up_scale
@@ -157,5 +155,5 @@ class KRCNNConvDeconvUpsampleHead(nn.Module):
         for layer in self.blocks:
             x = F.relu(layer(x))
         x = self.score_lowres(x)
-        x = layers.interpolate(x, scale_factor=self.up_scale, mode="bilinear", align_corners=False)
+        x = interpolate(x, scale_factor=self.up_scale, mode="bilinear", align_corners=False)
         return x

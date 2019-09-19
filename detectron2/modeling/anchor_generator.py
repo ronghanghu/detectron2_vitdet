@@ -1,8 +1,10 @@
 import copy
 import math
+from typing import List
 import torch
 from torch import nn
 
+from detectron2.layers import ShapeSpec
 from detectron2.structures import Boxes, RotatedBoxes
 from detectron2.utils.registry import Registry
 
@@ -50,12 +52,12 @@ class DefaultAnchorGenerator(nn.Module):
     For a set of image sizes and feature maps, computes a set of anchors.
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, input_shape):
         super().__init__()
         # fmt: off
         sizes         = cfg.MODEL.ANCHOR_GENERATOR.SIZES
         aspect_ratios = cfg.MODEL.ANCHOR_GENERATOR.ASPECT_RATIOS
-        self.strides  = cfg.MODEL.ANCHOR_GENERATOR.COMPUTED_INPUT_STRIDES
+        self.strides  = [x.stride for x in input_shape]
         # fmt: on
         """
         sizes (list[list[int]]): sizes[i] is the list of anchor sizes to use
@@ -177,13 +179,13 @@ class RotatedAnchorGenerator(nn.Module):
     The anchor generator used by Rotated RPN (RRPN).
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, input_shape: List[ShapeSpec]):
         super().__init__()
         # fmt: off
         sizes         = cfg.MODEL.ANCHOR_GENERATOR.SIZES
         aspect_ratios = cfg.MODEL.ANCHOR_GENERATOR.ASPECT_RATIOS
         angles        = cfg.MODEL.ANCHOR_GENERATOR.ANGLES
-        self.strides  = cfg.MODEL.ANCHOR_GENERATOR.COMPUTED_INPUT_STRIDES
+        self.strides  = [x.stride for x in input_shape]
         # fmt: on
 
         self.num_features = len(self.strides)
@@ -299,6 +301,6 @@ class RotatedAnchorGenerator(nn.Module):
         return anchors
 
 
-def build_anchor_generator(cfg):
+def build_anchor_generator(cfg, input_shape):
     anchor_generator = cfg.MODEL.ANCHOR_GENERATOR.NAME
-    return ANCHOR_GENERATOR_REGISTRY.get(anchor_generator)(cfg)
+    return ANCHOR_GENERATOR_REGISTRY.get(anchor_generator)(cfg, input_shape)

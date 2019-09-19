@@ -17,9 +17,10 @@ __all__ = ["GeneralizedRCNN", "ProposalNetwork"]
 @META_ARCH_REGISTRY.register()
 class GeneralizedRCNN(nn.Module):
     """
-    Main class for Generalized R-CNN. Supports boxes, masks and keypoints
-    This is very similar to what we had before, the difference being that now
-    we construct the modules in __init__, instead of passing them as arguments
+    Generalized R-CNN. Any models that contains the following three components:
+    1. Per-image feature extraction (aka backbone)
+    2. Region proposal generation
+    3. Per-region feature extraction and prediction
     """
 
     def __init__(self, cfg):
@@ -27,8 +28,8 @@ class GeneralizedRCNN(nn.Module):
 
         self.device = torch.device(cfg.MODEL.DEVICE)
         self.backbone = build_backbone(cfg)
-        self.proposal_generator = build_proposal_generator(cfg)
-        self.roi_heads = build_roi_heads(cfg)
+        self.proposal_generator = build_proposal_generator(cfg, self.backbone.output_shape())
+        self.roi_heads = build_roi_heads(cfg, self.backbone.output_shape())
 
         assert len(cfg.MODEL.PIXEL_MEAN) == len(cfg.MODEL.PIXEL_STD)
         num_channels = len(cfg.MODEL.PIXEL_MEAN)
@@ -45,8 +46,8 @@ class GeneralizedRCNN(nn.Module):
 
         For now, each item in the list is a dict that contains:
             image: Tensor, image in (C, H, W) format.
-            instances: Instances
-            proposals: Instances, precomputed proposals.
+            instances (optional): groundtruth Instances
+            proposals (optional): Instances, precomputed proposals.
             Other information that's included in the original dicts, such as:
                 "height", "width" (int): the output resolution of the model, used in inference.
                     See :meth:`postprocess` for details.
@@ -151,7 +152,7 @@ class ProposalNetwork(nn.Module):
         self.device = torch.device(cfg.MODEL.DEVICE)
 
         self.backbone = build_backbone(cfg)
-        self.proposal_generator = build_proposal_generator(cfg)
+        self.proposal_generator = build_proposal_generator(cfg, self.backbone.output_shape())
 
         pixel_mean = torch.Tensor(cfg.MODEL.PIXEL_MEAN).to(self.device).view(-1, 1, 1)
         pixel_std = torch.Tensor(cfg.MODEL.PIXEL_STD).to(self.device).view(-1, 1, 1)

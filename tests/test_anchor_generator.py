@@ -3,6 +3,7 @@ import unittest
 import torch
 
 from detectron2.config import get_cfg
+from detectron2.layers import ShapeSpec
 from detectron2.modeling.anchor_generator import DefaultAnchorGenerator, RotatedAnchorGenerator
 
 logger = logging.getLogger(__name__)
@@ -13,9 +14,8 @@ class TestAnchorGenerator(unittest.TestCase):
         cfg = get_cfg()
         cfg.MODEL.ANCHOR_GENERATOR.SIZES = [[32, 64]]
         cfg.MODEL.ANCHOR_GENERATOR.ASPECT_RATIOS = [[0.25, 1, 4]]
-        cfg.MODEL.ANCHOR_GENERATOR.COMPUTED_INPUT_STRIDES = [4]
 
-        anchor_generator = DefaultAnchorGenerator(cfg)
+        anchor_generator = DefaultAnchorGenerator(cfg, [ShapeSpec(stride=4)])
 
         num_images = 2
         # It's possible to infer strides from image size instead of config in the future.
@@ -50,8 +50,7 @@ class TestAnchorGenerator(unittest.TestCase):
         cfg.MODEL.ANCHOR_GENERATOR.SIZES = [[32, 64]]
         cfg.MODEL.ANCHOR_GENERATOR.ASPECT_RATIOS = [[0.25, 1, 4]]
         cfg.MODEL.ANCHOR_GENERATOR.ANGLES = [[0, 45]]
-        cfg.MODEL.ANCHOR_GENERATOR.COMPUTED_INPUT_STRIDES = [4]
-        anchor_generator = RotatedAnchorGenerator(cfg)
+        anchor_generator = RotatedAnchorGenerator(cfg, [ShapeSpec(stride=4)])
 
         num_images = 2
         # It's possible to infer strides from image size instead of config in the future.

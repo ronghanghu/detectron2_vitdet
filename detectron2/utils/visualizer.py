@@ -252,11 +252,7 @@ class Visualizer:
         return self.output
 
     def draw_panoptic_seg_predictions(
-        self,
-        panoptic_seg,
-        segments_info,
-        area_limit=None,
-        alpha=0.9
+        self, panoptic_seg, segments_info, area_limit=None, alpha=0.9
     ):
         """
         Draw panoptic prediction results on an image.

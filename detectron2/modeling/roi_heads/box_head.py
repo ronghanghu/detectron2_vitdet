@@ -3,7 +3,7 @@ import borc.nn.weight_init as weight_init
 from torch import nn
 from torch.nn import functional as F
 
-from detectron2.layers import Conv2d, get_norm
+from detectron2.layers import Conv2d, ShapeSpec, get_norm
 from detectron2.utils.registry import Registry
 
 ROI_BOX_HEAD_REGISTRY = Registry("ROI_BOX_HEAD")
@@ -16,29 +16,25 @@ class FastRCNNConvFCHead(nn.Module):
     several fc layers (each followed by relu).
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, input_shape: ShapeSpec):
         """
         The following attributes are parsed from config:
-            input size from ROI_BOX_HEAD.COMPUTED_INPUT_SIZE
             num_conv, num_fc: the number of conv/fc layers
             conv_dim/fc_dim: the dimension of the conv/fc layers
             norm: normalization for the conv layers
         """
-        super(FastRCNNConvFCHead, self).__init__()
+        super().__init__()
 
         # fmt: off
-        input_size = cfg.MODEL.ROI_BOX_HEAD.COMPUTED_INPUT_SIZE
         num_conv   = cfg.MODEL.ROI_BOX_HEAD.NUM_CONV
         conv_dim   = cfg.MODEL.ROI_BOX_HEAD.CONV_DIM
         num_fc     = cfg.MODEL.ROI_BOX_HEAD.NUM_FC
         fc_dim     = cfg.MODEL.ROI_BOX_HEAD.FC_DIM
         norm       = cfg.MODEL.ROI_BOX_HEAD.NORM
         # fmt: on
-        assert len(input_size) == 3, input_size
-
         assert num_conv + num_fc > 0
 
-        self._output_size = input_size
+        self._output_size = (input_shape.channels, input_shape.height, input_shape.width)
 
         self.conv_norm_relus = []
         for k in range(num_conv):
@@ -81,6 +77,6 @@ class FastRCNNConvFCHead(nn.Module):
         return self._output_size
 
 
-def build_box_head(cfg):
+def build_box_head(cfg, input_shape):
     name = cfg.MODEL.ROI_BOX_HEAD.NAME
-    return ROI_BOX_HEAD_REGISTRY.get(name)(cfg)
+    return ROI_BOX_HEAD_REGISTRY.get(name)(cfg, input_shape)

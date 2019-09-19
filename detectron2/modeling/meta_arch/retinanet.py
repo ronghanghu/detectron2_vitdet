@@ -1,10 +1,11 @@
 import logging
 import math
+from typing import List
 import torch
 from borc.nn import sigmoid_focal_loss_jit, smooth_l1_loss
 from torch import nn
 
-from detectron2.layers import batched_nms, cat
+from detectron2.layers import ShapeSpec, batched_nms, cat
 from detectron2.structures import Boxes, ImageList, Instances, pairwise_iou
 from detectron2.utils.logger import log_first_n
 
@@ -78,12 +79,10 @@ class RetinaNet(nn.Module):
 
         self.backbone = build_backbone(cfg)
 
-        feature_strides = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_STRIDES)
-        in_strides = [feature_strides[f] for f in self.in_features]
-        cfg.MODEL.ANCHOR_GENERATOR.COMPUTED_INPUT_STRIDES = in_strides
-        self.anchor_generator = build_anchor_generator(cfg)
-
-        self.head = RetinaNetHead(cfg)  # it also calls `build_anchor_generator`
+        backbone_shape = self.backbone.output_shape()
+        feature_shapes = [backbone_shape[f] for f in self.in_features]
+        self.head = RetinaNetHead(cfg, feature_shapes)
+        self.anchor_generator = build_anchor_generator(cfg, feature_shapes)
 
         # Matching and loss
         self.box2box_transform = Box2BoxTransform(weights=cfg.MODEL.RPN.BBOX_REG_WEIGHTS)
@@ -356,15 +355,14 @@ class RetinaNetHead(nn.Module):
     It has two subnets for the two tasks, with a common structure but separate parameters.
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, input_shape: List[ShapeSpec]):
         super().__init__()
         # fmt: off
-        self.in_features = cfg.MODEL.RETINANET.IN_FEATURES
-        in_channels      = cfg.MODEL.FPN.OUT_CHANNELS
+        in_channels      = input_shape[0].channels
         num_classes      = cfg.MODEL.RETINANET.NUM_CLASSES
         num_convs        = cfg.MODEL.RETINANET.NUM_CONVS
         prior_prob       = cfg.MODEL.RETINANET.PRIOR_PROB
-        num_anchors      = build_anchor_generator(cfg).num_cell_anchors
+        num_anchors      = build_anchor_generator(cfg, input_shape).num_cell_anchors
         # fmt: on
         assert (
             len(set(num_anchors)) == 1

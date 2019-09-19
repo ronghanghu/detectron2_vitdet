@@ -1,10 +1,11 @@
 import numpy as np
+from typing import Dict
 import borc.nn.weight_init as weight_init
 import torch
 from torch import nn
 from torch.nn import functional as F
 
-from detectron2.layers import Conv2d
+from detectron2.layers import Conv2d, ShapeSpec
 from detectron2.structures import ImageList
 from detectron2.utils.registry import Registry
 
@@ -30,7 +31,7 @@ class SemanticSegmentor(nn.Module):
         self.device = torch.device(cfg.MODEL.DEVICE)
 
         self.backbone = build_backbone(cfg)
-        self.sem_seg_head = build_sem_seg_head(cfg)
+        self.sem_seg_head = build_sem_seg_head(cfg, self.backbone.output_shape())
 
         pixel_mean = torch.Tensor(cfg.MODEL.PIXEL_MEAN).to(self.device).view(-1, 1, 1)
         pixel_std = torch.Tensor(cfg.MODEL.PIXEL_STD).to(self.device).view(-1, 1, 1)
@@ -84,9 +85,9 @@ class SemanticSegmentor(nn.Module):
         return processed_results
 
 
-def build_sem_seg_head(cfg):
+def build_sem_seg_head(cfg, input_shape):
     name = cfg.MODEL.SEM_SEG_HEAD.NAME
-    return SEM_SEG_HEADS_REGISTRY.get(name)(cfg)
+    return SEM_SEG_HEADS_REGISTRY.get(name)(cfg, input_shape)
 
 
 @SEM_SEG_HEADS_REGISTRY.register()
@@ -97,13 +98,13 @@ class SemSegFPNHead(nn.Module):
     all levels of the FPN into single output.
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, input_shape: Dict[str, ShapeSpec]):
         super().__init__()
 
         # fmt: off
         self.in_features      = cfg.MODEL.SEM_SEG_HEAD.IN_FEATURES
-        feature_strides       = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_STRIDES)
-        feature_channels      = dict(cfg.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_CHANNELS)
+        feature_strides       = {k: v.stride for k, v in input_shape.items()}
+        feature_channels      = {k: v.channels for k, v in input_shape.items()}
         self.ignore_value     = cfg.MODEL.SEM_SEG_HEAD.IGNORE_VALUE
         num_classes           = cfg.MODEL.SEM_SEG_HEAD.NUM_CLASSES
         conv_dims             = cfg.MODEL.SEM_SEG_HEAD.CONVS_DIM

@@ -37,9 +37,9 @@ class PanopticFPN(nn.Module):
         )
 
         self.backbone = build_backbone(cfg)
-        self.proposal_generator = build_proposal_generator(cfg)
-        self.roi_heads = build_roi_heads(cfg)
-        self.sem_seg_head = build_sem_seg_head(cfg)
+        self.proposal_generator = build_proposal_generator(cfg, self.backbone.output_shape())
+        self.roi_heads = build_roi_heads(cfg, self.backbone.output_shape())
+        self.sem_seg_head = build_sem_seg_head(cfg, self.backbone.output_shape())
 
         pixel_mean = torch.Tensor(cfg.MODEL.PIXEL_MEAN).to(self.device).view(3, 1, 1)
         pixel_std = torch.Tensor(cfg.MODEL.PIXEL_STD).to(self.device).view(3, 1, 1)

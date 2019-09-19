@@ -3,7 +3,7 @@ import borc.nn.weight_init as weight_init
 import torch.nn.functional as F
 from torch import nn
 
-from detectron2.layers import Conv2d, get_norm
+from detectron2.layers import Conv2d, ShapeSpec, get_norm
 
 from .backbone import Backbone
 from .build import BACKBONE_REGISTRY
@@ -139,6 +139,14 @@ class FPN(Backbone):
             results.extend(self.top_block(top_block_in_feature))
         assert len(self._out_features) == len(results)
         return dict(zip(self._out_features, results))
+
+    def output_shape(self):
+        return {
+            name: ShapeSpec(
+                channels=self._out_feature_channels[name], stride=self._out_feature_strides[name]
+            )
+            for name in self._out_features
+        }
 
 
 def _assert_strides_are_log2_contiguous(strides):
