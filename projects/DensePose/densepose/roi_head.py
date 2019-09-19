@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # File:
 
+import torch
 from detectron2.modeling import ROI_HEADS_REGISTRY, StandardROIHeads
 from detectron2.modeling.poolers import ROIPooler
 
@@ -79,11 +80,18 @@ class DensePoseROIHeads(StandardROIHeads):
                 return densepose_loss_dict
         else:
             pred_boxes = [x.pred_boxes for x in instances]
-            densepose_features = self.densepose_pooler(features, pred_boxes)
-            if len(densepose_features) > 0:
-                densepose_head_outputs = self.densepose_head(densepose_features)
+            features_dp = self.densepose_pooler(features, pred_boxes)
+            if len(features_dp) > 0:
+                densepose_head_outputs = self.densepose_head(features_dp)
                 densepose_outputs, _ = self.densepose_predictor(densepose_head_outputs)
-                densepose_inference(densepose_outputs, instances)
+            else:
+                # If no detection occured instances
+                # set densepose_outputs to empty tensors
+                empty_tensor = torch.zeros(size=(0, 0, 0, 0),
+                                           device=features_dp.device)
+                densepose_outputs = tuple([empty_tensor] * 4)
+
+            densepose_inference(densepose_outputs, instances)
             return instances
 
     def forward(self, images, features, proposals, targets=None):

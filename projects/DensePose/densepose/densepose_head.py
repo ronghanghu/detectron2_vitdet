@@ -155,7 +155,7 @@ def densepose_inference(densepose_outputs, detections):
     """
     Infer dense pose estimate based on outputs from the DensePose head
     and detections. The estimate for each detection instance is stored in its
-    "densepose" attribute.
+    "pred_densepose" attribute.
 
     Args:
         densepose_outputs (tuple(`torch.Tensor`)): iterable containing 4 elements:
@@ -169,7 +169,7 @@ def densepose_inference(densepose_outputs, detections):
                   W is the resolution along the X axis
                   H is the resolution along the Y axis
         detections (list[Instances]): A list of N Instances, where N is the number of images
-            in the batch. Instances are modified by this method: "densepose" attribute
+            in the batch. Instances are modified by this method: "pred_densepose" attribute
             is added to each instance, the attribute contains the corresponding
             DensePoseOutput object.
     """
