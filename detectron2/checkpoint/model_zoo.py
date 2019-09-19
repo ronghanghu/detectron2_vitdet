@@ -15,6 +15,7 @@ class ModelCatalog(object):
     # Loading them to a model with regular BN or SyncBN is wrong.
     # Even when loaded to FrozenBN, it is still different from affine by an epsilon,
     # which should be negligible for training.
+    # NOTE: all models here uses PIXEL_STD=[1,1,1]
     C2_IMAGENET_MODELS = {
         "MSRA/R-50": "ImageNetPretrained/MSRA/R-50.pkl",
         "MSRA/R-101": "ImageNetPretrained/MSRA/R-101.pkl",
@@ -89,7 +90,7 @@ class ModelCatalog(object):
 
 class ModelCatalogHandler(PathHandler):
     """
-    Resolve URL like catalog:// by the model zoo.
+    Resolve URL like catalog://.
     """
 
     PREFIX = "catalog://"

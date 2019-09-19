@@ -33,8 +33,8 @@ _C.MODEL.WEIGHTS = ""
 # Values to be used for image normalization (BGR order)
 # Default values are the mean pixel value from ImageNet: [103.53, 116.28, 123.675]
 _C.MODEL.PIXEL_MEAN = [103.530, 116.280, 123.675]
-# When using the C2 pre-trained models, std has been absorbed into its conv1 weights,
-# so the std needs to be set 1.
+# When using pre-trained models in Detectron1 or any MSRA models,
+# std has been absorbed into its conv1 weights, so the std needs to be set 1.
 # Otherwise, you can use [57.375, 57.120, 58.395] (ImageNet std)
 _C.MODEL.PIXEL_STD = [1.0, 1.0, 1.0]
 

@@ -1,6 +1,7 @@
 _BASE_: "../Base-RCNN-FPN.yaml"
 MODEL:
   WEIGHTS: "detectron2://ImageNetPretrained/FAIR/X-101-32x8d.pkl"
+  PIXEL_STD: [57.375, 57.120, 58.395]
   MASK_ON: True
   RESNETS:
     STRIDE_IN_1X1: False  # this is a C2 model
