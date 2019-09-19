@@ -1,6 +1,7 @@
 import logging
 import numpy as np
 import pickle
+from borc.common.file_io import PathManager
 
 from .c2_model_loading import align_and_update_state_dicts
 from .checkpoint import Checkpointer
@@ -108,9 +109,10 @@ class DetectionCheckpointer(Checkpointer):
     model zoo, and apply conversions for legacy models.
     """
 
-    def _load_file(self, f):
-        if f.endswith(".pkl"):
-            data = pickle.load(open(f, "rb"), encoding="latin1")
+    def _load_file(self, filename):
+        if filename.endswith(".pkl"):
+            with PathManager.open(filename, "rb") as f:
+                data = pickle.load(f, encoding="latin1")
             if "model" in data and "__author__" in data:
                 # file is in Detectron2 model zoo format
                 self.logger.info("Reading a file from '{}'".format(data["__author__"]))
@@ -124,7 +126,7 @@ class DetectionCheckpointer(Checkpointer):
                 data = {k: v for k, v in data.items() if not k.endswith("_momentum")}
                 return {"model": data, "__author__": "Caffe2", "matching_heuristics": True}
 
-        loaded = super()._load_file(f)  # load native pth checkpoint
+        loaded = super()._load_file(filename)  # load native pth checkpoint
         if "model" not in loaded:
             loaded = {"model": loaded}
         loaded["model"] = _convert_background_class(loaded["model"])
