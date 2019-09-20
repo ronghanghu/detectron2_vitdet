@@ -2,6 +2,7 @@
 # File:
 
 import torch
+
 from detectron2.modeling import ROI_HEADS_REGISTRY, StandardROIHeads
 from detectron2.modeling.poolers import ROIPooler
 
@@ -87,8 +88,7 @@ class DensePoseROIHeads(StandardROIHeads):
             else:
                 # If no detection occured instances
                 # set densepose_outputs to empty tensors
-                empty_tensor = torch.zeros(size=(0, 0, 0, 0),
-                                           device=features_dp.device)
+                empty_tensor = torch.zeros(size=(0, 0, 0, 0), device=features_dp.device)
                 densepose_outputs = tuple([empty_tensor] * 4)
 
             densepose_inference(densepose_outputs, instances)

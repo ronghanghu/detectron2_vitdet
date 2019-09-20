@@ -1,4 +1,4 @@
-from typing import Tuple, Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class EntrySelector(object):
@@ -7,8 +7,8 @@ class EntrySelector(object):
     """
 
     @staticmethod
-    def from_string(spec: str) -> 'EntrySelector':
-        if spec == '*':
+    def from_string(spec: str) -> "EntrySelector":
+        if spec == "*":
             return AllEntrySelector()
         return FieldEntrySelector(spec)
 
@@ -18,7 +18,7 @@ class AllEntrySelector(EntrySelector):
     Selector that accepts all entries
     """
 
-    SPECIFIER = '*'
+    SPECIFIER = "*"
 
     def __call__(self, entry):
         return True
@@ -55,9 +55,9 @@ class FieldEntrySelector(EntrySelector):
 
         def __init__(self, name: str, typespec: str, value: str):
             import builtins
+
             self.name = name
-            self.type = getattr(builtins, typespec) \
-                if typespec is not None else str
+            self.type = getattr(builtins, typespec) if typespec is not None else str
             self.value = value
 
         def __call__(self, entry):
@@ -67,17 +67,19 @@ class FieldEntrySelector(EntrySelector):
         """
         Predicate that checks whether an entry field falls into the specified range
         """
+
         def __init__(self, name: str, typespec: str, vmin: str, vmax: str):
             import builtins
+
             self.name = name
-            self.type = getattr(builtins, typespec) \
-                if typespec is not None else str
+            self.type = getattr(builtins, typespec) if typespec is not None else str
             self.vmin = vmin
             self.vmax = vmax
 
         def __call__(self, entry):
-            return (entry[self.name] >= self.type(self.vmin)) and \
-                (entry[self.name] <= self.type(self.vmax))
+            return (entry[self.name] >= self.type(self.vmin)) and (
+                entry[self.name] <= self.type(self.vmax)
+            )
 
     def __init__(self, spec: str):
         self._predicates = self._parse_specifier_into_predicates(spec)
@@ -88,41 +90,38 @@ class FieldEntrySelector(EntrySelector):
                 return False
         return True
 
-    def _parse_specifier_into_predicates(self, spec: str) \
-            -> List['_FieldEntryPredicate']:
+    def _parse_specifier_into_predicates(self, spec: str) -> List["_FieldEntryPredicate"]:
         predicates = []
         specs = spec.split(self._SPEC_DELIM)
         for subspec in specs:
             eq_idx = subspec.find(self._EQUAL)
             if eq_idx > 0:
                 field_name_with_type = subspec[:eq_idx]
-                field_name, field_type = self._parse_field_name_type(
-                    field_name_with_type)
-                field_value_or_range = subspec[eq_idx + 1:]
+                field_name, field_type = self._parse_field_name_type(field_name_with_type)
+                field_value_or_range = subspec[eq_idx + 1 :]
                 if self._is_range_spec(field_value_or_range):
                     vmin, vmax = self._get_range_spec(field_value_or_range)
                     predicate = FieldEntrySelector._FieldEntryRangePredicate(
-                        field_name, field_type, vmin, vmax)
+                        field_name, field_type, vmin, vmax
+                    )
                 else:
                     predicate = FieldEntrySelector._FieldEntryValuePredicate(
-                        field_name, field_type, field_value_or_range)
+                        field_name, field_type, field_value_or_range
+                    )
                 predicates.append(predicate)
             elif eq_idx == 0:
-                self._parse_error(f"\"{subspec}\", field name is empty!")
+                self._parse_error(f'"{subspec}", field name is empty!')
             else:
-                self._parse_error(
-                    f"\"{subspec}\", should have format "
-                    "<field>=<value_or_range>!")
+                self._parse_error(f'"{subspec}", should have format ' "<field>=<value_or_range>!")
         return predicates
 
-    def _parse_field_name_type(self, field_name_with_type: str) \
-            -> Tuple[str, Optional[str]]:
+    def _parse_field_name_type(self, field_name_with_type: str) -> Tuple[str, Optional[str]]:
         type_delim_idx = field_name_with_type.find(self._TYPE_DELIM)
         if type_delim_idx > 0:
             field_name = field_name_with_type[:type_delim_idx]
-            field_type = field_name_with_type[type_delim_idx + 1:]
+            field_type = field_name_with_type[type_delim_idx + 1 :]
         elif type_delim_idx == 0:
-            self._parse_error(f"\"{field_name_with_type}\", field name is empty!")
+            self._parse_error(f'"{field_name_with_type}", field name is empty!')
         else:
             field_name = field_name_with_type
             field_type = None
@@ -136,10 +135,10 @@ class FieldEntrySelector(EntrySelector):
         if self._is_range_spec(field_value_or_range):
             delim_idx = field_value_or_range.find(self._RANGE_DELIM)
             vmin = field_value_or_range[:delim_idx]
-            vmax = field_value_or_range[delim_idx + 1:]
+            vmax = field_value_or_range[delim_idx + 1 :]
             return vmin, vmax
         else:
-            self._parse_error("\"field_value_or_range\", range of values expected!")
+            self._parse_error('"field_value_or_range", range of values expected!')
 
     def _parse_error(self, msg):
         raise ValueError(f"{self._ERROR_PREFIX}: {msg}")

@@ -1,5 +1,5 @@
-import cv2
 import numpy as np
+import cv2
 
 
 class MatrixVisualizer(object):
@@ -8,9 +8,14 @@ class MatrixVisualizer(object):
     """
 
     def __init__(
-            self, inplace=True, cmap=cv2.COLORMAP_PARULA, val_scale=1.0,
-            alpha=0.7, interp_method_matrix=cv2.INTER_LINEAR,
-            interp_method_mask=cv2.INTER_NEAREST):
+        self,
+        inplace=True,
+        cmap=cv2.COLORMAP_PARULA,
+        val_scale=1.0,
+        alpha=0.7,
+        interp_method_matrix=cv2.INTER_LINEAR,
+        interp_method_mask=cv2.INTER_NEAREST,
+    ):
         self.inplace = inplace
         self.cmap = cmap
         self.val_scale = val_scale
@@ -28,14 +33,12 @@ class MatrixVisualizer(object):
         x, y, w, h = [int(v) for v in bbox_xywh]
         mask, matrix = self._resize(mask, matrix, w, h)
         mask_bg = np.tile((mask == 0)[:, :, np.newaxis], [1, 1, 3])
-        matrix_scaled_8u = (matrix.astype(np.float32) * self.val_scale) \
-            .astype(np.uint8)
+        matrix_scaled_8u = (matrix.astype(np.float32) * self.val_scale).astype(np.uint8)
         matrix_vis = cv2.applyColorMap(matrix_scaled_8u, self.cmap)
-        matrix_vis[mask_bg] = \
-            image_target_bgr[y : y + h, x : x + w, :][mask_bg]
-        image_target_bgr[y : y + h, x : x + w, :] = \
-            image_target_bgr[y : y + h, x : x + w, :] * (1.0 - self.alpha) + \
-            matrix_vis * self.alpha
+        matrix_vis[mask_bg] = image_target_bgr[y : y + h, x : x + w, :][mask_bg]
+        image_target_bgr[y : y + h, x : x + w, :] = (
+            image_target_bgr[y : y + h, x : x + w, :] * (1.0 - self.alpha) + matrix_vis * self.alpha
+        )
         return image_target_bgr.astype(np.uint8)
 
     def _resize(self, mask, matrix, w, h):
@@ -68,9 +71,7 @@ class RectangleVisualizer(object):
         x, y, w, h = bbox_xywh
         color = color or self.color
         thickness = thickness or self.thickness
-        cv2.rectangle(
-            image_bgr, (int(x), int(y)), (int(x + w), int(y + h)),
-            color, thickness)
+        cv2.rectangle(image_bgr, (int(x), int(y)), (int(x + w), int(y + h)), color, thickness)
         return image_bgr
 
 
@@ -85,8 +86,7 @@ class PointsVisualizer(object):
     def visualize(self, image_bgr, pts_xy, colors_bgr=None, rs=None):
         for j, pt_xy in enumerate(pts_xy):
             x, y = pt_xy
-            color_bgr = colors_bgr[j] if colors_bgr is not None \
-                else self.color_bgr
+            color_bgr = colors_bgr[j] if colors_bgr is not None else self.color_bgr
             r = rs[j] if rs is not None else self.r
             cv2.circle(image_bgr, (x, y), r, color_bgr, -1)
         return image_bgr
@@ -98,12 +98,18 @@ class TextVisualizer(object):
     _COLOR_WHITE = (255, 255, 255)
 
     def __init__(
-            self, font_face=cv2.FONT_HERSHEY_SIMPLEX,
-            font_color_bgr=_COLOR_GRAY, font_scale=0.35,
-            font_line_type=cv2.LINE_AA, font_line_thickness=1,
-            fill_color_bgr=_COLOR_WHITE, fill_color_transparency=1.0,
-            frame_color_bgr=_COLOR_WHITE, frame_color_transparency=1.0,
-            frame_thickness=1):
+        self,
+        font_face=cv2.FONT_HERSHEY_SIMPLEX,
+        font_color_bgr=_COLOR_GRAY,
+        font_scale=0.35,
+        font_line_type=cv2.LINE_AA,
+        font_line_thickness=1,
+        fill_color_bgr=_COLOR_WHITE,
+        fill_color_transparency=1.0,
+        frame_color_bgr=_COLOR_WHITE,
+        frame_color_transparency=1.0,
+        frame_thickness=1,
+    ):
         self.font_face = font_face
         self.font_color_bgr = font_color_bgr
         self.font_scale = font_scale
@@ -120,43 +126,49 @@ class TextVisualizer(object):
         x, y = topleft_xy
         if self.frame_color_transparency < 1.0:
             t = self.frame_thickness
-            image_bgr[y - t : y + txt_h + t, x - t : x + txt_w + t, :] = \
-                (image_bgr[y - t : y + txt_h + t, x - t : x + txt_w + t, :]
-                 * self.frame_color_transparency
-                 + np.array(self.frame_color_bgr)
-                 * (1.0 - self.frame_color_transparency)).astype(np.float)
+            image_bgr[y - t : y + txt_h + t, x - t : x + txt_w + t, :] = (
+                image_bgr[y - t : y + txt_h + t, x - t : x + txt_w + t, :]
+                * self.frame_color_transparency
+                + np.array(self.frame_color_bgr) * (1.0 - self.frame_color_transparency)
+            ).astype(np.float)
         if self.fill_color_transparency < 1.0:
-            image_bgr[y : y + txt_h, x : x + txt_w, :] = \
-                (image_bgr[y : y + txt_h, x : x + txt_w, :]
-                 * self.fill_color_transparency
-                 + np.array(self.fill_color_bgr)
-                 * (1.0 - self.fill_color_transparency)).astype(np.float)
+            image_bgr[y : y + txt_h, x : x + txt_w, :] = (
+                image_bgr[y : y + txt_h, x : x + txt_w, :] * self.fill_color_transparency
+                + np.array(self.fill_color_bgr) * (1.0 - self.fill_color_transparency)
+            ).astype(np.float)
             cv2.putText(
-                image_bgr, txt, topleft_xy, self.font_face,
-                self.font_scale, self.font_color_bgr, self.font_line_thickness,
-                self.font_line_type)
+                image_bgr,
+                txt,
+                topleft_xy,
+                self.font_face,
+                self.font_scale,
+                self.font_color_bgr,
+                self.font_line_thickness,
+                self.font_line_type,
+            )
         return image_bgr
 
     def get_text_size_wh(self, txt):
         ((txt_w, txt_h), _) = cv2.getTextSize(
-            txt, self.font_face, self.font_scale, self.font_line_thickness)
+            txt, self.font_face, self.font_scale, self.font_line_thickness
+        )
         return txt_w, txt_h
 
 
 class CompoundVisualizer(object):
-
     def __init__(self, visualizers):
         self.visualizers = visualizers
 
     def visualize(self, image_bgr, data):
-        assert len(data) == len(self.visualizers), \
-            'The number of datas {} should match the number of visualizers' \
-            ' {}'.format(len(data), len(self.visualizers))
+        assert len(data) == len(self.visualizers), (
+            "The number of datas {} should match the number of visualizers"
+            " {}".format(len(data), len(self.visualizers))
+        )
         image = image_bgr
         for i, visualizer in enumerate(self.visualizers):
             image = visualizer.visualize(image, data[i])
         return image
 
     def __str__(self):
-        visualizer_str = ', '.join([str(v) for v in self.visualizers])
-        return 'Compound Visualizer [{}]'.format(visualizer_str)
+        visualizer_str = ", ".join([str(v) for v in self.visualizers])
+        return "Compound Visualizer [{}]".format(visualizer_str)
