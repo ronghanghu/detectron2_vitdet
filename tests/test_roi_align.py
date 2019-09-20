@@ -67,8 +67,9 @@ class ROIAlignTest(unittest.TestCase):
         rois = [0] + list(box)
         rois = torch.from_numpy(np.asarray(rois)[None, :].astype("float32"))
         output = op.forward(input, rois).numpy()
-        output_cuda = op.forward(input.cuda(), rois.cuda()).cpu().numpy()
-        self.assertTrue(np.allclose(output, output_cuda))
+        if torch.cuda.is_available():
+            output_cuda = op.forward(input.cuda(), rois.cuda()).cpu().numpy()
+            self.assertTrue(np.allclose(output, output_cuda))
         return output[0, 0]
 
 

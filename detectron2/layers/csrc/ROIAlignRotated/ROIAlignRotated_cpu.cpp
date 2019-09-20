@@ -1,7 +1,16 @@
 #include <ATen/TensorUtils.h>
-#include "ROIAlign.h"
+#include "ROIAlignRotated.h"
 
-// implementation taken from Caffe2
+// Note: this implementation originates from the Caffe2 ROIAlignRotated Op
+// and PyTorch ROIAlign (non-rotated) Op implementations.
+// The key difference between this implementation and those ones is
+// we don't do "legacy offset" in this version, as there aren't many previous
+// works, if any, using the "legacy" ROIAlignRotated Op.
+// This would make the interface a bit cleaner.
+
+namespace detectron2 {
+
+namespace {
 template <typename T>
 struct PreCalc {
   int pos1;
@@ -28,6 +37,10 @@ void pre_calc_for_bilinear_interpolate(
     T bin_size_w,
     int roi_bin_grid_h,
     int roi_bin_grid_w,
+    T roi_center_h,
+    T roi_center_w,
+    T cos_theta,
+    T sin_theta,
     std::vector<PreCalc<T>>& pre_calc) {
   int pre_calc_index = 0;
   for (int ph = 0; ph < pooled_height; ph++) {
@@ -41,8 +54,12 @@ void pre_calc_for_bilinear_interpolate(
               static_cast<T>(ix + .5f) * bin_size_w /
                   static_cast<T>(roi_bin_grid_w);
 
-          T x = xx;
-          T y = yy;
+          // Rotate by theta around the center and translate
+          // In image space, (y, x) is the order for Right Handed System,
+          // and this is essentially multiplying the point by a rotation matrix
+          // to rotate it counterclockwise through angle theta.
+          T y = yy * cos_theta - xx * sin_theta + roi_center_h;
+          T x = yy * sin_theta + xx * cos_theta + roi_center_w;
           // deal with: inverse elements are out of feature map boundary
           if (y < -1.0 || y > height || x < -1.0 || x > width) {
             // empty
@@ -60,10 +77,10 @@ void pre_calc_for_bilinear_interpolate(
             continue;
           }
 
-          if (y <= 0) {
+          if (y < 0) {
             y = 0;
           }
-          if (x <= 0) {
+          if (x < 0) {
             x = 0;
           }
 
@@ -111,109 +128,6 @@ void pre_calc_for_bilinear_interpolate(
 }
 
 template <typename T>
-void ROIAlignForward(
-    const int nthreads,
-    const T* input,
-    const T& spatial_scale,
-    const int channels,
-    const int height,
-    const int width,
-    const int pooled_height,
-    const int pooled_width,
-    const int sampling_ratio,
-    const T* rois,
-    T* output,
-    bool aligned) {
-  int n_rois = nthreads / channels / pooled_width / pooled_height;
-  // (n, c, ph, pw) is an element in the pooled output
-  // can be parallelized using omp
-  // #pragma omp parallel for num_threads(32)
-  for (int n = 0; n < n_rois; n++) {
-    int index_n = n * channels * pooled_width * pooled_height;
-
-    const T* offset_rois = rois + n * 5;
-    int roi_batch_ind = offset_rois[0];
-
-    // Do not use rounding; this implementation detail is critical
-    T offset = aligned ? (T)0.5 : (T)0.0;
-    T roi_start_w = offset_rois[1] * spatial_scale - offset;
-    T roi_start_h = offset_rois[2] * spatial_scale - offset;
-    T roi_end_w = offset_rois[3] * spatial_scale - offset;
-    T roi_end_h = offset_rois[4] * spatial_scale - offset;
-
-    T roi_width = roi_end_w - roi_start_w;
-    T roi_height = roi_end_h - roi_start_h;
-    if (aligned) {
-      AT_ASSERTM(
-          roi_width >= 0 && roi_height >= 0,
-          "ROIs in ROIAlign do not have non-negative size!");
-    } else { // for backward-compatibility only
-      roi_width = std::max(roi_width, (T)1.);
-      roi_height = std::max(roi_height, (T)1.);
-    }
-    T bin_size_h = static_cast<T>(roi_height) / static_cast<T>(pooled_height);
-    T bin_size_w = static_cast<T>(roi_width) / static_cast<T>(pooled_width);
-
-    // We use roi_bin_grid to sample the grid and mimic integral
-    int roi_bin_grid_h = (sampling_ratio > 0)
-        ? sampling_ratio
-        : ceil(roi_height / pooled_height); // e.g., = 2
-    int roi_bin_grid_w =
-        (sampling_ratio > 0) ? sampling_ratio : ceil(roi_width / pooled_width);
-
-    // We do average (integral) pooling inside a bin
-    const T count = roi_bin_grid_h * roi_bin_grid_w; // e.g. = 4
-
-    // we want to precalculate indices and weights shared by all channels,
-    // this is the key point of optimization
-    std::vector<PreCalc<T>> pre_calc(
-        roi_bin_grid_h * roi_bin_grid_w * pooled_width * pooled_height);
-    pre_calc_for_bilinear_interpolate(
-        height,
-        width,
-        pooled_height,
-        pooled_width,
-        roi_bin_grid_h,
-        roi_bin_grid_w,
-        roi_start_h,
-        roi_start_w,
-        bin_size_h,
-        bin_size_w,
-        roi_bin_grid_h,
-        roi_bin_grid_w,
-        pre_calc);
-
-    for (int c = 0; c < channels; c++) {
-      int index_n_c = index_n + c * pooled_width * pooled_height;
-      const T* offset_input =
-          input + (roi_batch_ind * channels + c) * height * width;
-      int pre_calc_index = 0;
-
-      for (int ph = 0; ph < pooled_height; ph++) {
-        for (int pw = 0; pw < pooled_width; pw++) {
-          int index = index_n_c + ph * pooled_width + pw;
-
-          T output_val = 0.;
-          for (int iy = 0; iy < roi_bin_grid_h; iy++) {
-            for (int ix = 0; ix < roi_bin_grid_w; ix++) {
-              PreCalc<T> pc = pre_calc[pre_calc_index];
-              output_val += pc.w1 * offset_input[pc.pos1] +
-                  pc.w2 * offset_input[pc.pos2] +
-                  pc.w3 * offset_input[pc.pos3] + pc.w4 * offset_input[pc.pos4];
-
-              pre_calc_index += 1;
-            }
-          }
-          output_val /= count;
-
-          output[index] = output_val;
-        } // for pw
-      } // for ph
-    } // for c
-  } // for n
-}
-
-template <typename T>
 void bilinear_interpolate_gradient(
     const int height,
     const int width,
@@ -226,8 +140,7 @@ void bilinear_interpolate_gradient(
     int& x_low,
     int& x_high,
     int& y_low,
-    int& y_high,
-    const int index /* index for debug only*/) {
+    int& y_high) {
   // deal with cases that inverse elements are out of feature map boundary
   if (y < -1.0 || y > height || x < -1.0 || x > width) {
     // empty
@@ -236,10 +149,13 @@ void bilinear_interpolate_gradient(
     return;
   }
 
-  if (y <= 0)
+  if (y < 0) {
     y = 0;
-  if (x <= 0)
+  }
+
+  if (x < 0) {
     x = 0;
+  }
 
   y_low = (int)y;
   x_low = (int)x;
@@ -279,8 +195,121 @@ inline void add(T* address, const T& val) {
   *address += val;
 }
 
+} // namespace
+
 template <typename T>
-void ROIAlignBackward(
+void ROIAlignRotatedForward(
+    const int nthreads,
+    const T* input,
+    const T& spatial_scale,
+    const int channels,
+    const int height,
+    const int width,
+    const int pooled_height,
+    const int pooled_width,
+    const int sampling_ratio,
+    const T* rois,
+    T* output) {
+  int n_rois = nthreads / channels / pooled_width / pooled_height;
+  // (n, c, ph, pw) is an element in the pooled output
+  // can be parallelized using omp
+  // #pragma omp parallel for num_threads(32)
+  for (int n = 0; n < n_rois; n++) {
+    int index_n = n * channels * pooled_width * pooled_height;
+
+    const T* current_roi = rois + n * 6;
+    int roi_batch_ind = current_roi[0];
+
+    // Do not use rounding; this implementation detail is critical
+    // ROIAlignRotated supports align == true, i.e., continuous coordinate
+    // by default, thus the 0.5 offset
+    T offset = (T)0.5;
+    T roi_center_w = current_roi[1] * spatial_scale - offset;
+    T roi_center_h = current_roi[2] * spatial_scale - offset;
+    T roi_width = current_roi[3] * spatial_scale;
+    T roi_height = current_roi[4] * spatial_scale;
+    T theta = current_roi[5] * M_PI / 180.0;
+    T cos_theta = cos(theta);
+    T sin_theta = sin(theta);
+
+    AT_ASSERTM(
+        roi_width >= 0 && roi_height >= 0,
+        "ROIs in ROIAlignRotated do not have non-negative size!");
+
+    T bin_size_h = static_cast<T>(roi_height) / static_cast<T>(pooled_height);
+    T bin_size_w = static_cast<T>(roi_width) / static_cast<T>(pooled_width);
+
+    // We use roi_bin_grid to sample the grid and mimic integral
+    int roi_bin_grid_h = (sampling_ratio > 0)
+        ? sampling_ratio
+        : ceil(roi_height / pooled_height); // e.g., = 2
+    int roi_bin_grid_w =
+        (sampling_ratio > 0) ? sampling_ratio : ceil(roi_width / pooled_width);
+
+    // We do average (integral) pooling inside a bin
+    const T count = roi_bin_grid_h * roi_bin_grid_w; // e.g. = 4
+
+    // we want to precalculate indices and weights shared by all chanels,
+    // this is the key point of optimization
+    std::vector<PreCalc<T>> pre_calc(
+        roi_bin_grid_h * roi_bin_grid_w * pooled_width * pooled_height);
+
+    // roi_start_h and roi_start_w are computed wrt the center of RoI (x, y).
+    // Appropriate translation needs to be applied after.
+    T roi_start_h = -roi_height / 2.0;
+    T roi_start_w = -roi_width / 2.0;
+
+    pre_calc_for_bilinear_interpolate(
+        height,
+        width,
+        pooled_height,
+        pooled_width,
+        roi_bin_grid_h,
+        roi_bin_grid_w,
+        roi_start_h,
+        roi_start_w,
+        bin_size_h,
+        bin_size_w,
+        roi_bin_grid_h,
+        roi_bin_grid_w,
+        roi_center_h,
+        roi_center_w,
+        cos_theta,
+        sin_theta,
+        pre_calc);
+
+    for (int c = 0; c < channels; c++) {
+      int index_n_c = index_n + c * pooled_width * pooled_height;
+      const T* offset_input =
+          input + (roi_batch_ind * channels + c) * height * width;
+      int pre_calc_index = 0;
+
+      for (int ph = 0; ph < pooled_height; ph++) {
+        for (int pw = 0; pw < pooled_width; pw++) {
+          int index = index_n_c + ph * pooled_width + pw;
+
+          T output_val = 0.;
+          for (int iy = 0; iy < roi_bin_grid_h; iy++) {
+            for (int ix = 0; ix < roi_bin_grid_w; ix++) {
+              PreCalc<T> pc = pre_calc[pre_calc_index];
+              output_val += pc.w1 * offset_input[pc.pos1] +
+                  pc.w2 * offset_input[pc.pos2] +
+                  pc.w3 * offset_input[pc.pos3] + pc.w4 * offset_input[pc.pos4];
+
+              pre_calc_index += 1;
+            }
+          }
+          output_val /= count;
+
+          output[index] = output_val;
+        } // for pw
+      } // for ph
+    } // for c
+  } // for n
+}
+
+template <typename T>
+void ROIAlignRotatedBackward(
     const int nthreads,
     const T* grad_output,
     const T& spatial_scale,
@@ -295,8 +324,7 @@ void ROIAlignBackward(
     const int n_stride,
     const int c_stride,
     const int h_stride,
-    const int w_stride,
-    bool aligned) {
+    const int w_stride) {
   for (int index = 0; index < nthreads; index++) {
     // (n, c, ph, pw) is an element in the pooled output
     int pw = index % pooled_width;
@@ -304,26 +332,25 @@ void ROIAlignBackward(
     int c = (index / pooled_width / pooled_height) % channels;
     int n = index / pooled_width / pooled_height / channels;
 
-    const T* offset_rois = rois + n * 5;
-    int roi_batch_ind = offset_rois[0];
+    const T* current_roi = rois + n * 6;
+    int roi_batch_ind = current_roi[0];
 
     // Do not use rounding; this implementation detail is critical
-    T offset = aligned ? (T)0.5 : (T)0.0;
-    T roi_start_w = offset_rois[1] * spatial_scale - offset;
-    T roi_start_h = offset_rois[2] * spatial_scale - offset;
-    T roi_end_w = offset_rois[3] * spatial_scale - offset;
-    T roi_end_h = offset_rois[4] * spatial_scale - offset;
+    // ROIAlignRotated supports align == true, i.e., continuous coordinate
+    // by default, thus the 0.5 offset
+    T offset = (T)0.5;
+    T roi_center_w = current_roi[1] * spatial_scale - offset;
+    T roi_center_h = current_roi[2] * spatial_scale - offset;
+    T roi_width = current_roi[3] * spatial_scale;
+    T roi_height = current_roi[4] * spatial_scale;
+    T theta = current_roi[5] * M_PI / 180.0;
+    T cos_theta = cos(theta);
+    T sin_theta = sin(theta);
 
-    T roi_width = roi_end_w - roi_start_w;
-    T roi_height = roi_end_h - roi_start_h;
-    if (aligned) {
-      AT_ASSERTM(
-          roi_width >= 0 && roi_height >= 0,
-          "ROIs in ROIAlign do not have non-negative size!");
-    } else { // for backward-compatibility only
-      roi_width = std::max(roi_width, (T)1.);
-      roi_height = std::max(roi_height, (T)1.);
-    }
+    AT_ASSERTM(
+        roi_width >= 0 && roi_height >= 0,
+        "ROIs in ROIAlignRotated do not have non-negative size!");
+
     T bin_size_h = static_cast<T>(roi_height) / static_cast<T>(pooled_height);
     T bin_size_w = static_cast<T>(roi_width) / static_cast<T>(pooled_width);
 
@@ -342,35 +369,32 @@ void ROIAlignBackward(
     int roi_bin_grid_w =
         (sampling_ratio > 0) ? sampling_ratio : ceil(roi_width / pooled_width);
 
+    // roi_start_h and roi_start_w are computed wrt the center of RoI (x, y).
+    // Appropriate translation needs to be applied after.
+    T roi_start_h = -roi_height / 2.0;
+    T roi_start_w = -roi_width / 2.0;
+
     // We do average (integral) pooling inside a bin
     const T count = roi_bin_grid_h * roi_bin_grid_w; // e.g. = 4
 
     for (int iy = 0; iy < roi_bin_grid_h; iy++) {
-      const T y = roi_start_h + ph * bin_size_h +
+      const T yy = roi_start_h + ph * bin_size_h +
           static_cast<T>(iy + .5f) * bin_size_h /
               static_cast<T>(roi_bin_grid_h); // e.g., 0.5, 1.5
       for (int ix = 0; ix < roi_bin_grid_w; ix++) {
-        const T x = roi_start_w + pw * bin_size_w +
+        const T xx = roi_start_w + pw * bin_size_w +
             static_cast<T>(ix + .5f) * bin_size_w /
                 static_cast<T>(roi_bin_grid_w);
+
+        // Rotate by theta around the center and translate
+        T y = yy * cos_theta - xx * sin_theta + roi_center_h;
+        T x = yy * sin_theta + xx * cos_theta + roi_center_w;
 
         T w1, w2, w3, w4;
         int x_low, x_high, y_low, y_high;
 
         bilinear_interpolate_gradient(
-            height,
-            width,
-            y,
-            x,
-            w1,
-            w2,
-            w3,
-            w4,
-            x_low,
-            x_high,
-            y_low,
-            y_high,
-            index);
+            height, width, y, x, w1, w2, w3, w4, x_low, x_high, y_low, y_high);
 
         T g1 = grad_output_this_bin * w1 / count;
         T g2 = grad_output_this_bin * w2 / count;
@@ -387,16 +411,15 @@ void ROIAlignBackward(
       } // ix
     } // iy
   } // for
-} // ROIAlignBackward
+} // ROIAlignRotatedBackward
 
-at::Tensor ROIAlign_forward_cpu(
+at::Tensor ROIAlignRotated_forward_cpu(
     const at::Tensor& input,
     const at::Tensor& rois,
     const float spatial_scale,
     const int pooled_height,
     const int pooled_width,
-    const int sampling_ratio,
-    bool aligned) {
+    const int sampling_ratio) {
   AT_ASSERTM(input.device().is_cpu(), "input must be a CPU tensor");
   AT_ASSERTM(rois.device().is_cpu(), "rois must be a CPU tensor");
 
@@ -415,28 +438,29 @@ at::Tensor ROIAlign_forward_cpu(
 
   auto output_size = num_rois * pooled_height * pooled_width * channels;
 
-  if (output.numel() == 0)
+  if (output.numel() == 0) {
     return output;
+  }
 
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(input.type(), "ROIAlign_forward", [&] {
-    ROIAlignForward<scalar_t>(
-        output_size,
-        input.contiguous().data_ptr<scalar_t>(),
-        spatial_scale,
-        channels,
-        height,
-        width,
-        pooled_height,
-        pooled_width,
-        sampling_ratio,
-        rois.contiguous().data_ptr<scalar_t>(),
-        output.data_ptr<scalar_t>(),
-        aligned);
-  });
+  AT_DISPATCH_FLOATING_TYPES_AND_HALF(
+      input.type(), "ROIAlignRotated_forward", [&] {
+        ROIAlignRotatedForward<scalar_t>(
+            output_size,
+            input.contiguous().data_ptr<scalar_t>(),
+            spatial_scale,
+            channels,
+            height,
+            width,
+            pooled_height,
+            pooled_width,
+            sampling_ratio,
+            rois.contiguous().data_ptr<scalar_t>(),
+            output.data_ptr<scalar_t>());
+      });
   return output;
 }
 
-at::Tensor ROIAlign_backward_cpu(
+at::Tensor ROIAlignRotated_backward_cpu(
     const at::Tensor& grad,
     const at::Tensor& rois,
     const float spatial_scale,
@@ -446,14 +470,13 @@ at::Tensor ROIAlign_backward_cpu(
     const int channels,
     const int height,
     const int width,
-    const int sampling_ratio,
-    bool aligned) {
+    const int sampling_ratio) {
   AT_ASSERTM(grad.device().is_cpu(), "grad must be a CPU tensor");
   AT_ASSERTM(rois.device().is_cpu(), "rois must be a CPU tensor");
 
   at::TensorArg grad_t{grad, "grad", 1}, rois_t{rois, "rois", 2};
 
-  at::CheckedFrom c = "ROIAlign_backward_cpu";
+  at::CheckedFrom c = "ROIAlignRotated_backward_cpu";
   at::checkAllSameType(c, {grad_t, rois_t});
 
   at::Tensor grad_input =
@@ -470,24 +493,26 @@ at::Tensor ROIAlign_backward_cpu(
   int h_stride = grad.stride(2);
   int w_stride = grad.stride(3);
 
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(grad.type(), "ROIAlign_forward", [&] {
-    ROIAlignBackward<scalar_t>(
-        grad.numel(),
-        grad.contiguous().data_ptr<scalar_t>(),
-        spatial_scale,
-        channels,
-        height,
-        width,
-        pooled_height,
-        pooled_width,
-        sampling_ratio,
-        grad_input.data_ptr<scalar_t>(),
-        rois.contiguous().data_ptr<scalar_t>(),
-        n_stride,
-        c_stride,
-        h_stride,
-        w_stride,
-        aligned);
-  });
+  AT_DISPATCH_FLOATING_TYPES_AND_HALF(
+      grad.type(), "ROIAlignRotated_forward", [&] {
+        ROIAlignRotatedBackward<scalar_t>(
+            grad.numel(),
+            grad.contiguous().data_ptr<scalar_t>(),
+            spatial_scale,
+            channels,
+            height,
+            width,
+            pooled_height,
+            pooled_width,
+            sampling_ratio,
+            grad_input.data_ptr<scalar_t>(),
+            rois.contiguous().data_ptr<scalar_t>(),
+            n_stride,
+            c_stride,
+            h_stride,
+            w_stride);
+      });
   return grad_input;
 }
+
+} // namespace detectron2
