@@ -17,14 +17,10 @@ class TestAnchorGenerator(unittest.TestCase):
 
         anchor_generator = DefaultAnchorGenerator(cfg, [ShapeSpec(stride=4)])
 
-        num_images = 2
-        # It's possible to infer strides from image size instead of config in the future.
-        # For now, only len(images) is used in anchor_generator,
-        # therefore here we just use 1 as a placeholder to represent the images.
-        images = [1 for i in range(num_images)]
         # only the last two dimensions of features matter here
-        features = {"stage3": torch.rand(14, 96, 1, 2)}
-        anchors = anchor_generator(images, [features["stage3"]])
+        num_images = 2
+        features = {"stage3": torch.rand(num_images, 96, 1, 2)}
+        anchors = anchor_generator([features["stage3"]])
         expected_anchor_tensor = torch.tensor(
             [
                 [-32.0, -8.0, 32.0, 8.0],
@@ -52,14 +48,10 @@ class TestAnchorGenerator(unittest.TestCase):
         cfg.MODEL.ANCHOR_GENERATOR.ANGLES = [[0, 45]]
         anchor_generator = RotatedAnchorGenerator(cfg, [ShapeSpec(stride=4)])
 
-        num_images = 2
-        # It's possible to infer strides from image size instead of config in the future.
-        # For now, only len(images) is used in anchor_generator,
-        # therefore here we just use 1 as a placeholder to represent the images.
-        images = [1 for i in range(num_images)]
         # only the last two dimensions of features matter here
-        features = {"stage3": torch.rand(14, 96, 1, 2)}
-        anchors = anchor_generator(images, [features["stage3"]])
+        num_images = 2
+        features = {"stage3": torch.rand(num_images, 96, 1, 2)}
+        anchors = anchor_generator([features["stage3"]])
         expected_anchor_tensor = torch.tensor(
             [
                 [0.0, 0.0, 64.0, 16.0, 0.0],

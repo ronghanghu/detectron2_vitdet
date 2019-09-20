@@ -126,7 +126,7 @@ class RetinaNet(nn.Module):
         features = self.backbone(images.tensor)
         features = [features[f] for f in self.in_features]
         box_cls, box_delta = self.head(features)
-        anchors = self.anchor_generator(images, features)
+        anchors = self.anchor_generator(features)
 
         if self.training:
             gt_classes, gt_anchors_reg_deltas = self.get_ground_truth(anchors, gt_instances)

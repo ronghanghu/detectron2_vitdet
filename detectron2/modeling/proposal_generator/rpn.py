@@ -141,7 +141,7 @@ class RPN(nn.Module):
         del gt_instances
         features = [features[f] for f in self.in_features]
         pred_objectness_logits, pred_anchor_deltas = self.rpn_head(features)
-        anchors = self.anchor_generator(images, features)
+        anchors = self.anchor_generator(features)
         # TODO: The anchors only depend on the feature map shape; there's probably
         # an opportunity for some optimizations (e.g., caching anchors).
         outputs = RPNOutputs(

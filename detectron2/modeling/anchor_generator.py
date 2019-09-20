@@ -155,13 +155,17 @@ class DefaultAnchorGenerator(nn.Module):
                 anchors.append([x0, y0, x1, y1])
         return torch.tensor(anchors)
 
-    def forward(self, image_list, feature_maps):
+    def forward(self, features):
         """
+        Args:
+            features (list[Tensor]): list of backbone feature maps on which to generate anchors.
+
         Returns:
             list[list[Boxes]]: a list of #image elements. Each is a list of #feature level Boxes.
                 The Boxes contains anchors of this image on the specific feature level.
         """
-        grid_sizes = [feature_map.shape[-2:] for feature_map in feature_maps]
+        num_images = len(features[0])
+        grid_sizes = [feature_map.shape[-2:] for feature_map in features]
         anchors_over_all_feature_maps = self.grid_anchors(grid_sizes)
 
         anchors_in_image = []
@@ -169,7 +173,7 @@ class DefaultAnchorGenerator(nn.Module):
             boxes = Boxes(anchors_per_feature_map)
             anchors_in_image.append(boxes)
 
-        anchors = [copy.deepcopy(anchors_in_image) for _ in range(len(image_list))]
+        anchors = [copy.deepcopy(anchors_in_image) for _ in range(num_images)]
         return anchors
 
 
@@ -282,14 +286,18 @@ class RotatedAnchorGenerator(nn.Module):
 
         return torch.tensor(anchors)
 
-    def forward(self, image_list, feature_maps):
+    def forward(self, features):
         """
+        Args:
+            features (list[Tensor]): list of backbone feature maps on which to generate anchors.
+
         Returns:
             list[list[RotatedBoxes]]:
                 a list of #image elements. Each is a list of #feature level RotatedBoxes.
                 The RotatedBoxes contains anchors of this image on the specific feature level.
         """
-        grid_sizes = [feature_map.shape[-2:] for feature_map in feature_maps]
+        num_images = len(features[0])
+        grid_sizes = [feature_map.shape[-2:] for feature_map in features]
         anchors_over_all_feature_maps = self.grid_anchors(grid_sizes)
 
         anchors_in_image = []
@@ -297,7 +305,7 @@ class RotatedAnchorGenerator(nn.Module):
             boxes = RotatedBoxes(anchors_per_feature_map)
             anchors_in_image.append(boxes)
 
-        anchors = [copy.deepcopy(anchors_in_image) for _ in range(len(image_list))]
+        anchors = [copy.deepcopy(anchors_in_image) for _ in range(num_images)]
         return anchors
 
 
