@@ -1,3 +1,4 @@
+import contextlib
 import io
 import itertools
 import json
@@ -7,6 +8,7 @@ import tempfile
 from collections import OrderedDict
 from borc.common.file_io import PathManager
 from PIL import Image
+from tabulate import tabulate
 
 from detectron2.data import MetadataCatalog
 from detectron2.utils import comm
@@ -20,6 +22,8 @@ class COCOPanopticEvaluator(DatasetEvaluator):
     """
     Evaluate Panoptic Quality metrics on COCO using PanopticAPI.
     It saves panoptic segmentation prediction in `output_dir`
+
+    It contains a synchronize call and has to be called from all workers.
     """
 
     def __init__(self, dataset_name, output_dir):
@@ -104,12 +108,13 @@ class COCOPanopticEvaluator(DatasetEvaluator):
 
             from panopticapi.evaluation import pq_compute
 
-            pq_res = pq_compute(
-                gt_json,
-                PathManager.get_local_path(self._predictions_json),
-                gt_folder=gt_folder,
-                pred_folder=pred_dir,
-            )
+            with contextlib.redirect_stdout(io.StringIO()):
+                pq_res = pq_compute(
+                    gt_json,
+                    PathManager.get_local_path(self._predictions_json),
+                    gt_folder=gt_folder,
+                    pred_folder=pred_dir,
+                )
 
         res = {}
         res["PQ"] = 100 * pq_res["All"]["pq"]
@@ -123,5 +128,20 @@ class COCOPanopticEvaluator(DatasetEvaluator):
         res["RQ_st"] = 100 * pq_res["Stuff"]["rq"]
 
         results = OrderedDict({"panoptic_seg": res})
-        logger.info(results)
+
+        headers = ["", "PQ", "SQ", "RQ", "#categories"]
+        data = []
+        for name in ["All", "Things", "Stuff"]:
+            row = [name] + [pq_res[name][k] * 100 for k in ["pq", "sq", "rq"]] + [pq_res[name]["n"]]
+            data.append(row)
+        table = tabulate(
+            data,
+            headers=headers,
+            tablefmt="pipe",
+            floatfmt=".3f",
+            stralign="center",
+            numalign="center",
+        )
+        logger.info("Panoptic Evaluation Results:\n" + table)
+
         return results

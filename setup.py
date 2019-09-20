@@ -68,7 +68,6 @@ setup(
         "yacs>=0.1.6",
         "tabulate",
         "tensorboardX",
-        "torchvision>=0.4",
         "cloudpickle",
     ],
     ext_modules=get_extensions(),

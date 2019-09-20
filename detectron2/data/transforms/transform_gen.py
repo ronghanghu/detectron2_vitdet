@@ -54,10 +54,11 @@ class TransformGen(metaclass=ABCMeta):
     The transform can then be used to transform images
     or other data (boxes, points, annotations, etc.) associated with it.
 
-    A list of `TransformGen` can be applied with :func:`TransformGen.generate_transforms`.
     The assumption made in this class
     is that the image itself is sufficient to instantiate a transform.
     When this assumption is not true, you need to create the transforms by your own.
+
+    A list of `TransformGen` can be applied with :func:`apply_transform_gens`.
     """
 
     def _init(self, params=None):
