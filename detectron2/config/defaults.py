@@ -121,10 +121,6 @@ _C.MODEL.BACKBONE.NAME = "build_resnet_backbone"
 # Add StopGrad at a specified stage so the bottom layers are frozen
 _C.MODEL.BACKBONE.FREEZE_AT = 2
 
-# Computed attributes that will be filled during backbone construction
-# _C.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_STRIDES = (('res1', 4), ('res2', 8), ...)
-# _C.MODEL.BACKBONE.COMPUTED_OUT_FEATURE_CHANNELS = (('res1', 64), ('res2', 128), ...)
-
 
 # ---------------------------------------------------------------------------- #
 # FPN options
@@ -172,8 +168,6 @@ _C.MODEL.ANCHOR_GENERATOR.SIZES = [[32, 64, 128, 256, 512]]
 # or len(ASPECT_RATIOS) == 1 is true and aspect ratio list ASPECT_RATIOS[0] is used
 # for all IN_FEATURES.
 _C.MODEL.ANCHOR_GENERATOR.ASPECT_RATIOS = [[0.5, 1.0, 2.0]]
-# list[int], the stride for each input feature map where anchors will be created.
-# _C.MODEL.ANCHOR_GENERATOR.COMPUTED_INPUT_STRIDES = [stride1, stride2, ...]
 # Anchor angles.
 # list[float], the angle in degrees, for each input feature map.
 # ANGLES[i] specifies the list of angles for IN_FEATURES[i].
@@ -290,9 +284,6 @@ _C.MODEL.ROI_BOX_HEAD.CONV_DIM = 256
 # Normalization method for the convolution layers.
 # Options: "" (no norm), "GN", "SyncBN".
 _C.MODEL.ROI_BOX_HEAD.NORM = ""
-# The caller of box head is responsible to fill this computed attribute
-# about the input size of the box head.
-# _C.MODEL.ROI_BOX_HEAD.COMPUTED_INPUT_SIZE = (channel, height, width)
 # Whether to use class agnostic for bbox regression
 _C.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG = False
 
@@ -321,9 +312,6 @@ _C.MODEL.ROI_MASK_HEAD.CONV_DIM = 256
 # Normalization method for the convolution layers.
 # Options: "" (no norm), "GN", "SyncBN".
 _C.MODEL.ROI_MASK_HEAD.NORM = ""
-# The caller of mask head is responsible to fill this computed attribute
-# about the input size of the mask head.
-# _C.MODEL.ROI_MASK_HEAD.COMPUTED_INPUT_SIZE = (channel, height, width)
 # Whether to use class agnostic for mask prediction
 _C.MODEL.ROI_MASK_HEAD.CLS_AGNOSTIC_MASK = False
 # Type of pooling operation applied to the incoming feature map for each RoI
@@ -339,9 +327,6 @@ _C.MODEL.ROI_KEYPOINT_HEAD.POOLER_RESOLUTION = 14
 _C.MODEL.ROI_KEYPOINT_HEAD.POOLER_SAMPLING_RATIO = 0
 _C.MODEL.ROI_KEYPOINT_HEAD.CONV_DIMS = tuple(512 for _ in range(8))
 _C.MODEL.ROI_KEYPOINT_HEAD.NUM_KEYPOINTS = 17  # 17 is the number of keypoints in COCO.
-# The caller of keypoint head is responsible to fill this computed attribute
-# about the input size of the keypoint head.
-# _C.MODEL.ROI_KEYPOINT_HEAD.COMPUTED_INPUT_SIZE = (channel, height, width)
 
 # Images with too few (or no) keypoints are excluded from training.
 _C.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE = 1

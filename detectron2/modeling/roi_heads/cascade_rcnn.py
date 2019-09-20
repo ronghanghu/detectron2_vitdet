@@ -32,7 +32,7 @@ class CascadeROIHeads(StandardROIHeads):
         pooler_resolution        = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
         pooler_scales            = tuple(1.0 / self.feature_strides[k] for k in self.in_features)
         sampling_ratio           = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
-        box_pooler_type          = cfg.MODEL.ROI_BOX_HEAD.POOLER_TYPE
+        pooler_type              = cfg.MODEL.ROI_BOX_HEAD.POOLER_TYPE
         cascade_bbox_reg_weights = cfg.MODEL.ROI_BOX_CASCADE_HEAD.BBOX_REG_WEIGHTS
         cascade_ious             = cfg.MODEL.ROI_BOX_CASCADE_HEAD.IOUS
         self.num_cascade_stages  = len(cascade_ious)
@@ -51,7 +51,7 @@ class CascadeROIHeads(StandardROIHeads):
             output_size=pooler_resolution,
             scales=pooler_scales,
             sampling_ratio=sampling_ratio,
-            pooler_type=box_pooler_type,
+            pooler_type=pooler_type,
         )
         pooled_shape = ShapeSpec(
             channels=in_channels, width=pooler_resolution, height=pooler_resolution
