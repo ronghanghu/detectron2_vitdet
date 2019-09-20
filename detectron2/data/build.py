@@ -174,7 +174,8 @@ def print_instances_class_histogram(dataset_dicts, class_names):
     )
     total_num_instances = sum(data[1::2])
     data.extend([None] * (N_COLS - (len(data) % N_COLS)))
-    data.extend(["total", total_num_instances])
+    if num_classes > 1:
+        data.extend(["total", total_num_instances])
     data = itertools.zip_longest(*[data[i::N_COLS] for i in range(N_COLS)])
     table = tabulate(
         data,
