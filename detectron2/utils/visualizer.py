@@ -14,10 +14,13 @@ from detectron2.structures import Boxes, BoxMode, Keypoints, PolygonMasks
 
 from .colormap import random_color
 
+__all__ = ["ColorMode", "VisImage", "Visualizer"]
+
+
 _SMALL_OBJECT_AREA_THRESH = 1000
-_OFF_WHITE = (255, 255, 240)
+_OFF_WHITE = (1.0, 1.0, 240.0 / 255)
 _BLACK = (0, 0, 0)
-_RED = (255, 0, 0)
+_RED = (1.0, 0, 0)
 
 _KEYPOINT_THRESHOLD = 0.05
 
@@ -77,6 +80,39 @@ def _polygon_to_box(polygon, h, w):
     bbox[2] += bbox[0]
     bbox[3] += bbox[1]
     return bbox
+
+
+class _PanopticPrediction:
+    def __init__(self, panoptic_seg, segments_info):
+        self._seg = panoptic_seg
+
+        self._sinfo = {
+            s["id"]: {"isthing": s["isthing"], "category_id": s["category_id"]}
+            for s in segments_info
+        }  # seg id -> seg info
+        segment_ids, areas = torch.unique(panoptic_seg, sorted=True, return_counts=True)
+        areas = areas.numpy()
+        sorted_idxs = np.argsort(-areas)
+        self._seg_ids, self._seg_areas = segment_ids[sorted_idxs], areas[sorted_idxs]
+        self._seg_ids = self._seg_ids.tolist()
+        for sid, area in zip(self._seg_ids, self._seg_areas):
+            if sid in self._sinfo:
+                self._sinfo[sid]["area"] = float(area)
+
+    def semantic_masks(self):
+        for sid in self._seg_ids:
+            sinfo = self._sinfo.get(sid)
+            if sinfo is None or sinfo["isthing"]:
+                # Some pixels (e.g. id 0 in PanopticFPN) have no instance or semantic predictions.
+                continue
+            yield (self._seg == sid).numpy().astype(np.uint8), sinfo
+
+    def instance_masks(self):
+        for sid in self._seg_ids:
+            sinfo = self._sinfo.get(sid)
+            if sinfo is None or not sinfo["isthing"]:
+                continue
+            yield (self._seg == sid).numpy().astype(np.uint8), sinfo
 
 
 class VisImage:
@@ -213,13 +249,13 @@ class Visualizer:
         )
         return self.output
 
-    def draw_sem_seg_predictions(self, predictions, area_limit=None, alpha=0.8):
+    def draw_sem_seg_predictions(self, predictions, area_threshold=None, alpha=0.8):
         """
         Draw stuff prediction results on an image.
 
         Args:
             predictions (Tensor): the output of shape (C, H, W).
-            area_limit (int): segments with less than `area_limit` are not drawn.
+            area_threshold (int): segments with less than `area_threshold` are not drawn.
             alpha (float): the larger it is, the more opaque the segmentations are.
 
         Returns:
@@ -227,32 +263,27 @@ class Visualizer:
         """
         labels, areas = np.unique(predictions, return_counts=True)
         sorted_idxs = np.argsort(-areas).tolist()
-        labels, areas = labels[sorted_idxs], areas[sorted_idxs]
-        edge_color = [x / 255 for x in _OFF_WHITE]
-        for label, area in zip(labels, areas):
-            # do not draw segments that are too small
-            if area_limit and area < area_limit:
-                continue
-
+        labels = labels[sorted_idxs]
+        for label in labels:
             try:
                 mask_color = [x / 255 for x in self.metadata.stuff_colors[label]]
             except AttributeError:
-                mask_color = random_color(rgb=True, maximum=1)
+                mask_color = None
 
             binary_mask = (predictions == label).numpy().astype(np.uint8)
-            self.draw_binary_mask(binary_mask, color=mask_color, edge_color=edge_color, alpha=alpha)
-
-            # draw text in the center of object
-            lighter_color = self._change_color_brightness(mask_color, brightness_factor=0.7)
-            _, _, stats, centroids = cv2.connectedComponentsWithStats(binary_mask, 8)
-            largest_component_id = np.argmax(stats[1:, -1]) + 1
-            center = centroids[largest_component_id]
-            self.draw_text(self.metadata.stuff_class_names[label], center, color=lighter_color)
-
+            text = self.metadata.stuff_class_names[label]
+            self.draw_binary_mask(
+                binary_mask,
+                color=mask_color,
+                edge_color=_OFF_WHITE,
+                text=text,
+                alpha=alpha,
+                area_threshold=area_threshold,
+            )
         return self.output
 
     def draw_panoptic_seg_predictions(
-        self, panoptic_seg, segments_info, area_limit=None, alpha=0.9
+        self, panoptic_seg, segments_info, area_threshold=None, alpha=0.9
     ):
         """
         Draw panoptic prediction results on an image.
@@ -262,69 +293,45 @@ class Visualizer:
                 segment.
             segments_info (list[dict]): Describe each segment in `panoptic_seg`.
                 Each dict contains keys "id", "category_id", "isthing".
-            area_limit (int): stuff segments with less than `area_limit` are not drawn.
+            area_threshold (int): stuff segments with less than `area_threshold` are not drawn.
 
         Returns:
             output (VisImage): image object with visualizations.
         """
-        segments_info = {
-            s["id"]: {"isthing": s["isthing"], "category_id": s["category_id"]}
-            for s in segments_info
-        }
-        segment_ids, areas = torch.unique(panoptic_seg, sorted=True, return_counts=True)
-        sorted_idxs = np.argsort(-areas)
-        segment_ids, areas = segment_ids[sorted_idxs], areas[sorted_idxs]
-
-        edge_color = [x / 255 for x in _OFF_WHITE]
+        pred = _PanopticPrediction(panoptic_seg, segments_info)
 
         # draw mask for all semantic segments first i.e. "stuff"
-        for segment_id, area in zip(segment_ids.tolist(), areas):
-            sinfo = segments_info.get(segment_id)
-            if sinfo is None or sinfo["isthing"]:
-                # Some pixels (e.g. id 0 in PanopticFPN) have no instance or semantic predictions.
-                continue
-            # do not draw segments that are too small
-            if area_limit and area < area_limit:
-                continue
-
-            # draw mask
-            binary_mask = (panoptic_seg == segment_id).numpy().astype(np.uint8)
+        for mask, sinfo in pred.semantic_masks():
             category_idx = sinfo["category_id"]
             try:
                 mask_color = [x / 255 for x in self.metadata.stuff_colors[category_idx]]
             except AttributeError:
-                mask_color = random_color(rgb=True, maximum=1)
-            self.draw_binary_mask(binary_mask, color=mask_color, edge_color=edge_color, alpha=alpha)
+                mask_color = None
 
-            # write label at the object's center of mass
-            lighter_color = self._change_color_brightness(mask_color, brightness_factor=0.7)
-            label = self.metadata.stuff_class_names[category_idx]
-            _, _, stats, centroids = cv2.connectedComponentsWithStats(binary_mask, 8)
-            largest_component_id = np.argmax(stats[1:, -1]) + 1
-            center = centroids[largest_component_id]
-            self.draw_text(label, center, color=lighter_color)
+            text = self.metadata.stuff_class_names[category_idx]
+            self.draw_binary_mask(
+                mask,
+                color=mask_color,
+                edge_color=_OFF_WHITE,
+                text=text,
+                alpha=alpha,
+                area_threshold=area_threshold,
+            )
 
         # draw mask for all instances second
-        for segment_id, sinfo in segments_info.items():
-            if not sinfo["isthing"]:
-                continue
-            # draw mask
-            category_idx = sinfo["category_id"]
-            binary_mask = (panoptic_seg == segment_id).numpy().astype(np.uint8)
-            try:
-                mask_color = [x / 255 for x in self.metadata.thing_colors[category_idx]]
-                mask_color = self._jitter(mask_color)
-            except AttributeError:
-                mask_color = random_color(rgb=True, maximum=1)
-            self.draw_binary_mask(binary_mask, color=mask_color, edge_color=edge_color, alpha=alpha)
-
-            # write label at the object's center of mass
-            lighter_color = self._change_color_brightness(mask_color, brightness_factor=0.7)
-            label = self.metadata.class_names[category_idx]
-            _, _, stats, centroids = cv2.connectedComponentsWithStats(binary_mask, 8)
-            largest_component_id = np.argmax(stats[1:, -1]) + 1
-            center = centroids[largest_component_id]
-            self.draw_text(label, center, color=lighter_color)
+        all_instances = list(pred.instance_masks())
+        if len(all_instances) == 0:
+            return self.output
+        masks, sinfo = list(zip(*all_instances))
+        category_ids = [x["category_id"] for x in sinfo]
+        try:
+            colors = [
+                self._jitter([x / 255 for x in self.metadata.thing_colors[k]]) for k in category_ids
+            ]
+        except AttributeError:
+            colors = None
+        labels = [self.metadata.class_names[k] for k in category_ids]
+        self.overlay_instances(masks=masks, labels=labels, assigned_colors=colors)
 
         return self.output
 
@@ -436,19 +443,23 @@ class Visualizer:
                 # first get a box
                 if boxes is not None:
                     box = boxes[i]
+                    x0, y0, x1, y1 = box
+                    text_pos = (x0, y0)
                 elif masks is not None:
                     box = _polygon_to_box(masks[i], self.output.height, self.output.width)
+                    x0, y0, x1, y1 = box
+                    # draw text in the center when box is not drawn
+                    text_pos = ((x0 + x1) * 0.5, (y0 + y1) * 0.5)
                 else:
                     raise NotImplementedError("Cannot draw labels.")
-                x0, y0, x1, y1 = box
-                lighter_color = self._change_color_brightness(color, brightness_factor=0.7)
-                box_area = (y1 - y0) * (x1 - x0)
-                text_pos = (x0, y0)
-                if box_area < _SMALL_OBJECT_AREA_THRESH:
+                # for small objects, draw text at the side to avoid occulusion
+                if (y1 - y0) * (x1 - x0) < _SMALL_OBJECT_AREA_THRESH:
                     if y1 >= self.output.height - 5:
                         text_pos = (x1, y0)
                     else:
                         text_pos = (x0, y1)
+
+                lighter_color = self._change_color_brightness(color, brightness_factor=0.7)
                 self.draw_text(labels[i], text_pos, color=lighter_color)
 
         # draw keypoints
@@ -498,11 +509,10 @@ class Visualizer:
         except KeyError:
             pass
         else:
-            color = tuple(x / 255 for x in _RED)
             # draw line from nose to mid-shoulder
             nose_x, nose_y = visible.get("nose", (None, None))
             if nose_x is not None:
-                self.draw_line([nose_x, mid_shoulder_x], [nose_y, mid_shoulder_y], color=color)
+                self.draw_line([nose_x, mid_shoulder_x], [nose_y, mid_shoulder_y], color=_RED)
 
             try:
                 # draw line from mid-shoulder to mid-hip
@@ -512,9 +522,7 @@ class Visualizer:
                 pass
             else:
                 mid_hip_x, mid_hip_y = (lh_x + rh_x) / 2, (lh_y + rh_y) / 2
-                self.draw_line(
-                    [mid_hip_x, mid_shoulder_x], [mid_hip_y, mid_shoulder_y], color=color
-                )
+                self.draw_line([mid_hip_x, mid_shoulder_x], [mid_hip_y, mid_shoulder_y], color=_RED)
         return self.output
 
     """
@@ -622,25 +630,49 @@ class Visualizer:
         self.output.ax.add_line(Line2D(x_data, y_data, color=color))
         return self.output
 
-    def draw_binary_mask(self, binary_mask, color, edge_color=None, alpha=0.5):
+    def draw_binary_mask(
+        self, binary_mask, color=None, *, edge_color=None, text=None, alpha=0.5, area_threshold=4096
+    ):
         """
         Args:
             binary_mask (ndarray): numpy array of shape (H, W), where H is the image height and
                 W is the image width. Each value in the array is either a 0 or 1 value of uint8
                 type.
             color: color of the mask. Refer to `matplotlib.colors` for a full list of
-                formats that are accepted.
+                formats that are accepted. If None, will pick a random color.
             edge_color: color of the polygon edges. Refer to `matplotlib.colors` for a
                 full list of formats that are accepted.
+            text (str): if None, will be drawn in the object's center of mass.
             alpha (float): blending efficient. Smaller values lead to more transparent masks.
+            area_threshold (float): a connected component small than this will not be shown.
 
         Returns:
             output (VisImage): image object with mask drawn.
         """
+        if color is None:
+            color = random_color(rgb=True, maximum=1)
+        if area_threshold is None:
+            area_threshold = 4096
+
         # TODO handle masks with holes
+        has_valid_segment = False
         for segment in _mask_to_polygon(binary_mask):
+            area = mask_util.area(
+                mask_util.frPyObjects([segment], binary_mask.shape[0], binary_mask.shape[1])
+            )
+            if area < area_threshold:
+                continue
+            has_valid_segment = True
             segment = segment.reshape(-1, 2)
             self.draw_polygon(segment, color=color, edge_color=edge_color, alpha=alpha)
+
+        if text is not None and has_valid_segment:
+            # TODO sometimes drawn on wrong objects. the heuristics here can improve.
+            lighter_color = self._change_color_brightness(color, brightness_factor=0.7)
+            _, _, stats, centroids = cv2.connectedComponentsWithStats(binary_mask, 8)
+            largest_component_id = np.argmax(stats[1:, -1]) + 1
+            center = centroids[largest_component_id]
+            self.draw_text(text, center, color=lighter_color)
         return self.output
 
     def draw_polygon(self, segment, color, edge_color=None, alpha=0.5):
@@ -756,6 +788,7 @@ class Visualizer:
             else:
                 # assume p is a binary mask
                 assert p.shape[1] != 2, p.shape
+                assert p.ndim == 2, p.shape
                 return _mask_to_polygon(np.asarray(p))
 
         m = masks_or_polygons
