@@ -36,7 +36,7 @@ def get_parser():
     parser.add_argument("--input", nargs="+", help="A list of space separated input images")
     parser.add_argument(
         "--output",
-        help="A directory to save output visualizations. "
+        help="A file or directory to save output visualizations. "
         "If not given, will show output in an OpenCV window.",
     )
 
@@ -78,13 +78,15 @@ if __name__ == "__main__":
             )
 
             if args.output:
-                assert os.path.isdir(args.output), args.output
-                out_filename = os.path.join(args.output, os.path.basename(path))
-                if visualized_output:
-                    visualized_output.save(out_filename)
+                if os.path.isdir(args.output):
+                    assert os.path.isdir(args.output), args.output
+                    out_filename = os.path.join(args.output, os.path.basename(path))
+                else:
+                    assert len(args.input) == 1, "Please specify a directory with args.output"
+                    out_filename = args.output
+                visualized_output.save(out_filename)
             else:
-                if visualized_output:
-                    cv2.imshow("COCO detections", visualized_output.get_image()[:, :, ::-1])
+                cv2.imshow("COCO detections", visualized_output.get_image()[:, :, ::-1])
                 if cv2.waitKey(0) == 27:
                     break  # esc to quit
     elif args.webcam:
@@ -104,9 +106,12 @@ if __name__ == "__main__":
         basename = os.path.basename(args.video_input)
 
         if args.output:
-            output_fname = os.path.join(args.output, basename)
-            output_fname = os.path.splitext(output_fname)[0] + ".avi"
-            assert not os.path.isfile(output_fname)
+            if os.path.isdir(args.output):
+                output_fname = os.path.join(args.output, basename)
+                output_fname = os.path.splitext(output_fname)[0] + ".mkv"
+            else:
+                output_fname = args.output
+            assert not os.path.isfile(output_fname), output_fname
             output_file = cv2.VideoWriter(
                 filename=output_fname,
                 # some installation of opencv may not support x264 (due to its license),
