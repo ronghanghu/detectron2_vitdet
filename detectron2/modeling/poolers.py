@@ -5,7 +5,7 @@ import torch
 from torch import nn
 from torchvision.ops import RoIPool
 
-from detectron2.layers import ROIAlign, cat
+from detectron2.layers import ROIAlign, ROIAlignRotated, cat
 
 
 def assign_boxes_to_levels(box_lists, min_level, max_level, canonical_box_size, canonical_level):
@@ -14,8 +14,8 @@ def assign_boxes_to_levels(box_lists, min_level, max_level, canonical_box_size, 
     vector.
 
     Args:
-        box_lists (list[Boxes]): A list of N Boxes, where N is the number of images
-            in the batch.
+        box_lists (list[Boxes] | list[RotatedBoxes]): A list of N Boxes or N RotatedBoxes,
+            where N is the number of images in the batch.
         min_level (int): Smallest feature map level index. The input is considered index 0,
             the output of stage 1 is index 1, and so.
         max_level (int): Largest feature map level index.
@@ -46,14 +46,22 @@ def convert_boxes_to_pooler_format(box_lists):
     (see description under Returns).
 
     Args:
-        box_lists (list[Boxes]): A list of N Boxes, where N is the number of images
-            in the batch.
+        box_lists (list[Boxes] | list[RotatedBoxes]):
+            A list of N Boxes or N RotatedBoxes, where N is the number of images in the batch.
 
     Returns:
-        A tensor of shape (M, 5), where M is the total number of boxes aggregated over all
-            N batch images. The 5 columns are (batch index, x0, y0, x1, y1), where batch index
+        When input is list[Boxes]:
+            A tensor of shape (M, 5), where M is the total number of boxes aggregated over all
+            N batch images.
+            The 5 columns are (batch index, x0, y0, x1, y1), where batch index
             is the index in [0, N) indentifying which batch image the box with corners at
             (x0, y0, x1, y1) comes from.
+        When input is list[RotatedBoxes]:
+            A tensor of shape (M, 6), where M is the total number of boxes aggregated over all
+            N batch images.
+            The 6 columns are (batch index, x_ctr, y_ctr, width, height, angle_degrees),
+            where batch index is the index in [0, N) indentifying which batch image the
+            rotated box (x_ctr, y_ctr, width, height, angle_degrees) comes from.
     """
 
     def fmt_box_list(box_tensor, batch_index):
@@ -126,6 +134,11 @@ class ROIPooler(nn.Module):
             self.level_poolers = nn.ModuleList(
                 RoIPool(output_size, spatial_scale=scale) for scale in scales
             )
+        elif pooler_type == "ROIAlignRotated":
+            self.level_poolers = nn.ModuleList(
+                ROIAlignRotated(output_size, spatial_scale=scale, sampling_ratio=sampling_ratio)
+                for scale in scales
+            )
         else:
             raise ValueError("Unknown pooler type: {}".format(pooler_type))
 
@@ -147,8 +160,8 @@ class ROIPooler(nn.Module):
         Args:
             x (list[Tensor]): A list of feature maps with scales matching thosed used to
                 construct this module.
-            box_lists (list[Boxes]): A list of N Boxes, where N is the number of images
-                in the batch.
+            box_lists (list[Boxes] | list[RotatedBoxes]):
+                A list of N Boxes or N RotatedBoxes, where N is the number of images in the batch.
 
         Returns:
             A tensor of shape (M, C, output_size, output_size) where M is the total number of

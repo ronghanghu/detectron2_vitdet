@@ -160,6 +160,9 @@ class Boxes:
     def __len__(self):
         return self.tensor.shape[0]
 
+    def __repr__(self):
+        return "Boxes(" + str(self.tensor) + ")"
+
     def inside_box(self, box_size, boundary_threshold=0):
         """
         Args:
