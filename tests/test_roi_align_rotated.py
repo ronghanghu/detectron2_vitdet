@@ -98,6 +98,11 @@ class ROIAlignRotatedTest(unittest.TestCase):
             assert torch.allclose(result_cpu, result_cuda.cpu())
         return result_cpu[0, 0]
 
+    def test_empty_box(self):
+        img = torch.rand(5, 5)
+        out = self._simple_roi_align_rotated(img, [2, 3, 0, 0, 0], (7, 7))
+        self.assertTrue((out == 0).all())
+
     def test_roi_align_rotated_gradcheck_cpu(self):
         dtype = torch.float64
         device = torch.device("cpu")

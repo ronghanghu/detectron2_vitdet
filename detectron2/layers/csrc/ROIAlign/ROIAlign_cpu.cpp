@@ -146,7 +146,7 @@ void ROIAlignForward(
     if (aligned) {
       AT_ASSERTM(
           roi_width >= 0 && roi_height >= 0,
-          "ROIs in ROIAlign do not have non-negative size!");
+          "ROIs in ROIAlign cannot have non-negative size!");
     } else { // for backward-compatibility only
       roi_width = std::max(roi_width, (T)1.);
       roi_height = std::max(roi_height, (T)1.);
@@ -162,7 +162,8 @@ void ROIAlignForward(
         (sampling_ratio > 0) ? sampling_ratio : ceil(roi_width / pooled_width);
 
     // We do average (integral) pooling inside a bin
-    const T count = roi_bin_grid_h * roi_bin_grid_w; // e.g. = 4
+    // When the grid is empty, output zeros.
+    const T count = std::max(roi_bin_grid_h * roi_bin_grid_w, 1); // e.g. = 4
 
     // we want to precalculate indices and weights shared by all channels,
     // this is the key point of optimization

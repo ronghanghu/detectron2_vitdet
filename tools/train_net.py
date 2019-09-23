@@ -171,10 +171,13 @@ def do_train(cfg, model, resume=True):
         )
         if cfg.TEST.PRECISE_BN.ENABLED and get_bn_modules(model)
         else None,
+    ]
+    if comm.is_main_process():
+        trainer_hooks.append(hooks.PeriodicCheckpointer(checkpointer, cfg.SOLVER.CHECKPOINT_PERIOD))
+    trainer_hooks.append(
         hooks.EvalHook(
             cfg.TEST.EVAL_PERIOD, lambda: do_test(cfg, model, trainer.iter + 1 == max_iter)
-        ),
-    ]
+        ))
     if comm.is_main_process():
         writers = [
             CommonMetricPrinter(max_iter),
@@ -182,7 +185,6 @@ def do_train(cfg, model, resume=True):
             TensorboardXWriter(cfg.OUTPUT_DIR),
         ]
         trainer_hooks.append(hooks.PeriodicWriter(writers))
-        trainer_hooks.append(hooks.PeriodicCheckpointer(checkpointer, cfg.SOLVER.CHECKPOINT_PERIOD))
 
     trainer.register_hooks(trainer_hooks)
     trainer.train(start_iter, max_iter)

@@ -233,6 +233,8 @@ class CascadeROIHeads(StandardROIHeads):
         for boxes_per_image, image_size in zip(boxes, image_sizes):
             boxes_per_image.clip(image_size)
             if self.training:
+                # do not filter empty boxes at inference time,
+                # because the scores from each stage need to be aligned and added later
                 boxes_per_image = boxes_per_image[boxes_per_image.nonempty()]
             prop = Instances(image_size)
             prop.proposal_boxes = boxes_per_image

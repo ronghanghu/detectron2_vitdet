@@ -193,7 +193,7 @@ __global__ void RoIAlignRotatedForward(
     T roi_start_w = -roi_width / 2.0;
 
     // We do average (inte  gral) pooling inside a bin
-    const T count = roi_bin_grid_h * roi_bin_grid_w; // e.g. = 4
+    const T count = max(roi_bin_grid_h * roi_bin_grid_w, 1); // e.g. = 4
 
     T output_val = 0.;
     for (int iy = 0; iy < roi_bin_grid_h; iy++) // e.g., iy = 0, 1

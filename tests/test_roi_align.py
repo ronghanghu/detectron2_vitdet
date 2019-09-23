@@ -57,10 +57,12 @@ class ROIAlignTest(unittest.TestCase):
         diff = np.abs(output2x - output)
         self.assertTrue(diff.max() < 1e-4)
 
-    def _simple_roialign(self, img, box, resolution, aligned):
+    def _simple_roialign(self, img, box, resolution, aligned=True):
         """
         RoiAlign with scale 1.0 and 0 sample ratio.
         """
+        if isinstance(resolution, int):
+            resolution = (resolution, resolution)
         op = ROIAlign(resolution, 1.0, 0, aligned=aligned)
         input = torch.from_numpy(img[None, None, :, :].astype("float32"))
 
@@ -71,6 +73,12 @@ class ROIAlignTest(unittest.TestCase):
             output_cuda = op.forward(input.cuda(), rois.cuda()).cpu().numpy()
             self.assertTrue(np.allclose(output, output_cuda))
         return output[0, 0]
+
+    def test_empty_box(self):
+        img = np.random.rand(5, 5)
+        box = [3, 4, 5, 4]
+        o = self._simple_roialign(img, box, 7)
+        self.assertTrue((o == 0).all())
 
 
 if __name__ == "__main__":

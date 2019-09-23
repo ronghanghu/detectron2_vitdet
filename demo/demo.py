@@ -7,6 +7,7 @@ import cv2
 import tqdm
 
 from detectron2.config import get_cfg
+from detectron2.data.detection_utils import read_image
 from detectron2.utils.logger import setup_logger
 
 from predictor import VisualizationDemo
@@ -70,7 +71,8 @@ if __name__ == "__main__":
         if len(args.input) == 1:
             args.input = glob.glob(os.path.expanduser(args.input[0]))
         for path in tqdm.tqdm(args.input, disable=not args.output):
-            img = cv2.imread(path, cv2.IMREAD_COLOR)
+            # use PIL, to be consistent with evaluation
+            img = read_image(path, format="BGR")
             start_time = time.time()
             predictions, visualized_output = demo.run_on_image(img)
             logger.info(
