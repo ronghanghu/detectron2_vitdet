@@ -72,6 +72,7 @@ class Box2BoxTransform(object):
                 box transformations for the single box boxes[i].
             boxes (Tensor): boxes to transform, of shape (N, 4)
         """
+        assert torch.isfinite(deltas).all().item()
         boxes = boxes.to(deltas.dtype)
 
         widths = boxes[:, 2] - boxes[:, 0]
@@ -99,7 +100,6 @@ class Box2BoxTransform(object):
         pred_boxes[:, 1::4] = pred_ctr_y - 0.5 * pred_h  # y1
         pred_boxes[:, 2::4] = pred_ctr_x + 0.5 * pred_w  # x2
         pred_boxes[:, 3::4] = pred_ctr_y + 0.5 * pred_h  # y2
-
         return pred_boxes
 
 
@@ -175,6 +175,7 @@ class Box2BoxTransformRotated(object):
             boxes (Tensor): boxes to transform, of shape (N, 5)
         """
         assert deltas.shape[1] == 5 and boxes.shape[1] == 5
+        assert torch.isfinite(deltas).all().item()
 
         boxes = boxes.to(deltas.dtype)
 

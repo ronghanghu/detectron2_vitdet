@@ -233,8 +233,6 @@ class RPNOutputs(object):
         self.positive_fraction = positive_fraction
         self.pred_objectness_logits = pred_objectness_logits
         self.pred_anchor_deltas = pred_anchor_deltas
-        for deltas in pred_anchor_deltas:
-            assert torch.isfinite(deltas).all()
 
         self.anchors = anchors
         self.gt_boxes = gt_boxes

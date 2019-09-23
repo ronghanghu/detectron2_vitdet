@@ -1,14 +1,13 @@
 import colorsys
-import io
 import numpy as np
 from enum import Enum, unique
 import cv2
-import matplotlib.colors as mc
-import matplotlib.pyplot as plt
+import matplotlib as mpl
+import matplotlib.colors as mplc
+import matplotlib.figure as mplfigure
 import pycocotools.mask as mask_util
 import torch
-from matplotlib.lines import Line2D
-from matplotlib.patches import Polygon
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 
 from detectron2.structures import Boxes, BoxMode, Keypoints, PolygonMasks
 
@@ -116,19 +115,18 @@ class _PanopticPrediction:
 
 
 class VisImage:
-    def __init__(self, img, title="", scale=1.0):
+    def __init__(self, img, scale=1.0):
         """
         Args:
             img (ndarray): an RGB image of shape (H, W, 3).
-            title (str, optional): image title
             scale (float): scale the input image
         """
-        self.dpi = plt.gcf().get_dpi()
+        self.img = img
         self.scale = scale
         self.width, self.height = img.shape[1], img.shape[0]
-        self.fig, self.ax = self._setup_figure(img, title)
+        self._setup_figure(img)
 
-    def _setup_figure(self, img, title):
+    def _setup_figure(self, img):
         """
         Args:
             Same as in :meth:`__init__()`.
@@ -137,14 +135,18 @@ class VisImage:
             fig (matplotlib.pyplot.figure): top level container for all the image plot elements.
             ax (matplotlib.pyplot.Axes): contains figure elements and sets the coordinate system.
         """
-        fig = plt.figure(frameon=False)
+        fig = mplfigure.Figure(frameon=False)
+        self.dpi = fig.get_dpi()
         fig.set_size_inches(self.width * self.scale / self.dpi, self.height * self.scale / self.dpi)
-        ax = plt.Axes(fig, [0.0, 0.0, 1.0, 1.0])
-        ax.set_title(title)
+        self.canvas = FigureCanvasAgg(fig)
+        # self.canvas = mpl.backends.backend_cairo.FigureCanvasCairo(fig)
+        ax = fig.add_axes([0.0, 0.0, 1.0, 1.0])
         ax.axis("off")
-        fig.add_axes(ax)
-        ax.imshow(img)
-        return fig, ax
+        ax.set_xlim(0.0, self.width)
+        ax.set_ylim(self.height)
+
+        self.fig = fig
+        self.ax = ax
 
     def save(self, filepath):
         """
@@ -152,8 +154,8 @@ class VisImage:
             filepath (str): a string that contains the absolute path, including the file name, where
                 the visualized image will be saved.
         """
+        self.ax.imshow(self.img, interpolation="nearest")
         self.fig.savefig(filepath)
-        plt.close()
 
     def get_image(self):
         """
@@ -161,14 +163,34 @@ class VisImage:
             ndarray: the visualized image of shape (H, W, 3) (RGB) in uint8 type.
               The shape is scaled w.r.t the input image using the given `scale` argument.
         """
-        canvas = self.fig.canvas
+        canvas = self.canvas
+        s, (width, height) = canvas.print_to_buffer()
+        if (self.width, self.height) != (width, height):
+            img = cv2.resize(self.img, (width, height))
+        else:
+            img = self.img
 
-        buf = io.BytesIO()
-        canvas.print_rgba(buf)
-        buffer = np.frombuffer(buf.getvalue(), dtype="uint8")
-        num_cols, num_rows = canvas.get_width_height()
-        visualized_image = buffer.reshape(num_rows, num_cols, 4)[:, :, :3]
-        plt.close()
+        # buf = io.BytesIO()  # works for cairo backend
+        # canvas.print_rgba(buf)
+        # width, height = self.width, self.height
+        # s = buf.getvalue()
+
+        buffer = np.frombuffer(s, dtype="uint8")
+
+        # imshow is slow. blend manually (still quite slow)
+        img_rgba = buffer.reshape(height, width, 4)
+        rgb, alpha = np.split(img_rgba, [3], axis=2)
+
+        try:
+            import numexpr as ne  # fuse them with numexpr
+
+            visualized_image = ne.evaluate("img * (1 - alpha / 255.0) + rgb * (alpha / 255.0)")
+        except ImportError:
+            alpha = alpha.astype("float32") / 255.0
+            visualized_image = img * (1 - alpha) + rgb * alpha
+
+        visualized_image = visualized_image.astype("uint8")
+
         return visualized_image
 
 
@@ -546,7 +568,7 @@ class Visualizer:
             font_size = self._default_font_size
 
         # since the text background is dark, we don't want the text to be dark
-        color = np.maximum(list(mc.to_rgb(color)), 0.2)
+        color = np.maximum(list(mplc.to_rgb(color)), 0.2)
         color[np.argmax(color)] = max(0.8, np.max(color))
 
         x, y = position
@@ -585,7 +607,7 @@ class Visualizer:
         line_width = max(self.output.height // 320, 1)
 
         self.output.ax.add_patch(
-            plt.Rectangle(
+            mpl.patches.Rectangle(
                 (x0, y0),
                 width,
                 height,
@@ -611,7 +633,7 @@ class Visualizer:
             output (VisImage): image object with box drawn.
         """
         x, y = circle_coord
-        self.output.ax.add_patch(plt.Circle(circle_coord, radius=radius, color=color))
+        self.output.ax.add_patch(mpl.patches.Circle(circle_coord, radius=radius, color=color))
         return self.output
 
     def draw_line(self, x_data, y_data, color):
@@ -627,7 +649,7 @@ class Visualizer:
         Returns:
             output (VisImage): image object with line drawn.
         """
-        self.output.ax.add_line(Line2D(x_data, y_data, color=color))
+        self.output.ax.add_line(mpl.lines.Line2D(x_data, y_data, color=color))
         return self.output
 
     def draw_binary_mask(
@@ -695,12 +717,12 @@ class Visualizer:
                 edge_color = self._change_color_brightness(color, brightness_factor=-0.7)
             else:
                 edge_color = color
-        edge_color = mc.to_rgb(edge_color) + (1,)
+        edge_color = mplc.to_rgb(edge_color) + (1,)
 
-        polygon = Polygon(
+        polygon = mpl.patches.Polygon(
             segment,
             fill=True,
-            facecolor=mc.to_rgb(color) + (alpha,),
+            facecolor=mplc.to_rgb(color) + (alpha,),
             edgecolor=edge_color,
             linewidth=max(self.output.height // 300 * self.output.scale, 1),
         )
@@ -723,7 +745,7 @@ class Visualizer:
             jittered_color (tuple[double]): a tuple of 3 elements, containing the RGB values of the
                 color after being jittered. The values in the list are in the [0.0, 1.0] range.
         """
-        color = mc.to_rgb(color)
+        color = mplc.to_rgb(color)
         vec = np.random.rand(3)
         # better to do it in another color space
         vec = vec / np.linalg.norm(vec) * 0.5
@@ -747,8 +769,8 @@ class Visualizer:
                 modified color. Each value in the tuple is in the [0.0, 1.0] range.
         """
         assert brightness_factor >= -1.0 and brightness_factor <= 1.0
-        color = mc.to_rgb(color)
-        polygon_color = colorsys.rgb_to_hls(*mc.to_rgb(color))
+        color = mplc.to_rgb(color)
+        polygon_color = colorsys.rgb_to_hls(*mplc.to_rgb(color))
         modified_lightness = polygon_color[1] + (brightness_factor * polygon_color[1])
         modified_lightness = 0.0 if modified_lightness < 0.0 else modified_lightness
         modified_lightness = 1.0 if modified_lightness > 1.0 else modified_lightness

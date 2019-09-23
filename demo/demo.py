@@ -1,5 +1,6 @@
 import argparse
 import glob
+import multiprocessing as mp
 import os
 import time
 import cv2
@@ -56,6 +57,7 @@ def get_parser():
 
 
 if __name__ == "__main__":
+    mp.set_start_method("spawn")
     args = get_parser().parse_args()
     logger = setup_logger()
     logger.info("Arguments: " + str(args))
