@@ -5,6 +5,8 @@ import torch.utils.data as data
 
 from detectron2.utils.serialize import PicklableWrapper
 
+__all__ = ["MapDataset", "DatasetFromList"]
+
 
 class MapDataset(data.Dataset):
     """

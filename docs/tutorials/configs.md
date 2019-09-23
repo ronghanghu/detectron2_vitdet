@@ -1,5 +1,8 @@
+# Using Configs
 
-## Best Practice with Configs
+### Basics
+
+### Best Practice with Configs
 
 1. Treat the configs you write as "code": avoid copying them or duplicating them, but use "_BASE_"
 	 instead to share common parts between configs.

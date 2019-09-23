@@ -1,8 +1,9 @@
 
-## Detectron2 Data Format and Loading Pipeline
+# The Deafult Data Loading Pipeline
 
 To load a dataset, you can implement your own dataloader and use it in your training loop, as long as it produces something
-that your model accepts. More often, you want to use our builtin
+that your model accepts.
+For standard tasks, you may want to use our builtin
 `build_detection_{train,test}_loader` which creates a dataloader from config.
 
 Here is how `build_detection_{train,test}_loader` works:
@@ -13,21 +14,21 @@ Here is how `build_detection_{train,test}_loader` works:
 	 * User can register `name->list[dict]` mappings for extra datasets by `DatasetRegistry.register`.
 	 * The structure of the dicts is free-form in theory, but should be in "Detectron2 format"
 	   if consumed by Detectron2 builtin transformations in the next step.
-	 * Details about dataset format and dataset registration in [DATASETS.md](DATASETS.md).
-2. Each dict is mapped by a function (transform):
-	 * User can customize this mapping function, by the "transform" argument in `build_detection_{train,test}_loader`.
+	 * Details about dataset format and dataset registration in [datasets](datasets).
+2. Each dict is mapped by a function ("mapper"):
+	 * User can customize this mapping function, by the "mapper" argument in `build_detection_{train,test}_loader`.
 	 * The output format is free-form, as long as it is accepted by the consumer of this dataloader
 		(usually the model).
-		The output format of the default transform is explained below.
-3. The output of the transform is batched.
+		The output format of the default mapper is explained below.
+3. The output of the mapper is batched.
 	 * Currently it's naively batched to a list.
 4. The batched data is the output of the dataloader. And typically it's also the input of
 	 `model.forward()`.
 
 
-## Model Input Format
+### Model Input Format
 
-The output of the default transform in data loader is a dict.
+The output of the default mapper in data loader is a dict.
 After batching, it becomes `list[dict]`, one dict per image,
 which is the input format of all the builtin models.
 
@@ -51,7 +52,7 @@ The dict may contain the following keys:
 * "sem_seg": `Tensor[int]` in (H, W) format. The semantic segmentation ground truth.
 
 
-## Model Output Format
+### Model Output Format
 
 The builtin models produce a `list[dict]`, one dict for each image. Each dict may contain:
 
@@ -65,7 +66,4 @@ The builtin models produce a `list[dict]`, one dict for each image. Each dict ma
 * "sem_seg": `Tensor` of (#class, H, W), the semantic segmentation prediction.
 * "proposals": TODO
 * "panoptic_seg": TODO
-
-
-
 

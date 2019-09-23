@@ -6,3 +6,5 @@ from .roi_align import ROIAlign, roi_align
 from .roi_align_rotated import ROIAlignRotated, roi_align_rotated
 from .shape_spec import ShapeSpec
 from .wrappers import BatchNorm2d, Conv2d, ConvTranspose2d, cat, interpolate
+
+__all__ = [k for k in globals().keys() if not k.startswith("_")]

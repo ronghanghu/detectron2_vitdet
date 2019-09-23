@@ -24,7 +24,12 @@ from .detection_utils import check_metadata_consistency
 This file contains the default logic to build a dataloader for training or testing.
 """
 
-__all__ = ["build_detection_train_loader", "build_detection_test_loader"]
+__all__ = [
+    "build_detection_train_loader",
+    "build_detection_test_loader",
+    "load_proposals_into_dataset",
+    "print_instances_class_histogram",
+]
 
 
 def filter_images_with_only_crowd_annotations(dataset_dicts):

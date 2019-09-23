@@ -33,7 +33,7 @@ def upgrade_config(cfg, to_version=None):
     Upgrade a config from its current version to a newer version.
 
     Args:
-        cfg (CfgNode),
+        cfg (CfgNode):
         to_version (int): defaults to the latest version.
     """
     cfg = cfg.clone()
@@ -55,7 +55,7 @@ def downgrade_config(cfg, to_version):
     Downgrade a config from its current version to an older version.
 
     Args:
-        cfg (CfgNode),
+        cfg (CfgNode):
         to_version (int):
 
     Note:

@@ -69,6 +69,8 @@ setup(
         "tabulate",
         "tensorboardX",
         "cloudpickle",
+        "matplotlib",
+        "tqdm>4.29.0",
     ],
     ext_modules=get_extensions(),
     cmdclass={"build_ext": torch.utils.cpp_extension.BuildExtension},

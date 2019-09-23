@@ -3,6 +3,8 @@ import logging
 import types
 from typing import List
 
+__all__ = ["DatasetCatalog", "MetadataCatalog"]
+
 
 class DatasetCatalog(object):
     """

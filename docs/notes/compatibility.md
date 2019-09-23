@@ -1,4 +1,4 @@
-
+# Compatibility with Other Libraries
 
 ## Compatibility with Detectron
 
@@ -46,3 +46,7 @@ The major differences are:
 	In Detectron2, the "paste_mask" function is different and should be more accurate than Detectron.
 
 There are some differences in training as well, but they won't affect model compatibility.
+
+## Compatibility with Caffe2
+
+TODO

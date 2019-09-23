@@ -26,6 +26,8 @@ class JSONWriter:
 
     Examples parsing such a json file:
 
+    .. code-block:: none
+
         $ cat metrics.json | jq -s '.[0:2]'
         [
           {
