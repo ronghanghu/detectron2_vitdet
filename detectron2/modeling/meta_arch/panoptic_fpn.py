@@ -141,7 +141,8 @@ def combine_semantic_and_instance_outputs(
 
     Args:
         instance_results: output of :func:`detector_postprocess`.
-        semantic_results: output of :func:`sem_seg_postprocess`.
+        semantic_results: an (H, W) tensor, each is the contiguous semantic
+            category id
 
     Returns:
         panoptic_seg (Tensor): of shape (height, width) where the values are ids for each segment.

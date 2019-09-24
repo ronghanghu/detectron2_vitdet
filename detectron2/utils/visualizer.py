@@ -111,7 +111,30 @@ class _PanopticPrediction:
             sinfo = self._sinfo.get(sid)
             if sinfo is None or not sinfo["isthing"]:
                 continue
-            yield (self._seg == sid).numpy().astype(np.uint8), sinfo
+            mask = (self._seg == sid).numpy().astype(np.uint8)
+            if mask.sum() > 0:
+                yield mask, sinfo
+
+
+def _create_text_labels(classes, scores, class_names):
+    """
+    Args:
+        classes (list[int] or None):
+        scores (list[float] or None):
+        class_names (list[str] or None):
+
+    Returns:
+        list[str] or None
+    """
+    labels = None
+    if class_names is not None and len(class_names) > 1:
+        labels = [class_names[i] for i in classes]
+    if scores is not None:
+        if labels is None:
+            labels = ["{:.0f}%".format(s * 100) for s in scores]
+        else:
+            labels = ["{}: {:.0f}%".format(l, s * 100) for l, s in zip(labels, scores)]
+    return labels
 
 
 class VisImage:
@@ -210,7 +233,7 @@ class Visualizer:
         self.output = VisImage(self.img, scale=scale)
         self.cpu_device = torch.device("cpu")
 
-        self._default_font_size = np.sqrt(self.output.height * self.output.width) // 60
+        self._default_font_size = np.sqrt(self.output.height * self.output.width) // 90
         self._instance_mode = instance_mode
 
     def draw_instance_predictions(self, predictions):
@@ -228,13 +251,7 @@ class Visualizer:
         boxes = predictions.pred_boxes if predictions.has("pred_boxes") else None
         scores = predictions.scores if predictions.has("scores") else None
         classes = predictions.pred_classes if predictions.has("pred_classes") else None
-        if classes is not None:
-            classes = classes.tolist()
-            names = self.metadata.get("class_names", None)
-            if names:
-                labels = [names[i] for i in classes]
-            if scores is not None:
-                labels = ["{}: {:.0f}%".format(l, s * 100) for l, s in zip(labels, scores)]
+        labels = _create_text_labels(classes, scores, self.metadata.get("class_names", None))
         keypoints = predictions.pred_keypoints if predictions.has("pred_keypoints") else None
 
         if predictions.has("pred_masks"):

@@ -177,7 +177,8 @@ def do_train(cfg, model, resume=True):
     trainer_hooks.append(
         hooks.EvalHook(
             cfg.TEST.EVAL_PERIOD, lambda: do_test(cfg, model, trainer.iter + 1 == max_iter)
-        ))
+        )
+    )
     if comm.is_main_process():
         writers = [
             CommonMetricPrinter(max_iter),

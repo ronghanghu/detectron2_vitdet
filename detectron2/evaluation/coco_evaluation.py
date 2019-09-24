@@ -168,19 +168,14 @@ class COCOEvaluator(DatasetEvaluator):
         for task in sorted(tasks):
             coco_eval = (
                 _evaluate_predictions_on_coco(
-                    self._coco_api,
-                    self._coco_results,
-                    task,
-                    kpt_oks_sigmas=self._kpt_oks_sigmas,
+                    self._coco_api, self._coco_results, task, kpt_oks_sigmas=self._kpt_oks_sigmas
                 )
                 if len(self._coco_results) > 0
                 else None  # cocoapi does not handle empty results very well
             )
 
             res = self._derive_coco_results(
-                coco_eval,
-                task,
-                class_names=self._metadata.get("class_names"),
+                coco_eval, task, class_names=self._metadata.get("class_names")
             )
             self._results[task] = res
 
@@ -252,8 +247,7 @@ class COCOEvaluator(DatasetEvaluator):
         # the standard metrics
         results = {metric: float(coco_eval.stats[idx] * 100) for idx, metric in enumerate(metrics)}
         self._logger.info(
-            "Evaluation results for {}: \n".format(iou_type)
-            + create_small_table(results)
+            "Evaluation results for {}: \n".format(iou_type) + create_small_table(results)
         )
 
         if class_names is None or len(class_names) <= 1:
@@ -442,9 +436,7 @@ def _evaluate_box_proposals(dataset_predictions, coco_api, thresholds=None, area
     }
 
 
-def _evaluate_predictions_on_coco(
-    coco_gt, coco_results, iou_type, kpt_oks_sigmas=None
-):
+def _evaluate_predictions_on_coco(coco_gt, coco_results, iou_type, kpt_oks_sigmas=None):
     """
     Evaluate the coco results using COCOEval API.
     """

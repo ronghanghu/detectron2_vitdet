@@ -1,7 +1,12 @@
 import numpy as np
 import pycocotools.mask as mask_util
 
-from detectron2.utils.visualizer import ColorMode, Visualizer, _PanopticPrediction
+from detectron2.utils.visualizer import (
+    ColorMode,
+    Visualizer,
+    _PanopticPrediction,
+    _create_text_labels,
+)
 
 from .colormap import random_color
 
@@ -64,7 +69,7 @@ class VideoVisualizer:
 
         boxes = predictions.pred_boxes.tensor.numpy() if predictions.has("pred_boxes") else None
         scores = predictions.scores if predictions.has("scores") else None
-        labels = predictions.pred_classes.numpy() if predictions.has("pred_classes") else None
+        classes = predictions.pred_classes.numpy() if predictions.has("pred_classes") else None
         keypoints = predictions.pred_keypoints if predictions.has("pred_keypoints") else None
 
         if predictions.has("pred_masks"):
@@ -76,16 +81,12 @@ class VideoVisualizer:
             masks = None
 
         detected = [
-            _DetectedInstance(labels[i], boxes[i], mask_rle=None, color=None, ttl=3)
+            _DetectedInstance(classes[i], boxes[i], mask_rle=None, color=None, ttl=3)
             for i in range(num_instances)
         ]
         colors = self._assign_colors(detected)
 
-        if scores is not None:
-            labels = [
-                "{}: {:.0f}%".format(self.metadata.class_names[l], s * 100)
-                for l, s in zip(labels, scores)
-            ]
+        labels = _create_text_labels(classes, scores, self.metadata.class_names)
 
         if self._instance_mode == ColorMode.IMAGE_BW:
             img_bw = frame.astype("f4").mean(axis=2)
@@ -116,7 +117,7 @@ class VideoVisualizer:
         return frame_visualizer.output
 
     def draw_panoptic_seg_predictions(
-        self, frame, panoptic_seg, segments_info, area_threshold=None, alpha=0.7
+        self, frame, panoptic_seg, segments_info, area_threshold=None, alpha=0.5
     ):
         frame_visualizer = Visualizer(frame, self.metadata)
         pred = _PanopticPrediction(panoptic_seg, segments_info)
@@ -182,7 +183,7 @@ class VideoVisualizer:
             rles_old = [x.mask_rle for x in self._old_instances]
             rles_new = [x.mask_rle for x in instances]
             ious = mask_util.iou(rles_old, rles_new, is_crowd)
-            threshold = 0.7
+            threshold = 0.6
         else:
             boxes_old = [x.bbox for x in self._old_instances]
             boxes_new = [x.bbox for x in instances]
