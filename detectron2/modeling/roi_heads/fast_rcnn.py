@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import torch
 from borc.nn import smooth_l1_loss
@@ -8,6 +9,7 @@ from detectron2.layers import batched_nms, cat
 from detectron2.structures import Boxes, Instances
 from detectron2.utils.events import get_event_storage
 
+logger = logging.getLogger(__name__)
 
 """
 Shape shorthand in this module:
@@ -39,24 +41,36 @@ def fast_rcnn_losses(
     gt_classes, gt_proposal_deltas, pred_class_logits, pred_proposal_deltas, smooth_l1_beta
 ):
     """
-    Compute the classification and box delta losses defined in the Fast R-CNN paper.
+    When box dimension is 4:
+        Computes the classification and box delta losses defined in the Fast R-CNN paper.
+    When box dimension is 5:
+        Computes the same losses for Fast R-CNN with rotated boxes.
 
     Args:
         gt_classes (Tensor): A tensor of shape (R,) storing ground-truth classification
             labels in [0, K], including K fg class and 1 bg class.
-        gt_proposal_deltas (Tensor): shape (R, 4), row i represents ground-truth box2box
-            transform targets (dx, dy, dw, dh) that map object instance i to its matched
-            ground-truth box.
+        gt_proposal_deltas (Tensor):
+            Shape (R, box_dim), row i represents ground-truth box2box transform targets
+            (dx, dy, dw, dh) or (dx, dy, dw, dh, da) that map object instance i to
+            its matched ground-truth box.
         pred_class_logits (Tensor): A tensor for shape (R, K + 1) storing predicted classification
             logits for the K+1-way classification problem. Each row corresponds to a predicted
             object instance.
         pred_proposal_deltas (Tensor): shape depends on whether we are doing
-            cls-agnoistic or cls-specific regression.
+            cls-agnoistic or cls-specific regression, and the box dimensions.
+            When box_dim is 4:
             1. cls-specific: Shape (R, 4 * K), each row stores a list of class-specific
             predicted box2box transform [dx_0, dy_0, dw_0, dh_0, ..., dx_k, dy_k, dw_k, dh_k, ...]
             for each class k in [0, K). (No predictions for the background class.)
             2. cls-agnostic: Shape (R, 4), the second row stores the class-agnostic (foreground)
             predicted box2box transform.
+            When box_dim is 5:
+            1. cls-specific: Shape (R, 5 * K), each row stores a list of class-specific
+            predicted rotated box2box transform
+            [dx_0, dy_0, dw_0, dh_0, da_0, ..., dx_k, dy_k, dw_k, dh_k, da_k, ...]
+            for each class k in [0, K). (No predictions for the background class.)
+            2. cls-agnostic: Shape (R, 5), the second row stores the class-agnostic (foreground)
+            predicted rotated box2box transform.
         smooth_l1_beta (float): The transition point between L1 and L2 loss in
             the smooth L1 loss function. When set to 0, the loss becomes L1. When
             set to +inf, the loss becomes constant 0.
@@ -64,7 +78,8 @@ def fast_rcnn_losses(
     Returns:
         loss_cls, loss_box_reg (Tensor): Scalar loss values.
     """
-    cls_agnostic_bbox_reg = pred_proposal_deltas.size(1) == 4
+    box_dim = gt_proposal_deltas.size(1)
+    cls_agnostic_bbox_reg = pred_proposal_deltas.size(1) == box_dim
     device = pred_class_logits.device
 
     loss_cls = F.cross_entropy(pred_class_logits, gt_classes, reduction="mean")
@@ -80,13 +95,14 @@ def fast_rcnn_losses(
     fg_inds = torch.nonzero((gt_classes >= 0) & (gt_classes < bg_class_ind)).squeeze(1)
     if cls_agnostic_bbox_reg:
         # pred_proposal_deltas only corresponds to foreground class for agnostic
-        gt_class_cols = torch.tensor([0, 1, 2, 3], device=device)
+        gt_class_cols = torch.arange(box_dim, device=device)
     else:
         fg_gt_classes = gt_classes[fg_inds]
-        # pred_proposal_deltas for class k are located in columns [4 * k : 4 * k + 4].
+        # pred_proposal_deltas for class k are located in columns [b * k : b * k + b],
+        # where b is the dimension of box representation (4 or 5)
         # Note that compared to Detectron1,
         # we do not perform bounding box regression for background classes.
-        gt_class_cols = 4 * fg_gt_classes[:, None] + torch.tensor([0, 1, 2, 3], device=device)
+        gt_class_cols = box_dim * fg_gt_classes[:, None] + torch.arange(box_dim, device=device)
 
     loss_box_reg = smooth_l1_loss(
         pred_proposal_deltas[fg_inds[:, None], gt_class_cols],
@@ -199,13 +215,13 @@ class FastRCNNOutputs(object):
     ):
         """
         Args:
-            box2box_transform (Box2BoxTransform): :class:`Box2BoxTransform` instance for
-                proposal-to-detection tranformations.
+            box2box_transform (Box2BoxTransform/Box2BoxTransformRotated):
+                box2box transform instance for proposal-to-detection tranformations.
             pred_class_logits (Tensor): A tensor of shape (R, K + 1) storing the predicted class
                 logits for all R predicted object instances.
-            pred_proposal_deltas (Tensor): A tensor of shape (R, K * 4) or (R, 4) for
+            pred_proposal_deltas (Tensor): A tensor of shape (R, K * B) or (R, B) for
                 class-specific or class-agnostic storing the predicted deltas that
-                transform proposals into final box detections.
+                transform proposals into final box detections, where B is the box dimension (4 or 5)
             proposals (list[Instances]): A list of N Instancess, where Instances i stores the
                 proposals for image i, in the field "proposal_boxes".
                 When training, each Instances must have ground-truth labels
@@ -220,14 +236,15 @@ class FastRCNNOutputs(object):
         self.pred_proposal_deltas = pred_proposal_deltas
         self.smooth_l1_beta = smooth_l1_beta
 
+        box_type = type(proposals[0].proposal_boxes)
         # cat(..., dim=0) concatenates over all images in the batch
-        self.proposals = Boxes.cat([p.proposal_boxes for p in proposals])
+        self.proposals = box_type.cat([p.proposal_boxes for p in proposals])
         assert not self.proposals.tensor.requires_grad, "Proposals should not require gradients!"
         self.image_shapes = [x.image_size for x in proposals]
 
         # The following fields should exist only when training.
         if proposals[0].has("gt_boxes"):
-            self.gt_boxes = Boxes.cat([p.gt_boxes for p in proposals])
+            self.gt_boxes = box_type.cat([p.gt_boxes for p in proposals])
             assert proposals[0].has("gt_classes")
             self.gt_classes = cat([p.gt_classes for p in proposals], dim=0)
 
@@ -276,8 +293,8 @@ class FastRCNNOutputs(object):
         """
         Returns:
             list[Tensor]: A list of Tensors of predicted class-specific or class-agnostic boxes
-                for each image. Element i has shape (Ri, K * 4) or (Ri, 4), where Ri is
-                the number of predicted objects for image i.
+                for each image. Element i has shape (Ri, K * B) or (Ri, B), where Ri is
+                the number of predicted objects for image i and B is the box dimension (4 or 5)
         """
         boxes = self.box2box_transform.apply_deltas(
             self.pred_proposal_deltas, self.proposals.tensor
@@ -320,12 +337,14 @@ class FastRCNNOutputLayers(nn.Module):
       (2) classification scores
     """
 
-    def __init__(self, input_size, num_classes, cls_agnostic_bbox_reg):
+    def __init__(self, input_size, num_classes, cls_agnostic_bbox_reg, box_dim=4):
         """
         Args:
             input_size (int): channels, or (channels, height, width)
             num_classes (int): number of foreground classes
             cls_agnostic_bbox_reg (bool): whether to use class agnostic for bbox regression
+            box_dim (int): the dimension of bounding boxes.
+                Example box dimensions: 4 for regular XYXY boxes and 5 for rotated XYWHA boxes
         """
         super(FastRCNNOutputLayers, self).__init__()
 
@@ -336,7 +355,7 @@ class FastRCNNOutputLayers(nn.Module):
         # (hence + 1)
         self.cls_score = nn.Linear(input_size, num_classes + 1)
         num_bbox_reg_classes = 1 if cls_agnostic_bbox_reg else num_classes
-        self.bbox_pred = nn.Linear(input_size, num_bbox_reg_classes * 4)
+        self.bbox_pred = nn.Linear(input_size, num_bbox_reg_classes * box_dim)
 
         nn.init.normal_(self.cls_score.weight, std=0.01)
         nn.init.normal_(self.bbox_pred.weight, std=0.001)
