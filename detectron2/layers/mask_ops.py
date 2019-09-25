@@ -101,16 +101,13 @@ def paste_masks_in_image_aligned(masks, boxes, image_shape, threshold):
             img_y = (img_y - y0[idx]) / (y1[idx] - y0[idx]) * 2 - 1
             img_x = (img_x - x0[idx]) / (x1[idx] - x0[idx]) * 2 - 1
 
-            # https://github.com/pytorch/pytorch/issues/20785
-            img_y = img_y * mask_h / (mask_h - 1)
-            img_x = img_x * mask_w / (mask_w - 1)
-
             gy, gx = torch.meshgrid(img_y, img_x)
             ind = torch.stack([gx, gy], dim=-1).to(dtype=torch.float32, device=masks.device)
+            # Use align_corners=False. See https://github.com/pytorch/pytorch/issues/20785
             res = F.grid_sample(
                 mask[None, None, :, :].to(dtype=torch.float32),
                 ind[None, :, :, :],
-                align_corners=True,
+                align_corners=False,
             )
             if threshold >= 0:
                 res = (res >= threshold).to(dtype=torch.uint8)
@@ -132,14 +129,13 @@ def paste_masks_in_image_aligned(masks, boxes, image_shape, threshold):
             img_x = (img_x - x0_chunk) / (x1_chunk - x0_chunk) * 2 - 1
             # img_x, img_y have shapes (N_chunk, img_w), (N_chunk, img_h)
 
-            # https://github.com/pytorch/pytorch/issues/20785
-            img_y = img_y * mask_h / (mask_h - 1)
-            img_x = img_x * mask_w / (mask_w - 1)
             gx = img_x[:, None, :].expand(N_chunk, img_h, img_w)
             gy = img_y[:, :, None].expand(N_chunk, img_h, img_w)
             grid = torch.stack([gx, gy], dim=3)
 
-            img_masks = F.grid_sample(masks_chunk.to(dtype=torch.float32), grid, align_corners=True)
+            img_masks = F.grid_sample(
+                masks_chunk.to(dtype=torch.float32), grid, align_corners=False
+            )
             if threshold >= 0:
                 img_masks = (img_masks >= threshold).to(dtype=torch.uint8)
             else:
