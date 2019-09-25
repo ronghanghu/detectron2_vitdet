@@ -2,6 +2,7 @@ import torch
 
 from detectron2.layers import ShapeSpec
 
+from .anchor_generator import build_anchor_generator
 from .backbone import (
     BACKBONE_REGISTRY,
     FPN,
@@ -24,6 +25,12 @@ from .meta_arch import (
     build_sem_seg_head,
 )
 from .postprocessing import detector_postprocess, sem_seg_postprocess
+from .proposal_generator import (
+    PROPOSAL_GENERATOR_REGISTRY,
+    build_proposal_generator,
+    RPN_HEAD_REGISTRY,
+    build_rpn_head,
+)
 from .roi_heads import (
     ROI_BOX_HEAD_REGISTRY,
     ROI_HEADS_REGISTRY,

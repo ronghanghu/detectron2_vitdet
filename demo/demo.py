@@ -58,7 +58,7 @@ def get_parser():
 
 
 if __name__ == "__main__":
-    mp.set_start_method("spawn")
+    mp.set_start_method("spawn", force=True)
     args = get_parser().parse_args()
     logger = setup_logger()
     logger.info("Arguments: " + str(args))

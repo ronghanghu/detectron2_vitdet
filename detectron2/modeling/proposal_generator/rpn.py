@@ -20,26 +20,6 @@ def build_rpn_head(cfg, input_shape):
     return RPN_HEAD_REGISTRY.get(name)(cfg, input_shape)
 
 
-def shared_rpn_head_num_cell_anchors(cfg):
-    """
-    This function calculates the number of anchor cells. This is specific to
-    a RPN Head which shares conv layers over all feature map levels.
-    That's why the length of index [0] for anchor sizes and aspect ratios is
-    correct (even though it ignores the other indices).
-    """
-    anchor_sizes = cfg.MODEL.ANCHOR_GENERATOR.SIZES
-    # Check that all levels use the same number of anchor sizes
-    if len(anchor_sizes) > 1:
-        for c in anchor_sizes:
-            assert len(c) == len(anchor_sizes[0])
-    anchor_aspect_ratios = cfg.MODEL.ANCHOR_GENERATOR.ASPECT_RATIOS
-    # Check that all levels use the same number of aspect ratios
-    if len(anchor_aspect_ratios) > 1:
-        for c in anchor_aspect_ratios:
-            assert len(c) == len(anchor_aspect_ratios[0])
-    return len(anchor_sizes[0]) * len(anchor_aspect_ratios[0])
-
-
 @RPN_HEAD_REGISTRY.register()
 class StandardRPNHead(nn.Module):
     """
@@ -52,11 +32,18 @@ class StandardRPNHead(nn.Module):
     def __init__(self, cfg, input_shape: List[ShapeSpec]):
         super().__init__()
 
+        # Standard RPN is shared across levels:
         in_channels = [s.channels for s in input_shape]
-        assert len(set(in_channels)) == 1
+        assert len(set(in_channels)) == 1, "Each level must have the same channel!"
         in_channels = in_channels[0]
 
-        num_cell_anchors = shared_rpn_head_num_cell_anchors(cfg)
+        # RPNHead should take the same input as anchor generator
+        # NOTE: it assumes that creating an anchor generator does not have unwanted side effect.
+        num_cell_anchors = build_anchor_generator(cfg, input_shape).num_cell_anchors
+        assert (
+            len(set(num_cell_anchors)) == 1
+        ), "Each level must have the same number of cell anchors"
+        num_cell_anchors = num_cell_anchors[0]
 
         # 3x3 conv for the hidden representation
         self.conv = nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1)

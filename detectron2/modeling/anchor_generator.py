@@ -236,6 +236,20 @@ class RotatedAnchorGenerator(nn.Module):
 
         return BufferList(cell_anchors)
 
+    @property
+    def num_cell_anchors(self):
+        """
+        Returns:
+            list[int]: Each int is the number of anchors at every pixel
+                location, on that feature map.
+                For example, if at every pixel we use anchors of 3 aspect
+                ratios and 5 sizes, the number of anchors is 15.
+                (See also ANCHOR_GENERATOR.SIZES and ANCHOR_GENERATOR.ASPECT_RATIOS in config)
+
+                In standard RPN models, `num_cell_anchors` on every feature map is the same.
+        """
+        return [len(cell_anchors) for cell_anchors in self.cell_anchors]
+
     def grid_anchors(self, grid_sizes):
         anchors = []
         for size, stride, base_anchors in zip(grid_sizes, self.strides, self.cell_anchors):
