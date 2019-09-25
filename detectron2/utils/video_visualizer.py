@@ -4,8 +4,8 @@ import pycocotools.mask as mask_util
 from detectron2.utils.visualizer import (
     ColorMode,
     Visualizer,
-    _PanopticPrediction,
     _create_text_labels,
+    _PanopticPrediction,
 )
 
 from .colormap import random_color

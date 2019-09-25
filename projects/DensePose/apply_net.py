@@ -7,13 +7,9 @@ import sys
 from typing import Any, ClassVar, Dict, List
 import torch
 
-from detectron2.checkpoint import DetectionCheckpointer
-from detectron2.config import CfgNode, get_cfg
-from detectron2.data import DatasetFromList, samplers
-from detectron2.data.build import trivial_batch_collator
-from detectron2.data.common import MapDataset
-from detectron2.data.dataset_mapper import DatasetMapper
-from detectron2.modeling import build_model
+from detectron2.config import get_cfg
+from detectron2.data.detection_utils import read_image
+from detectron2.engine.defaults import DefaultPredictor
 from detectron2.structures.instances import Instances
 from detectron2.utils.logger import setup_logger
 
@@ -68,40 +64,33 @@ class InferenceAction(Action):
     @classmethod
     def execute(cls: type, args: argparse.Namespace):
         logger.info(f"Loading config from {args.cfg}")
-        cfg = cls._setup_config(args.cfg)
+        cfg = cls._setup_config(args.cfg, args.model)
         logger.info(f"Loading model from {args.model}")
-        model = cls._load_model(cfg, args.model)
+        predictor = DefaultPredictor(cfg)
         logger.info(f"Loading data from {args.input}")
-        dataset = cls._setup_dataset(args.input)
-        if len(dataset) == 0:
+        file_list = cls._get_input_file_list(args.input)
+        if len(file_list) == 0:
             logger.warning(f"No input images for {args.input}")
             return
-        data_loader = cls._setup_data_loader(cfg, dataset)
-        model.eval()
         context = cls.create_context(args)
-        for _idx, batch in enumerate(data_loader):
+        for file_name in file_list:
+            img = read_image(file_name, format="BGR")  # predictor expects BGR image.
             with torch.no_grad():
-                outputs = model(batch)
-                cls.execute_on_outputs(context, batch, outputs)
+                outputs = predictor(img)["instances"]
+                cls.execute_on_outputs(context, {"file_name": file_name, "image": img}, outputs)
         cls.postexecute(context)
 
     @classmethod
-    def _setup_config(cls: type, config_fpath: str):
+    def _setup_config(cls: type, config_fpath: str, model_fpath: str):
         cfg = get_cfg()
         add_densepose_config(cfg)
         cfg.merge_from_file(config_fpath)
+        cfg.MODEL.WEIGHTS = model_fpath
         cfg.freeze()
         return cfg
 
     @classmethod
-    def _load_model(cls: type, cfg: CfgNode, model_fpath: str):
-        model = build_model(cfg)
-        checkpointer = DetectionCheckpointer(model)
-        checkpointer.load(model_fpath)
-        return model
-
-    @classmethod
-    def _setup_dataset(cls: type, input_spec: str):
+    def _get_input_file_list(cls: type, input_spec: str):
         if os.path.isdir(input_spec):
             file_list = [
                 fname
@@ -112,21 +101,7 @@ class InferenceAction(Action):
             file_list = [input_spec]
         else:
             file_list = glob.glob(input_spec)
-        return DatasetFromList([{"file_name": fname} for fname in file_list])
-
-    @classmethod
-    def _setup_data_loader(cls: type, cfg: CfgNode, dataset):
-        dataset_mapper = DatasetMapper(cfg, False)
-        dataset_mapped = MapDataset(dataset, dataset_mapper)
-        image_sampler = samplers.InferenceSampler(len(dataset_mapped))
-        batch_sampler = torch.utils.data.sampler.BatchSampler(image_sampler, 1, drop_last=False)
-        data_loader = torch.utils.data.DataLoader(
-            dataset_mapped,
-            num_workers=cfg.DATALOADER.NUM_WORKERS,
-            batch_sampler=batch_sampler,
-            collate_fn=trivial_batch_collator,
-        )
-        return data_loader
+        return file_list
 
 
 @register_action
@@ -154,14 +129,11 @@ class DumpAction(InferenceAction):
         )
 
     @classmethod
-    def execute_on_outputs(
-        cls: type, context: Dict[str, Any], batch: List[dict], outputs: List[Instances]
-    ):
-        for entry, instances in zip(batch, outputs):
-            image_fpath = entry["file_name"]
-            logger.info(f"Processing {image_fpath}")
-            entry["instances"] = instances
-            context["results"].append(entry)
+    def execute_on_outputs(cls: type, context: Dict[str, Any], entry: dict, outputs: Instances):
+        image_fpath = entry["file_name"]
+        logger.info(f"Processing {image_fpath}")
+        entry["instances"] = outputs
+        context["results"].append(entry)
 
     @classmethod
     def create_context(cls: type, args: argparse.Namespace):
@@ -213,30 +185,25 @@ class ShowAction(InferenceAction):
         )
 
     @classmethod
-    def execute_on_outputs(
-        cls: type, context: Dict[str, Any], batch: List[dict], outputs: List[Instances]
-    ):
+    def execute_on_outputs(cls: type, context: Dict[str, Any], entry: dict, outputs: Instances):
         import cv2
         import numpy as np
 
         visualizer = context["visualizer"]
-        for entry, output in zip(batch, outputs):
-            image_fpath = entry["file_name"]
-            logger.info(f"Processing {image_fpath}")
-            image = cv2.imread(image_fpath, cv2.IMREAD_GRAYSCALE)
-            h = entry["image"].size(1)
-            w = entry["image"].size(2)
-            image = cv2.resize(image, (w, h), cv2.INTER_LINEAR)
-            image = np.tile(image[:, :, np.newaxis], [1, 1, 3])
-            if not output["instances"].has("pred_densepose"):
-                continue
-            datas = cls._extract_data_for_visualizers(context["vis_specs"], output["instances"])
-            image_vis = visualizer.visualize(image, datas)
-            entry_idx = context["entry_idx"] + 1
-            out_fname = cls._get_out_fname(entry_idx, context["out_fname"])
-            cv2.imwrite(out_fname, image_vis)
-            logger.info(f"Output saved to {out_fname}")
-            context["entry_idx"] += 1
+
+        image_fpath = entry["file_name"]
+        logger.info(f"Processing {image_fpath}")
+        image = cv2.cvtColor(entry["image"], cv2.COLOR_BGR2GRAY)
+        image = np.tile(image[:, :, np.newaxis], [1, 1, 3])
+        if not outputs.has("pred_densepose"):
+            return
+        datas = cls._extract_data_for_visualizers(context["vis_specs"], outputs)
+        image_vis = visualizer.visualize(image, datas)
+        entry_idx = context["entry_idx"] + 1
+        out_fname = cls._get_out_fname(entry_idx, context["out_fname"])
+        cv2.imwrite(out_fname, image_vis)
+        logger.info(f"Output saved to {out_fname}")
+        context["entry_idx"] += 1
 
     @classmethod
     def postexecute(cls: type, context: Dict[str, Any]):
