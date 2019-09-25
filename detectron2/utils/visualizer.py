@@ -9,7 +9,7 @@ import pycocotools.mask as mask_util
 import torch
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 
-from detectron2.structures import Boxes, BoxMode, Keypoints, PolygonMasks
+from detectron2.structures import BitMasks, Boxes, BoxMode, Keypoints, PolygonMasks
 
 from .colormap import random_color
 
@@ -40,45 +40,79 @@ class ColorMode(Enum):
     IMAGE_BW = 2
 
 
-def _mask_to_polygon(mask):
-    # cv2.RETR_CCOMP flag retrieves all the contours and arranges them to a 2-level
-    # hierarchy. External contours (boundary) of the object are placed in hierarchy-1.
-    # Internal contours (holes) are placed in hierarchy-2.
-    # cv2.CHAIN_APPROX_NONE flag gets vertices of polygons from countours.
-    res = cv2.findContours(mask.copy(), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)[-2]
-    res = [x.flatten() for x in res]
-    res = [x for x in res if len(x) >= 6]
-    return res
-
-
-def _polygon_areas(polygons, h, w):
+class GenericMask:
     """
-    Args:
-        polygons (list[list[ndarray]]):
-    Returns:
-        list[float]: the areas
+    Attribute:
+        polygons (list[ndarray]): list[ndarray]: polygons for this mask.
+            Each ndarray has format [x, y, x, y, ...]
+        mask (ndarray): a binary mask
     """
-    rles = []
-    non_empty = np.asarray([len(p) > 0 for p in polygons])
-    for p in polygons:
-        if len(p) > 0:  # coco does not work for empty ones
-            p = [x.tolist() for x in p]
-            p = mask_util.frPyObjects(p, h, w)
-            p = mask_util.merge(p)
-            rles.append(p)
-    non_empty_areas = np.asarray(mask_util.area(rles), dtype=np.float32)
-    areas = np.zeros((len(polygons),), dtype=np.float32)
-    areas[non_empty] = non_empty_areas
-    return areas
 
+    def __init__(self, mask_or_polygons, height, width):
+        self._mask = self._polygons = None
+        self.height = height
+        self.width = width
 
-def _polygon_to_box(polygon, h, w):
-    p = mask_util.frPyObjects([x.tolist() for x in polygon], h, w)
-    p = mask_util.merge(p)
-    bbox = mask_util.toBbox(p)
-    bbox[2] += bbox[0]
-    bbox[3] += bbox[1]
-    return bbox
+        m = mask_or_polygons
+        if isinstance(m, dict):
+            # RLEs
+            assert "counts" in m and "size" in m
+            if isinstance(m["counts"], list):  # uncompressed RLEs
+                h, w = m["size"]
+                assert h == height and w == width
+                m = mask_util.frPyObjects(m, h, w)
+            self._mask = mask_util.decode(m)[:, :]
+            return
+
+        if isinstance(m, list):  # list[ndarray]
+            self._polygons = [np.asarray(x).reshape(-1) for x in m]
+            return
+
+        if isinstance(m, np.ndarray):  # assumed to be a binary mask
+            assert m.shape[1] != 2, m.shape
+            assert m.shape == (height, width), m.shape
+            self._mask = m
+            return
+
+        raise ValueError("GenericMask cannot handle object {} of type '{}'".format(m, type(m)))
+
+    @property
+    def mask(self):
+        if self._mask is None:
+            self._mask = self.polygons_to_mask(self._polygons)
+        return self._mask
+
+    @property
+    def polygons(self):
+        if self._polygons is None:
+            self._polygons = self.mask_to_polygons(self._mask)
+        return self._polygons
+
+    def mask_to_polygons(self, mask):
+        # cv2.RETR_CCOMP flag retrieves all the contours and arranges them to a 2-level
+        # hierarchy. External contours (boundary) of the object are placed in hierarchy-1.
+        # Internal contours (holes) are placed in hierarchy-2.
+        # cv2.CHAIN_APPROX_NONE flag gets vertices of polygons from countours.
+        res = cv2.findContours(mask.astype("uint8"), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)[-2]
+        res = [x.flatten() for x in res]
+        res = [x for x in res if len(x) >= 6]
+        return res
+
+    def polygons_to_mask(self, polygons):
+        rle = mask_util.frPyObjects(polygons, self.height, self.width)
+        rle = mask_util.merge(rle)
+        return mask_util.decode(rle)[:, :]
+
+    def area(self):
+        return self.mask.sum()
+
+    def bbox(self):
+        p = mask_util.frPyObjects(self.polygons, self.height, self.width)
+        p = mask_util.merge(p)
+        bbox = mask_util.toBbox(p)
+        bbox[2] += bbox[0]
+        bbox[3] += bbox[1]
+        return bbox
 
 
 class _PanopticPrediction:
@@ -255,10 +289,10 @@ class Visualizer:
         keypoints = predictions.pred_keypoints if predictions.has("pred_keypoints") else None
 
         if predictions.has("pred_masks"):
-            masks = predictions.pred_masks
-            polygons = self._convert_polygons(masks)
+            masks = predictions.pred_masks.numpy()
+            masks = [GenericMask(x, self.output.height, self.output.width) for x in masks]
         else:
-            masks, polygons = None, None
+            masks = None
 
         if self._instance_mode == ColorMode.SEGMENTATION and self.metadata.get("thing_colors"):
             colors = [
@@ -279,7 +313,7 @@ class Visualizer:
             alpha = 0.3
 
         self.overlay_instances(
-            masks=polygons,
+            masks=masks,
             boxes=boxes,
             labels=labels,
             keypoints=keypoints,
@@ -412,12 +446,15 @@ class Visualizer:
             boxes (Boxes or ndarray): either a :class:`Boxes` or a Nx4 numpy array
                 of XYXY_ABS format for the N objects in a single image.
             labels (list[str]): the text to be displayed for each instance.
-            masks (PolygonMasks i.e. list[list[Tensor[float]]] or list[list[ndarray]]):
-                this contains the segmentation masks for all objects in one image. The
-                first level of the list corresponds to individual instances. The second
-                level to all the polygon that compose the instance, and the third level
-                to the polygon coordinates. The third level is either a Tensor or a numpy
-                array that should have the format of [x0, y0, x1, y1, ..., xn, yn] (n >= 3).
+            masks (masks-like object): Supported types are:
+                `structures.masks.PolygonMasks`, `structures.masks.BitMasks`.
+                list[list[ndarray]]: contains the segmentation masks for all objects in one image.
+                    The first level of the list corresponds to individual instances. The second
+                    level to all the polygon that compose the instance, and the third level
+                    to the polygon coordinates. The third level should have the format of
+                    [x0, y0, x1, y1, ..., xn, yn] (n >= 3).
+                list[ndarray]: each ndarray is a binary mask of shape (H, W).
+                list[dict]: each dict is a COCO-style RLE.
             keypoints (Keypoint or array like): an array-like object of shape (N, K, 3),
                 where the N is the number of instances and K is the number of keypoints.
                 The last dimension corresponds to (x, y, visibility or score).
@@ -433,7 +470,7 @@ class Visualizer:
             boxes = self._convert_boxes(boxes)
             num_instances = len(boxes)
         if masks is not None:
-            masks = self._convert_polygons(masks)
+            masks = self._convert_masks(masks)
             if num_instances:
                 assert len(masks) == num_instances
             else:
@@ -456,7 +493,7 @@ class Visualizer:
         if boxes is not None:
             areas = np.prod(boxes[:, 2:] - boxes[:, :2], axis=1)
         elif masks is not None:
-            areas = _polygon_areas(masks, self.output.height, self.output.width)
+            areas = np.asarray([x.area() for x in masks])
 
         if areas is not None:
             sorted_idxs = np.argsort(-areas).tolist()
@@ -474,21 +511,20 @@ class Visualizer:
                 self.draw_box(boxes[i], edge_color=color)
 
             if masks is not None:
-                for segment in masks[i]:
-                    segment = np.asarray(segment).reshape(-1, 2)
-                    self.draw_polygon(segment, color, alpha=alpha)
+                for segment in masks[i].polygons:
+                    self.draw_polygon(segment.reshape(-1, 2), color, alpha=alpha)
 
             if labels is not None:
                 # first get a box
                 if boxes is not None:
-                    box = boxes[i]
-                    x0, y0, x1, y1 = box
-                    text_pos = (x0, y0)
+                    x0, y0, x1, y1 = boxes[i]
+                    text_pos = (x0, y0)  # if drawing boxes, put text on the box corner.
                 elif masks is not None:
-                    box = _polygon_to_box(masks[i], self.output.height, self.output.width)
-                    x0, y0, x1, y1 = box
-                    # draw text in the center when box is not drawn
-                    text_pos = ((x0 + x1) * 0.5, (y0 + y1) * 0.5)
+                    x0, y0, x1, y1 = masks[i].bbox()
+
+                    # draw text in the center (defined by median) when box is not drawn
+                    # median is less sensitive to outliers.
+                    text_pos = np.median(masks[i].mask.nonzero(), axis=1)[::-1]
                 else:
                     raise NotImplementedError("Cannot draw labels.")
                 # for small objects, draw text at the side to avoid occulusion
@@ -695,7 +731,8 @@ class Visualizer:
 
         # TODO handle masks with holes
         has_valid_segment = False
-        for segment in _mask_to_polygon(binary_mask):
+        mask = GenericMask(binary_mask, self.output.height, self.output.width)
+        for segment in mask.polygons:
             area = mask_util.area(
                 mask_util.frPyObjects([segment], binary_mask.shape[0], binary_mask.shape[1])
             )
@@ -708,9 +745,12 @@ class Visualizer:
         if text is not None and has_valid_segment:
             # TODO sometimes drawn on wrong objects. the heuristics here can improve.
             lighter_color = self._change_color_brightness(color, brightness_factor=0.7)
-            _, _, stats, centroids = cv2.connectedComponentsWithStats(binary_mask, 8)
+            _num_cc, cc_labels, stats, centroids = cv2.connectedComponentsWithStats(binary_mask, 8)
             largest_component_id = np.argmax(stats[1:, -1]) + 1
-            center = centroids[largest_component_id]
+
+            # median is more stable than centroid
+            # center = centroids[largest_component_id]
+            center = np.median((cc_labels == largest_component_id).nonzero(), axis=1)[::-1]
             self.draw_text(text, center, color=lighter_color)
         return self.output
 
@@ -803,38 +843,28 @@ class Visualizer:
         else:
             return np.asarray(boxes)
 
-    def _convert_polygons(self, masks_or_polygons):
+    def _convert_masks(self, masks_or_polygons):
         """
-        Convert different format of masks or polygons to polygons in ndarray format.
+        Convert different format of masks or polygons to a tuple of masks and polygons.
 
         Returns:
-            list[list[ndarray]]: polygons for each instance.
-                Each ndarray has format [x, y, x, y, ...]
+            list[GenericMask]:
         """
-
-        def to_polygons(p):
-            if isinstance(p, dict):
-                # RLEs
-                assert "counts" in p and "size" in p
-                if isinstance(p["counts"], list):  # uncompressed RLEs
-                    h, w = p["size"]
-                    p = mask_util.frPyObjects(p, h, w)
-                mask = mask_util.decode(p)
-                return _mask_to_polygon(mask)
-            if isinstance(p, list):
-                # check that the length is a multiple of 2
-                return [np.asarray(x).reshape(-1, 2).reshape(-1) for x in p]
-            else:
-                # assume p is a binary mask
-                assert p.shape[1] != 2, p.shape
-                assert p.ndim == 2, p.shape
-                return _mask_to_polygon(np.asarray(p))
 
         m = masks_or_polygons
         if isinstance(m, PolygonMasks):
-            return m.polygons
-        else:
-            return [to_polygons(p) for p in masks_or_polygons]
+            m = m.polygons
+        if isinstance(m, BitMasks):
+            m = m.tensor.numpy()
+        if isinstance(m, torch.Tensor):
+            m = m.numpy()
+        ret = []
+        for x in m:
+            if isinstance(x, GenericMask):
+                ret.append(x)
+            else:
+                ret.append(GenericMask(x, self.output.height, self.output.width))
+        return ret
 
     def _convert_keypoints(self, keypoints):
         if isinstance(keypoints, Keypoints):

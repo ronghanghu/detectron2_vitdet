@@ -287,7 +287,7 @@ if __name__ == "__main__":
         python -m detectron2.data.datasets.coco \
             path/to/json path/to/image_root dataset_name
 
-        "dataset_name" can be "coco", "coco_person", or other
+        "dataset_name" can be "coco_2014_minival_100", or other
         pre-registered ones
     """
     import numpy as np
