@@ -142,7 +142,7 @@ class AllReduce(Function):
         return grad_output
 
 
-class NaiveSyncBatchNorm(nn.BatchNorm2d):
+class NaiveSyncBatchNorm(BatchNorm2d):
     """
     `torch.nn.SyncBatchNorm` has known unknown bugs.
 
