@@ -81,7 +81,7 @@ class VideoVisualizer:
             masks = None
 
         detected = [
-            _DetectedInstance(classes[i], boxes[i], mask_rle=None, color=None, ttl=3)
+            _DetectedInstance(classes[i], boxes[i], mask_rle=None, color=None, ttl=8)
             for i in range(num_instances)
         ]
         colors = self._assign_colors(detected)
@@ -149,7 +149,7 @@ class VideoVisualizer:
 
         category_ids = [x["category_id"] for x in sinfo]
         detected = [
-            _DetectedInstance(category_ids[i], bbox=None, mask_rle=masks_rles[i], color=None, ttl=3)
+            _DetectedInstance(category_ids[i], bbox=None, mask_rle=masks_rles[i], color=None, ttl=8)
             for i in range(num_instances)
         ]
         colors = self._assign_colors(detected)
@@ -183,12 +183,12 @@ class VideoVisualizer:
             rles_old = [x.mask_rle for x in self._old_instances]
             rles_new = [x.mask_rle for x in instances]
             ious = mask_util.iou(rles_old, rles_new, is_crowd)
-            threshold = 0.6
+            threshold = 0.5
         else:
             boxes_old = [x.bbox for x in self._old_instances]
             boxes_new = [x.bbox for x in instances]
             ious = mask_util.iou(boxes_old, boxes_new, is_crowd)
-            threshold = 0.7
+            threshold = 0.6
         if len(ious) == 0:
             ious = np.zeros((len(self._old_instances), len(instances)), dtype="float32")
 

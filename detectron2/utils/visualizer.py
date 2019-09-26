@@ -519,14 +519,18 @@ class Visualizer:
                 if boxes is not None:
                     x0, y0, x1, y1 = boxes[i]
                     text_pos = (x0, y0)  # if drawing boxes, put text on the box corner.
+                    horiz_align = "left"
                 elif masks is not None:
                     x0, y0, x1, y1 = masks[i].bbox()
 
                     # draw text in the center (defined by median) when box is not drawn
                     # median is less sensitive to outliers.
                     text_pos = np.median(masks[i].mask.nonzero(), axis=1)[::-1]
+                    horiz_align = "center"
                 else:
-                    raise NotImplementedError("Cannot draw labels.")
+                    raise NotImplementedError(
+                        "Cannot draw labels when boxes and masks are not available."
+                    )
                 # for small objects, draw text at the side to avoid occulusion
                 if (y1 - y0) * (x1 - x0) < _SMALL_OBJECT_AREA_THRESH:
                     if y1 >= self.output.height - 5:
@@ -535,7 +539,9 @@ class Visualizer:
                         text_pos = (x0, y1)
 
                 lighter_color = self._change_color_brightness(color, brightness_factor=0.7)
-                self.draw_text(labels[i], text_pos, color=lighter_color)
+                self.draw_text(
+                    labels[i], text_pos, color=lighter_color, horizontal_alignment=horiz_align
+                )
 
         # draw keypoints
         if keypoints is not None:
@@ -604,7 +610,9 @@ class Visualizer:
     Primitive drawing functions:
     """
 
-    def draw_text(self, text, position, font_size=None, color="g"):
+    def draw_text(
+        self, text, position, *, font_size=None, color="g", horizontal_alignment="center"
+    ):
         """
         Args:
             text (str): class label
@@ -613,6 +621,7 @@ class Visualizer:
                 proportional to the image width is calculated and used.
             color: color of the text. Refer to `matplotlib.colors` for full list
                 of formats that are accepted.
+            horizontal_alignment (str): see `matplotlib.text.Text`
 
         Returns:
             output (VisImage): image object with text drawn.
@@ -633,6 +642,7 @@ class Visualizer:
             family="sans-serif",
             bbox={"facecolor": "black", "alpha": 0.8, "pad": 0.7, "edgecolor": "none"},
             verticalalignment="top",
+            horizontalalignment=horizontal_alignment,
             color=color,
             zorder=10,
         )
@@ -656,8 +666,7 @@ class Visualizer:
         width = x1 - x0
         height = y1 - y0
 
-        # calculate line width of box proportional to image width
-        line_width = max(self.output.height // 320, 1)
+        linewidth = max(self._default_font_size / 4, 1)
 
         self.output.ax.add_patch(
             mpl.patches.Rectangle(
@@ -666,7 +675,7 @@ class Visualizer:
                 height,
                 fill=False,
                 edgecolor=edge_color,
-                linewidth=line_width * self.output.scale,
+                linewidth=linewidth * self.output.scale,
                 alpha=alpha,
                 linestyle=line_style,
             )
@@ -702,7 +711,10 @@ class Visualizer:
         Returns:
             output (VisImage): image object with line drawn.
         """
-        self.output.ax.add_line(mpl.lines.Line2D(x_data, y_data, color=color))
+        linewidth = max(self._default_font_size / 3, 1)
+        self.output.ax.add_line(
+            mpl.lines.Line2D(x_data, y_data, linewidth=linewidth * self.output.scale, color=color)
+        )
         return self.output
 
     def draw_binary_mask(
