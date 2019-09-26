@@ -19,7 +19,7 @@ from densepose.vis.densepose import (
     DensePoseDataPointsUVisualizer,
     DensePoseDataPointsVisualizer,
     DensePoseDataPointsVVisualizer,
-    DensePoseDataSegmentationVisualizer,
+    DensePoseDataCoarseSegmentationVisualizer,
 )
 
 DOC = """Query DB - a tool to print / visualize data from a database
@@ -124,7 +124,7 @@ class ShowAction(EntrywiseAction):
 
     COMMAND: ClassVar[str] = "show"
     VISUALIZERS: ClassVar[Dict[str, object]] = {
-        "dp_segm": DensePoseDataSegmentationVisualizer(),
+        "dp_segm": DensePoseDataCoarseSegmentationVisualizer(),
         "dp_i": DensePoseDataPointsIVisualizer(),
         "dp_u": DensePoseDataPointsUVisualizer(),
         "dp_v": DensePoseDataPointsVVisualizer(),

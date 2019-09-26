@@ -1,6 +1,10 @@
+import logging
 import numpy as np
 import cv2
+import torch
 
+Image = np.ndarray
+Boxes = torch.Tensor
 
 class MatrixVisualizer(object):
     """
@@ -31,9 +35,18 @@ class MatrixVisualizer(object):
         else:
             image_target_bgr = image_bgr * 0
         x, y, w, h = [int(v) for v in bbox_xywh]
+        if w <= 0 or h <= 0:
+            return image_bgr
         mask, matrix = self._resize(mask, matrix, w, h)
         mask_bg = np.tile((mask == 0)[:, :, np.newaxis], [1, 1, 3])
-        matrix_scaled_8u = (matrix.astype(np.float32) * self.val_scale).astype(np.uint8)
+        matrix_scaled = matrix.astype(np.float32) * self.val_scale
+        _EPSILON = 1e-6
+        if np.any(matrix_scaled > 255 + _EPSILON):
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"Matrix has values > {255 + _EPSILON} after "
+                f"scaling, clipping to [0..255]")
+        matrix_scaled_8u = matrix_scaled.clip(0, 255).astype(np.uint8)
         matrix_vis = cv2.applyColorMap(matrix_scaled_8u, self.cmap)
         matrix_vis[mask_bg] = image_target_bgr[y : y + h, x : x + w, :][mask_bg]
         image_target_bgr[y : y + h, x : x + w, :] = (
@@ -123,6 +136,7 @@ class TextVisualizer(object):
 
     def visualize(self, image_bgr, txt, topleft_xy):
         txt_w, txt_h = self.get_text_size_wh(txt)
+        topleft_xy = tuple(map(int, topleft_xy))
         x, y = topleft_xy
         if self.frame_color_transparency < 1.0:
             t = self.frame_thickness
@@ -136,16 +150,16 @@ class TextVisualizer(object):
                 image_bgr[y : y + txt_h, x : x + txt_w, :] * self.fill_color_transparency
                 + np.array(self.fill_color_bgr) * (1.0 - self.fill_color_transparency)
             ).astype(np.float)
-            cv2.putText(
-                image_bgr,
-                txt,
-                topleft_xy,
-                self.font_face,
-                self.font_scale,
-                self.font_color_bgr,
-                self.font_line_thickness,
-                self.font_line_type,
-            )
+        cv2.putText(
+            image_bgr,
+            txt,
+            topleft_xy,
+            self.font_face,
+            self.font_scale,
+            self.font_color_bgr,
+            self.font_line_thickness,
+            self.font_line_type,
+        )
         return image_bgr
 
     def get_text_size_wh(self, txt):

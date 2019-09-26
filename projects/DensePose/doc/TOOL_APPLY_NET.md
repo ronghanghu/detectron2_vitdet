@@ -40,7 +40,7 @@ python apply_net.py dump configs/densepose_R_50_FPN_s1x.yaml DensePose_ResNet50_
 
 The general command form is:
 ```bash
-python apply_net.py show [-h] [-v] [--output <image_file>] <config> <model> <input> <visualizations>
+python apply_net.py show [-h] [-v] [--min_score <score>] [--nms_thresh <threshold>] [--output <image_file>] <config> <model> <input> <visualizations>
 ```
 
 There are four mandatory arguments:
@@ -56,10 +56,12 @@ There are four mandatory arguments:
      V coordinate in part parametrization;
 
 
-One can additionally provide `--output` argument to define visualization file name
-template, which defaults to `output.png`. To distinguish output file names for
-different images, the tool appends 1-based entry index,
-e.g. output.0001.png, output.0002.png, etc...
+One can additionally provide the following optional arguments:
+ - `--min_score` to only show detections with sufficient scores that are not lower than provided value
+ - `--nms_thresh` to additionally apply non-maximum suppression to detections at a given threshold
+ - `--output` to define visualization file name template, which defaults to `output.png`.
+   To distinguish output file names for different images, the tool appends 1-based entry index,
+   e.g. output.0001.png, output.0002.png, etc...
 
 
 The following examples show how to output results of a DensePose model
@@ -69,17 +71,17 @@ with ResNet-50 FPN backbone using different visualizations for image `image.jpg`
 ```bash
 python apply_net.py show configs/densepose_R_50_FPN_s1x.yaml DensePose_ResNet50_FPN_s1x-e2e.pkl image.jpg bbox,dp_segm -v
 ```
-![Bounding Box + Segmentation Visualization](doc/images/res_bbox_dp_segm.png)
+![Bounding Box + Segmentation Visualization](images/res_bbox_dp_segm.png)
 
 2. Show bounding box and estimated U coordinates for body parts:
 ```bash
 python apply_net.py show configs/densepose_R_50_FPN_s1x.yaml DensePose_ResNet50_FPN_s1x-e2e.pkl image.jpg bbox,dp_u -v
 ```
-![Bounding Box + U Coordinate Visualization](doc/images/res_bbox_dp_u.png)
+![Bounding Box + U Coordinate Visualization](images/res_bbox_dp_u.png)
 
 3. Show bounding box and estimated V coordinates for body parts:
 ```bash
 python apply_net.py show configs/densepose_R_50_FPN_s1x.yaml DensePose_ResNet50_FPN_s1x-e2e.pkl image.jpg bbox,dp_v -v
 ```
-![Bounding Box + V Coordinate Visualization](doc/images/res_bbox_dp_v.png)
+![Bounding Box + V Coordinate Visualization](images/res_bbox_dp_v.png)
 

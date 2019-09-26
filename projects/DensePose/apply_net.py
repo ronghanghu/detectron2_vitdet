@@ -19,9 +19,13 @@ from densepose.utils.logger import verbosity_to_level
 from densepose.vis.base import CompoundVisualizer
 from densepose.vis.bounding_box import ScoredBoundingBoxVisualizer
 from densepose.vis.densepose import (
-    DensePoseResultsSegmentationVisualizer,
+    DensePoseResultsFineSegmentationVisualizer,
     DensePoseResultsUVisualizer,
     DensePoseResultsVVisualizer,
+)
+from densepose.vis.extractor import (
+    CompoundExtractor,
+    create_extractor
 )
 
 DOC = """Apply Net - a tool to print / visualize DensePose results
@@ -64,7 +68,8 @@ class InferenceAction(Action):
     @classmethod
     def execute(cls: type, args: argparse.Namespace):
         logger.info(f"Loading config from {args.cfg}")
-        cfg = cls._setup_config(args.cfg, args.model)
+        opts = []
+        cfg = cls.setup_config(args.cfg, args.model, args, opts)
         logger.info(f"Loading model from {args.model}")
         predictor = DefaultPredictor(cfg)
         logger.info(f"Loading data from {args.input}")
@@ -81,10 +86,14 @@ class InferenceAction(Action):
         cls.postexecute(context)
 
     @classmethod
-    def _setup_config(cls: type, config_fpath: str, model_fpath: str):
+    def setup_config(
+            cls: type, config_fpath: str, model_fpath: str,
+            args: argparse.Namespace, opts: List[str]):
         cfg = get_cfg()
         add_densepose_config(cfg)
         cfg.merge_from_file(config_fpath)
+        if opts:
+            cfg.merge_from_list(opts)
         cfg.MODEL.WEIGHTS = model_fpath
         cfg.freeze()
         return cfg
@@ -129,7 +138,9 @@ class DumpAction(InferenceAction):
         )
 
     @classmethod
-    def execute_on_outputs(cls: type, context: Dict[str, Any], entry: dict, outputs: Instances):
+    def execute_on_outputs(
+            cls: type, context: Dict[str, Any], entry: Dict[str, Any],
+            outputs: Instances):
         image_fpath = entry["file_name"]
         logger.info(f"Processing {image_fpath}")
         entry["instances"] = outputs
@@ -143,6 +154,9 @@ class DumpAction(InferenceAction):
     @classmethod
     def postexecute(cls: type, context: Dict[str, Any]):
         out_fname = context["out_fname"]
+        out_dir = os.path.dirname(out_fname)
+        if len(out_dir) > 0 and not os.path.exists(out_dir):
+            os.makedirs(out_dir)
         with open(out_fname, "wb") as hFile:
             pickle.dump(context["results"], hFile)
             logger.info(f"Output saved to {out_fname}")
@@ -156,10 +170,10 @@ class ShowAction(InferenceAction):
 
     COMMAND: ClassVar[str] = "show"
     VISUALIZERS: ClassVar[Dict[str, object]] = {
-        "dp_segm": DensePoseResultsSegmentationVisualizer(),
-        "dp_u": DensePoseResultsUVisualizer(),
-        "dp_v": DensePoseResultsVVisualizer(),
-        "bbox": ScoredBoundingBoxVisualizer(min_score=0.8),
+        "dp_segm": DensePoseResultsFineSegmentationVisualizer,
+        "dp_u": DensePoseResultsUVisualizer,
+        "dp_v": DensePoseResultsVVisualizer,
+        "bbox": ScoredBoundingBoxVisualizer,
     }
 
     @classmethod
@@ -178,6 +192,20 @@ class ShowAction(InferenceAction):
             "[{}]".format(",".join(sorted(cls.VISUALIZERS.keys()))),
         )
         parser.add_argument(
+            "--min_score",
+            metavar="<score>",
+            default=0.8,
+            type=float,
+            help="Minimum detection score to visualize",
+        )
+        parser.add_argument(
+            "--nms_thresh",
+            metavar="<threshold>",
+            default=None,
+            type=float,
+            help="NMS threshold",
+        )
+        parser.add_argument(
             "--output",
             metavar="<image_file>",
             default="outputres.png",
@@ -185,22 +213,38 @@ class ShowAction(InferenceAction):
         )
 
     @classmethod
-    def execute_on_outputs(cls: type, context: Dict[str, Any], entry: dict, outputs: Instances):
+    def setup_config(
+            cls: type, config_fpath: str, model_fpath: str,
+            args: argparse.Namespace, opts: List[str]):
+        opts.append("MODEL.ROI_HEADS.SCORE_THRESH_TEST")
+        opts.append(str(args.min_score))
+        if args.nms_thresh is not None:
+            opts.append("MODEL.ROI_HEADS.NMS_THRESH_TEST")
+            opts.append(str(args.nms_thresh))
+        cfg = super(ShowAction, cls).setup_config(
+            config_fpath, model_fpath, args, opts)
+        return cfg
+
+    @classmethod
+    def execute_on_outputs(
+            cls: type, context: Dict[str, Any], entry: Dict[str, Any],
+            outputs: Instances):
         import cv2
         import numpy as np
 
         visualizer = context["visualizer"]
-
+        extractor = context["extractor"]
         image_fpath = entry["file_name"]
         logger.info(f"Processing {image_fpath}")
         image = cv2.cvtColor(entry["image"], cv2.COLOR_BGR2GRAY)
         image = np.tile(image[:, :, np.newaxis], [1, 1, 3])
-        if not outputs.has("pred_densepose"):
-            return
-        datas = cls._extract_data_for_visualizers(context["vis_specs"], outputs)
-        image_vis = visualizer.visualize(image, datas)
+        data = extractor(outputs)
+        image_vis = visualizer.visualize(image, data)
         entry_idx = context["entry_idx"] + 1
         out_fname = cls._get_out_fname(entry_idx, context["out_fname"])
+        out_dir = os.path.dirname(out_fname)
+        if len(out_dir) > 0 and not os.path.exists(out_dir):
+            os.makedirs(out_dir)
         cv2.imwrite(out_fname, image_vis)
         logger.info(f"Output saved to {out_fname}")
         context["entry_idx"] += 1
@@ -218,47 +262,21 @@ class ShowAction(InferenceAction):
     def create_context(cls: type, args: argparse.Namespace) -> Dict[str, Any]:
         vis_specs = args.visualizations.split(",")
         visualizers = []
+        extractors = []
         for vis_spec in vis_specs:
-            vis = cls.VISUALIZERS[vis_spec]
+            vis = cls.VISUALIZERS[vis_spec]()
             visualizers.append(vis)
+            extractor = create_extractor(vis)
+            extractors.append(extractor)
+        visualizer = CompoundVisualizer(visualizers)
+        extractor = CompoundExtractor(extractors)
         context = {
-            "vis_specs": vis_specs,
-            "visualizer": CompoundVisualizer(visualizers),
+            "extractor": extractor,
+            "visualizer": visualizer,
             "out_fname": args.output,
             "entry_idx": 0,
         }
         return context
-
-    @classmethod
-    def _extract_data_for_visualizers(cls: type, vis_specs: List[str], instances: Instances):
-        boxes_xywh = instances.pred_boxes.tensor
-        boxes_xywh[:, 2] -= boxes_xywh[:, 0]
-        boxes_xywh[:, 3] -= boxes_xywh[:, 1]
-        scores = instances.scores
-        dp_results = instances.pred_densepose.to_result(boxes_xywh)
-        datas = []
-        for vis_spec in vis_specs:
-            datas.append((boxes_xywh, scores) if "bbox" == vis_spec else dp_results)
-        return datas
-
-    @classmethod
-    def _extract_data_for_visualizers_from_entry(
-        cls: type, vis_specs: List[str], entry: Dict[str, Any]
-    ):
-        dp_list = []
-        bbox_list = []
-        for annotation in entry["annotations"]:
-            is_valid, _ = DensePoseDataRelative.validate_annotation(annotation)
-            if not is_valid:
-                continue
-            bbox = torch.as_tensor(annotation["bbox"])
-            bbox_list.append(bbox)
-            dp_data = DensePoseDataRelative(annotation)
-            dp_list.append(dp_data)
-        datas = []
-        for vis_spec in vis_specs:
-            datas.append(bbox_list if "bbox" == vis_spec else (bbox_list, dp_list))
-        return datas
 
 
 def create_argument_parser() -> argparse.ArgumentParser:

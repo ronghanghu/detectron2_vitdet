@@ -12,14 +12,13 @@ class BoundingBoxVisualizer(object):
 
 
 class ScoredBoundingBoxVisualizer(object):
-    def __init__(self, min_score=0, bbox_visualizer_params=None, score_visualizer_params=None):
+    def __init__(self, bbox_visualizer_params=None, score_visualizer_params=None):
         if bbox_visualizer_params is None:
             bbox_visualizer_params = {}
         if score_visualizer_params is None:
             score_visualizer_params = {}
         self.visualizer_bbox = RectangleVisualizer(**bbox_visualizer_params)
         self.visualizer_score = TextVisualizer(**score_visualizer_params)
-        self.min_score = min_score
 
     def visualize(self, image_bgr, scored_bboxes):
         boxes_xywh, box_scores = scored_bboxes
@@ -29,9 +28,8 @@ class ScoredBoundingBoxVisualizer(object):
         )
         for i, box_xywh in enumerate(boxes_xywh):
             score_i = box_scores[i]
-            if score_i >= self.min_score:
-                image_bgr = self.visualizer_bbox.visualize(image_bgr, box_xywh)
-                score_txt = "{0:6.4f}".format(score_i)
+            image_bgr = self.visualizer_bbox.visualize(image_bgr, box_xywh)
+            score_txt = "{0:6.4f}".format(score_i)
             topleft_xy = box_xywh[0], box_xywh[1]
             image_bgr = self.visualizer_score.visualize(image_bgr, score_txt, topleft_xy)
         return image_bgr

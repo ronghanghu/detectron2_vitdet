@@ -1,8 +1,9 @@
 import numpy as np
 import cv2
+from typing import Optional, Tuple, Iterable
 
 from ..structures import DensePoseDataRelative, DensePoseOutput, DensePoseResult
-from .base import MatrixVisualizer, PointsVisualizer
+from .base import MatrixVisualizer, PointsVisualizer, Boxes, Image
 
 
 class DensePoseResultsVisualizer(object):
@@ -21,7 +22,12 @@ class DensePoseResultsVisualizer(object):
         self.data_extractor = data_extractor
         self.segm_extractor = segm_extractor
 
-    def visualize(self, image_bgr, densepose_result: DensePoseResult):
+    def visualize(
+            self,
+            image_bgr: Image,
+            densepose_result: Optional[DensePoseResult]) -> Image:
+        if densepose_result is None:
+            return image_bgr
         for i, result_encoded_w_shape in enumerate(densepose_result.results):
             iuv_arr = DensePoseResult.decode_png_data(*result_encoded_w_shape)
             bbox_xywh = densepose_result.boxes_xywh[i]
@@ -45,15 +51,15 @@ def _extract_v_from_iuvarr(iuv_arr):
     return iuv_arr[2, :, :]
 
 
-class DensePoseResultsSegmentationVisualizer(DensePoseResultsVisualizer):
+class DensePoseResultsFineSegmentationVisualizer(DensePoseResultsVisualizer):
     def __init__(self, inplace=True, cmap=cv2.COLORMAP_PARULA, alpha=0.7):
-        super(DensePoseResultsSegmentationVisualizer, self).__init__(
+        super(DensePoseResultsFineSegmentationVisualizer, self).__init__(
             _extract_i_from_iuvarr,
             _extract_i_from_iuvarr,
             inplace,
             cmap,
             alpha,
-            val_scale=255.0 / (DensePoseDataRelative.N_BODY_PARTS + 1),
+            val_scale=255.0 / DensePoseDataRelative.N_PART_LABELS,
         )
 
 
@@ -71,20 +77,23 @@ class DensePoseResultsVVisualizer(DensePoseResultsVisualizer):
         )
 
 
-class DensePoseOutputsSegmentationVisualizer(object):
+class DensePoseOutputsFineSegmentationVisualizer(object):
     def __init__(self, inplace=True, cmap=cv2.COLORMAP_PARULA, alpha=0.7):
         self.mask_visualizer = MatrixVisualizer(
             inplace=inplace,
             cmap=cmap,
-            val_scale=255.0 / (DensePoseDataRelative.N_BODY_PARTS + 1),
+            val_scale=255.0 / DensePoseDataRelative.N_PART_LABELS,
             alpha=alpha,
         )
 
-    def visualize(self, image_bgr, densepose_output_with_bboxes):
-        densepose_output, bboxes_xywh = densepose_output_with_bboxes
-        assert isinstance(
-            densepose_output, DensePoseOutput
-        ), "DensePoseOutput expected, {} encountered".format(type(densepose_output))
+    def visualize(
+            self,
+            image_bgr: Image,
+            dp_output_with_bboxes: Optional[Tuple[DensePoseOutput, Boxes]]) \
+            -> Image:
+        if dp_output_with_bboxes is None:
+            return image_bgr
+        densepose_output, bboxes_xywh = dp_output_with_bboxes
         S = densepose_output.S
         I = densepose_output.I  # noqa
         U = densepose_output.U
@@ -123,8 +132,14 @@ class DensePoseOutputsUVisualizer(object):
             inplace=inplace, cmap=cmap, val_scale=1.0, alpha=alpha
         )
 
-    def visualize(self, image_bgr, densepose_output_with_bboxes):
-        densepose_output, bboxes_xywh = densepose_output_with_bboxes
+    def visualize(
+            self,
+            image_bgr: Image,
+            dp_output_with_bboxes: Optional[Tuple[DensePoseOutput, Boxes]]) \
+            -> Image:
+        if dp_output_with_bboxes is None:
+            return image_bgr
+        densepose_output, bboxes_xywh = dp_output_with_bboxes
         assert isinstance(
             densepose_output, DensePoseOutput
         ), "DensePoseOutput expected, {} encountered".format(type(densepose_output))
@@ -170,8 +185,14 @@ class DensePoseOutputsVVisualizer(object):
             inplace=inplace, cmap=cmap, val_scale=1.0, alpha=alpha
         )
 
-    def visualize(self, image_bgr, densepose_output_with_bboxes):
-        densepose_output, bboxes_xywh = densepose_output_with_bboxes
+    def visualize(
+            self,
+            image_bgr: Image,
+            dp_output_with_bboxes: Optional[Tuple[DensePoseOutput, Boxes]]) \
+            -> Image:
+        if dp_output_with_bboxes is None:
+            return image_bgr
+        densepose_output, bboxes_xywh = dp_output_with_bboxes
         assert isinstance(
             densepose_output, DensePoseOutput
         ), "DensePoseOutput expected, {} encountered".format(type(densepose_output))
@@ -211,7 +232,7 @@ class DensePoseOutputsVVisualizer(object):
         return image_bgr
 
 
-class DensePoseDataSegmentationVisualizer(object):
+class DensePoseDataCoarseSegmentationVisualizer(object):
     """
     Visualizer for ground truth segmentation
     """
@@ -220,16 +241,24 @@ class DensePoseDataSegmentationVisualizer(object):
         self.mask_visualizer = MatrixVisualizer(
             inplace=inplace,
             cmap=cmap,
-            val_scale=255.0 / (DensePoseDataRelative.N_BODY_PARTS + 1),
+            val_scale=255.0 / DensePoseDataRelative.N_BODY_PARTS,
             alpha=alpha,
         )
 
-    def visualize(self, image_bgr, bbox_densepose_list):
-        for bbox_xywh, densepose_data in zip(*bbox_densepose_list):
+    def visualize(
+            self,
+            image_bgr : Image,
+            bbox_densepose_datas:
+            Optional[Tuple[Iterable[Boxes], Iterable[DensePoseDataRelative]]]) \
+            -> Image:
+        if bbox_densepose_datas is None:
+            return image_bgr
+        for bbox_xywh, densepose_data in zip(*bbox_densepose_datas):
             matrix = densepose_data.segm.numpy()
             mask = np.zeros(matrix.shape, dtype=np.uint8)
             mask[matrix > 0] = 1
-            image_bgr = self.mask_visualizer.visualize(image_bgr, mask, matrix, bbox_xywh.numpy())
+            image_bgr = self.mask_visualizer.visualize(
+                image_bgr, mask, matrix, bbox_xywh.numpy())
         return image_bgr
 
 
@@ -239,9 +268,15 @@ class DensePoseDataPointsVisualizer(object):
         self.densepose_data_to_value_fn = densepose_data_to_value_fn
         self.cmap = cmap
 
-    def visualize(self, image_bgr, bbox_densepose_list):
-        bbox_list, densepose_list = bbox_densepose_list
-        for bbox_xywh, densepose_data in zip(*bbox_densepose_list):
+    def visualize(
+            self,
+            image_bgr: Image,
+            bbox_densepose_datas:
+            Optional[Tuple[Iterable[Boxes], Iterable[DensePoseDataRelative]]]) \
+            -> Image:
+        if bbox_densepose_datas is None:
+            return image_bgr
+        for bbox_xywh, densepose_data in zip(*bbox_densepose_datas):
             x0, y0, w, h = bbox_xywh.numpy()
             x = densepose_data.x.numpy() * w / 255.0 + x0
             y = densepose_data.y.numpy() * h / 255.0 + y0
@@ -252,9 +287,11 @@ class DensePoseDataPointsVisualizer(object):
                 v = self.densepose_data_to_value_fn(densepose_data)
                 img_colors_bgr = cv2.applyColorMap(v, self.cmap)
                 colors_bgr = [
-                    [int(v) for v in img_color_bgr.ravel()] for img_color_bgr in img_colors_bgr
+                    [int(v) for v in img_color_bgr.ravel()]
+                    for img_color_bgr in img_colors_bgr
                 ]
-                image_bgr = self.points_visualizer.visualize(image_bgr, pts_xy, colors_bgr)
+                image_bgr = self.points_visualizer.visualize(
+                    image_bgr, pts_xy, colors_bgr)
         return image_bgr
 
 
@@ -269,7 +306,10 @@ def _densepose_data_v_for_cmap(densepose_data):
 
 
 def _densepose_data_i_for_cmap(densepose_data):
-    i = np.clip(densepose_data.i.numpy(), 0.0, 25.0) * (255.0 / 25.0)
+    i = np.clip(
+        densepose_data.i.numpy(),
+        0.0, DensePoseDataRelative.N_PART_LABELS) * \
+        255.0 / DensePoseDataRelative.N_PART_LABELS
     return i.astype(np.uint8)
 
 
