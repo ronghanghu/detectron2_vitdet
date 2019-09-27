@@ -117,7 +117,7 @@ class COCOEvaluator(DatasetEvaluator):
             self._predictions = list(itertools.chain(*self._predictions))
 
             if not comm.is_main_process():
-                return
+                return {}
 
         if len(self._predictions) == 0:
             self._logger.warning("[COCOEvaluator] Did not receive valid predictions.")

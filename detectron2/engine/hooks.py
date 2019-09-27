@@ -296,6 +296,10 @@ class EvalHook(HookBase):
             results = self._func()
 
             if results:
+                assert isinstance(
+                    results, dict
+                ), "Eval function must return a dict. Got {} instead.".format(results)
+
                 self.trainer.storage.put_scalars(
                     **flatten_results_dict(results), smoothing_hint=False
                 )

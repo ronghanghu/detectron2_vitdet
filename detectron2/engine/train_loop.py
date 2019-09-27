@@ -147,6 +147,10 @@ class SimpleTrainer(TrainerBase):
     """
     A simple trainer for the most common type of task:
     single-cost single-optimizer single-data-source iterative optimization.
+    It assumes that every step, you:
+    1. Compute the loss with a data from the data_loader.
+    2. Compute the gradients with the above loss.
+    3. Update the model with the optimizer.
 
     If you want to do anything fancier than this,
     either subclass TrainerBase and implement your own `run_step`,
@@ -200,7 +204,25 @@ class SimpleTrainer(TrainerBase):
         # gather metrics among all workers for logging
         metrics_dict = {k: v.detach().cpu().item() for k, v in loss_dict.items()}
         metrics_dict["data_time"] = data_time
+        # This assumes we do DDP-style training, which is currently the only
+        # supported method in detectron2.
         all_metrics_dict = comm.gather(metrics_dict)
+        self._write_metrics(all_metrics_dict)
+
+        self.optimizer.zero_grad()
+        losses.backward()
+
+        """
+        If you need gradient clipping/scaling or other processing, you can
+        wrap the optimizer with your custom `step()` method.
+        """
+        self.optimizer.step()
+
+    def _write_metrics(self, all_metrics_dict):
+        """
+        Args:
+            all_metrics_dict (list[dict]): list of metrics dict from all workers
+        """
         if comm.is_main_process():
             # data_time among workers can have high variance. The actual latency
             # caused by data_time is the maximum among workers.
@@ -214,12 +236,3 @@ class SimpleTrainer(TrainerBase):
             self.storage.put_scalars(data_time=data_time, total_loss=total_losses_reduced)
             if len(metrics_dict) > 1:
                 self.storage.put_scalars(**metrics_dict)
-
-        self.optimizer.zero_grad()
-        losses.backward()
-
-        """
-        If you need gradient clipping/scaling or other processing, you can
-        wrap the optimizer with your custom `step()` method.
-        """
-        self.optimizer.step()

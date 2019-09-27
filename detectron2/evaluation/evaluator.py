@@ -82,8 +82,8 @@ def inference_on_dataset(model, data_loader, evaluator):
     Run model (in eval mode) on the data_loader and evaluate the metrics with evaluator.
 
     Args:
-        model: a callable which takes an object from `data_loader` and returns some outputs.
-            It will be temporarily set to `eval` mode.
+        model (nn.Module): a module which accepts an object from
+            `data_loader` and returns some outputs. It will be temporarily set to `eval` mode.
 
             If you wish to evaluate a model in `training` mode instead, you can
             wrap the given model and override its behavior of `.eval()` and `.train()`.
