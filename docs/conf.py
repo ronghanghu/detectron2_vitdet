@@ -50,7 +50,7 @@ except ImportError:
         "torch.nn.modules.utils",
     ]:
         sys.modules[m] = mock.Mock(name=m)
-for m in ["cv2", "scipy", "tensorboardX", "portalocker"]:
+for m in ["cv2", "scipy", "portalocker"]:
     sys.modules[m] = mock.Mock(name=m)
 sys.modules["cv2"].__version__ = "3.4"
 

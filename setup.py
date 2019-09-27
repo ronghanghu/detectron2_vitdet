@@ -67,7 +67,6 @@ setup(
         "Pillow",
         "yacs>=0.1.6",
         "tabulate",
-        "tensorboardX",
         "cloudpickle",
         "matplotlib",
         "tqdm>4.29.0",
