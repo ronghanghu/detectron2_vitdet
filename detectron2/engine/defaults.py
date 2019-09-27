@@ -369,8 +369,6 @@ class DefaultTrainer(SimpleTrainer):
                     results_i
                 )
                 logger.info("Evaluation results for {} in csv format:".format(dataset_name))
-                # TODO this changes behavior.
-                # in the past it is only printed once
                 print_csv_format(results_i)
 
         if len(results) == 1:

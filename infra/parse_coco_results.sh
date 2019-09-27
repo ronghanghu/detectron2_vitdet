@@ -27,12 +27,14 @@ echo "$trainspeed","$inferencespeed","$memory"
 
 echo "------------------------------"
 
-# INFO [12/26 17:26:32] engine.coco_evaluation: copypaste: Task: bbox
-# INFO [12/26 17:26:32] engine.coco_evaluation: copypaste: AP,AP50,AP75,APs,APm,APl
-# INFO [12/26 17:26:32] engine.coco_evaluation: copypaste: 0.0017,0.0024,0.0017,0.0005,0.0019,0.0011
-# INFO [12/26 17:26:32] engine.coco_evaluation: copypaste: Task: segm
-# INFO [12/26 17:26:32] engine.coco_evaluation: copypaste: AP,AP50,AP75,APs,APm,APl
-# INFO [12/26 17:26:32] engine.coco_evaluation: copypaste: 0.0014,0.0021,0.0016,0.0005,0.0016,0.0011
+# [12/26 17:26:32] engine.coco_evaluation: copypaste: Task: bbox
+# [12/26 17:26:32] engine.coco_evaluation: copypaste: AP,AP50,AP75,APs,APm,APl
+# [12/26 17:26:32] engine.coco_evaluation: copypaste: 0.0017,0.0024,0.0017,0.0005,0.0019,0.0011
+# [12/26 17:26:32] engine.coco_evaluation: copypaste: Task: segm
+# [12/26 17:26:32] engine.coco_evaluation: copypaste: AP,AP50,AP75,APs,APm,APl
+# [12/26 17:26:32] engine.coco_evaluation: copypaste: 0.0014,0.0021,0.0016,0.0005,0.0016,0.0011
 
 echo "COCO Results:"
-grep -o 'copypaste:.*' "$LOG" | cut -d ' ' -f 2-
+num_tasks=$(grep -o 'copypaste:.*Task.*' "$LOG" | sort -u | wc -l)
+# each task has 3 lines
+grep -o 'copypaste:.*' "$LOG" | cut -d ' ' -f 2- | tail -n $((num_tasks * 3))
