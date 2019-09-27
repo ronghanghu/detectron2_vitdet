@@ -97,7 +97,7 @@ def do_test(cfg, model, is_final=True):
     Returns:
         A dict of dicts. result[task][metric] is a float.
     """
-    assert len(cfg.DATASETS.TEST) == 1, (
+    assert len(cfg.DATASETS.TEST) <= 1, (
         "The current do_test is only implemented for one test set. "
         "Write a for-loop if you'd like to evaluate more datasets."
     )
