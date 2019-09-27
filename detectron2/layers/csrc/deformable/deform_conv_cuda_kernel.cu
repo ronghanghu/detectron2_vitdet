@@ -17,6 +17,7 @@
 // https://github.com/chengdazhi/Deformable-Convolution-V2-PyTorch/blob/mmdetection/mmdet/ops/dcn/src/deform_conv_cuda_kernel.cu
 
 #include <ATen/ATen.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <float.h>
 #include <math.h>
 #include <stdio.h>
@@ -255,6 +256,9 @@ void deformable_im2col(
   int num_kernels = channels * height_col * width_col * parallel_imgs;
   int channel_per_deformable_group = channels / deformable_group;
 
+  at::cuda::CUDAGuard device_guard(data_im.device());
+  cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+
   AT_DISPATCH_FLOATING_TYPES_AND_HALF(
       data_im.type(), "deformable_im2col_gpu", ([&] {
         const scalar_t* data_im_ = data_im.data_ptr<scalar_t>();
@@ -263,7 +267,9 @@ void deformable_im2col(
 
         deformable_im2col_gpu_kernel<<<
             GET_BLOCKS(num_kernels),
-            CUDA_NUM_THREADS>>>(
+            CUDA_NUM_THREADS,
+            0,
+            stream>>>(
             num_kernels,
             data_im_,
             data_offset_,
@@ -392,6 +398,9 @@ void deformable_col2im(
       channels * ksize_h * ksize_w * height_col * width_col * parallel_imgs;
   int channel_per_deformable_group = channels / deformable_group;
 
+  at::cuda::CUDAGuard device_guard(data_col.device());
+  cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+
   AT_DISPATCH_FLOATING_TYPES_AND_HALF(
       data_col.type(), "deformable_col2im_gpu", ([&] {
         const scalar_t* data_col_ = data_col.data_ptr<scalar_t>();
@@ -400,7 +409,9 @@ void deformable_col2im(
 
         deformable_col2im_gpu_kernel<<<
             GET_BLOCKS(num_kernels),
-            CUDA_NUM_THREADS>>>(
+            CUDA_NUM_THREADS,
+            0,
+            stream>>>(
             num_kernels,
             data_col_,
             data_offset_,
@@ -544,6 +555,9 @@ void deformable_col2im_coord(
   int channel_per_deformable_group =
       channels * ksize_h * ksize_w / deformable_group;
 
+  at::cuda::CUDAGuard device_guard(data_col.device());
+  cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+
   AT_DISPATCH_FLOATING_TYPES_AND_HALF(
       data_col.type(), "deformable_col2im_coord_gpu", ([&] {
         const scalar_t* data_col_ = data_col.data_ptr<scalar_t>();
@@ -553,7 +567,9 @@ void deformable_col2im_coord(
 
         deformable_col2im_coord_gpu_kernel<<<
             GET_BLOCKS(num_kernels),
-            CUDA_NUM_THREADS>>>(
+            CUDA_NUM_THREADS,
+            0,
+            stream>>>(
             num_kernels,
             data_col_,
             data_im_,
@@ -1006,6 +1022,9 @@ void modulated_deformable_im2col_cuda(
   const int channel_per_deformable_group = channels / deformable_group;
   const int num_kernels = channels * batch_size * height_col * width_col;
 
+  at::cuda::CUDAGuard device_guard(data_im.device());
+  cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+
   AT_DISPATCH_FLOATING_TYPES_AND_HALF(
       data_im.type(), "modulated_deformable_im2col_gpu", ([&] {
         const scalar_t* data_im_ = data_im.data_ptr<scalar_t>();
@@ -1015,7 +1034,9 @@ void modulated_deformable_im2col_cuda(
 
         modulated_deformable_im2col_gpu_kernel<<<
             GET_BLOCKS(num_kernels),
-            CUDA_NUM_THREADS>>>(
+            CUDA_NUM_THREADS,
+            0,
+            stream>>>(
             num_kernels,
             data_im_,
             data_offset_,
@@ -1071,6 +1092,9 @@ void modulated_deformable_col2im_cuda(
   const int num_kernels =
       channels * kernel_h * kernel_w * batch_size * height_col * width_col;
 
+  at::cuda::CUDAGuard device_guard(data_col.device());
+  cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+
   AT_DISPATCH_FLOATING_TYPES_AND_HALF(
       data_col.type(), "modulated_deformable_col2im_gpu", ([&] {
         const scalar_t* data_col_ = data_col.data_ptr<scalar_t>();
@@ -1080,7 +1104,9 @@ void modulated_deformable_col2im_cuda(
 
         modulated_deformable_col2im_gpu_kernel<<<
             GET_BLOCKS(num_kernels),
-            CUDA_NUM_THREADS>>>(
+            CUDA_NUM_THREADS,
+            0,
+            stream>>>(
             num_kernels,
             data_col_,
             data_offset_,
@@ -1139,6 +1165,9 @@ void modulated_deformable_col2im_coord_cuda(
   const int channel_per_deformable_group =
       channels * kernel_h * kernel_w / deformable_group;
 
+  at::cuda::CUDAGuard device_guard(data_col.device());
+  cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+
   AT_DISPATCH_FLOATING_TYPES_AND_HALF(
       data_col.type(), "modulated_deformable_col2im_coord_gpu", ([&] {
         const scalar_t* data_col_ = data_col.data_ptr<scalar_t>();
@@ -1150,7 +1179,9 @@ void modulated_deformable_col2im_coord_cuda(
 
         modulated_deformable_col2im_coord_gpu_kernel<<<
             GET_BLOCKS(num_kernels),
-            CUDA_NUM_THREADS>>>(
+            CUDA_NUM_THREADS,
+            0,
+            stream>>>(
             num_kernels,
             data_col_,
             data_im_,
