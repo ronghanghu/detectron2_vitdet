@@ -5,10 +5,7 @@ from detectron2.structures.instances import Instances
 from detectron2.layers.nms import batched_nms
 from .base import CompoundVisualizer
 from densepose.vis.densepose import DensePoseResultsVisualizer
-from densepose.vis.bounding_box import (
-    BoundingBoxVisualizer,
-    ScoredBoundingBoxVisualizer,
-)
+from densepose.vis.bounding_box import BoundingBoxVisualizer, ScoredBoundingBoxVisualizer
 
 
 Scores = Sequence[float]
@@ -39,8 +36,7 @@ def create_extractor(visualizer: object):
     elif isinstance(visualizer, DensePoseResultsVisualizer):
         return DensePoseResultExtractor()
     elif isinstance(visualizer, ScoredBoundingBoxVisualizer):
-        return CompoundExtractor([
-            extract_boxes_xywh_from_instances, extract_scores_from_instances])
+        return CompoundExtractor([extract_boxes_xywh_from_instances, extract_scores_from_instances])
     elif isinstance(visualizer, BoundingBoxVisualizer):
         return extract_boxes_xywh_from_instances
     else:
@@ -53,6 +49,7 @@ class BoundingBoxExtractor(object):
     """
     Extracts bounding boxes from instances
     """
+
     def __call__(self, instances: Instances):
         boxes_xywh = extract_boxes_xywh_from_instances(instances)
         return boxes_xywh
@@ -62,6 +59,7 @@ class ScoredBoundingBoxExtractor(object):
     """
     Extracts bounding boxes from instances
     """
+
     def __call__(self, instances: Instances, select=None):
         scores = extract_scores_from_instances(instances)
         boxes_xywh = extract_boxes_xywh_from_instances(instances)
@@ -77,6 +75,7 @@ class DensePoseResultExtractor(object):
     """
     Extracts DensePose result from instances
     """
+
     def __call__(self, instances: Instances, select=None):
         boxes_xywh = extract_boxes_xywh_from_instances(instances)
         if instances.has("pred_densepose") and (boxes_xywh is not None):
@@ -93,6 +92,7 @@ class CompoundExtractor(object):
     """
     Extracts data for CompoundVisualizer
     """
+
     def __init__(self, extractors):
         self.extractors = extractors
 
@@ -108,6 +108,7 @@ class NmsFilteredExtractor(object):
     """
     Extracts data in the format accepted by NmsFilteredVisualizer
     """
+
     def __init__(self, extractor, iou_threshold):
         self.extractor = extractor
         self.iou_threshold = iou_threshold
@@ -121,7 +122,8 @@ class NmsFilteredExtractor(object):
             boxes_xywh,
             scores,
             torch.zeros(len(scores), dtype=torch.int32),
-            iou_threshold=self.iou_threshold).squeeze()
+            iou_threshold=self.iou_threshold,
+        ).squeeze()
         select_local = torch.zeros(len(boxes_xywh), dtype=torch.bool, device=boxes_xywh.device)
         select_local[select_local_idx] = True
         select = select_local if select is None else (select & select_local)
@@ -132,6 +134,7 @@ class ScoreThresholdedExtractor(object):
     """
     Extracts data in the format accepted by ScoreThresholdedVisualizer
     """
+
     def __init__(self, extractor, min_score):
         self.extractor = extractor
         self.min_score = min_score
@@ -140,7 +143,7 @@ class ScoreThresholdedExtractor(object):
         scores = extract_scores_from_instances(instances)
         if scores is None:
             return None
-        select_local = (scores > self.min_score)
+        select_local = scores > self.min_score
         select = select_local if select is None else (select & select_local)
         data = self.extractor(instances, select=select)
         return data

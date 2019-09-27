@@ -132,20 +132,36 @@ class _PanopticPrediction:
             if sid in self._sinfo:
                 self._sinfo[sid]["area"] = float(area)
 
+    def non_empty_mask(self):
+        """
+        Returns:
+            (H, W) array, a mask for all pixels that have a prediction
+        """
+        empty_ids = []
+        for id in self._seg_ids:
+            if id not in self._sinfo:
+                empty_ids.append(id)
+        if len(empty_ids) == 0:
+            return np.zeros(self._seg.shape, dtype=np.uint8)
+        assert (
+            len(empty_ids) == 1
+        ), ">1 ids corresponds to no labels. This is currently not supported"
+        return (self._seg != empty_ids[0]).numpy().astype(np.bool)
+
     def semantic_masks(self):
         for sid in self._seg_ids:
             sinfo = self._sinfo.get(sid)
             if sinfo is None or sinfo["isthing"]:
                 # Some pixels (e.g. id 0 in PanopticFPN) have no instance or semantic predictions.
                 continue
-            yield (self._seg == sid).numpy().astype(np.uint8), sinfo
+            yield (self._seg == sid).numpy().astype(np.bool), sinfo
 
     def instance_masks(self):
         for sid in self._seg_ids:
             sinfo = self._sinfo.get(sid)
             if sinfo is None or not sinfo["isthing"]:
                 continue
-            mask = (self._seg == sid).numpy().astype(np.uint8)
+            mask = (self._seg == sid).numpy().astype(np.bool)
             if mask.sum() > 0:
                 yield mask, sinfo
 
@@ -304,12 +320,9 @@ class Visualizer:
             alpha = 0.5
 
         if self._instance_mode == ColorMode.IMAGE_BW:
-            img_bw = self.img.astype("f4").mean(axis=2)
-            img_bw = np.stack([img_bw] * 3, axis=2)
-            if masks is not None:
-                visible = masks.any(dim=0).numpy() > 0
-                img_bw[visible] = self.img[visible]
-            self.output.ax.imshow(img_bw.astype("uint8"))
+            self.output.img = self._create_grayscale_image(
+                (predictions.pred_masks.any(dim=0) > 0).numpy()
+            )
             alpha = 0.3
 
         self.overlay_instances(
@@ -372,6 +385,9 @@ class Visualizer:
             output (VisImage): image object with visualizations.
         """
         pred = _PanopticPrediction(panoptic_seg, segments_info)
+
+        if self._instance_mode == ColorMode.IMAGE_BW:
+            self.output.img = self._create_grayscale_image(pred.non_empty_mask())
 
         # draw mask for all semantic segments first i.e. "stuff"
         for mask, sinfo in pred.semantic_masks():
@@ -743,6 +759,7 @@ class Visualizer:
 
         # TODO handle masks with holes
         has_valid_segment = False
+        binary_mask = binary_mask.astype("uint8")  # opencv needs uint8
         mask = GenericMask(binary_mask, self.output.height, self.output.width)
         for segment in mask.polygons:
             area = mask_util.area(
@@ -820,6 +837,17 @@ class Visualizer:
         vec = vec / np.linalg.norm(vec) * 0.5
         res = np.clip(vec + color, 0, 1)
         return tuple(res)
+
+    def _create_grayscale_image(self, mask=None):
+        """
+        Create a grayscale version of the original image.
+        The colors in masked area, if given, will be kept.
+        """
+        img_bw = self.img.astype("f4").mean(axis=2)
+        img_bw = np.stack([img_bw] * 3, axis=2)
+        if mask is not None:
+            img_bw[mask] = self.img[mask]
+        return img_bw
 
     def _change_color_brightness(self, color, brightness_factor):
         """

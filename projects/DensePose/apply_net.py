@@ -14,7 +14,6 @@ from detectron2.structures.instances import Instances
 from detectron2.utils.logger import setup_logger
 
 from densepose import add_densepose_config
-from densepose.structures import DensePoseDataRelative
 from densepose.utils.logger import verbosity_to_level
 from densepose.vis.base import CompoundVisualizer
 from densepose.vis.bounding_box import ScoredBoundingBoxVisualizer
@@ -23,10 +22,7 @@ from densepose.vis.densepose import (
     DensePoseResultsUVisualizer,
     DensePoseResultsVVisualizer,
 )
-from densepose.vis.extractor import (
-    CompoundExtractor,
-    create_extractor
-)
+from densepose.vis.extractor import CompoundExtractor, create_extractor
 
 DOC = """Apply Net - a tool to print / visualize DensePose results
 """
@@ -87,8 +83,8 @@ class InferenceAction(Action):
 
     @classmethod
     def setup_config(
-            cls: type, config_fpath: str, model_fpath: str,
-            args: argparse.Namespace, opts: List[str]):
+        cls: type, config_fpath: str, model_fpath: str, args: argparse.Namespace, opts: List[str]
+    ):
         cfg = get_cfg()
         add_densepose_config(cfg)
         cfg.merge_from_file(config_fpath)
@@ -139,8 +135,8 @@ class DumpAction(InferenceAction):
 
     @classmethod
     def execute_on_outputs(
-            cls: type, context: Dict[str, Any], entry: Dict[str, Any],
-            outputs: Instances):
+        cls: type, context: Dict[str, Any], entry: Dict[str, Any], outputs: Instances
+    ):
         image_fpath = entry["file_name"]
         logger.info(f"Processing {image_fpath}")
         entry["instances"] = outputs
@@ -199,11 +195,7 @@ class ShowAction(InferenceAction):
             help="Minimum detection score to visualize",
         )
         parser.add_argument(
-            "--nms_thresh",
-            metavar="<threshold>",
-            default=None,
-            type=float,
-            help="NMS threshold",
+            "--nms_thresh", metavar="<threshold>", default=None, type=float, help="NMS threshold"
         )
         parser.add_argument(
             "--output",
@@ -214,21 +206,20 @@ class ShowAction(InferenceAction):
 
     @classmethod
     def setup_config(
-            cls: type, config_fpath: str, model_fpath: str,
-            args: argparse.Namespace, opts: List[str]):
+        cls: type, config_fpath: str, model_fpath: str, args: argparse.Namespace, opts: List[str]
+    ):
         opts.append("MODEL.ROI_HEADS.SCORE_THRESH_TEST")
         opts.append(str(args.min_score))
         if args.nms_thresh is not None:
             opts.append("MODEL.ROI_HEADS.NMS_THRESH_TEST")
             opts.append(str(args.nms_thresh))
-        cfg = super(ShowAction, cls).setup_config(
-            config_fpath, model_fpath, args, opts)
+        cfg = super(ShowAction, cls).setup_config(config_fpath, model_fpath, args, opts)
         return cfg
 
     @classmethod
     def execute_on_outputs(
-            cls: type, context: Dict[str, Any], entry: Dict[str, Any],
-            outputs: Instances):
+        cls: type, context: Dict[str, Any], entry: Dict[str, Any], outputs: Instances
+    ):
         import cv2
         import numpy as np
 

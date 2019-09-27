@@ -6,6 +6,7 @@ import torch
 Image = np.ndarray
 Boxes = torch.Tensor
 
+
 class MatrixVisualizer(object):
     """
     Base visualizer for matrix data
@@ -44,8 +45,8 @@ class MatrixVisualizer(object):
         if np.any(matrix_scaled > 255 + _EPSILON):
             logger = logging.getLogger(__name__)
             logger.warning(
-                f"Matrix has values > {255 + _EPSILON} after "
-                f"scaling, clipping to [0..255]")
+                f"Matrix has values > {255 + _EPSILON} after " f"scaling, clipping to [0..255]"
+            )
         matrix_scaled_8u = matrix_scaled.clip(0, 255).astype(np.uint8)
         matrix_vis = cv2.applyColorMap(matrix_scaled_8u, self.cmap)
         matrix_vis[mask_bg] = image_target_bgr[y : y + h, x : x + w, :][mask_bg]

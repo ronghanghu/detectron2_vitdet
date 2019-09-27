@@ -89,13 +89,11 @@ class VideoVisualizer:
         labels = _create_text_labels(classes, scores, self.metadata.class_names)
 
         if self._instance_mode == ColorMode.IMAGE_BW:
-            img_bw = frame.astype("f4").mean(axis=2)
-            img_bw = np.stack([img_bw] * 3, axis=2)
-            if masks is not None:
-                visible = masks.any(dim=0).numpy() > 0
-                img_bw[visible] = frame[visible]
-            frame_visualizer.output.ax.imshow(img_bw.astype("uint8"))
-            alpha = 0.4
+            # any() returns uint8 tensor
+            frame_visualizer.output.img = frame_visualizer._create_grayscale_image(
+                (masks.any(dim=0) > 0).numpy() if masks is not None else None
+            )
+            alpha = 0.3
         else:
             alpha = 0.5
 
@@ -122,6 +120,11 @@ class VideoVisualizer:
         frame_visualizer = Visualizer(frame, self.metadata)
         pred = _PanopticPrediction(panoptic_seg, segments_info)
 
+        if self._instance_mode == ColorMode.IMAGE_BW:
+            frame_visualizer.output.img = frame_visualizer._create_grayscale_image(
+                pred.non_empty_mask()
+            )
+
         # draw mask for all semantic segments first i.e. "stuff"
         for mask, sinfo in pred.semantic_masks():
             category_idx = sinfo["category_id"]
@@ -144,7 +147,9 @@ class VideoVisualizer:
         # draw mask for all instances second
         masks, sinfo = list(zip(*all_instances))
         num_instances = len(masks)
-        masks_rles = mask_util.encode(np.asarray(np.asarray(masks).transpose(1, 2, 0), order="F"))
+        masks_rles = mask_util.encode(
+            np.asarray(np.asarray(masks).transpose(1, 2, 0), dtype=np.uint8, order="F")
+        )
         assert len(masks_rles) == num_instances
 
         category_ids = [x["category_id"] for x in sinfo]
