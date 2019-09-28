@@ -1,4 +1,6 @@
 
 # Beginner's Tutorial
 
-TODO
+See our demo in Colab Notebook, 
+which covers how to run inference with a detectron2 model, 
+and how to train a detectron2 model on a custom dataset.

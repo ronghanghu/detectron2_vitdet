@@ -1,36 +1,36 @@
 
-# The Deafult Data Loading Pipeline
+# Use Custom Data Loaders
 
-To load a dataset, you can implement your own dataloader and use it in your training loop, as long as it produces something
-that your model accepts.
-For standard tasks, you may want to use our builtin
-`build_detection_{train,test}_loader` which creates a dataloader from config.
+Detectron2 contains a builtin data loader pipeline.
+It's good to understand how it works, if you want to write your own one.
 
-Here is how `build_detection_{train,test}_loader` works:
+Detectron2 has two functions
+`build_detection_{train,test}_loader` which creates a dataloader from a given config.
+Here is how `build_detection_{train,test}_loader` work:
 
-1. It takes the name of the dataset (e.g., "coco_2017_train") from config, and maps it to
-	 `list[dict]`.
-	 * User can register COCO-format datasets by `detectron2.data.datasets.register_coco_instances()`.
-	 * User can register `name->list[dict]` mappings for extra datasets by `DatasetRegistry.register`.
-	 * The structure of the dicts is free-form in theory, but should be in "Detectron2 format"
-	   if consumed by Detectron2 builtin transformations in the next step.
-	 * Details about dataset format and dataset registration in [datasets](datasets).
+1. It takes the name of the dataset (e.g., "coco_2017_train"), and maps it to `list[dict]`.
+   Details about dataset format and dataset registration can be found in [datasets](datasets).
 2. Each dict is mapped by a function ("mapper"):
-	 * User can customize this mapping function, by the "mapper" argument in `build_detection_{train,test}_loader`.
-	 * The output format is free-form, as long as it is accepted by the consumer of this dataloader
-		(usually the model).
-		The output format of the default mapper is explained below.
-3. The output of the mapper is batched.
+	 * User can customize this mapping function, by the "mapper" argument in
+        `build_detection_{train,test}_loader`. The default is [DatasetMapper]( ../modules/data.html#detectron2.data.DatasetMapper)
+	 * There is no constraints on the output format, as long as it is accepted by the consumer of this dataloader (usually the model).
+	The output format of the default mapper is explained below.
+3. The outputs of the mapper are batched.
 	 * Currently it's naively batched to a list.
 4. The batched data is the output of the dataloader. And typically it's also the input of
 	 `model.forward()`.
 
 
+If you want to do something new (e.g., different sampling or batching logic),
+You can write your own data loader, as long as it produces the format your model accepts.
+Next we explain the input format used by the builtin models in detectron2.
+
+
 ### Model Input Format
 
-The output of the default mapper in data loader is a dict.
-After batching, it becomes `list[dict]`, one dict per image,
-which is the input format of all the builtin models.
+The output of the default [DatasetMapper]( ../modules/data.html#detectron2.data.DatasetMapper) in data loader is a dict.
+After batching, it becomes `list[dict]`, with one dict per image.
+This will be the input format of all the builtin models.
 
 The dict may contain the following keys:
 
@@ -54,7 +54,7 @@ The dict may contain the following keys:
 
 ### Model Output Format
 
-The builtin models produce a `list[dict]`, one dict for each image. Each dict may contain:
+The standard models produce a `list[dict]`, one dict for each image. Each dict may contain:
 
 * "instances": `Instances` object with the following fields:
 	* "pred_boxes": `Boxes` object of N boxes

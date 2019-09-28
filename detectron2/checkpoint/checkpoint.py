@@ -117,7 +117,7 @@ class Checkpointer(object):
     def get_all_checkpoint_files(self):
         """
         Returns:
-            List: All available checkpoint files (*.pth) in target directory.
+            List: All available checkpoint files (.pth files) in target directory.
         """
         all_model_checkpoints = [
             os.path.join(self.save_dir, file)

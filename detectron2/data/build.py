@@ -369,12 +369,12 @@ def build_detection_test_loader(cfg, dataset_name, mapper=None):
         cfg: a detectron2 CfgNode
         dataset_name (str): a name of the dataset that's available in the DatasetCatalog
         mapper (callable): a callable which takes a sample (dict) from dataset
-            and returns the format to be consumed by the model.
-            By default it will be `DatasetMapper(cfg, False)`.
+           and returns the format to be consumed by the model.
+           By default it will be `DatasetMapper(cfg, False)`.
 
     Returns:
         DataLoader: a torch DataLoader, that loads the given detection
-            dataset, with test-time transformation and batching.
+           dataset, with test-time transformation and batching.
     """
     dataset_dicts = get_detection_dataset_dicts(
         [dataset_name],

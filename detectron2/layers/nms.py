@@ -76,13 +76,13 @@ def nms_rotated(boxes, scores, iou_threshold):
 
     Args:
         boxes (Tensor[N, 5]): Rotated boxes to perform NMS on. They are expected to be in
-            (x_center, y_center, width, height, angle_degrees) format.
+           (x_center, y_center, width, height, angle_degrees) format.
         scores (Tensor[N]): Scores for each one of the rotated boxes
         iou_threshold (float): Discards all overlapping rotated boxes with IoU < iou_threshold
 
     Returns:
         keep (Tensor): int64 tensor with the indices of the elements that have been kept
-            by Rotated NMS, sorted in decreasing order of scores
+           by Rotated NMS, sorted in decreasing order of scores
     """
     from detectron2 import _C
 
@@ -98,25 +98,22 @@ def batched_nms_rotated(boxes, scores, idxs, iou_threshold):
     Each index value correspond to a category, and NMS
     will not be applied between elements of different categories.
 
-    Parameters
-    ----------
-    boxes : Tensor[N, 5]
-        boxes where NMS will be performed. They
-        are expected to be in (x_ctr, y_ctr, width, height, angle_degrees) format
-    scores : Tensor[N]
-        scores for each one of the boxes
-    idxs : Tensor[N]
-        indices of the categories for each one of the boxes.
-    iou_threshold : float
-        discards all overlapping boxes
-        with IoU < iou_threshold
+    Args:
+        boxes (Tensor[N, 5]):
+           boxes where NMS will be performed. They
+           are expected to be in (x_ctr, y_ctr, width, height, angle_degrees) format
+        scores (Tensor[N]):
+           scores for each one of the boxes
+        idxs (Tensor[N]):
+           indices of the categories for each one of the boxes.
+        iou_threshold (float):
+           discards all overlapping boxes
+           with IoU < iou_threshold
 
-    Returns
-    -------
-    keep : Tensor
-        int64 tensor with the indices of
-        the elements that have been kept by NMS, sorted
-        in decreasing order of scores
+    Returns:
+        Tensor: int64 tensor with the indices of
+            the elements that have been kept by NMS, sorted
+            in decreasing order of scores
     """
 
     if boxes.numel() == 0:

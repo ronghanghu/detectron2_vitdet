@@ -1,10 +1,10 @@
-Detectron2 Tutorials
+Tutorials
 ======================================
 
 .. toctree::
    :maxdepth: 2
 
    beginner
-   configs
-   data_loading
    datasets
+   data_loading
+   configs
