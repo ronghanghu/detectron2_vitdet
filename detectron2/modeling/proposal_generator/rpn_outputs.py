@@ -1,4 +1,5 @@
 import itertools
+import logging
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -9,6 +10,8 @@ from detectron2.structures import Boxes, Instances, pairwise_iou
 from detectron2.utils.events import get_event_storage
 
 from ..sampling import subsample_labels
+
+logger = logging.getLogger(__name__)
 
 # TODO: comments for future refactoring of this module
 #
@@ -157,13 +160,13 @@ def rpn_losses(
     Args:
         gt_objectness_logits (Tensor): shape (N,), each element in {-1, 0, 1} representing
             ground-truth objectness labels with: -1 = ignore; 0 = not object; 1 = object.
-        gt_anchor_deltas (Tensor): shape (N, 4), row i represents ground-truth
-            box2box transform targets (dx, dy, dw, dh) that map anchor i to its
-            matched ground-truth box.
+        gt_anchor_deltas (Tensor): shape (N, box_dim), row i represents ground-truth
+            box2box transform targets (dx, dy, dw, dh) or (dx, dy, dw, dh, da) that map anchor i to
+            its matched ground-truth box.
         pred_objectness_logits (Tensor): shape (N,), each element is a predicted objectness
             logit.
-        pred_anchor_deltas (Tensor): shape (N, 4), each row is a predicted box2box
-            transform (dx, dy, dw, dh).
+        pred_anchor_deltas (Tensor): shape (N, box_dim), each row is a predicted box2box
+            transform (dx, dy, dw, dh) or (dx, dy, dw, dh, da)
         smooth_l1_beta (float): The transition point between L1 and L2 loss in
             the smooth L1 loss function. When set to 0, the loss becomes L1. When
             set to +inf, the loss becomes constant 0.
@@ -313,9 +316,9 @@ class RPNOutputs(object):
         """
         gt_objectness_logits: list of N tensors. Tensor i is a vector whose length is the
             total number of anchors in image i (i.e., len(anchors[i]))
-        gt_anchor_deltas: list of N tensors. Tensor i has shape (len(anchors[i]), 4).
+        gt_anchor_deltas: list of N tensors. Tensor i has shape (len(anchors[i]), B),
+            where B is the box dimension
         """
-
         # Collect all objectness labels and delta targets over feature maps and images
         # The final ordering is L, N, H, W, A from slowest to fastest axis.
         num_anchors_per_map = [np.prod(x.shape[1:]) for x in self.pred_objectness_logits]
@@ -339,13 +342,15 @@ class RPNOutputs(object):
         # Concat from all feature maps
         gt_objectness_logits = cat([x.flatten() for x in gt_objectness_logits], dim=0)
 
-        # Stack to: (N, num_anchors_per_image, 4)
+        # Stack to: (N, num_anchors_per_image, B)
         gt_anchor_deltas = torch.stack(gt_anchor_deltas, dim=0)
         assert gt_anchor_deltas.shape[1] == num_anchors_per_image
+        B = gt_anchor_deltas.shape[2]  # box dimension (4 or 5)
+
         # Split to tuple of L tensors, each with shape (N, num_anchors_per_image)
         gt_anchor_deltas = torch.split(gt_anchor_deltas, num_anchors_per_map, dim=1)
         # Concat from all feature maps
-        gt_anchor_deltas = cat([x.reshape(-1, 4) for x in gt_anchor_deltas], dim=0)
+        gt_anchor_deltas = cat([x.reshape(-1, B) for x in gt_anchor_deltas], dim=0)
 
         # Collect all objectness logits and delta predictions over feature maps
         # and images to arrive at the same shape as the labels and targets
@@ -360,11 +365,11 @@ class RPNOutputs(object):
         )
         pred_anchor_deltas = cat(
             [
-                # Reshape: (N, A*4, Hi, Wi) -> (N, A, 4, Hi, Wi) -> (N, Hi, Wi, A, 4)
-                #          -> (N*Hi*Wi*A, 4)
-                x.view(x.shape[0], -1, 4, x.shape[-2], x.shape[-1])
+                # Reshape: (N, A*B, Hi, Wi) -> (N, A, B, Hi, Wi) -> (N, Hi, Wi, A, B)
+                #          -> (N*Hi*Wi*A, B)
+                x.view(x.shape[0], -1, B, x.shape[-2], x.shape[-1])
                 .permute(0, 3, 4, 1, 2)
-                .reshape(-1, 4)
+                .reshape(-1, B)
                 for x in self.pred_anchor_deltas
             ],
             dim=0,
@@ -390,25 +395,27 @@ class RPNOutputs(object):
 
         Returns:
             proposals (list[Tensor]): A list of L tensors. Tensor i has shape
-                (N, Hi*Wi*A, 4).
+                (N, Hi*Wi*A, B), where B is box dimension (4 or 5).
         """
         proposals = []
         # Transpose anchors from images-by-feature-maps (N, L) to feature-maps-by-images (L, N)
         anchors = list(zip(*self.anchors))
         # For each feature map
         for anchors_i, pred_anchor_deltas_i in zip(anchors, self.pred_anchor_deltas):
+            B = anchors_i[0].tensor.size(1)
             N, _, Hi, Wi = pred_anchor_deltas_i.shape
-            # Reshape: (N, A*4, Hi, Wi) -> (N, A, 4, Hi, Wi) -> (N, Hi, Wi, A, 4) -> (N*Hi*Wi*A, 4)
+            # Reshape: (N, A*B, Hi, Wi) -> (N, A, B, Hi, Wi) -> (N, Hi, Wi, A, B) -> (N*Hi*Wi*A, B)
             pred_anchor_deltas_i = (
-                pred_anchor_deltas_i.view(N, -1, 4, Hi, Wi).permute(0, 3, 4, 1, 2).reshape(-1, 4)
+                pred_anchor_deltas_i.view(N, -1, B, Hi, Wi).permute(0, 3, 4, 1, 2).reshape(-1, B)
             )
-            # Concatenate all anchors to shape (N*Hi*Wi*A, 4)
-            anchors_i = Boxes.cat(anchors_i)
+            # Concatenate all anchors to shape (N*Hi*Wi*A, B)
+            # type(anchors_i[0]) is Boxes (B = 4) or RotatedBoxes (B = 5)
+            anchors_i = type(anchors_i[0]).cat(anchors_i)
             proposals_i = self.box2box_transform.apply_deltas(
                 pred_anchor_deltas_i, anchors_i.tensor
             )
-            # Append feature map proposals with shape (N, Hi*Wi*A, 4)
-            proposals.append(proposals_i.view(N, -1, 4))
+            # Append feature map proposals with shape (N, Hi*Wi*A, B)
+            proposals.append(proposals_i.view(N, -1, B))
         return proposals
 
     def predict_objectness_logits(self):

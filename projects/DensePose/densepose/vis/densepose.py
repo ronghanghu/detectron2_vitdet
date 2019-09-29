@@ -1,9 +1,9 @@
 import numpy as np
+from typing import Iterable, Optional, Tuple
 import cv2
-from typing import Optional, Tuple, Iterable
 
 from ..structures import DensePoseDataRelative, DensePoseOutput, DensePoseResult
-from .base import MatrixVisualizer, PointsVisualizer, Boxes, Image
+from .base import Boxes, Image, MatrixVisualizer, PointsVisualizer
 
 
 class DensePoseResultsVisualizer(object):

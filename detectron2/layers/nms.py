@@ -9,6 +9,7 @@ def batched_nms(boxes, scores, idxs, iou_threshold):
     """
     Same as torchvision.ops.boxes.batched_nms, but safer.
     """
+    assert boxes.shape[-1] == 4
     # TODO may need better strategy.
     # Investigate after having a fully-cuda NMS op.
     if len(boxes) < 40000:
@@ -115,6 +116,7 @@ def batched_nms_rotated(boxes, scores, idxs, iou_threshold):
             the elements that have been kept by NMS, sorted
             in decreasing order of scores
     """
+    assert boxes.shape[-1] == 5
 
     if boxes.numel() == 0:
         return torch.empty((0,), dtype=torch.int64, device=boxes.device)

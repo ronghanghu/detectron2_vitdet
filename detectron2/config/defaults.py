@@ -143,7 +143,7 @@ _C.MODEL.FPN.FUSE_TYPE = "sum"
 # Proposal generator options
 # ---------------------------------------------------------------------------- #
 _C.MODEL.PROPOSAL_GENERATOR = CN()
-# Current proposal generators include "RPN" and "PrecomputedProposals"
+# Current proposal generators include "RPN", "RRPN" and "PrecomputedProposals"
 _C.MODEL.PROPOSAL_GENERATOR.NAME = "RPN"
 # Proposal height and width both need to be greater than MIN_SIZE
 # (a the scale used during training or inference)
@@ -171,7 +171,7 @@ _C.MODEL.ANCHOR_GENERATOR.ASPECT_RATIOS = [[0.5, 1.0, 2.0]]
 # Anchor angles.
 # list[float], the angle in degrees, for each input feature map.
 # ANGLES[i] specifies the list of angles for IN_FEATURES[i].
-_C.MODEL.ANCHOR_GENERATOR.ANGLES = [[]]
+_C.MODEL.ANCHOR_GENERATOR.ANGLES = [[-90, 0, 90]]
 
 
 # ---------------------------------------------------------------------------- #

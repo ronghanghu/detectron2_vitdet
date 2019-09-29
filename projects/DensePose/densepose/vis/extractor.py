@@ -1,12 +1,14 @@
+import logging
 from typing import Sequence
 import torch
-import logging
-from detectron2.structures.instances import Instances
-from detectron2.layers.nms import batched_nms
-from .base import CompoundVisualizer
-from densepose.vis.densepose import DensePoseResultsVisualizer
-from densepose.vis.bounding_box import BoundingBoxVisualizer, ScoredBoundingBoxVisualizer
 
+from detectron2.layers.nms import batched_nms
+from detectron2.structures.instances import Instances
+
+from densepose.vis.bounding_box import BoundingBoxVisualizer, ScoredBoundingBoxVisualizer
+from densepose.vis.densepose import DensePoseResultsVisualizer
+
+from .base import CompoundVisualizer
 
 Scores = Sequence[float]
 

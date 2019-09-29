@@ -15,11 +15,11 @@ from densepose.utils.logger import verbosity_to_level
 from densepose.vis.base import CompoundVisualizer
 from densepose.vis.bounding_box import BoundingBoxVisualizer
 from densepose.vis.densepose import (
+    DensePoseDataCoarseSegmentationVisualizer,
     DensePoseDataPointsIVisualizer,
     DensePoseDataPointsUVisualizer,
     DensePoseDataPointsVisualizer,
     DensePoseDataPointsVVisualizer,
-    DensePoseDataCoarseSegmentationVisualizer,
 )
 
 DOC = """Query DB - a tool to print / visualize data from a database
