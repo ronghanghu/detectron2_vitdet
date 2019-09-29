@@ -17,6 +17,10 @@ __all__ = ["SemanticSegmentor", "SEM_SEG_HEADS_REGISTRY", "SemSegFPNHead", "buil
 
 
 SEM_SEG_HEADS_REGISTRY = Registry("SEM_SEG_HEADS")
+"""
+Registry for semantic segmentation heads, which make semantic segmentation predictions
+from feature maps.
+"""
 
 
 @META_ARCH_REGISTRY.register()
@@ -86,6 +90,9 @@ class SemanticSegmentor(nn.Module):
 
 
 def build_sem_seg_head(cfg, input_shape):
+    """
+    Build a semantic segmentation head from `cfg.MODEL.SEM_SEG_HEAD.NAME`.
+    """
     name = cfg.MODEL.SEM_SEG_HEAD.NAME
     return SEM_SEG_HEADS_REGISTRY.get(name)(cfg, input_shape)
 

@@ -9,6 +9,10 @@ from detectron2.utils.events import get_event_storage
 from detectron2.utils.registry import Registry
 
 ROI_MASK_HEAD_REGISTRY = Registry("ROI_MASK_HEAD")
+"""
+Registry for mask heads, which predicts instance masks given
+per-region features.
+"""
 
 
 def mask_rcnn_loss(pred_mask_logits, instances):
@@ -193,5 +197,8 @@ class MaskRCNNConvUpsampleHead(nn.Module):
 
 
 def build_mask_head(cfg, input_shape):
+    """
+    Build a mask head defined by `cfg.MODEL.ROI_MASK_HEAD.NAME`.
+    """
     name = cfg.MODEL.ROI_MASK_HEAD.NAME
     return ROI_MASK_HEAD_REGISTRY.get(name)(cfg, input_shape)

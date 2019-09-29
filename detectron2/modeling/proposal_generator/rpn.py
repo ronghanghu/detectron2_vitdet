@@ -13,9 +13,16 @@ from .build import PROPOSAL_GENERATOR_REGISTRY
 from .rpn_outputs import RPNOutputs, find_top_rpn_proposals
 
 RPN_HEAD_REGISTRY = Registry("RPN_HEAD")
+"""
+Registry for RPN heads, which take feature maps and perform
+objectness classification and bounding box regression for anchors.
+"""
 
 
 def build_rpn_head(cfg, input_shape):
+    """
+    Build an RPN head defined by `cfg.MODEL.RPN.HEAD_NAME`.
+    """
     name = cfg.MODEL.RPN.HEAD_NAME
     return RPN_HEAD_REGISTRY.get(name)(cfg, input_shape)
 
@@ -77,7 +84,7 @@ class StandardRPNHead(nn.Module):
 @PROPOSAL_GENERATOR_REGISTRY.register()
 class RPN(nn.Module):
     """
-    RPN subnetwork.
+    Region Proposal Network, introduced by the Faster R-CNN paper.
     """
 
     def __init__(self, cfg, input_shape: Dict[str, ShapeSpec]):

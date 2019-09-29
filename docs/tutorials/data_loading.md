@@ -21,7 +21,7 @@ Here is how `build_detection_{train,test}_loader` work:
 	 `model.forward()`.
 
 
-If you want to do something new (e.g., different sampling or batching logic),
+If you want to do something different (e.g., use a different sampling or batching logic),
 You can write your own data loader, as long as it produces the format your model accepts.
 Next we explain the input format used by the builtin models in detectron2.
 

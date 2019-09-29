@@ -2,7 +2,7 @@ import torch
 
 from detectron2.layers import ShapeSpec
 
-from .anchor_generator import build_anchor_generator
+from .anchor_generator import build_anchor_generator, ANCHOR_GENERATOR_REGISTRY
 from .backbone import (
     BACKBONE_REGISTRY,
     FPN,

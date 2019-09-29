@@ -1,10 +1,6 @@
 detectron2.utils package
 ========================
 
-Submodules
-----------
-
-
 detectron2.utils.colormap module
 --------------------------------
 

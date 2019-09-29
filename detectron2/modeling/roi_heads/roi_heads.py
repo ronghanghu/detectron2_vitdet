@@ -20,9 +20,17 @@ from .keypoint_head import build_keypoint_head, keypoint_rcnn_inference, keypoin
 from .mask_head import build_mask_head, mask_rcnn_inference, mask_rcnn_loss
 
 ROI_HEADS_REGISTRY = Registry("ROI_HEADS")
+"""
+Registry for ROI heads in a generalized R-CNN model.
+ROIHeads take feature maps and region proposals, and
+perform per-region computation.
+"""
 
 
 def build_roi_heads(cfg, input_shape):
+    """
+    Build ROIHeads defined by `cfg.MODEL.ROI_HEADS.NAME`.
+    """
     name = cfg.MODEL.ROI_HEADS.NAME
     return ROI_HEADS_REGISTRY.get(name)(cfg, input_shape)
 
@@ -443,10 +451,12 @@ class StandardROIHeads(ROIHeads):
             sampling_ratio=sampling_ratio,
             pooler_type=pooler_type,
         )
+        # Here we split "box head" and "box predictor", which is mainly due to historical reasons.
+        # They are used together so the "box predictor" layers should be part of the "box head".
+        # New subclasses of ROIHeads do not need "box predictor"s.
         self.box_head = build_box_head(
             cfg, ShapeSpec(channels=in_channels, height=pooler_resolution, width=pooler_resolution)
         )
-
         self.box_predictor = FastRCNNOutputLayers(
             self.box_head.output_size, self.num_classes, self.cls_agnostic_bbox_reg
         )

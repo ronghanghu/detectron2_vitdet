@@ -4,10 +4,15 @@ from detectron2.utils.registry import Registry
 from .backbone import Backbone
 
 BACKBONE_REGISTRY = Registry("BACKBONE")
+"""
+Registry for backbones, which extract feature maps from images.
+"""
 
 
 def build_backbone(cfg, input_shape=None):
     """
+    Build a backbone from `cfg.MODEL.BACKBONE.NAME`.
+
     Returns:
         an instance of :class:`Backbone`
     """

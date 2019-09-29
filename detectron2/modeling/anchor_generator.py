@@ -9,6 +9,9 @@ from detectron2.structures import Boxes, RotatedBoxes
 from detectron2.utils.registry import Registry
 
 ANCHOR_GENERATOR_REGISTRY = Registry("ANCHOR_GENERATOR")
+"""
+Registry for modules that creates object detection anchors for feature maps.
+"""
 
 
 class BufferList(nn.Module):
@@ -52,7 +55,7 @@ class DefaultAnchorGenerator(nn.Module):
     For a set of image sizes and feature maps, computes a set of anchors.
     """
 
-    def __init__(self, cfg, input_shape):
+    def __init__(self, cfg, input_shape: List[ShapeSpec]):
         super().__init__()
         # fmt: off
         sizes         = cfg.MODEL.ANCHOR_GENERATOR.SIZES
@@ -341,5 +344,8 @@ class RotatedAnchorGenerator(nn.Module):
 
 
 def build_anchor_generator(cfg, input_shape):
+    """
+    Built an anchor generator from `cfg.MODEL.ANCHOR_GENERATOR.NAME`.
+    """
     anchor_generator = cfg.MODEL.ANCHOR_GENERATOR.NAME
     return ANCHOR_GENERATOR_REGISTRY.get(anchor_generator)(cfg, input_shape)
