@@ -1,5 +1,6 @@
 import numpy as np
 from enum import Enum, unique
+from typing import Iterator, List, Tuple, TypeVar, Union
 import torch
 
 from detectron2.layers import cat
@@ -22,8 +23,10 @@ class BoxMode(Enum):
     XYXY_REL = 2
     XYWH_REL = 3
 
+    RawBoxType = TypeVar("RawBoxType", List[float], Tuple[float, ...], torch.Tensor, np.ndarray)
+
     @staticmethod
-    def convert(box, from_mode, to_mode):
+    def convert(box: RawBoxType, from_mode: "BoxMode", to_mode: "BoxMode") -> RawBoxType:
         """
         Args:
             box: can be a 4-tuple, 4-list or a Nx4 array/tensor.
@@ -39,13 +42,13 @@ class BoxMode(Enum):
         single_box = isinstance(box, (list, tuple))
         if single_box:
             box = np.array(box)
-            assert box.shape == (
+            assert box.shape == (  # type: ignore
                 4,
             ), "BoxMode.convert takes either a 4-tuple/list or a Nx4 array/tensor"
 
         assert to_mode.value < 2 and from_mode.value < 2, "Relative mode not yet supported!"
 
-        arr = box.reshape(-1, 4)
+        arr = box.reshape(-1, 4)  # type: ignore
         if to_mode == BoxMode.XYXY_ABS and from_mode == BoxMode.XYWH_ABS:
             arr[:, 2] += arr[:, 0]
             arr[:, 3] += arr[:, 1]
@@ -71,7 +74,9 @@ class Boxes:
         tensor: float matrix of Nx4.
     """
 
-    def __init__(self, tensor):
+    BoxSizeType = Union[List[int], Tuple[int, int]]
+
+    def __init__(self, tensor: torch.Tensor):
         """
         Args:
             tensor (Tensor[float]): a Nx4 matrix.  Each row is (x1, y1, x2, y2).
@@ -84,7 +89,7 @@ class Boxes:
 
         self.tensor = tensor
 
-    def clone(self):
+    def clone(self) -> "Boxes":
         """
         Clone the Boxes.
 
@@ -93,10 +98,10 @@ class Boxes:
         """
         return Boxes(self.tensor.clone())
 
-    def to(self, device):
+    def to(self, device: str) -> "Boxes":
         return Boxes(self.tensor.to(device))
 
-    def area(self):
+    def area(self) -> torch.Tensor:
         """
         Computes the area of all the boxes.
 
@@ -107,7 +112,7 @@ class Boxes:
         area = (box[:, 2] - box[:, 0]) * (box[:, 3] - box[:, 1])
         return area
 
-    def clip(self, box_size):
+    def clip(self, box_size: BoxSizeType) -> None:
         """
         Clip (in place) the boxes by limiting x coordinates to the range [0, width]
         and y coordinates to the range [0, height].
@@ -122,7 +127,7 @@ class Boxes:
         self.tensor[:, 2].clamp_(min=0, max=w)
         self.tensor[:, 3].clamp_(min=0, max=h)
 
-    def nonempty(self, threshold=0):
+    def nonempty(self, threshold: int = 0) -> torch.Tensor:
         """
         Find boxes that are non-empty.
         A box is considered empty, if either of its side is no larger than threshold.
@@ -137,7 +142,7 @@ class Boxes:
         keep = (widths > threshold) & (heights > threshold)
         return keep
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: Union[int, slice, torch.BoolTensor]) -> "Boxes":
         """
         Returns:
             Boxes: Create a new :class:`Boxes` by indexing.
@@ -157,13 +162,13 @@ class Boxes:
         assert b.dim() == 2, "Indexing on Boxes with {} failed to return a matrix!".format(item)
         return Boxes(b)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.tensor.shape[0]
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "Boxes(" + str(self.tensor) + ")"
 
-    def inside_box(self, box_size, boundary_threshold=0):
+    def inside_box(self, box_size: BoxSizeType, boundary_threshold: int = 0) -> torch.Tensor:
         """
         Args:
             box_size (height, width): Size of the reference box.
@@ -182,7 +187,7 @@ class Boxes:
         )
         return inds_inside
 
-    def get_centers(self):
+    def get_centers(self) -> torch.Tensor:
         """
         Returns:
             The box centers in a Nx2 array of (x, y).
@@ -190,7 +195,7 @@ class Boxes:
         return (self.tensor[:, :2] + self.tensor[:, 2:]) / 2
 
     @staticmethod
-    def cat(boxes_list):
+    def cat(boxes_list: List["Boxes"]) -> "Boxes":
         """
         Concatenates a list of Boxes into a single Boxes
 
@@ -208,10 +213,10 @@ class Boxes:
         return cat_boxes
 
     @property
-    def device(self):
+    def device(self) -> str:
         return self.tensor.device
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[torch.Tensor]:
         """
         Yield a box as a Tensor of shape (4,) at a time.
         """
@@ -220,7 +225,7 @@ class Boxes:
 
 # implementation from https://github.com/kuangliu/torchcv/blob/master/torchcv/utils/box.py
 # with slight modifications
-def pairwise_iou(boxes1, boxes2):
+def pairwise_iou(boxes1: Boxes, boxes2: Boxes) -> torch.Tensor:
     """
     Given two lists of boxes of size N and M,
     compute the IoU (intersection over union)
@@ -253,7 +258,7 @@ def pairwise_iou(boxes1, boxes2):
     return iou
 
 
-def matched_boxlist_iou(boxes1, boxes2):
+def matched_boxlist_iou(boxes1: Boxes, boxes2: Boxes) -> torch.Tensor:
     """
     Compute pairwise intersection over union (IOU) of two sets of matched
     boxes. The box order must be (xmin, ymin, xmax, ymax).

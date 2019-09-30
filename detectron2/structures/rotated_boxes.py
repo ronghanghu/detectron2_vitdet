@@ -1,3 +1,4 @@
+from typing import Iterator, List, Union
 import torch
 
 from detectron2.layers import cat
@@ -15,7 +16,7 @@ class RotatedBoxes(Boxes):
     (support indexing, `to(device)`, `.device`, and iteration over all boxes)
     """
 
-    def __init__(self, tensor):
+    def __init__(self, tensor: torch.Tensor):
         """
         Args:
             tensor (Tensor[float]): a Nx5 matrix.  Each row is
@@ -188,7 +189,7 @@ class RotatedBoxes(Boxes):
 
         self.tensor = tensor
 
-    def clone(self):
+    def clone(self) -> "RotatedBoxes":
         """
         Clone the RotatedBoxes.
 
@@ -197,10 +198,10 @@ class RotatedBoxes(Boxes):
         """
         return RotatedBoxes(self.tensor.clone())
 
-    def to(self, device):
+    def to(self, device: str) -> "RotatedBoxes":
         return RotatedBoxes(self.tensor.to(device))
 
-    def area(self):
+    def area(self) -> torch.Tensor:
         """
         Computes the area of all the boxes.
 
@@ -211,14 +212,14 @@ class RotatedBoxes(Boxes):
         area = box[:, 2] * box[:, 3]
         return area
 
-    def normalize_angles(self):
+    def normalize_angles(self) -> None:
         """
         Restrict angles to the range of (-180, 180] degrees
         """
         self.tensor[:, 4] = self.tensor[:, 4] % 360
         self.tensor[:, 4][torch.where(self.tensor[:, 4] > 180)] -= 360
 
-    def clip(self, box_size, clip_angle_threshold=1.0):
+    def clip(self, box_size: Boxes.BoxSizeType, clip_angle_threshold: float = 1.0) -> None:
         """
         Clip (in place) the boxes by limiting x coordinates to the range [0, width]
         and y coordinates to the range [0, height].
@@ -266,7 +267,7 @@ class RotatedBoxes(Boxes):
         self.tensor[idx, 2] = torch.min(self.tensor[idx, 2], x2 - x1)
         self.tensor[idx, 3] = torch.min(self.tensor[idx, 3], y2 - y1)
 
-    def nonempty(self, threshold=0):
+    def nonempty(self, threshold: int = 0) -> torch.Tensor:
         """
         Find boxes that are non-empty.
         A box is considered empty, if either of its side is no larger than threshold.
@@ -281,7 +282,7 @@ class RotatedBoxes(Boxes):
         keep = (widths > threshold) & (heights > threshold)
         return keep
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: Union[int, slice, torch.BoolTensor]) -> "RotatedBoxes":
         """
         Returns:
             RotatedBoxes: Create a new :class:`RotatedBoxes` by indexing.
@@ -303,13 +304,13 @@ class RotatedBoxes(Boxes):
         )
         return RotatedBoxes(b)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.tensor.shape[0]
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "RotatedBoxes(" + str(self.tensor) + ")"
 
-    def inside_box(self, box_size, boundary_threshold=0):
+    def inside_box(self, box_size: Boxes.BoxSizeType, boundary_threshold: int = 0) -> torch.Tensor:
         """
         Args:
             box_size (height, width): Size of the reference box covering
@@ -346,7 +347,7 @@ class RotatedBoxes(Boxes):
 
         return inds_inside
 
-    def get_centers(self):
+    def get_centers(self) -> torch.Tensor:
         """
         Returns:
             The box centers in a Nx2 array of (x, y).
@@ -354,7 +355,7 @@ class RotatedBoxes(Boxes):
         return self.tensor[:, :2]
 
     @staticmethod
-    def cat(boxes_list):
+    def cat(boxes_list: List["RotatedBoxes"]) -> "RotatedBoxes":  # type: ignore
         """
         Concatenates a list of RotatedBoxes into a single RotatedBoxes
 
@@ -372,17 +373,17 @@ class RotatedBoxes(Boxes):
         return cat_boxes
 
     @property
-    def device(self):
+    def device(self) -> str:
         return self.tensor.device
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[torch.Tensor]:
         """
         Yield a box as a Tensor of shape (5,) at a time.
         """
         yield from self.tensor
 
 
-def pairwise_iou(boxes1: RotatedBoxes, boxes2: RotatedBoxes):
+def pairwise_iou(boxes1: RotatedBoxes, boxes2: RotatedBoxes) -> None:
     """
     Given two lists of rotated boxes of size N and M,
     compute the IoU (intersection over union)

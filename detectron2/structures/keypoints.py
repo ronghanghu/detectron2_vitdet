@@ -1,3 +1,5 @@
+import numpy as np
+from typing import Any, List, Union
 import torch
 
 from detectron2.layers import interpolate
@@ -15,7 +17,7 @@ class Keypoints:
         v=2: labeled and visible
     """
 
-    def __init__(self, keypoints):
+    def __init__(self, keypoints: Union[torch.Tensor, np.ndarray, List[List[float]]]):
         """
         Arguments:
             keypoints: A Tensor, numpy array, or list of the x, y, and visibility of each keypoint.
@@ -27,13 +29,13 @@ class Keypoints:
         assert keypoints.dim() == 3 and keypoints.shape[2] == 3, keypoints.shape
         self.tensor = keypoints
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.tensor.size(0)
 
-    def to(self, *args, **kwargs):
+    def to(self, *args: Any, **kwargs: Any) -> torch.Tensor:
         return type(self)(self.tensor.to(*args, **kwargs))
 
-    def to_heatmap(self, boxes, heatmap_size):
+    def to_heatmap(self, boxes: torch.Tensor, heatmap_size: int) -> torch.Tensor:
         """
         Arguments:
             boxes: Nx4 tensor, the boxes to draw the keypoints to
@@ -46,7 +48,7 @@ class Keypoints:
         """
         return _keypoints_to_heatmap(self.tensor, boxes, heatmap_size)
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: Union[int, slice, torch.BoolTensor]) -> "Keypoints":
         """
         Create a new `Keypoints` by indexing on this `Keypoints`.
 
@@ -63,14 +65,16 @@ class Keypoints:
             return Keypoints([self.tensor[item]])
         return Keypoints(self.tensor[item])
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         s = self.__class__.__name__ + "("
         s += "num_instances={})".format(len(self.tensor))
         return s
 
 
 # TODO make this nicer, this is a direct translation from C2 (but removing the inner loop)
-def _keypoints_to_heatmap(keypoints, rois, heatmap_size):
+def _keypoints_to_heatmap(
+    keypoints: torch.Tensor, rois: torch.Tensor, heatmap_size: int
+) -> torch.Tensor:
     """
     Encode keypoint locations into a target heatmap for use in SoftmaxWithLoss across space.
 
@@ -128,7 +132,7 @@ def _keypoints_to_heatmap(keypoints, rois, heatmap_size):
 
 
 @torch.no_grad()
-def heatmaps_to_keypoints(maps, rois):
+def heatmaps_to_keypoints(maps: torch.Tensor, rois: torch.Tensor) -> torch.Tensor:
     """
     Args:
         maps (Tensor): (#ROIs, #keypoints, POOL_H, POOL_W)

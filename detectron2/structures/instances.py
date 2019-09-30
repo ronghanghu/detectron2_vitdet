@@ -1,4 +1,5 @@
 import itertools
+from typing import Any, Dict, List, Tuple, Union
 import torch
 
 from detectron2.layers import cat
@@ -27,37 +28,37 @@ class Instances:
        or a vector of integer indices.
     """
 
-    def __init__(self, image_size, **kwargs):
+    def __init__(self, image_size: Tuple[int, int], **kwargs: Any):
         """
         Args:
             image_size (height, width): the spatial size of the image.
             kwargs: fields to add to this `Instances`.
         """
         self._image_size = image_size
-        self._fields = {}
+        self._fields: Dict[str, Any] = {}
         for k, v in kwargs.items():
             self.set(k, v)
 
     @property
-    def image_size(self):
+    def image_size(self) -> Tuple[int, int]:
         """
         Returns:
             tuple: height, width
         """
         return self._image_size
 
-    def __setattr__(self, name, val):
+    def __setattr__(self, name: str, val: Any) -> None:
         if name.startswith("_"):
             super().__setattr__(name, val)
         else:
             self.set(name, val)
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:
         if name == "_fields" or name not in self._fields:
             raise AttributeError("Cannot find field '{}' in the given Instances!".format(name))
         return self._fields[name]
 
-    def set(self, name, value):
+    def set(self, name: str, value: Any) -> None:
         """
         Set the field named `name` to `value`.
         The length of `value` must be the number of instances,
@@ -70,26 +71,26 @@ class Instances:
             ), "Adding a field of length {} to a Instances of length {}".format(data_len, len(self))
         self._fields[name] = value
 
-    def has(self, name):
+    def has(self, name: str) -> bool:
         """
         Returns:
             bool: whether the field called `name` exists.
         """
         return name in self._fields
 
-    def remove(self, name):
+    def remove(self, name: str) -> None:
         """
         Remove the field called `name`.
         """
         del self._fields[name]
 
-    def get(self, name):
+    def get(self, name: str) -> Any:
         """
         Returns the field called `name`.
         """
         return self._fields[name]
 
-    def get_fields(self):
+    def get_fields(self) -> Dict[str, Any]:
         """
         Returns:
             dict: a dict which maps names (str) to data of the fields
@@ -99,7 +100,7 @@ class Instances:
         return self._fields
 
     # Tensor-like methods
-    def to(self, device):
+    def to(self, device: str) -> "Instances":
         """
         Returns:
             Instances: all fields are called with a `to(device)`, if
@@ -112,7 +113,7 @@ class Instances:
             ret.set(k, v)
         return ret
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: Union[int, slice, torch.BoolTensor]) -> "Instances":
         """
         Args:
             item: an index-like object and will be used to index all the fields.
@@ -126,13 +127,13 @@ class Instances:
             ret.set(k, v[item])
         return ret
 
-    def __len__(self):
+    def __len__(self) -> int:
         for v in self._fields.values():
             return len(v)
         raise NotImplementedError("Empty Instances does not support __len__!")
 
     @staticmethod
-    def cat(instance_lists):
+    def cat(instance_lists: List["Instances"]) -> "Instances":
         """
         Args:
             instance_lists (list[Instances])
@@ -163,7 +164,7 @@ class Instances:
             ret.set(k, values)
         return ret
 
-    def __str__(self):
+    def __str__(self) -> str:
         s = self.__class__.__name__ + "("
         s += "num_instances={}, ".format(len(self))
         s += "image_height={}, ".format(self._image_size[0])

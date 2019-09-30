@@ -1,5 +1,6 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 from __future__ import division
+from typing import Any, List, Sequence, Tuple, Union
 import torch
 from torch.nn import functional as F
 
@@ -15,7 +16,7 @@ class ImageList(object):
         image_sizes (list[tuple[int, int]]): each tuple is (h, w)
     """
 
-    def __init__(self, tensor, image_sizes):
+    def __init__(self, tensor: torch.Tensor, image_sizes: List[Tuple[int, int]]):
         """
         Arguments:
             tensor (Tensor): of shape (N, H, W) or (N, C_1, ..., C_K, H, W) where K >= 1
@@ -24,10 +25,10 @@ class ImageList(object):
         self.tensor = tensor
         self.image_sizes = image_sizes
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.image_sizes)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: Union[int, slice]) -> torch.Tensor:
         """
         Access the individual image in its original size.
 
@@ -35,14 +36,16 @@ class ImageList(object):
             Tensor: an image of shape (H, W) or (C_1, ..., C_K, H, W) where K >= 1
         """
         size = self.image_sizes[idx]
-        return self.tensor[idx, ..., : size[0], : size[1]]
+        return self.tensor[idx, ..., : size[0], : size[1]]  # type: ignore
 
-    def to(self, *args, **kwargs):
+    def to(self, *args: Any, **kwargs: Any) -> "ImageList":
         cast_tensor = self.tensor.to(*args, **kwargs)
         return ImageList(cast_tensor, self.image_sizes)
 
     @staticmethod
-    def from_tensors(tensors, size_divisibility=0, pad_value=0.0):
+    def from_tensors(
+        tensors: Sequence[torch.Tensor], size_divisibility: int = 0, pad_value: float = 0.0
+    ) -> "ImageList":
         """
         Args:
             tensors: a tuple or list of `torch.Tensors`, each of shape (Hi, Wi) or
@@ -67,9 +70,9 @@ class ImageList(object):
             import math
 
             stride = size_divisibility
-            max_size = list(max_size)
-            max_size[-2] = int(math.ceil(max_size[-2] / stride) * stride)
-            max_size[-1] = int(math.ceil(max_size[-1] / stride) * stride)
+            max_size = list(max_size)  # type: ignore
+            max_size[-2] = int(math.ceil(max_size[-2] / stride) * stride)  # type: ignore
+            max_size[-1] = int(math.ceil(max_size[-1] / stride) * stride)  # type: ignore
             max_size = tuple(max_size)
 
         image_sizes = [im.shape[-2:] for im in tensors]
