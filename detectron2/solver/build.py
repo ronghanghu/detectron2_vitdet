@@ -1,13 +1,16 @@
+from typing import Any, Dict, List
 import torch
+
+from detectron2.config import CfgNode
 
 from .lr_scheduler import WarmupCosineLR, WarmupMultiStepLR
 
 
-def build_optimizer(cfg, model):
+def build_optimizer(cfg: CfgNode, model: torch.nn.Module) -> torch.optim.Optimizer:
     """
     Build an optimizer from config.
     """
-    params = []
+    params: List[Dict[str, Any]] = []
     for key, value in model.named_parameters():
         if not value.requires_grad:
             continue
@@ -28,7 +31,9 @@ def build_optimizer(cfg, model):
     return optimizer
 
 
-def build_lr_scheduler(cfg, optimizer):
+def build_lr_scheduler(
+    cfg: CfgNode, optimizer: torch.optim.Optimizer
+) -> torch.optim.lr_scheduler._LRScheduler:
     """
     Build a LR scheduler from config.
     """
