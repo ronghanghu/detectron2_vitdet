@@ -21,6 +21,7 @@ Instructions to bump version:
 """
 
 import logging
+from typing import List, Optional, Tuple
 
 from .config import CfgNode as CN
 from .defaults import _C
@@ -28,7 +29,7 @@ from .defaults import _C
 __all__ = ["upgrade_config", "downgrade_config"]
 
 
-def upgrade_config(cfg, to_version=None):
+def upgrade_config(cfg: CN, to_version: Optional[int] = None) -> CN:
     """
     Upgrade a config from its current version to a newer version.
 
@@ -50,7 +51,7 @@ def upgrade_config(cfg, to_version=None):
     return cfg
 
 
-def downgrade_config(cfg, to_version):
+def downgrade_config(cfg: CN, to_version: int) -> CN:
     """
     Downgrade a config from its current version to an older version.
 
@@ -77,7 +78,7 @@ def downgrade_config(cfg, to_version):
     return cfg
 
 
-def guess_version(cfg, filename):
+def guess_version(cfg: CN, filename: str) -> int:
     """
     Guess the version of a partial config where the VERSION field is not specified.
     Returns the version, or the latest if cannot make a guess.
@@ -86,7 +87,7 @@ def guess_version(cfg, filename):
     """
     logger = logging.getLogger(__name__)
 
-    def _has(name):
+    def _has(name: str) -> bool:
         name = name.split(".")
         cur = cfg
         for n in name:
@@ -112,11 +113,11 @@ def guess_version(cfg, filename):
     return ret
 
 
-def _rename(cfg, old, new):
+def _rename(cfg: CN, old: str, new: str) -> None:
     old_keys = old.split(".")
     new_keys = new.split(".")
 
-    def _set(key_seq, val):
+    def _set(key_seq: List[str], val: str) -> None:
         cur = cfg
         for k in key_seq[:-1]:
             if k not in cur:
@@ -124,13 +125,13 @@ def _rename(cfg, old, new):
             cur = cur[k]
         cur[key_seq[-1]] = val
 
-    def _get(key_seq):
+    def _get(key_seq: List[str]) -> CN:
         cur = cfg
         for k in key_seq:
             cur = cur[k]
         return cur
 
-    def _del(key_seq):
+    def _del(key_seq: List[str]) -> None:
         cur = cfg
         for k in key_seq[:-1]:
             cur = cur[k]
@@ -147,15 +148,15 @@ class _RenameConverter:
     A converter that handles simple rename.
     """
 
-    RENAME = []  # list of tuples of (old name, new name)
+    RENAME: List[Tuple[str, str]] = []  # list of tuples of (old name, new name)
 
     @classmethod
-    def upgrade(cls, cfg):
+    def upgrade(cls, cfg: CN) -> None:
         for old, new in cls.RENAME:
             _rename(cfg, old, new)
 
     @classmethod
-    def downgrade(cls, cfg):
+    def downgrade(cls, cfg: CN) -> None:
         for old, new in cls.RENAME[::-1]:
             _rename(cfg, new, old)
 
@@ -200,7 +201,7 @@ class ConverterV2(_RenameConverter):
     ]
 
     @classmethod
-    def upgrade(cls, cfg):
+    def upgrade(cls, cfg: CN) -> None:
         super().upgrade(cfg)
 
         if cfg.MODEL.META_ARCHITECTURE == "RetinaNet":
@@ -218,7 +219,7 @@ class ConverterV2(_RenameConverter):
         del cfg["MODEL"]["RETINANET"]["ANCHOR_STRIDES"]
 
     @classmethod
-    def downgrade(cls, cfg):
+    def downgrade(cls, cfg: CN) -> None:
         super().downgrade(cfg)
 
         _rename(cfg, "MODEL.ANCHOR_GENERATOR.ASPECT_RATIOS", "MODEL.RPN.ANCHOR_ASPECT_RATIOS")

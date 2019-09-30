@@ -17,7 +17,7 @@ class CfgNode(_CfgNode):
     """
 
     # Note that the default value of allow_unsafe is changed to True
-    def merge_from_file(self, cfg_filename: str, allow_unsafe=True):
+    def merge_from_file(self, cfg_filename: str, allow_unsafe: bool = True) -> None:
         loaded_cfg = _CfgNode.load_yaml_with_base(cfg_filename, allow_unsafe=allow_unsafe)
         loaded_cfg = type(self)(loaded_cfg)
 
@@ -63,7 +63,7 @@ class CfgNode(_CfgNode):
 global_cfg = CfgNode()
 
 
-def get_cfg():
+def get_cfg() -> CfgNode:
     """
     Get a copy of the default config.
 
@@ -75,7 +75,7 @@ def get_cfg():
     return _C.clone()
 
 
-def set_global_cfg(cfg):
+def set_global_cfg(cfg: CfgNode) -> None:
     """
     Let the global config point to the given cfg.
 
