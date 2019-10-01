@@ -88,9 +88,8 @@ def guess_version(cfg: CN, filename: str) -> int:
     logger = logging.getLogger(__name__)
 
     def _has(name: str) -> bool:
-        name = name.split(".")
         cur = cfg
-        for n in name:
+        for n in name.split("."):
             if n not in cur:
                 return False
             cur = cur[n]

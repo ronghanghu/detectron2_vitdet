@@ -6,12 +6,12 @@ from detectron2.structures import Instances
 
 def detector_postprocess(results, output_height, output_width, mask_threshold=0.5):
     """
-    Postprocess the output boxes.
+    Resize the output instances.
     The input images are often resized when entering an object detector.
     As a result, we often need the outputs of the detector in a different
     resolution from its inputs.
 
-    This function will postprocess the raw outputs of an R-CNN detector
+    This function will resize the raw outputs of an R-CNN detector
     to produce outputs according to the desired output resolution.
 
     Args:
@@ -21,7 +21,7 @@ def detector_postprocess(results, output_height, output_width, mask_threshold=0.
         output_height, output_width: the desired output resolution.
 
     Returns:
-        Instances: the postprocessed output from the model, based on the output resolution
+        Instances: the resized output from the model, based on the output resolution
     """
     scale_x, scale_y = (output_width / results.image_size[1], output_height / results.image_size[0])
     results = Instances((output_height, output_width), **results.get_fields())
@@ -54,16 +54,12 @@ def detector_postprocess(results, output_height, output_width, mask_threshold=0.
 
 def sem_seg_postprocess(result, img_size, output_height, output_width):
     """
-    Postprocess the output semantic segmentation logit predictions. Return semantic segmentation
-    labels predicted for each pixel in the original resolution.
+    Return semantic segmentation predictions in the original resolution.
 
     The input images are often resized when entering semantic segmentor. Moreover, in same
     cases, they also padded inside segmentor to be divisible by maximum network stride.
     As a result, we often need the predictions of the segmentor in a different
     resolution from its inputs.
-
-    After resizing the logits to the desired resolutions, argmax is applied to return semnantic
-    segmentation classes predicted for each pixel.
 
     Args:
         result (Tensor): semantic segmentation prediction logits. A tensor of shape (C, H, W),

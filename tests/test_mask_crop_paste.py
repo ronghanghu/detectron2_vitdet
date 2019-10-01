@@ -19,7 +19,7 @@ from detectron2.layers.mask_ops import (
     scale_boxes,
 )
 from detectron2.structures import BitMasks, Boxes, PolygonMasks
-from detectron2.structures.masks import batch_crop_and_resize_bitmask, rasterize_polygons_within_box
+from detectron2.structures.masks import rasterize_polygons_within_box
 
 
 """
@@ -103,13 +103,9 @@ def process_annotation(ann, mask_side_len=28):
         "gridsample": rasterize_polygons_with_grid_sample(
             gt_full_image_bit_mask, gt_bbox, mask_side_len
         ),
-        "roialign": batch_crop_and_resize_bitmask(
-            BitMasks.from_polygon_masks(
-                PolygonMasks([[x.tolist() for x in gt_polygons]]), height, width
-            ),
-            torch.from_numpy(gt_bbox[None, :].astype("float32")),
-            mask_side_len,
-        )[0],
+        "roialign": BitMasks.from_polygon_masks(
+            PolygonMasks([[x.tolist() for x in gt_polygons]]), height, width
+        ).crop_and_resize(torch.from_numpy(gt_bbox[None, :].astype("float32")), mask_side_len)[0],
     }
 
     # Run paste ..

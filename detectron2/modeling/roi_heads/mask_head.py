@@ -4,7 +4,6 @@ from torch import nn
 from torch.nn import functional as F
 
 from detectron2.layers import Conv2d, ConvTranspose2d, ShapeSpec, cat, get_norm
-from detectron2.structures import batch_crop_and_resize
 from detectron2.utils.events import get_event_storage
 from detectron2.utils.registry import Registry
 
@@ -46,8 +45,8 @@ def mask_rcnn_loss(pred_mask_logits, instances):
             gt_classes_per_image = instances_per_image.gt_classes.to(dtype=torch.int64)
             gt_classes.append(gt_classes_per_image)
 
-        gt_masks_per_image = batch_crop_and_resize(
-            instances_per_image.gt_masks, instances_per_image.proposal_boxes.tensor, mask_side_len
+        gt_masks_per_image = instances_per_image.gt_masks.crop_and_resize(
+            instances_per_image.proposal_boxes.tensor, mask_side_len
         ).to(device=pred_mask_logits.device)
         # A tensor of shape (N, M, M), N=#instances in the image; M=mask_side_len
         gt_masks.append(gt_masks_per_image)

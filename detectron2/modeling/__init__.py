@@ -24,7 +24,7 @@ from .meta_arch import (
     build_model,
     build_sem_seg_head,
 )
-from .postprocessing import detector_postprocess, sem_seg_postprocess
+from .postprocessing import detector_postprocess
 from .proposal_generator import (
     PROPOSAL_GENERATOR_REGISTRY,
     build_proposal_generator,

@@ -72,79 +72,6 @@ def rasterize_polygons_within_box(
     return mask
 
 
-def batch_crop_and_resize(
-    masks: Union["PolygonMasks", "BitMasks"], boxes: torch.Tensor, mask_size: int
-) -> torch.Tensor:
-    """
-    Crop regions in masks using boxes, and produce result images in the size
-    of mask_size x mask_size.
-
-    Args:
-        masks (PolygonMasks or BitMasks): store N masks for an image in polygon
-            format or bitmap format.
-        boxes (Tensor): store N boxes corresponding to the masks.
-        mask_size (int): the size of the output mask.
-
-    Returns:
-        Tensor: A bool tensor of shape (N, mask_size, mask_size), where
-            N is the number of predicted boxes for this image.
-    """
-    if isinstance(masks, PolygonMasks):
-        device = boxes.device
-        # Put boxes on the CPU, as the polygon representation is not efficient GPU-wise
-        # (several small tensors for representing a single instance mask)
-        boxes = boxes.to(torch.device("cpu"))
-
-        results = [
-            rasterize_polygons_within_box(mask, box.numpy(), mask_size)
-            for mask, box in zip(masks, boxes)
-        ]
-        """
-        mask: list[list[float]], the polygons for one instance
-        box: a tensor of shape (4,)
-        """
-        if len(results) == 0:
-            return torch.empty(0, dtype=torch.bool, device=device)
-        return torch.stack(results, dim=0).to(device=device)
-    else:
-        assert isinstance(masks, BitMasks), type(masks)
-        return batch_crop_and_resize_bitmask(masks, boxes, mask_size)
-
-
-def batch_crop_and_resize_bitmask(
-    masks: "BitMasks", boxes: torch.Tensor, mask_size: int
-) -> torch.Tensor:
-    """
-    Use ROIAlign to rasterize boxes in full image BitMasks.
-    It has less reconstruction error compared to rasterization with polygons.
-    However we observe no difference in accuracy,
-    but this one uses more memory to store all the masks.
-
-    Args:
-        masks (BitMasks): store N masks for an image in polygon format.
-        boxes (Tensor): store N boxes corresponding to the masks.
-        mask_size (int): the size of the rasterized mask.
-
-    Returns:
-        Tensor: A bool tensor of shape (N, mask_size, mask_size), where
-            N is the number of predicted boxes for this image.
-    """
-    device = masks.tensor.device
-
-    batch_inds = torch.arange(len(boxes), device=device).to(dtype=boxes.dtype)[:, None]
-    rois = torch.cat([batch_inds, boxes], dim=1)  # Nx5
-
-    bit_masks = masks.tensor.to(dtype=torch.float32)
-    rois = rois.to(device=device)
-    output = (
-        ROIAlign((mask_size, mask_size), 1.0, 0, aligned=True)
-        .forward(bit_masks[:, None, :, :], rois)
-        .squeeze(1)
-    )
-    output = output >= 0.5
-    return output
-
-
 class BitMasks:
     """
     This class stores the segmentation masks for all objects in one image, in
@@ -224,6 +151,38 @@ class BitMasks:
             polygon_masks = polygon_masks.polygons
         masks = [polygons_to_bitmask(p, height, width) for p in polygon_masks]
         return BitMasks(torch.stack([torch.from_numpy(x) for x in masks]))
+
+    def crop_and_resize(self, boxes: torch.Tensor, mask_size: int) -> torch.Tensor:
+        """
+        Crop each bitmask by the given box, and resize results to (mask_size, mask_size).
+        This can be used to prepare training targets for Mask R-CNN.
+        It has less reconstruction error compared to rasterization with polygons.
+        However we observe no difference in accuracy,
+        but BitMasks requires more memory to store all the masks.
+
+        Args:
+            boxes (Tensor): Nx4 tensor storing the boxes for each mask
+            mask_size (int): the size of the rasterized mask.
+
+        Returns:
+            Tensor: A bool tensor of shape (N, mask_size, mask_size), where
+                N is the number of predicted boxes for this image.
+        """
+        assert len(boxes) == len(self), "{} != {}".format(len(boxes), len(self))
+        device = self.tensor.device
+
+        batch_inds = torch.arange(len(boxes), device=device).to(dtype=boxes.dtype)[:, None]
+        rois = torch.cat([batch_inds, boxes], dim=1)  # Nx5
+
+        bit_masks = self.tensor.to(dtype=torch.float32)
+        rois = rois.to(device=device)
+        output = (
+            ROIAlign((mask_size, mask_size), 1.0, 0, aligned=True)
+            .forward(bit_masks[:, None, :, :], rois)
+            .squeeze(1)
+        )
+        output = output >= 0.5
+        return output
 
     def get_bounding_boxes(self) -> None:
         # not needed now
@@ -348,3 +307,35 @@ class PolygonMasks:
 
     def __len__(self) -> int:
         return len(self.polygons)
+
+    def crop_and_resize(self, boxes: torch.Tensor, mask_size: int) -> torch.Tensor:
+        """
+        Crop each mask by the given box, and resize results to (mask_size, mask_size).
+        This can be used to prepare training targets for Mask R-CNN.
+
+        Args:
+            boxes (Tensor): Nx4 tensor storing the boxes for each mask
+            mask_size (int): the size of the rasterized mask.
+
+        Returns:
+            Tensor: A bool tensor of shape (N, mask_size, mask_size), where
+                N is the number of predicted boxes for this image.
+        """
+        assert len(boxes) == len(self), "{} != {}".format(len(boxes), len(self))
+
+        device = boxes.device
+        # Put boxes on the CPU, as the polygon representation is not efficient GPU-wise
+        # (several small tensors for representing a single instance mask)
+        boxes = boxes.to(torch.device("cpu"))
+
+        results = [
+            rasterize_polygons_within_box(poly, box.numpy(), mask_size)
+            for poly, box in zip(self.polygons, boxes)
+        ]
+        """
+        poly: list[list[float]], the polygons for one instance
+        box: a tensor of shape (4,)
+        """
+        if len(results) == 0:
+            return torch.empty(0, mask_size, mask_size, dtype=torch.bool, device=device)
+        return torch.stack(results, dim=0).to(device=device)
