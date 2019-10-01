@@ -19,7 +19,7 @@ def paste_masks_in_image(masks, boxes, image_shape, threshold=0.5):
     corresponding bounding boxes in boxes.
 
     Args:
-        masks (tensor): Tensor of shape (Bimg, 1, Hmask, Wmask), where Bimg is the number of
+        masks (tensor): Tensor of shape (Bimg, Hmask, Wmask), where Bimg is the number of
             detected object instances in the image and Hmask, Wmask are the mask width and mask
             height of the predicted mask (e.g., Hmask = Wmask = 28). Values are in [0, 1].
         boxes (Boxes): A Boxes of length Bimg. boxes.tensor[i] and masks[i] correspond
@@ -29,53 +29,15 @@ def paste_masks_in_image(masks, boxes, image_shape, threshold=0.5):
             binary masks.
 
     Returns:
-        img_masks (Tensor): A tensor of shape (Bimg, 1, Himage, Wimage), where Bimg is the
+        img_masks (Tensor): A tensor of shape (Bimg, Himage, Wimage), where Bimg is the
             number of detected object instances and Himage, Wimage are the image width
             and height. img_masks[i] is a binary mask for object instance i.
     """
     assert masks.shape[-1] == masks.shape[-2], "Only square mask predictions are supported"
+    if len(masks) == 0:
+        return masks.new_empty((0,) + image_shape, dtype=torch.uint8)
 
-    if len(masks) > 0:
-        img_masks = paste_masks_in_image_aligned(masks, boxes, image_shape, threshold)
-
-        # The below are the original paste function (from Detectron1) which has
-        # larger quantization error.
-        # It is faster on CPU, while the aligned one is faster on GPU.
-
-        # Our pixel modeling requires extrapolation for any continuous
-        # coordinate < 0.5 or > length - 0.5. When sampling pixels on the masks,
-        # we would like this extrapolation to be an interpolation between boundary values and zero,
-        # instead of using absolute zero or boundary values.
-        # Therefore we pad zero around the masks.
-        # masks, scale = pad_masks(masks[:, 0, :, :], 1)
-        # boxes = scale_boxes(boxes.tensor, scale)
-
-        # img_masks = [
-        #     paste_mask_in_image(mask, box, image_shape[0], image_shape[1], threshold)
-        #     for mask, box in zip(masks, boxes)
-        # ]
-        # img_masks = torch.stack(img_masks, dim=0)[:, None]
-    else:
-        img_masks = masks.new_empty((0, 1) + image_shape, dtype=torch.uint8)
-    return img_masks
-
-
-def paste_masks_in_image_aligned(masks, boxes, image_shape, threshold):
-    """
-    An implementation of :func:`paste_masks_in_image` which uses the pixel modeling
-    described in
-    Heckbert 1990 ("What is the coordinate of a pixel?"),
-    with a continuous-discrete conversion like this:
-
-        d = truncate(c)
-        c = d + 0.5,
-
-    where d is a discrete coordinate and c is a continuous coordinate.
-
-    It has the same interface as :func:`paste_masks_in_image`.
-    """
     boxes = boxes.tensor
-    masks = masks[:, 0, :, :]
 
     device = boxes.device
     N, mask_h, mask_w = masks.shape
@@ -94,7 +56,7 @@ def paste_masks_in_image_aligned(masks, boxes, image_shape, threshold):
         x1_int = torch.min(zero + img_w, x1.ceil().to(dtype=torch.int32) + 1)
         y1_int = torch.min(zero + img_h, y1.ceil().to(dtype=torch.int32) + 1)
 
-        img_masks = torch.zeros(N, 1, img_h, img_w, device=masks.device, dtype=torch.uint8)
+        img_masks = torch.zeros(N, img_h, img_w, device=masks.device, dtype=torch.uint8)
         for idx, mask in enumerate(masks):
             img_y = torch.arange(y0_int[idx], y1_int[idx], dtype=torch.float32, device=device) + 0.5
             img_x = torch.arange(x0_int[idx], x1_int[idx], dtype=torch.float32, device=device) + 0.5
@@ -113,7 +75,7 @@ def paste_masks_in_image_aligned(masks, boxes, image_shape, threshold):
                 res = (res >= threshold).to(dtype=torch.uint8)
             else:
                 res = (res * 255).to(dtype=torch.uint8)
-            img_masks[idx, 0, y0_int[idx] : y1_int[idx], x0_int[idx] : x1_int[idx]] = res
+            img_masks[idx, y0_int[idx] : y1_int[idx], x0_int[idx] : x1_int[idx]] = res
         return img_masks
     else:
 
@@ -151,11 +113,16 @@ def paste_masks_in_image_aligned(masks, boxes, image_shape, threshold):
             img_masks.append(
                 process_chunk(masks[inds, None, :, :], y0[inds], y1[inds], x0[inds], x1[inds])
             )
-        img_masks = torch.cat(img_masks)
+        img_masks = torch.cat(img_masks)[:, 0, :, :]
     return img_masks
 
 
-def paste_mask_in_image(mask, box, img_h, img_w, threshold):
+# The below are the original paste function (from Detectron1) which has
+# larger quantization error.
+# It is faster on CPU, while the aligned one is faster on GPU thanks to grid_sample.
+
+
+def paste_mask_in_image_old(mask, box, img_h, img_w, threshold):
     """
     Paste a single mask in an image.
     This is a per-box implementation of :func:`paste_masks_in_image`.
@@ -207,6 +174,15 @@ def paste_mask_in_image(mask, box, img_h, img_w, threshold):
         (y_0 - box[1]) : (y_1 - box[1]), (x_0 - box[0]) : (x_1 - box[0])
     ]
     return im_mask
+
+
+# Our pixel modeling requires extrapolation for any continuous
+# coordinate < 0.5 or > length - 0.5. When sampling pixels on the masks,
+# we would like this extrapolation to be an interpolation between boundary values and zero,
+# instead of using absolute zero or boundary values.
+# Therefore `paste_mask_in_image_old` is often used with zero padding around the masks like this:
+# masks, scale = pad_masks(masks[:, 0, :, :], 1)
+# boxes = scale_boxes(boxes.tensor, scale)
 
 
 def pad_masks(masks, padding):

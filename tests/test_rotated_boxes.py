@@ -241,8 +241,8 @@ class TestRotatedBoxesLayer(unittest.TestCase):
         assert torch.allclose(ious_cuda.cpu(), expected_ious)
 
     def test_benchmark_cpu_cuda(self):
-        num_boxes1 = 500
-        num_boxes2 = 1000
+        num_boxes1 = 200
+        num_boxes2 = 500
         boxes1 = torch.stack(
             [
                 torch.tensor([5 + 20 * i, 5 + 20 * i, 10, 10, 0], dtype=torch.float32)

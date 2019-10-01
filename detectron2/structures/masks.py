@@ -216,7 +216,7 @@ class PolygonMasks:
             # May need to change this assumption if GPU placement becomes useful
             if isinstance(t, torch.Tensor):
                 t = t.cpu().numpy()
-            return t.astype("float64")
+            return np.asarray(t).astype("float64")
 
         def process_polygons(
             polygons_per_instance: List[Union[torch.Tensor, np.ndarray]]
