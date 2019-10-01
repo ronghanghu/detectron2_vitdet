@@ -108,10 +108,16 @@ class VideoVisualizer:
 
         return frame_visualizer.output
 
-    def draw_sem_seg_predictions(self, frame, predictions, area_threshold=None):
+    def draw_sem_seg(self, frame, sem_seg, area_threshold=None):
+        """
+        Args:
+            sem_seg (ndarray or Tensor): semantic segmentation of shape (H, W),
+                each value is the integer label.
+            area_threhold (Optional[int]): only draw segmentations larger than the threshold
+        """
         # don't need to do anything special
         frame_visualizer = Visualizer(frame, self.metadata)
-        frame_visualizer.draw_sem_seg_predictions(predictions, area_threshold=None)
+        frame_visualizer.draw_sem_seg(sem_seg, area_threshold=None)
         return frame_visualizer.output
 
     def draw_panoptic_seg_predictions(

@@ -49,7 +49,7 @@ class GenericMask:
     """
 
     def __init__(self, mask_or_polygons, height, width):
-        self._mask = self._polygons = None
+        self._mask = self._polygons = self._has_holes = None
         self.height = height
         self.width = width
 
@@ -85,18 +85,30 @@ class GenericMask:
     @property
     def polygons(self):
         if self._polygons is None:
-            self._polygons = self.mask_to_polygons(self._mask)
+            self._polygons, self._has_holes = self.mask_to_polygons(self._mask)
         return self._polygons
+
+    @property
+    def has_holes(self):
+        if self._has_holes is None:
+            if self._mask is not None:
+                self._polygons, self._has_holes = self.mask_to_polygons(self._mask)
+            else:
+                self._has_holes = False  # if original format is polygon, does not have holes
+        return self._has_holes
 
     def mask_to_polygons(self, mask):
         # cv2.RETR_CCOMP flag retrieves all the contours and arranges them to a 2-level
         # hierarchy. External contours (boundary) of the object are placed in hierarchy-1.
         # Internal contours (holes) are placed in hierarchy-2.
         # cv2.CHAIN_APPROX_NONE flag gets vertices of polygons from countours.
-        res = cv2.findContours(mask.astype("uint8"), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)[-2]
+        res = cv2.findContours(mask.astype("uint8"), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
+        hierarchy = res[-1]
+        has_holes = (hierarchy.reshape(-1, 4)[:, 3] >= 0).sum() > 0
+        res = res[-2]
         res = [x.flatten() for x in res]
         res = [x for x in res if len(x) >= 6]
-        return res
+        return res, has_holes
 
     def polygons_to_mask(self, polygons):
         rle = mask_util.frPyObjects(polygons, self.height, self.width)
@@ -335,28 +347,30 @@ class Visualizer:
         )
         return self.output
 
-    def draw_sem_seg_predictions(self, predictions, area_threshold=None, alpha=0.8):
+    def draw_sem_seg(self, sem_seg, area_threshold=None, alpha=0.8):
         """
-        Draw stuff prediction results on an image.
+        Draw semantic segmentation predictions/labels.
 
         Args:
-            predictions (Tensor): the output of shape (C, H, W).
+            sem_seg (Tensor or ndarray): the segmentation of shape (H, W).
             area_threshold (int): segments with less than `area_threshold` are not drawn.
             alpha (float): the larger it is, the more opaque the segmentations are.
 
         Returns:
             output (VisImage): image object with visualizations.
         """
-        labels, areas = np.unique(predictions, return_counts=True)
+        if isinstance(sem_seg, torch.Tensor):
+            sem_seg = sem_seg.numpy()
+        labels, areas = np.unique(sem_seg, return_counts=True)
         sorted_idxs = np.argsort(-areas).tolist()
         labels = labels[sorted_idxs]
         for label in labels:
             try:
                 mask_color = [x / 255 for x in self.metadata.stuff_colors[label]]
-            except AttributeError:
+            except (AttributeError, IndexError):
                 mask_color = None
 
-            binary_mask = (predictions == label).numpy().astype(np.uint8)
+            binary_mask = (sem_seg == label).astype(np.uint8)
             text = self.metadata.stuff_class_names[label]
             self.draw_binary_mask(
                 binary_mask,
@@ -445,6 +459,12 @@ class Visualizer:
                 labels = [names[i] for i in labels]
             labels = [i + ("|crowd" if a.get("iscrowd", 0) else "") for i, a in zip(labels, annos)]
             self.overlay_instances(labels=labels, boxes=boxes, masks=masks, keypoints=keypts)
+
+        sem_seg = dic.get("sem_seg", None)
+        if sem_seg is None and "sem_seg_file_name" in dic:
+            sem_seg = cv2.imread(dic["sem_seg_file_name"], cv2.IMREAD_GRAYSCALE)
+        if sem_seg is not None:
+            self.draw_sem_seg(sem_seg, area_threshold=0, alpha=0.5)
         return self.output
 
     def overlay_instances(
@@ -757,19 +777,26 @@ class Visualizer:
         if area_threshold is None:
             area_threshold = 4096
 
-        # TODO handle masks with holes
         has_valid_segment = False
         binary_mask = binary_mask.astype("uint8")  # opencv needs uint8
         mask = GenericMask(binary_mask, self.output.height, self.output.width)
-        for segment in mask.polygons:
-            area = mask_util.area(
-                mask_util.frPyObjects([segment], binary_mask.shape[0], binary_mask.shape[1])
-            )
-            if area < area_threshold:
-                continue
+        shape2d = (binary_mask.shape[0], binary_mask.shape[1])
+
+        if not mask.has_holes:
+            # draw polygons for regular masks
+            for segment in mask.polygons:
+                area = mask_util.area(mask_util.frPyObjects([segment], shape2d[0], shape2d[1]))
+                if area < area_threshold:
+                    continue
+                has_valid_segment = True
+                segment = segment.reshape(-1, 2)
+                self.draw_polygon(segment, color=color, edge_color=edge_color, alpha=alpha)
+        else:
+            rgba = np.zeros(shape2d + (4,), dtype="float32")
+            rgba[:, :, :3] = color
+            rgba[:, :, 3] = (mask.mask == 1).astype("float32") * alpha
             has_valid_segment = True
-            segment = segment.reshape(-1, 2)
-            self.draw_polygon(segment, color=color, edge_color=edge_color, alpha=alpha)
+            self.output.ax.imshow(rgba)
 
         if text is not None and has_valid_segment:
             # TODO sometimes drawn on wrong objects. the heuristics here can improve.
@@ -810,7 +837,7 @@ class Visualizer:
             fill=True,
             facecolor=mplc.to_rgb(color) + (alpha,),
             edgecolor=edge_color,
-            linewidth=max(self.output.height // 300 * self.output.scale, 1),
+            linewidth=max(self._default_font_size // 15 * self.output.scale, 1),
         )
         self.output.ax.add_patch(polygon)
         return self.output

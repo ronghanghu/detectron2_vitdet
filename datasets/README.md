@@ -46,7 +46,8 @@ cityscapes/
   gtFine/
     train/
       aachen/
-        color, instanceIds, labelIds, polygons
+        color.png, instanceIds.png, labelIds.png, polygons.json
+				labelTrainIds.png (created by cityscapesscripts/preparation/createTrainIdLabelImgs.py)
       ...
     val/
     test/

@@ -21,7 +21,7 @@ import os
 from detectron2.data import MetadataCatalog, DatasetCatalog
 from .register_coco import register_coco_instances, register_coco_panoptic_separated
 from .lvis import register_lvis_instances, get_lvis_instances_meta
-from .cityscapes import load_cityscapes_instances
+from .cityscapes import load_cityscapes_instances, load_cityscapes_semantic
 from .pascal_voc import register_pascal_voc
 from .builtin_meta import _get_builtin_metadata
 
@@ -156,15 +156,9 @@ def register_all_lvis(root="datasets"):
 
 
 _RAW_CITYSCAPES_SPLITS = {
-    "cityscapes_fine_instanceonly_seg_train": (
-        "cityscapes/leftImg8bit/train",
-        "cityscapes/gtFine/train",
-    ),
-    "cityscapes_fine_instanceonly_seg_val": ("cityscapes/leftImg8bit/val", "cityscapes/gtFine/val"),
-    "cityscapes_fine_instanceonly_seg_test": (
-        "cityscapes/leftImg8bit/test",
-        "cityscapes/gtFine/test",
-    ),
+    "cityscapes_fine_{task}_train": ("cityscapes/leftImg8bit/train", "cityscapes/gtFine/train"),
+    "cityscapes_fine_{task}_val": ("cityscapes/leftImg8bit/val", "cityscapes/gtFine/val"),
+    "cityscapes_fine_{task}_test": ("cityscapes/leftImg8bit/test", "cityscapes/gtFine/test"),
 }
 
 
@@ -173,14 +167,24 @@ def register_all_cityscapes(root="datasets"):
         meta = _get_builtin_metadata("cityscapes")
         image_dir = os.path.join(root, image_dir)
         gt_dir = os.path.join(root, gt_dir)
+
+        inst_key = key.format(task="instance_seg")
         DatasetCatalog.register(
-            key,
+            inst_key,
             lambda x=image_dir, y=gt_dir: load_cityscapes_instances(
                 x, y, from_json=True, to_polygons=True
             ),
         )
-        MetadataCatalog.get(key).set(
+        MetadataCatalog.get(inst_key).set(
             image_dir=image_dir, gt_dir=gt_dir, evaluator_type="cityscapes", **meta
+        )
+
+        sem_key = key.format(task="sem_seg")
+        DatasetCatalog.register(
+            sem_key, lambda x=image_dir, y=gt_dir: load_cityscapes_semantic(x, y)
+        )
+        MetadataCatalog.get(sem_key).set(
+            image_dir=image_dir, gt_dir=gt_dir, evaluator_type="sem_seg", **meta
         )
 
 

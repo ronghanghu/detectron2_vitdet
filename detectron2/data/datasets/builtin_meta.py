@@ -248,15 +248,19 @@ def _get_builtin_metadata(dataset_name):
             "keypoint_connection_rules": KEYPOINT_CONNECTION_RULES,
         }
     elif dataset_name == "cityscapes":
+        # fmt: off
         CITYSCAPES_THING_CLASS_NAMES = [
-            "person",
-            "rider",
-            "car",
-            "truck",
-            "bus",
-            "train",
-            "motorcycle",
-            "bicycle",
+            "person", "rider", "car", "truck",
+            "bus", "train", "motorcycle", "bicycle",
         ]
-        return {"class_names": CITYSCAPES_THING_CLASS_NAMES}
+        CITYSCAPES_STUFF_CLASS_NAMES = [
+            "road", "sidewalk", "building", "wall", "fence", "pole", "traffic light",
+            "traffic sign", "vegetation", "terrain", "sky", "person", "rider", "car",
+            "truck", "bus", "train", "motorcycle", "bicycle", "license plate",
+        ]
+        # fmt: on
+        return {
+            "class_names": CITYSCAPES_THING_CLASS_NAMES,
+            "stuff_class_names": CITYSCAPES_STUFF_CLASS_NAMES,
+        }
     raise KeyError("No built-in metadata for dataset {}".format(dataset_name))

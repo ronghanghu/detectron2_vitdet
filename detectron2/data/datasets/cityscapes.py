@@ -29,9 +29,6 @@ def load_cityscapes_instances(image_dir, gt_dir, from_json=True, to_polygons=Tru
         from_json (bool): whether to read annotations from the raw json file or the png files.
         to_polygons (bool): whether to represent the segmentation as polygons
             (COCO's format) instead of masks (cityscapes's format).
-        dataset_id_to_contiguous_id (dict): mapping from id in the dataset to
-            a contiguous id in [0, #categories). If None, will not apply this
-            mapping and the categories in the returned dicts will have cityscapes' original id.
 
     Returns:
         list[dict]: a list of dicts in "Detectron2 Dataset" format. (See DATASETS.md)
@@ -75,6 +72,42 @@ def load_cityscapes_instances(image_dir, gt_dir, from_json=True, to_polygons=Tru
     for dict_per_image in ret:
         for anno in dict_per_image["annotations"]:
             anno["category_id"] = dataset_id_to_contiguous_id[anno["category_id"]]
+    return ret
+
+
+def load_cityscapes_semantic(image_dir, gt_dir):
+    """
+    Args:
+        image_dir (str): path to the raw dataset. e.g., "~/cityscapes/leftImg8bit/train".
+        gt_dir (str): path to the raw annotations. e.g., "~/cityscapes/gtFine/train".
+
+    Returns:
+        list[dict]: a list of dict, each has "file_name" and
+            "sem_seg_file_name".
+    """
+    ret = []
+    for image_file in glob.glob(os.path.join(image_dir, "**/*.png")):
+        suffix = "leftImg8bit.png"
+        assert image_file.endswith(suffix)
+        prefix = image_dir
+
+        label_file = gt_dir + image_file[len(prefix) : -len(suffix)] + "gtFine_labelTrainIds.png"
+        assert os.path.isfile(
+            label_file
+        ), "Please generate labelTrainIds.png with cityscapesscripts/preparation/createTrainIdLabelImgs.py"  # noqa
+
+        json_file = gt_dir + image_file[len(prefix) : -len(suffix)] + "gtFine_polygons.json"
+
+        with PathManager.open(json_file, "r") as f:
+            jsonobj = json.load(f)
+        ret.append(
+            {
+                "file_name": image_file,
+                "sem_seg_file_name": label_file,
+                "height": jsonobj["imgHeight"],
+                "width": jsonobj["imgWidth"],
+            }
+        )
     return ret
 
 
@@ -239,24 +272,44 @@ if __name__ == "__main__":
         python -m detectron2.data.datasets.cityscapes \
             cityscapes/leftImg8bit/train cityscapes/gtFine/train
     """
-    import sys
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("image_dir")
+    parser.add_argument("gt_dir")
+    parser.add_argument("--type", choices=["instance", "semantic"], default="instance")
+    args = parser.parse_args()
     from detectron2.data.catalog import Metadata
     from detectron2.utils.visualizer import Visualizer
     from cityscapesscripts.helpers.labels import labels
 
     logger = setup_logger(name=__name__)
 
-    thing_names = [k.name for k in labels]
-    meta = Metadata().set(class_names=thing_names)
-
-    dicts = load_cityscapes_instances(sys.argv[1], sys.argv[2], from_json=True, to_polygons=True)
-    logger.info("Done loading {} samples.".format(len(dicts)))
-
     dirname = "cityscapes-data-vis"
     os.makedirs(dirname, exist_ok=True)
+
+    if args.type == "instance":
+        dicts = load_cityscapes_instances(
+            args.image_dir, args.gt_dir, from_json=True, to_polygons=True
+        )
+        logger.info("Done loading {} samples.".format(len(dicts)))
+
+        thing_names = [k.name for k in labels if k.hasInstances and not k.ignoreInEval]
+        meta = Metadata().set(class_names=thing_names)
+
+    else:
+        dicts = load_cityscapes_semantic(args.image_dir, args.gt_dir)
+        logger.info("Done loading {} samples.".format(len(dicts)))
+
+        stuff_names = [k.name for k in labels if k.trainId != 255]
+        stuff_colors = [k.color for k in labels if k.trainId != 255]
+        meta = Metadata().set(stuff_class_names=stuff_names, stuff_colors=stuff_colors)
+
     for d in dicts:
         img = np.array(Image.open(d["file_name"]))
         visualizer = Visualizer(img, metadata=meta)
         vis = visualizer.draw_dataset_dict(d)
+        # cv2.imshow("a", vis.get_image()[:, :, ::-1])
+        # cv2.waitKey()
         fpath = os.path.join(dirname, os.path.basename(d["file_name"]))
         vis.save(fpath)

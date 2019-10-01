@@ -2,7 +2,7 @@ _BASE_: "../Base-RCNN-FPN.yaml"
 MODEL:
   # WEIGHTS: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
   # For better, more stable performance initialize from COCO
-  WEIGHTS: "detectron2://e2e_mask_rcnn_R_50_FPN_1x/111801949/model_final_05dc3b6ea7b1da199fafd3b58defdaae.pkl"
+  WEIGHTS: "detectron2://COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x/137849600/model_final_f10217.pkl"
   MASK_ON: True
   ROI_HEADS:
     NUM_CLASSES: 8
@@ -13,8 +13,8 @@ INPUT:
   MAX_SIZE_TRAIN: 2048
   MAX_SIZE_TEST: 2048
 DATASETS:
-  TRAIN: ("cityscapes_fine_instanceonly_seg_train",)
-  TEST: ("cityscapes_fine_instanceonly_seg_val",)
+  TRAIN: ("cityscapes_fine_instance_seg_train",)
+  TEST: ("cityscapes_fine_instance_seg_val",)
 SOLVER:
   BASE_LR: 0.01
   STEPS: (18000,)
