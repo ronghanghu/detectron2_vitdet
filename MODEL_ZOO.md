@@ -2,13 +2,37 @@
 
 ## Introduction
 
+This file documents a large collection of baselines trained
+with detectron2 in Sep 2019.
+The corresponding configurations for all models can be found under `configs/` directory.
+Unless otherwise noted, the following settings are used for all runs:
+
+#### Common Settings
+* All models were trained on [Big Basin](https://engineering.fb.com/data-center-engineering/introducing-big-basin-our-next-generation-ai-hardware/)
+  servers with 8 NVIDIA V100 GPUs, with data-parallel sync SGD and a total minibatch size of 16 images.
+* All models were trained with CUDA 9.2, cuDNN 7.4.2 or 7.6.3 (the difference on performance is found to be negligible).
+* Horizontal flipping and scale jittering are used as training augmentation.
+  This is different from the default setting in Detectron.
+* No test-time augmentation is used for inference.
+* (TODO) Inference time is measured with batch size 1. It contains the time taken to postprocess results for evaluation.
+* The *model id* column is provided for ease of reference.
+* To check downloaded file integrity: any model on this page contains its md5 prefix in its file name.
+* All COCO models were trained on `train2017` and evaluated on `val2017`.
+
+#### License
+
+TODO
+
 
 ### COCO Object Detection Baselines
+
+#### Faster R-CNN:
 <!--
-To update the table in vim:
+(fb only) To update the table in vim:
 1. Remove the old table: d{
 2. Copy the below command to the place of the table
 3. :.!bash
+
 ./gen_html_table.py --config 'COCO-Detection/faster*50*'{1x,3x} 'COCO-Detection/faster*101*' --name R50-C4 R50-DC5 R50-FPN R50-C4 R50-DC5 R50-FPN R101-C4 R101-DC5 R101-FPN X101-FPN --fields lr_sched train_speed inference_speed mem box_AP
 -->
 
@@ -127,6 +151,54 @@ To update the table in vim:
 </tr>
 </tbody></table>
 
+#### RetinaNet:
+<!--
+./gen_html_table.py --config 'COCO-Detection/retina*50*' 'COCO-Detection/retina*101*' --name R50 R50 R101 --fields lr_sched train_speed inference_speed mem box_AP
+-->
+
+<table><tbody>
+<!-- START TABLE -->
+<!-- TABLE HEADER -->
+<th valign="bottom">Name</th>
+<th valign="bottom">lr<br/>sched</th>
+<th valign="bottom">train<br/>time<br/>(s/iter)</th>
+<th valign="bottom">inference<br/>time<br/>(s/im)</th>
+<th valign="bottom">train<br/>mem<br/>(GB)</th>
+<th valign="bottom">box<br/>AP</th>
+<th valign="bottom">model id</th>
+<th valign="bottom">download</th>
+<!-- TABLE BODY -->
+<!-- ROW: retinanet_R_50_FPN_1x -->
+ <tr><td align="left">R50</td>
+<td align="center">1x</td>
+<td align="center">0.200</td>
+<td align="center">0.082</td>
+<td align="center">3.9</td>
+<td align="center">36.5</td>
+<td align="center">137593951</td>
+<td align="center"><a href="https://dl.fbaipublicfiles.com/detectron2/COCO-Detection/retinanet_R_50_FPN_1x/137593951/model_final_b796dc.pkl">model</a>&nbsp;|&nbsp;<a href="https://dl.fbaipublicfiles.com/detectron2/COCO-Detection/retinanet_R_50_FPN_1x/137593951/metrics.json">metrics</a></td>
+</tr>
+<!-- ROW: retinanet_R_50_FPN_3x -->
+ <tr><td align="left">R50</td>
+<td align="center">3x</td>
+<td align="center">0.201</td>
+<td align="center">0.081</td>
+<td align="center">3.9</td>
+<td align="center">37.9</td>
+<td align="center">137849486</td>
+<td align="center"><a href="https://dl.fbaipublicfiles.com/detectron2/COCO-Detection/retinanet_R_50_FPN_3x/137849486/model_final_4cafe0.pkl">model</a>&nbsp;|&nbsp;<a href="https://dl.fbaipublicfiles.com/detectron2/COCO-Detection/retinanet_R_50_FPN_3x/137849486/metrics.json">metrics</a></td>
+</tr>
+<!-- ROW: retinanet_R_101_FPN_3x -->
+ <tr><td align="left">R101</td>
+<td align="center">3x</td>
+<td align="center">0.280</td>
+<td align="center">0.087</td>
+<td align="center">5.1</td>
+<td align="center">39.9</td>
+<td align="center">138363263</td>
+<td align="center"><a href="https://dl.fbaipublicfiles.com/detectron2/COCO-Detection/retinanet_R_101_FPN_3x/138363263/model_final_59f53c.pkl">model</a>&nbsp;|&nbsp;<a href="https://dl.fbaipublicfiles.com/detectron2/COCO-Detection/retinanet_R_101_FPN_3x/138363263/metrics.json">metrics</a></td>
+</tr>
+</tbody></table>
 
 
 ### COCO Instance Segmentation Baselines
@@ -249,3 +321,67 @@ To update the table in vim:
 </tr>
 </tbody></table>
 
+
+### COCO Keypoint Detection Baselines
+<!--
+./gen_html_table.py --config 'COCO-Keypoints/*50*' 'COCO-Keypoints/*101*'  --name R50-FPN R50-FPN R101-FPN X101-FPN --fields lr_sched train_speed inference_speed mem box_AP keypoint_AP
+-->
+
+<table><tbody>
+<!-- START TABLE -->
+<!-- TABLE HEADER -->
+<th valign="bottom">Name</th>
+<th valign="bottom">lr<br/>sched</th>
+<th valign="bottom">train<br/>time<br/>(s/iter)</th>
+<th valign="bottom">inference<br/>time<br/>(s/im)</th>
+<th valign="bottom">train<br/>mem<br/>(GB)</th>
+<th valign="bottom">box<br/>AP</th>
+<th valign="bottom">kp.<br/>AP</th>
+<th valign="bottom">model id</th>
+<th valign="bottom">download</th>
+<!-- TABLE BODY -->
+<!-- ROW: keypoint_rcnn_R_50_FPN_1x -->
+ <tr><td align="left">R50-FPN</td>
+<td align="center">1x</td>
+<td align="center">0.315</td>
+<td align="center">0.102</td>
+<td align="center">5.0</td>
+<td align="center">53.6</td>
+<td align="center">64.0</td>
+<td align="center">137261548</td>
+<td align="center"><a href="https://dl.fbaipublicfiles.com/detectron2/COCO-Keypoints/keypoint_rcnn_R_50_FPN_1x/137261548/model_final_04e291.pkl">model</a>&nbsp;|&nbsp;<a href="https://dl.fbaipublicfiles.com/detectron2/COCO-Keypoints/keypoint_rcnn_R_50_FPN_1x/137261548/metrics.json">metrics</a></td>
+</tr>
+<!-- ROW: keypoint_rcnn_R_50_FPN_3x -->
+ <tr><td align="left">R50-FPN</td>
+<td align="center">3x</td>
+<td align="center">0.316</td>
+<td align="center">0.095</td>
+<td align="center">5.0</td>
+<td align="center">55.4</td>
+<td align="center">65.5</td>
+<td align="center">137849621</td>
+<td align="center"><a href="https://dl.fbaipublicfiles.com/detectron2/COCO-Keypoints/keypoint_rcnn_R_50_FPN_3x/137849621/model_final_a6e10b.pkl">model</a>&nbsp;|&nbsp;<a href="https://dl.fbaipublicfiles.com/detectron2/COCO-Keypoints/keypoint_rcnn_R_50_FPN_3x/137849621/metrics.json">metrics</a></td>
+</tr>
+<!-- ROW: keypoint_rcnn_R_101_FPN_3x -->
+ <tr><td align="left">R101-FPN</td>
+<td align="center">3x</td>
+<td align="center">0.390</td>
+<td align="center">0.106</td>
+<td align="center">6.1</td>
+<td align="center">56.4</td>
+<td align="center">66.1</td>
+<td align="center">138363331</td>
+<td align="center"><a href="https://dl.fbaipublicfiles.com/detectron2/COCO-Keypoints/keypoint_rcnn_R_101_FPN_3x/138363331/model_final_997cc7.pkl">model</a>&nbsp;|&nbsp;<a href="https://dl.fbaipublicfiles.com/detectron2/COCO-Keypoints/keypoint_rcnn_R_101_FPN_3x/138363331/metrics.json">metrics</a></td>
+</tr>
+<!-- ROW: keypoint_rcnn_X_101_32x8d_FPN_3x -->
+ <tr><td align="left">X101-FPN</td>
+<td align="center">3x</td>
+<td align="center">0.738</td>
+<td align="center">0.168</td>
+<td align="center">8.7</td>
+<td align="center">57.3</td>
+<td align="center">66.0</td>
+<td align="center">139686956</td>
+<td align="center"><a href="https://dl.fbaipublicfiles.com/detectron2/COCO-Keypoints/keypoint_rcnn_X_101_32x8d_FPN_3x/139686956/model_final_5ad38f.pkl">model</a>&nbsp;|&nbsp;<a href="https://dl.fbaipublicfiles.com/detectron2/COCO-Keypoints/keypoint_rcnn_X_101_32x8d_FPN_3x/139686956/metrics.json">metrics</a></td>
+</tr>
+</tbody></table>
