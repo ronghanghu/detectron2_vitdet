@@ -8,6 +8,7 @@ import unittest
 from collections import defaultdict
 import torch
 import tqdm
+from borc.common.benchmark import benchmark
 from pycocotools.coco import COCO
 from tabulate import tabulate
 from torch.nn import functional as F
@@ -135,5 +136,38 @@ class TestMaskCropPaste(unittest.TestCase):
         return table
 
 
+def benchmark_paste():
+    S = 800
+    H, W = image_shape = (S, S)
+    N = 64
+    torch.manual_seed(42)
+    masks = torch.rand(N, 28, 28)
+
+    center = torch.rand(N, 2) * 600 + 100
+    wh = torch.clamp(torch.randn(N, 2) * 40 + 200, min=50)
+    x0y0 = torch.clamp(center - wh * 0.5, min=0.0)
+    x1y1 = torch.clamp(center + wh * 0.5, max=S)
+    boxes = Boxes(torch.cat([x0y0, x1y1], axis=1))
+
+    def func(device, n=3):
+        m = masks.to(device=device)
+        b = boxes.to(device=device)
+
+        def bench():
+            for _ in range(n):
+                paste_masks_in_image(m, b, image_shape)
+            if device.type == "cuda":
+                torch.cuda.synchronize()
+
+        return bench
+
+    specs = [{"device": torch.device("cpu"), "n": 3}]
+    if torch.cuda.is_available():
+        specs.append({"device": torch.device("cuda"), "n": 3})
+
+    benchmark(func, "paste_masks", specs, num_iters=10, warmup_iters=2)
+
+
 if __name__ == "__main__":
+    benchmark_paste()
     unittest.main()

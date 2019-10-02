@@ -80,11 +80,17 @@ def paste_masks_in_image(masks, boxes, image_shape, threshold=0.5):
     else:
 
         def process_chunk(masks_chunk, y0_chunk, y1_chunk, x0_chunk, x1_chunk):
+            """
+            Args:
+                masks_chunk: N, 1, H, W
+                y0_chunk, ...: N
+            """
             # On GPU, paste all masks together (up to chunk size)
             # by using the entire image to sample the masks
             # Compared to pasting them one by one,
             # this has more operations but is faster on COCO-scale dataset.
             N_chunk = masks_chunk.shape[0]
+
             img_y = torch.arange(0.0, img_h).to(device=device) + 0.5
             img_x = torch.arange(0.0, img_w).to(device=device) + 0.5
             img_y = (img_y - y0_chunk) / (y1_chunk - y0_chunk) * 2 - 1
@@ -107,7 +113,7 @@ def paste_masks_in_image(masks, boxes, image_shape, threshold=0.5):
 
         num_chunks = int(np.ceil(N * img_h * img_w * BYTES_PER_FLOAT / GPU_MEM_LIMIT))
         assert num_chunks <= N, "Insufficient GPU memory; try increasing GPU_MEM_LIMIT"
-        chunks = torch.chunk(torch.arange(N), num_chunks)
+        chunks = torch.chunk(torch.arange(N, device=y0.device), num_chunks)
         img_masks = []
         for inds in chunks:
             img_masks.append(

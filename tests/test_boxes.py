@@ -2,7 +2,7 @@ import numpy as np
 import unittest
 import torch
 
-from detectron2.structures import BoxMode
+from detectron2.structures import Boxes, BoxMode, pairwise_iou
 
 
 class TestBoxMode(unittest.TestCase):
@@ -29,3 +29,34 @@ class TestBoxMode(unittest.TestCase):
         output = self._convert_xy_to_wh(box).numpy()
         self.assertTrue((output[0] == [5, 5, 5, 5]).all())
         self.assertTrue((output[1] == [1, 1, 1, 2]).all())
+
+
+class TestBoxIOU(unittest.TestCase):
+    def test_pairwise_iou(self):
+        boxes1 = torch.tensor([[0.0, 0.0, 1.0, 1.0], [0.0, 0.0, 1.0, 1.0]])
+
+        boxes2 = torch.tensor(
+            [
+                [0.0, 0.0, 1.0, 1.0],
+                [0.0, 0.0, 0.5, 1.0],
+                [0.0, 0.0, 1.0, 0.5],
+                [0.0, 0.0, 0.5, 0.5],
+                [0.5, 0.5, 1.0, 1.0],
+                [0.5, 0.5, 1.5, 1.5],
+            ]
+        )
+
+        expected_ious = torch.tensor(
+            [
+                [1.0, 0.5, 0.5, 0.25, 0.25, 0.25 / (2 - 0.25)],
+                [1.0, 0.5, 0.5, 0.25, 0.25, 0.25 / (2 - 0.25)],
+            ]
+        )
+
+        ious = pairwise_iou(Boxes(boxes1), Boxes(boxes2))
+
+        assert torch.allclose(ious, expected_ious)
+
+
+if __name__ == "__main__":
+    unittest.main()

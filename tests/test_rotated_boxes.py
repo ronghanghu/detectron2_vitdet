@@ -240,43 +240,6 @@ class TestRotatedBoxesLayer(unittest.TestCase):
         ious_cuda = pairwise_iou_rotated(boxes1.cuda(), boxes2.cuda())
         assert torch.allclose(ious_cuda.cpu(), expected_ious)
 
-    def test_benchmark_cpu_cuda(self):
-        num_boxes1 = 200
-        num_boxes2 = 500
-        boxes1 = torch.stack(
-            [
-                torch.tensor([5 + 20 * i, 5 + 20 * i, 10, 10, 0], dtype=torch.float32)
-                for i in range(num_boxes1)
-            ]
-        )
-        boxes2 = torch.stack(
-            [
-                torch.tensor(
-                    [5 + 20 * i, 5 + 20 * i, 10, 1 + 9 * i / num_boxes2, 0], dtype=torch.float32
-                )
-                for i in range(num_boxes2)
-            ]
-        )
-
-        def func(dev, n=1):
-            b1 = boxes1.to(device=dev)
-            b2 = boxes2.to(device=dev)
-
-            def bench():
-                for _ in range(n):
-                    pairwise_iou_rotated(b1, b2)
-                if dev.type == "cuda":
-                    torch.cuda.synchronize()
-
-            return bench
-
-        # only run it once per timed loop, since it's slow
-        args = [{"dev": torch.device("cpu"), "n": 1}]
-        if torch.cuda.is_available():
-            args.append({"dev": torch.device("cuda"), "n": 10})
-
-        benchmark(func, "rotated_iou", args, warmup_iters=3)
-
 
 class TestRotatedBoxesStructure(unittest.TestCase):
     def test_clip_area_0_degree(self):
@@ -571,5 +534,44 @@ class TestRotatedBoxesStructure(unittest.TestCase):
         assert torch.allclose(ious, expected_ious)
 
 
+def benchmark_rotated_iou():
+    num_boxes1 = 200
+    num_boxes2 = 500
+    boxes1 = torch.stack(
+        [
+            torch.tensor([5 + 20 * i, 5 + 20 * i, 10, 10, 0], dtype=torch.float32)
+            for i in range(num_boxes1)
+        ]
+    )
+    boxes2 = torch.stack(
+        [
+            torch.tensor(
+                [5 + 20 * i, 5 + 20 * i, 10, 1 + 9 * i / num_boxes2, 0], dtype=torch.float32
+            )
+            for i in range(num_boxes2)
+        ]
+    )
+
+    def func(dev, n=1):
+        b1 = boxes1.to(device=dev)
+        b2 = boxes2.to(device=dev)
+
+        def bench():
+            for _ in range(n):
+                pairwise_iou_rotated(b1, b2)
+            if dev.type == "cuda":
+                torch.cuda.synchronize()
+
+        return bench
+
+    # only run it once per timed loop, since it's slow
+    args = [{"dev": torch.device("cpu"), "n": 1}]
+    if torch.cuda.is_available():
+        args.append({"dev": torch.device("cuda"), "n": 10})
+
+    benchmark(func, "rotated_iou", args, warmup_iters=3)
+
+
 if __name__ == "__main__":
     unittest.main()
+    benchmark_rotated_iou()
