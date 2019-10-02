@@ -10,7 +10,7 @@ which is a big challenge for any research engineering project of a significant s
 
 2. On the other hand, such a project also needs a reasonably high-level
    abstraction, so that users can easily do things in standard ways,
-   without worrying too much about the details which only a few researchers care about.
+   without worrying too much about the details which only certain researchers care about.
    
 In detectron2, there are two types of interfaces that address this tension together:
 
@@ -21,7 +21,7 @@ In detectron2, there are two types of interfaces that address this tension toget
    the "standard default" behavior: it will take what it needs from the giant
    config and do the "standard" thing. 
    Users only need to load a standard config and pass it around, without having to worry about
-   which twenty arguments are used and what they all mean.
+   which arguments are used and what they all mean.
    
 2. Functions and classes that has well-defined explicit arguments. 
 
@@ -35,10 +35,11 @@ If you only need the standard behavior, the [Beginner's Tutorial](beginner)
 should suffice. If you need to extend detectron2 to your own needs,
 see the following tutorials for more details:
 
-* Detectron2 includes a few standard datasets, but you can [use custom ones](datasets).
-* Detectron2 contains the standard logic that [creates a data loader from a
-  dataset](data_loading), but you can write your own versions as well.
+* Detectron2 includes a few standard datasets, but you can use custom ones. See
+  [Use Custom Datasets](datasets).
+* Detectron2 contains the standard logic that creates a data loader from a
+  dataset, but you can write your own versions as well. See [Use Custom Data Loaders](data_loading).
 * Detectron2 implements many standard detection models, and provide ways for you
-  to overwrite its behaviors. (See [models](models))
+  to overwrite its behaviors. (See [Writing Models](models))
 * Detectron2 provides a default training loop that is good for common training tasks.
   You can customize it with hooks, or write your own loop instead. (See [training](training))

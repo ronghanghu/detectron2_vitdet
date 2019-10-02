@@ -8,4 +8,6 @@ Tutorials
    extend
    datasets
    data_loading
+   models
+   training
    configs

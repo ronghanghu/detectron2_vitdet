@@ -7,10 +7,10 @@ from detectron2.modeling import build_model
 model = build_model(cfg)  # returns a torch.nn.Module
 ```
 
-You can replace it completely by your own model,
+You can replace detectron2' model completely by your own model,
 but this is often not practical due to the complexity of a
 whole detection model. Therefore, we also provides a registration mechanism,
-so you can overwrite the behavior of a sub-model.
+which let you overwrite the behavior of certain internal components of the model.
 
 For example, to add a new backbone, import this code:
 ```python
