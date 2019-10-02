@@ -274,8 +274,8 @@ def get_detection_dataset_dicts(
 
     if has_instances:
         try:
-            class_names = MetadataCatalog.get(dataset_names[0]).class_names
-            check_metadata_consistency("class_names", dataset_names)
+            class_names = MetadataCatalog.get(dataset_names[0]).thing_classes
+            check_metadata_consistency("thing_classes", dataset_names)
             print_instances_class_histogram(dataset_dicts, class_names)
         except AttributeError:  # class names are not available for this dataset
             pass

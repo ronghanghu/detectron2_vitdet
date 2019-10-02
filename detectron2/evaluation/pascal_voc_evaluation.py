@@ -15,7 +15,7 @@ from detectron2.utils import comm
 from .evaluator import DatasetEvaluator
 
 
-class PascalVOCEvaluator(DatasetEvaluator):
+class PascalVOCDetectionEvaluator(DatasetEvaluator):
     """
     Evaluate Pascal VOC AP.
     It contains a synchronization, therefore has to be called from all ranks.
@@ -34,7 +34,7 @@ class PascalVOCEvaluator(DatasetEvaluator):
         meta = MetadataCatalog.get(dataset_name)
         self._anno_file_template = os.path.join(meta.dirname, "Annotations", "{}.xml")
         self._image_set_path = os.path.join(meta.dirname, "ImageSets", "Main", meta.split + ".txt")
-        self._class_names = meta.class_names
+        self._class_names = meta.thing_classes
         assert meta.year in [2007, 2012], meta.year
         self._is_2007 = meta.year == 2007
         self._cpu_device = torch.device("cpu")

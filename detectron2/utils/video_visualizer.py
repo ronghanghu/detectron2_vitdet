@@ -86,7 +86,7 @@ class VideoVisualizer:
         ]
         colors = self._assign_colors(detected)
 
-        labels = _create_text_labels(classes, scores, self.metadata.class_names)
+        labels = _create_text_labels(classes, scores, self.metadata.thing_classes)
 
         if self._instance_mode == ColorMode.IMAGE_BW:
             # any() returns uint8 tensor
@@ -142,7 +142,7 @@ class VideoVisualizer:
             frame_visualizer.draw_binary_mask(
                 mask,
                 color=mask_color,
-                text=self.metadata.stuff_class_names[category_idx],
+                text=self.metadata.stuff_classes[category_idx],
                 alpha=alpha,
                 area_threshold=area_threshold,
             )
@@ -164,7 +164,7 @@ class VideoVisualizer:
             for i in range(num_instances)
         ]
         colors = self._assign_colors(detected)
-        labels = [self.metadata.class_names[k] for k in category_ids]
+        labels = [self.metadata.thing_classes[k] for k in category_ids]
 
         frame_visualizer.overlay_instances(
             boxes=None,

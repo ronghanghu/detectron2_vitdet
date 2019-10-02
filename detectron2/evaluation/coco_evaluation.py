@@ -146,9 +146,9 @@ class COCOEvaluator(DatasetEvaluator):
         self._coco_results = list(itertools.chain(*[x["instances"] for x in self._predictions]))
 
         # unmap the category ids for COCO
-        if hasattr(self._metadata, "dataset_id_to_contiguous_id"):
+        if hasattr(self._metadata, "thing_dataset_id_to_contiguous_id"):
             reverse_id_mapping = {
-                v: k for k, v in self._metadata.dataset_id_to_contiguous_id.items()
+                v: k for k, v in self._metadata.thing_dataset_id_to_contiguous_id.items()
             }
             for result in self._coco_results:
                 result["category_id"] = reverse_id_mapping[result["category_id"]]
@@ -175,7 +175,7 @@ class COCOEvaluator(DatasetEvaluator):
             )
 
             res = self._derive_coco_results(
-                coco_eval, task, class_names=self._metadata.get("class_names")
+                coco_eval, task, class_names=self._metadata.get("thing_classes")
             )
             self._results[task] = res
 

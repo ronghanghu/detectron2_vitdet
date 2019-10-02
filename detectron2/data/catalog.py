@@ -3,6 +3,8 @@ import logging
 import types
 from typing import List
 
+from detectron2.utils.logger import log_first_n
+
 __all__ = ["DatasetCatalog", "MetadataCatalog"]
 
 
@@ -82,17 +84,31 @@ class Metadata(types.SimpleNamespace):
     .. code-block:: python
 
         # somewhere when you load the data:
-        MetadataCatalog.get("mydataset").class_names = ["person", "dog"]
+        MetadataCatalog.get("mydataset").thing_classes = ["person", "dog"]
 
         # somewhere when you print statistics or visualize:
-        class_names = MetadataCatalog.get("mydataset").class_names
+        classes = MetadataCatalog.get("mydataset").thing_classes
     """
 
     # the name of the dataset
     # set default to N/A so that `self.name` in the errors will not trigger getattr again
     name: str = "N/A"
 
+    _RENAMED = {
+        "class_names": "thing_classes",
+        "dataset_id_to_contiguous_id": "thing_dataset_id_to_contiguous_id",
+        "stuff_class_names": "stuff_classes",
+    }
+
     def __getattr__(self, key):
+        if key in self._RENAMED:
+            log_first_n(
+                logging.WARNING,
+                "Metadata '{}' was renamed to '{}'!".format(key, self._RENAMED[key]),
+                n=10,
+            )
+            return getattr(self, self._RENAMED[key])
+
         raise AttributeError(
             "Attribute '{}' does not exist in the metadata of '{}'. Available keys are {}.".format(
                 key, self.name, str(self.__dict__.keys())
@@ -100,6 +116,14 @@ class Metadata(types.SimpleNamespace):
         )
 
     def __setattr__(self, key, val):
+        if key in self._RENAMED:
+            log_first_n(
+                logging.WARNING,
+                "Metadata '{}' was renamed to '{}'!".format(key, self._RENAMED[key]),
+                n=10,
+            )
+            setattr(self, self._RENAMED[key], val)
+
         # Ensure that metadata of the same name stays consistent
         try:
             oldval = getattr(self, key)

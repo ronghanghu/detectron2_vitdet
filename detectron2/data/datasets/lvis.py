@@ -24,9 +24,7 @@ def register_lvis_instances(name, metadata, json_file, image_root):
 
     Args:
         name (str): a name that identifies the dataset, e.g. "lvis_v0.5_train".
-        metadata (dict): extra metadata associated with this dataset.
-            Currently only "class_names" is used, but "class_names" will also
-            be loaded automatically from json, therefore it can be an empty dict.
+        metadata (dict): extra metadata associated with this dataset. It can be an empty dict.
         json_file (str): path to the json instance annotation file.
         image_root (str): directory which contains all the images.
     """
@@ -44,7 +42,7 @@ def load_lvis_json(json_file, image_root, dataset_name=None):
         json_file (str): full path to the LVIS json annotation file.
         image_root (str): the directory where the images in this json file exists.
         dataset_name (str): the name of the dataset (e.g., "lvis_v0.5_train").
-            If provided, this function will put "class_names" into the metadata
+            If provided, this function will put "thing_classes" into the metadata
             associated with this dataset.
 
     Returns:
@@ -152,7 +150,7 @@ def get_lvis_instances_meta(dataset_name):
         dataset_name (str): LVIS dataset name without the split name (e.g., "lvis_v0.5").
 
     Returns:
-        dict: LVIS metadata with keys: class_names
+        dict: LVIS metadata with keys: thing_classes
     """
     if "v0.5" in dataset_name:
         return _get_lvis_instances_meta_v0_5()
@@ -170,8 +168,8 @@ def _get_lvis_instances_meta_v0_5():
     ), "Category ids are not in [1, #categories], as expected"
     # Ensure that the category list is sorted by id
     lvis_categories = [k for k in sorted(LVIS_CATEGORIES, key=lambda x: x["id"])]
-    class_names = [k["synonyms"][0] for k in lvis_categories]
-    meta = {"class_names": class_names}
+    thing_classes = [k["synonyms"][0] for k in lvis_categories]
+    meta = {"thing_classes": thing_classes}
     return meta
 
 

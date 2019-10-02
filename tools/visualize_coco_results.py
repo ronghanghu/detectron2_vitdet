@@ -56,10 +56,10 @@ if __name__ == "__main__":
 
     dicts = list(DatasetCatalog.get(args.dataset))
     metadata = MetadataCatalog.get(args.dataset)
-    if hasattr(metadata, "dataset_id_to_contiguous_id"):
+    if hasattr(metadata, "thing_dataset_id_to_contiguous_id"):
 
         def dataset_id_map(ds_id):
-            return metadata.dataset_id_to_contiguous_id[ds_id]
+            return metadata.thing_dataset_id_to_contiguous_id[ds_id]
 
     elif "lvis" in args.dataset:
         # LVIS results are in the same format as COCO results, but have a different

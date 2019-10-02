@@ -1,7 +1,7 @@
 # Use Custom Datasets
 
 If you want to use a different dataset, but reuse dataloaders in detectron2,
-you need to 
+you need to
 
 1. Register your dataset: tell detectron2 how to obtain your dataset.
 2. Optionally, register some metadata for your dataset.
@@ -100,18 +100,18 @@ You can do it like this:
 
 ```python
 from detectron2.data import MetadataCatalog
-MetadataCatalog.get("my_dataset").class_names = ["person", "dog"]
+MetadataCatalog.get("my_dataset").thing_classes = ["person", "dog"]
 ```
 
 Here are a list of metadata keys that's used by builtin features in detectron2.
 If you add your own dataset without these metadata, some features may be
 unavailable to you.
 
-* `class_names` (list[str]): Used by all instance detection/segmentation tasks.
-  A list of names for each instance category. 
+* `thing_classes` (list[str]): Used by all instance detection/segmentation tasks.
+  A list of names for each instance/thing category.
   If you load a COCO format dataset, it will be automatically set by the function `load_coco_json`.
-  
-* `stuff_class_names` (list[str]): Used by semantic/panoptic segmentation.
+
+* `stuff_classes` (list[str]): Used by semantic/panoptic segmentation.
   A list of names for each stuff category.
 
 * `stuff_colors` (list[tuple(r, g, b)]): Pre-defined color (in [0, 255]) for each stuff category.
@@ -127,17 +127,23 @@ unavailable to you.
 
 Here are some more metadata that are specific to the evaluation of certain datasets (e.g. COCO).
 
-* `dataset_id_to_contiguous_id` (dict[int->int]): Used by all instance detection/segmentation tasks in COCO format.
-  A mapping from instance class ids in the dataset to a contiguous ids in range [0, #class).
+* `thing_dataset_id_to_contiguous_id` (dict[int->int]): Used by all instance detection/segmentation tasks in COCO format.
+  A mapping from instance class ids in the dataset to contiguous ids in range [0, #class).
   Will be automatically set by the function `load_coco_json`.
 
-* `stuff_contiguous_id_to_dataset_id` (dict[int->int]): Used when generating prediction json files for
+* `stuff_dataset_id_to_contiguous_id` (dict[int->int]): Used when generating prediction json files for
   semantic/panoptic segmentation.
-  A mapping from contiguous stuff class ids in [0, #class) to the id in dataset.
-  It is useful for evaluation only.
+  A mapping from semantic segmentation class ids in the dataset
+	to contiguous ids in [0, #class). It is useful for evaluation only.
 
 * `json_file`: The COCO annotation json file. Used by COCO evaluation for COCO-format datasets.
 * `panoptic_root`, `panoptic_json`: Used by panoptic evaluation.
 * `evaluator_type`: Used by the builtin main training script to select
    evaluator. No need to use it if you write your own main script.
+
+NOTE: About the difference between "thing" and "stuff", see
+[On Seeing Stuff: The Perception of Materials by Humans and Machines](http://persci.mit.edu/pub_pdfs/adelson_spie_01.pdf).
+In detectron2, "thing" is used for instance-level tasks,
+and "stuff" is used for semantic segmentation.
+Both are used in panoptic segmentation.
 

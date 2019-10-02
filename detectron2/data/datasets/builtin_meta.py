@@ -192,11 +192,11 @@ def _get_coco_instances_meta():
     thing_colors = [k["color"] for k in COCO_CATEGORIES if k["isthing"] == 1]
     assert len(thing_ids) == 80, len(thing_ids)
     # Mapping from the incontiguous COCO category id to an id in [0, 79]
-    dataset_id_to_contiguous_id = {k: i for i, k in enumerate(thing_ids)}
-    class_names = [k["name"] for k in COCO_CATEGORIES if k["isthing"] == 1]
+    thing_dataset_id_to_contiguous_id = {k: i for i, k in enumerate(thing_ids)}
+    thing_classes = [k["name"] for k in COCO_CATEGORIES if k["isthing"] == 1]
     ret = {
-        "dataset_id_to_contiguous_id": dataset_id_to_contiguous_id,
-        "class_names": class_names,
+        "thing_dataset_id_to_contiguous_id": thing_dataset_id_to_contiguous_id,
+        "thing_classes": thing_classes,
         "thing_colors": thing_colors,
     }
     return ret
@@ -212,13 +212,13 @@ def _get_coco_panoptic_separated_meta():
     # For semantic segmentation, this mapping maps from contiguous stuff id
     # (in [0, 53], used in models) to ids in the dataset (used for processing results)
     # The id 0 is mapped to an extra category "thing".
-    stuff_contiguous_id_to_dataset_id = {i + 1: k for i, k in enumerate(stuff_ids)}
+    stuff_dataset_id_to_contiguous_id = {k: i + 1 for i, k in enumerate(stuff_ids)}
     # When converting COCO panoptic annotations to semantic annotations
     # We label the "thing" category to 0
-    stuff_contiguous_id_to_dataset_id[0] = 0
+    stuff_dataset_id_to_contiguous_id[0] = 0
 
     # 54 names for COCO stuff categories (including "things")
-    stuff_class_names = ["things"] + [
+    stuff_classes = ["things"] + [
         k["name"].replace("-other", "").replace("-merged", "")
         for k in COCO_CATEGORIES
         if k["isthing"] == 0
@@ -227,8 +227,8 @@ def _get_coco_panoptic_separated_meta():
     # NOTE: I randomly picked a color for things
     stuff_colors = [[82, 18, 128]] + [k["color"] for k in COCO_CATEGORIES if k["isthing"] == 0]
     ret = {
-        "stuff_contiguous_id_to_dataset_id": stuff_contiguous_id_to_dataset_id,
-        "stuff_class_names": stuff_class_names,
+        "stuff_dataset_id_to_contiguous_id": stuff_dataset_id_to_contiguous_id,
+        "stuff_classes": stuff_classes,
         "stuff_colors": stuff_colors,
     }
     ret.update(_get_coco_instances_meta())
@@ -242,25 +242,25 @@ def _get_builtin_metadata(dataset_name):
         return _get_coco_panoptic_separated_meta()
     elif dataset_name == "coco_person":
         return {
-            "class_names": ["person"],
+            "thing_classes": ["person"],
             "keypoint_names": COCO_PERSON_KEYPOINT_NAMES,
             "keypoint_flip_map": COCO_PERSON_KEYPOINT_FLIP_MAP,
             "keypoint_connection_rules": KEYPOINT_CONNECTION_RULES,
         }
     elif dataset_name == "cityscapes":
         # fmt: off
-        CITYSCAPES_THING_CLASS_NAMES = [
+        CITYSCAPES_THING_CLASSES = [
             "person", "rider", "car", "truck",
             "bus", "train", "motorcycle", "bicycle",
         ]
-        CITYSCAPES_STUFF_CLASS_NAMES = [
+        CITYSCAPES_STUFF_CLASSES = [
             "road", "sidewalk", "building", "wall", "fence", "pole", "traffic light",
             "traffic sign", "vegetation", "terrain", "sky", "person", "rider", "car",
             "truck", "bus", "train", "motorcycle", "bicycle", "license plate",
         ]
         # fmt: on
         return {
-            "class_names": CITYSCAPES_THING_CLASS_NAMES,
-            "stuff_class_names": CITYSCAPES_STUFF_CLASS_NAMES,
+            "thing_classes": CITYSCAPES_THING_CLASSES,
+            "stuff_classes": CITYSCAPES_STUFF_CLASSES,
         }
     raise KeyError("No built-in metadata for dataset {}".format(dataset_name))

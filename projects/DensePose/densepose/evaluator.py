@@ -77,14 +77,6 @@ class DensePoseCOCOEvaluator(DatasetEvaluator):
         """
         self._logger.info("Preparing results for COCO format ...")
 
-        # unmap the category ids for COCO
-        if hasattr(self._metadata, "dataset_id_to_contiguous_id"):
-            reverse_id_mapping = {
-                v: k for k, v in self._metadata.dataset_id_to_contiguous_id.items()
-            }
-            for result in self._predictions:
-                result["category_id"] = reverse_id_mapping[result["category_id"]]
-
         if self._output_dir:
             file_path = os.path.join(self._output_dir, "coco_densepose_results.json")
             with open(file_path, "w") as f:
@@ -108,14 +100,13 @@ def prediction_to_json(instances, img_id):
         list[dict]: the results in densepose evaluation format
     """
     scores = instances.scores.tolist()
-    classes = instances.pred_classes.tolist()
 
     results = []
     for k in range(len(instances)):
         densepose = instances.pred_densepose[k]
         result = {
             "image_id": img_id,
-            "category_id": classes[k],
+            "category_id": 1,  # densepose only has one class
             "bbox": densepose[1],
             "score": scores[k],
             "densepose": densepose,

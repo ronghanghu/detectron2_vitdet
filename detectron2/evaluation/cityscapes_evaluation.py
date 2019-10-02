@@ -26,7 +26,7 @@ class CityscapesEvaluator(DatasetEvaluator):
         Args:
             dataset_name (str): the name of the dataset.
                 It must have the following metadata associated with it:
-                "class_names", "gt_dir".
+                "thing_classes", "gt_dir".
         """
         self._metadata = MetadataCatalog.get(dataset_name)
         self._cpu_device = torch.device("cpu")
@@ -57,12 +57,12 @@ class CityscapesEvaluator(DatasetEvaluator):
             with open(pred_txt, "w") as fout:
                 for i in range(num_instances):
                     pred_class = output.pred_classes[i]
-                    class_name = self._metadata.class_names[pred_class]
-                    class_id = name2label[class_name].id
+                    classes = self._metadata.thing_classes[pred_class]
+                    class_id = name2label[classes].id
                     score = output.scores[i]
                     mask = output.pred_masks[i].numpy()
                     png_filename = os.path.join(
-                        self._temp_dir, basename + "_{}_{}.png".format(i, class_name)
+                        self._temp_dir, basename + "_{}_{}.png".format(i, classes)
                     )
 
                     Image.fromarray(mask * 255).save(png_filename)

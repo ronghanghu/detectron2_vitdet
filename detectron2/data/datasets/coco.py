@@ -30,7 +30,7 @@ def load_coco_json(json_file, image_root, dataset_name=None):
         json_file (str): full path to the json file in COCO instances annotation format.
         image_root (str): the directory where the images in this json file exists.
         dataset_name (str): the name of the dataset (e.g., coco_2017_train).
-            If provided, this function will also put "class_names" into
+            If provided, this function will also put "thing_classes" into
             the metadata associated with this dataset.
 
     Returns:
@@ -55,8 +55,8 @@ def load_coco_json(json_file, image_root, dataset_name=None):
         cat_ids = sorted(coco_api.getCatIds())
         cats = coco_api.loadCats(cat_ids)
         # The categories in a custom json file may not be sorted.
-        class_names = [c["name"] for c in sorted(cats, key=lambda x: x["id"])]
-        meta.class_names = class_names
+        thing_classes = [c["name"] for c in sorted(cats, key=lambda x: x["id"])]
+        meta.thing_classes = thing_classes
 
         # In COCO, certain category ids are artificially removed,
         # and by convention they are always ignored.
@@ -74,7 +74,7 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
 """
                 )
         id_map = {v: i for i, v in enumerate(cat_ids)}
-        meta.dataset_id_to_contiguous_id = id_map
+        meta.thing_dataset_id_to_contiguous_id = id_map
 
     # sort indices for reproducible results
     img_ids = sorted(list(coco_api.imgs.keys()))

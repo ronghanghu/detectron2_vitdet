@@ -22,9 +22,8 @@ def register_coco_instances(name, metadata, json_file, image_root):
 
     Args:
         name (str): the name that identifies a dataset, e.g. "coco_2014_train".
-        metadata (dict): extra metadata associated with this dataset.
-            Currently only "class_names" is used, but "class_names" will also
-            be loaded automatically from json, therefore you can leave it an empty dict.
+        metadata (dict): extra metadata associated with this dataset.  You can
+            leave it as an empty dict.
         json_file (str): path to the json instance annotation file.
         image_root (str): directory which contains all the images.
     """

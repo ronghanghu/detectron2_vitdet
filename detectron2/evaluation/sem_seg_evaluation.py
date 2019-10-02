@@ -49,7 +49,8 @@ class SemSegEvaluator(DatasetEvaluator):
         meta = MetadataCatalog.get(dataset_name)
         # Dict that maps contiguous training ids to COCO category ids
         try:
-            self._contiguous_id_to_dataset_id = meta.stuff_contiguous_id_to_dataset_id
+            c2d = meta.stuff_dataset_id_to_contiguous_id
+            self._contiguous_id_to_dataset_id = {v: k for k, v in c2d.items()}
         except AttributeError:
             self._contiguous_id_to_dataset_id = None
 

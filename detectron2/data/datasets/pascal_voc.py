@@ -72,4 +72,6 @@ def load_voc_instances(dirname: str, split: str):
 
 def register_pascal_voc(name, dirname, split, year):
     DatasetCatalog.register(name, lambda: load_voc_instances(dirname, split))
-    MetadataCatalog.get(name).set(class_names=CLASS_NAMES, dirname=dirname, year=year, split=split)
+    MetadataCatalog.get(name).set(
+        thing_classes=CLASS_NAMES, dirname=dirname, year=year, split=split
+    )

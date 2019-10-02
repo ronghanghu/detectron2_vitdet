@@ -159,7 +159,7 @@ class LVISEvaluator(DatasetEvaluator):
                 self._lvis_api,
                 self._lvis_results,
                 task,
-                class_names=self._metadata.get("class_names"),
+                class_names=self._metadata.get("thing_classes"),
             )
             self._results[task] = res
 

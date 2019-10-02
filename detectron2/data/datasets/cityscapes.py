@@ -294,8 +294,8 @@ if __name__ == "__main__":
         )
         logger.info("Done loading {} samples.".format(len(dicts)))
 
-        thing_names = [k.name for k in labels if k.hasInstances and not k.ignoreInEval]
-        meta = Metadata().set(class_names=thing_names)
+        thing_classes = [k.name for k in labels if k.hasInstances and not k.ignoreInEval]
+        meta = Metadata().set(thing_classes=thing_classes)
 
     else:
         dicts = load_cityscapes_semantic(args.image_dir, args.gt_dir)
@@ -303,7 +303,7 @@ if __name__ == "__main__":
 
         stuff_names = [k.name for k in labels if k.trainId != 255]
         stuff_colors = [k.color for k in labels if k.trainId != 255]
-        meta = Metadata().set(stuff_class_names=stuff_names, stuff_colors=stuff_colors)
+        meta = Metadata().set(stuff_names=stuff_names, stuff_colors=stuff_colors)
 
     for d in dicts:
         img = np.array(Image.open(d["file_name"]))

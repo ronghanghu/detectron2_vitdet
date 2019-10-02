@@ -313,7 +313,7 @@ class Visualizer:
         boxes = predictions.pred_boxes if predictions.has("pred_boxes") else None
         scores = predictions.scores if predictions.has("scores") else None
         classes = predictions.pred_classes if predictions.has("pred_classes") else None
-        labels = _create_text_labels(classes, scores, self.metadata.get("class_names", None))
+        labels = _create_text_labels(classes, scores, self.metadata.get("thing_classes", None))
         keypoints = predictions.pred_keypoints if predictions.has("pred_keypoints") else None
 
         if predictions.has("pred_masks"):
@@ -371,7 +371,7 @@ class Visualizer:
                 mask_color = None
 
             binary_mask = (sem_seg == label).astype(np.uint8)
-            text = self.metadata.stuff_class_names[label]
+            text = self.metadata.stuff_classes[label]
             self.draw_binary_mask(
                 binary_mask,
                 color=mask_color,
@@ -411,7 +411,7 @@ class Visualizer:
             except AttributeError:
                 mask_color = None
 
-            text = self.metadata.stuff_class_names[category_idx]
+            text = self.metadata.stuff_classes[category_idx]
             self.draw_binary_mask(
                 mask,
                 color=mask_color,
@@ -433,7 +433,7 @@ class Visualizer:
             ]
         except AttributeError:
             colors = None
-        labels = [self.metadata.class_names[k] for k in category_ids]
+        labels = [self.metadata.thing_classes[k] for k in category_ids]
         self.overlay_instances(masks=masks, labels=labels, assigned_colors=colors)
 
         return self.output
@@ -454,7 +454,7 @@ class Visualizer:
             boxes = [BoxMode.convert(x["bbox"], x["bbox_mode"], BoxMode.XYXY_ABS) for x in annos]
 
             labels = [x["category_id"] for x in annos]
-            names = self.metadata.get("class_names", None)
+            names = self.metadata.get("thing_classes", None)
             if names:
                 labels = [names[i] for i in labels]
             labels = [i + ("|crowd" if a.get("iscrowd", 0) else "") for i, a in zip(labels, annos)]

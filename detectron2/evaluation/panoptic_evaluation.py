@@ -33,8 +33,11 @@ class COCOPanopticEvaluator(DatasetEvaluator):
             output_dir (str): output directory to save results for evaluation
         """
         self._metadata = MetadataCatalog.get(dataset_name)
-        self._instances_contiguous_id_to_dataset_id = {
-            v: k for k, v in self._metadata.dataset_id_to_contiguous_id.items()
+        self._thing_contiguous_id_to_dataset_id = {
+            v: k for k, v in self._metadata.thing_dataset_id_to_contiguous_id.items()
+        }
+        self._stuff_contiguous_id_to_dataset_id = {
+            v: k for k, v in self._metadata.stuff_dataset_id_to_contiguous_id.items()
         }
 
         self._predictions_json = os.path.join(output_dir, "predictions.json")
@@ -49,11 +52,11 @@ class COCOPanopticEvaluator(DatasetEvaluator):
             # the model produces panoptic category id directly. No more conversion needed
             return segment_info
         if isthing is True:
-            segment_info["category_id"] = self._instances_contiguous_id_to_dataset_id[
+            segment_info["category_id"] = self._thing_contiguous_id_to_dataset_id[
                 segment_info["category_id"]
             ]
         else:
-            segment_info["category_id"] = self._metadata.stuff_contiguous_id_to_dataset_id[
+            segment_info["category_id"] = self._stuff_contiguous_id_to_dataset_id[
                 segment_info["category_id"]
             ]
         return segment_info

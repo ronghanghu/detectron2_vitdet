@@ -79,7 +79,7 @@ if __name__ == "__main__":
 
                 visualizer = Visualizer(img, metadata=metadata, scale=scale)
                 target_fields = per_image["instances"].get_fields()
-                labels = [metadata.class_names[i] for i in target_fields["gt_classes"]]
+                labels = [metadata.thing_classes[i] for i in target_fields["gt_classes"]]
                 vis = visualizer.overlay_instances(
                     labels=labels,
                     boxes=target_fields.get("gt_boxes", None),
