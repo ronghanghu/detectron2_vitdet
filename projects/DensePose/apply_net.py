@@ -21,6 +21,7 @@ from densepose.vis.densepose import (
     DensePoseResultsFineSegmentationVisualizer,
     DensePoseResultsUVisualizer,
     DensePoseResultsVVisualizer,
+    DensePoseResultsContourVisualizer,
 )
 from densepose.vis.extractor import CompoundExtractor, create_extractor
 
@@ -166,6 +167,7 @@ class ShowAction(InferenceAction):
 
     COMMAND: ClassVar[str] = "show"
     VISUALIZERS: ClassVar[Dict[str, object]] = {
+        "dp_contour": DensePoseResultsContourVisualizer,
         "dp_segm": DensePoseResultsFineSegmentationVisualizer,
         "dp_u": DensePoseResultsUVisualizer,
         "dp_v": DensePoseResultsVVisualizer,

@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 
 import copy
+
 import torch
 from borc.common.file_io import PathManager
 
-from detectron2.data import MetadataCatalog
 from detectron2.data import detection_utils as utils
 from detectron2.data import transforms as T
+from detectron2.data import MetadataCatalog
 
 from .structures import DensePoseDataRelative, DensePoseList, DensePoseTransformData
 
