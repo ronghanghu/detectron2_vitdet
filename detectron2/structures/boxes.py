@@ -1,9 +1,11 @@
 import numpy as np
 from enum import Enum, unique
-from typing import Iterator, List, Tuple, TypeVar, Union
+from typing import Iterator, List, Tuple, Union
 import torch
 
 from detectron2.layers import cat
+
+_RawBoxType = Union[List[float], Tuple[float, ...], torch.Tensor, np.ndarray]
 
 
 @unique
@@ -23,10 +25,8 @@ class BoxMode(Enum):
     XYXY_REL = 2
     XYWH_REL = 3
 
-    RawBoxType = TypeVar("RawBoxType", List[float], Tuple[float, ...], torch.Tensor, np.ndarray)
-
     @staticmethod
-    def convert(box: RawBoxType, from_mode: "BoxMode", to_mode: "BoxMode") -> RawBoxType:
+    def convert(box: _RawBoxType, from_mode: "BoxMode", to_mode: "BoxMode") -> _RawBoxType:
         """
         Args:
             box: can be a 4-tuple, 4-list or a Nx4 array/tensor.

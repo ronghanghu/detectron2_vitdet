@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Any, List, Union
+from typing import Any, List, Tuple, Union
 import torch
 
 from detectron2.layers import interpolate
@@ -32,7 +32,7 @@ class Keypoints:
     def __len__(self) -> int:
         return self.tensor.size(0)
 
-    def to(self, *args: Any, **kwargs: Any) -> torch.Tensor:
+    def to(self, *args: Any, **kwargs: Any) -> "Keypoints":
         return type(self)(self.tensor.to(*args, **kwargs))
 
     def to_heatmap(self, boxes: torch.Tensor, heatmap_size: int) -> torch.Tensor:
@@ -74,7 +74,7 @@ class Keypoints:
 # TODO make this nicer, this is a direct translation from C2 (but removing the inner loop)
 def _keypoints_to_heatmap(
     keypoints: torch.Tensor, rois: torch.Tensor, heatmap_size: int
-) -> torch.Tensor:
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Encode keypoint locations into a target heatmap for use in SoftmaxWithLoss across space.
 
