@@ -60,7 +60,7 @@ class CityscapesEvaluator(DatasetEvaluator):
                     classes = self._metadata.thing_classes[pred_class]
                     class_id = name2label[classes].id
                     score = output.scores[i]
-                    mask = output.pred_masks[i].numpy()
+                    mask = output.pred_masks[i].numpy().astype("uint8")
                     png_filename = os.path.join(
                         self._temp_dir, basename + "_{}_{}.png".format(i, classes)
                     )
