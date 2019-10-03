@@ -6,7 +6,7 @@ import itertools
 import logging
 import torch
 import tqdm
-from borc.common.timer import Timer
+from fvcore.common.timer import Timer
 from torch.nn.parallel import DistributedDataParallel
 
 from detectron2.checkpoint import DetectionCheckpointer

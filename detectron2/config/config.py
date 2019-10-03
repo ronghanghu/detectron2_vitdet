@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 
 import logging
-from borc.common.config import CfgNode as _CfgNode
+from fvcore.common.config import CfgNode as _CfgNode
 
 
 class CfgNode(_CfgNode):
     """
-    The same as `borc.common.config.CfgNode`, but different in:
+    The same as `fvcore.common.config.CfgNode`, but different in:
 
     1. Use unsafe yaml loading by default.
       Note that this may lead to arbitrary code execution: you must not

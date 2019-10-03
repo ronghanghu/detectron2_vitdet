@@ -1,5 +1,5 @@
 import logging
-from borc.common.file_io import PathHandler, PathManager
+from fvcore.common.file_io import PathHandler, PathManager
 
 
 class ModelCatalog(object):

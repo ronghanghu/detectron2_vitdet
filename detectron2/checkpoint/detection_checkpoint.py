@@ -1,5 +1,5 @@
 import pickle
-from borc.common.file_io import PathManager
+from fvcore.common.file_io import PathManager
 
 from .c2_model_loading import align_and_update_state_dicts
 from .checkpoint import Checkpointer

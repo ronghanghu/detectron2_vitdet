@@ -1,7 +1,7 @@
 import logging
 import numpy as np
 import torch
-from borc.nn import smooth_l1_loss
+from fvcore.nn import smooth_l1_loss
 from torch import nn
 from torch.nn import functional as F
 

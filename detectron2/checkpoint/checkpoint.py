@@ -4,7 +4,7 @@ import numpy as np
 import os
 from collections import defaultdict
 import torch
-from borc.common.file_io import PathManager
+from fvcore.common.file_io import PathManager
 from termcolor import colored
 from torch.nn.parallel import DataParallel, DistributedDataParallel
 

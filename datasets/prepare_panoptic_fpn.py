@@ -9,7 +9,7 @@ import os
 from PIL import Image
 
 from detectron2.data.datasets.builtin import COCO_CATEGORIES
-from borc.common.download import download
+from fvcore.common.download import download
 
 from panopticapi.utils import rgb2id
 

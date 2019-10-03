@@ -16,7 +16,7 @@ import pickle
 import time
 from collections import defaultdict
 import scipy.spatial.distance as ssd
-from borc.common.file_io import PathManager
+from fvcore.common.file_io import PathManager
 from pycocotools import mask as maskUtils
 from scipy.io import loadmat
 

@@ -2,7 +2,7 @@
 
 import copy
 import torch
-from borc.common.file_io import PathManager
+from fvcore.common.file_io import PathManager
 
 from detectron2.data import MetadataCatalog
 from detectron2.data import detection_utils as utils

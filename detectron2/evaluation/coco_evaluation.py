@@ -10,7 +10,7 @@ import pickle
 from collections import OrderedDict
 import pycocotools.mask as mask_util
 import torch
-from borc.common.file_io import PathManager
+from fvcore.common.file_io import PathManager
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 from tabulate import tabulate

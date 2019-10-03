@@ -2,7 +2,7 @@ import logging
 import math
 from typing import List
 import torch
-from borc.nn import sigmoid_focal_loss_jit, smooth_l1_loss
+from fvcore.nn import sigmoid_focal_loss_jit, smooth_l1_loss
 from torch import nn
 
 from detectron2.layers import ShapeSpec, batched_nms, cat

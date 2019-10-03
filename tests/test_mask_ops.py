@@ -8,7 +8,7 @@ import unittest
 from collections import defaultdict
 import torch
 import tqdm
-from borc.common.benchmark import benchmark
+from fvcore.common.benchmark import benchmark
 from pycocotools.coco import COCO
 from tabulate import tabulate
 from torch.nn import functional as F

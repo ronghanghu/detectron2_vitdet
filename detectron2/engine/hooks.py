@@ -7,9 +7,9 @@ import tempfile
 import time
 from collections import Counter
 import torch
-from borc.common.file_io import PathManager
-from borc.common.timer import Timer
-from borc.nn.precise_bn import get_bn_modules, update_bn_stats
+from fvcore.common.file_io import PathManager
+from fvcore.common.timer import Timer
+from fvcore.nn.precise_bn import get_bn_modules, update_bn_stats
 
 import detectron2.utils.comm as comm
 from detectron2.checkpoint import PeriodicCheckpointer as _PeriodicCheckpointer

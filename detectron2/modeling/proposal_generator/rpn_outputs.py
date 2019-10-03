@@ -3,7 +3,7 @@ import logging
 import numpy as np
 import torch
 import torch.nn.functional as F
-from borc.nn import smooth_l1_loss
+from fvcore.nn import smooth_l1_loss
 
 from detectron2.layers import batched_nms, cat
 from detectron2.structures import Boxes, Instances, pairwise_iou

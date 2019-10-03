@@ -4,9 +4,9 @@ import contextlib
 import os
 from PIL import Image
 
-from borc.common.timer import Timer
+from fvcore.common.timer import Timer
 from detectron2.structures import BoxMode
-from borc.common.file_io import PathManager
+from fvcore.common.file_io import PathManager
 
 from .. import MetadataCatalog, DatasetCatalog
 

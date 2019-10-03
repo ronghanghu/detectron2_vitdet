@@ -8,7 +8,7 @@ import pickle
 from collections import OrderedDict
 import pycocotools.mask as mask_util
 import torch
-from borc.common.file_io import PathManager
+from fvcore.common.file_io import PathManager
 
 import detectron2.utils.comm as comm
 from detectron2.data import MetadataCatalog

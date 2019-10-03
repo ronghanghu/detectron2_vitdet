@@ -5,7 +5,7 @@ import logging
 import numpy as np
 import pickle
 import torch.utils.data
-from borc.common.file_io import PathManager
+from fvcore.common.file_io import PathManager
 from tabulate import tabulate
 from termcolor import colored
 

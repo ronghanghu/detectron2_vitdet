@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from borc.common.file_io import PathManager
+from fvcore.common.file_io import PathManager
 import os
 import numpy as np
 import xml.etree.ElementTree as ET

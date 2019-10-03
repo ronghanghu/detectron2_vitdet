@@ -13,8 +13,8 @@ import logging
 import os
 from collections import OrderedDict
 import torch
-from borc.common.file_io import PathManager
-from borc.nn.precise_bn import get_bn_modules
+from fvcore.common.file_io import PathManager
+from fvcore.nn.precise_bn import get_bn_modules
 from torch.nn.parallel import DistributedDataParallel
 
 import detectron2.data.transforms as T
@@ -95,7 +95,7 @@ def default_setup(cfg, args):
         PathManager.mkdirs(output_dir)
 
     rank = comm.get_rank()
-    setup_logger(output_dir, distributed_rank=rank, name="borc")
+    setup_logger(output_dir, distributed_rank=rank, name="fvcore")
     logger = setup_logger(output_dir, distributed_rank=rank)
 
     logger.info("Rank of current process: {}. World size: {}".format(rank, comm.get_world_size()))

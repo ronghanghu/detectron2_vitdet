@@ -6,7 +6,7 @@ import logging
 import os
 import tempfile
 from collections import OrderedDict
-from borc.common.file_io import PathManager
+from fvcore.common.file_io import PathManager
 from PIL import Image
 from tabulate import tabulate
 

@@ -1,7 +1,7 @@
 import copy
 import numpy as np
 import torch
-from borc.common.file_io import PathManager
+from fvcore.common.file_io import PathManager
 from PIL import Image
 
 from . import detection_utils as utils

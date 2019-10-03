@@ -12,7 +12,7 @@ from PIL import Image
 from detectron2.structures import BoxMode
 from detectron2.utils.logger import setup_logger
 from detectron2.utils.comm import get_world_size
-from borc.common.file_io import PathManager
+from fvcore.common.file_io import PathManager
 
 try:
     import cv2  # noqa

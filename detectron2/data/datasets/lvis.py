@@ -1,9 +1,9 @@
 import logging
 import os
 
-from borc.common.timer import Timer
+from fvcore.common.timer import Timer
 from detectron2.structures import BoxMode
-from borc.common.file_io import PathManager
+from fvcore.common.file_io import PathManager
 from detectron2.data import DatasetCatalog, MetadataCatalog
 
 from .lvis_v0_5_categories import LVIS_CATEGORIES

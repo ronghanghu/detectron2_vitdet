@@ -4,7 +4,7 @@ import math
 import random
 import unittest
 import torch
-from borc.common.benchmark import benchmark
+from fvcore.common.benchmark import benchmark
 
 from detectron2.layers.rotated_boxes import pairwise_iou_rotated
 from detectron2.structures.boxes import Boxes
