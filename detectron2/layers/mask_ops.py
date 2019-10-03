@@ -12,6 +12,57 @@ BYTES_PER_FLOAT = 4
 GPU_MEM_LIMIT = 1024 ** 3  # 1 GB memory limit
 
 
+def _do_paste_mask(masks, boxes, img_h, img_w, skip_empty=True):
+    """
+    Args:
+        masks: N, 1, H, W
+        boxes: N, 4
+        img_h, img_w (int):
+        skip_empty (bool): only paste masks within the region that
+            tightly bound all boxes, and returns the results this region only.
+            An important optimization for CPU.
+
+    Returns:
+        if skip_empty == False, a mask of shape (N, img_h, img_w)
+        if skip_empty == True, a mask of shape (N, h', w'), and the slice
+            object for the corresponding region.
+    """
+    # On GPU, paste all masks together (up to chunk size)
+    # by using the entire image to sample the masks
+    # Compared to pasting them one by one,
+    # this has more operations but is faster on COCO-scale dataset.
+    device = masks.device
+    if skip_empty:
+        x0_int, y0_int = torch.clamp(boxes.min(dim=0).values.floor()[:2] - 1, min=0).to(
+            dtype=torch.int32
+        )
+        x1_int = torch.clamp(boxes[:, 2].max().ceil() + 1, max=img_w).to(dtype=torch.int32)
+        y1_int = torch.clamp(boxes[:, 3].max().ceil() + 1, max=img_h).to(dtype=torch.int32)
+    else:
+        x0_int, y0_int = 0, 0
+        x1_int, y1_int = img_w, img_h
+    x0, y0, x1, y1 = torch.split(boxes, 1, dim=1)  # each is Nx1
+
+    N = masks.shape[0]
+
+    img_y = torch.arange(y0_int, y1_int, device=device, dtype=torch.float32) + 0.5
+    img_x = torch.arange(x0_int, x1_int, device=device, dtype=torch.float32) + 0.5
+    img_y = (img_y - y0) / (y1 - y0) * 2 - 1
+    img_x = (img_x - x0) / (x1 - x0) * 2 - 1
+    # img_x, img_y have shapes (N, w), (N, h)
+
+    gx = img_x[:, None, :].expand(N, img_y.size(1), img_x.size(1))
+    gy = img_y[:, :, None].expand(N, img_y.size(1), img_x.size(1))
+    grid = torch.stack([gx, gy], dim=3)
+
+    img_masks = F.grid_sample(masks.to(dtype=torch.float32), grid, align_corners=False)
+
+    if skip_empty:
+        return img_masks[:, 0], (slice(y0_int, y1_int), slice(x0_int, x1_int))
+    else:
+        return img_masks[:, 0], ()
+
+
 def paste_masks_in_image(masks, boxes, image_shape, threshold=0.5):
     """
     Paste a set of masks that are of a fixed resolution (e.g., 28 x 28) into an image.
@@ -34,92 +85,45 @@ def paste_masks_in_image(masks, boxes, image_shape, threshold=0.5):
             and height. img_masks[i] is a binary mask for object instance i.
     """
     assert masks.shape[-1] == masks.shape[-2], "Only square mask predictions are supported"
-    if len(masks) == 0:
+    N = len(masks)
+    if N == 0:
         return masks.new_empty((0,) + image_shape, dtype=torch.uint8)
 
     boxes = boxes.tensor
-
     device = boxes.device
-    N, mask_h, mask_w = masks.shape
     assert len(boxes) == N, boxes.shape
-    x0, y0, x1, y1 = torch.split(boxes, 1, dim=1)  # each is Nx1
 
     img_h, img_w = image_shape
 
+    # The actual implementation split the input into chunks,
+    # and paste them chunk by chunk.
     if device.type == "cpu":
-        # on CPU, paste the masks one by one, by sampling coordinates in the box
-        x0, y0 = x0[:, 0], y0[:, 0]
-        x1, y1 = x1[:, 0], y1[:, 0]
-        zero = torch.Tensor([0]).to(device=x0.device, dtype=torch.int32)
-        x0_int = torch.max(zero, x0.floor().to(dtype=torch.int32) - 1)
-        y0_int = torch.max(zero, y0.floor().to(dtype=torch.int32) - 1)
-        x1_int = torch.min(zero + img_w, x1.ceil().to(dtype=torch.int32) + 1)
-        y1_int = torch.min(zero + img_h, y1.ceil().to(dtype=torch.int32) + 1)
-
-        img_masks = torch.zeros(N, img_h, img_w, device=masks.device, dtype=torch.uint8)
-        for idx, mask in enumerate(masks):
-            img_y = torch.arange(y0_int[idx], y1_int[idx], dtype=torch.float32, device=device) + 0.5
-            img_x = torch.arange(x0_int[idx], x1_int[idx], dtype=torch.float32, device=device) + 0.5
-            img_y = (img_y - y0[idx]) / (y1[idx] - y0[idx]) * 2 - 1
-            img_x = (img_x - x0[idx]) / (x1[idx] - x0[idx]) * 2 - 1
-
-            gy, gx = torch.meshgrid(img_y, img_x)
-            ind = torch.stack([gx, gy], dim=-1).to(dtype=torch.float32, device=masks.device)
-            # Use align_corners=False. See https://github.com/pytorch/pytorch/issues/20785
-            res = F.grid_sample(
-                mask[None, None, :, :].to(dtype=torch.float32),
-                ind[None, :, :, :],
-                align_corners=False,
-            )
-            if threshold >= 0:
-                res = (res >= threshold).to(dtype=torch.uint8)
-            else:
-                res = (res * 255).to(dtype=torch.uint8)
-            img_masks[idx, y0_int[idx] : y1_int[idx], x0_int[idx] : x1_int[idx]] = res
-        return img_masks
+        # CPU is most efficient when they are pasted one by one with skip_empty=True
+        # so that it performs minimal number of operatins.
+        num_chunks = N
     else:
-
-        def process_chunk(masks_chunk, y0_chunk, y1_chunk, x0_chunk, x1_chunk):
-            """
-            Args:
-                masks_chunk: N, 1, H, W
-                y0_chunk, ...: N
-            """
-            # On GPU, paste all masks together (up to chunk size)
-            # by using the entire image to sample the masks
-            # Compared to pasting them one by one,
-            # this has more operations but is faster on COCO-scale dataset.
-            N_chunk = masks_chunk.shape[0]
-
-            img_y = torch.arange(0.0, img_h).to(device=device) + 0.5
-            img_x = torch.arange(0.0, img_w).to(device=device) + 0.5
-            img_y = (img_y - y0_chunk) / (y1_chunk - y0_chunk) * 2 - 1
-            img_x = (img_x - x0_chunk) / (x1_chunk - x0_chunk) * 2 - 1
-            # img_x, img_y have shapes (N_chunk, img_w), (N_chunk, img_h)
-
-            gx = img_x[:, None, :].expand(N_chunk, img_h, img_w)
-            gy = img_y[:, :, None].expand(N_chunk, img_h, img_w)
-            grid = torch.stack([gx, gy], dim=3)
-
-            img_masks = F.grid_sample(
-                masks_chunk.to(dtype=torch.float32), grid, align_corners=False
-            )
-            if threshold >= 0:
-                img_masks = (img_masks >= threshold).to(dtype=torch.uint8)
-            else:
-                # for visualization and debugging
-                img_masks = (img_masks * 255).to(dtype=torch.uint8)
-            return img_masks
-
+        # GPU benefits from parallelism for larger chunks, but may have memory issue
         num_chunks = int(np.ceil(N * img_h * img_w * BYTES_PER_FLOAT / GPU_MEM_LIMIT))
-        assert num_chunks <= N, "Insufficient GPU memory; try increasing GPU_MEM_LIMIT"
-        chunks = torch.chunk(torch.arange(N, device=y0.device), num_chunks)
-        img_masks = []
-        for inds in chunks:
-            img_masks.append(
-                process_chunk(masks[inds, None, :, :], y0[inds], y1[inds], x0[inds], x1[inds])
-            )
-        img_masks = torch.cat(img_masks)[:, 0, :, :]
+        assert (
+            num_chunks <= N
+        ), "Default GPU_MEM_LIMIT in mask_ops.py is too small; try increasing it"
+    chunks = torch.chunk(torch.arange(N, device=device), num_chunks)
+
+    img_masks = torch.zeros(
+        N, img_h, img_w, device=device, dtype=torch.bool if threshold >= 0 else torch.uint8
+    )
+    for inds in chunks:
+        masks_chunk, spatial_inds = _do_paste_mask(
+            masks[inds, None, :, :], boxes[inds], img_h, img_w, skip_empty=device.type == "cpu"
+        )
+
+        if threshold >= 0:
+            masks_chunk = (masks_chunk >= threshold).to(dtype=torch.bool)
+        else:
+            # for visualization and debugging
+            masks_chunk = (masks_chunk * 255).to(dtype=torch.uint8)
+
+        img_masks[(inds,) + spatial_inds] = masks_chunk
     return img_masks
 
 

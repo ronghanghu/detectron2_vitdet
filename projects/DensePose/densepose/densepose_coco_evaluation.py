@@ -15,7 +15,6 @@ import numpy as np
 import pickle
 import time
 from collections import defaultdict
-
 import scipy.spatial.distance as ssd
 from borc.common.file_io import PathManager
 from pycocotools import mask as maskUtils

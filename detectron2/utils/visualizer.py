@@ -71,7 +71,7 @@ class GenericMask:
         if isinstance(m, np.ndarray):  # assumed to be a binary mask
             assert m.shape[1] != 2, m.shape
             assert m.shape == (height, width), m.shape
-            self._mask = m
+            self._mask = m.astype("uint8")
             return
 
         raise ValueError("GenericMask cannot handle object {} of type '{}'".format(m, type(m)))

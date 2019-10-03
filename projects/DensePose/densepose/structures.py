@@ -1,7 +1,6 @@
 import base64
 import numpy as np
 from io import BytesIO
-
 import torch
 from PIL import Image
 from torch.nn import functional as F

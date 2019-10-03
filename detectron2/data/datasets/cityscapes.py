@@ -51,6 +51,7 @@ def load_cityscapes_instances(image_dir, gt_dir, from_json=True, to_polygons=Tru
 
         json_file = gt_dir + image_file[len(prefix) : -len(suffix)] + "gtFine_polygons.json"
         files.append((image_file, instance_file, label_file, json_file))
+    assert len(files), "No images found in {}".format(image_dir)
 
     logger = logging.getLogger(__name__)
     logger.info("Preprocessing cityscapes annotations ...")

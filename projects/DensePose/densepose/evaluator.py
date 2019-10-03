@@ -9,7 +9,6 @@ import json
 import logging
 import os
 from collections import OrderedDict
-
 import torch
 from pycocotools import coco
 from pycocotools.coco import COCO

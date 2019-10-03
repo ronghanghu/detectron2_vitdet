@@ -18,10 +18,10 @@ from densepose.utils.logger import verbosity_to_level
 from densepose.vis.base import CompoundVisualizer
 from densepose.vis.bounding_box import ScoredBoundingBoxVisualizer
 from densepose.vis.densepose import (
+    DensePoseResultsContourVisualizer,
     DensePoseResultsFineSegmentationVisualizer,
     DensePoseResultsUVisualizer,
     DensePoseResultsVVisualizer,
-    DensePoseResultsContourVisualizer,
 )
 from densepose.vis.extractor import CompoundExtractor, create_extractor
 
