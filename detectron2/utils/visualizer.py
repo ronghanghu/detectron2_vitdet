@@ -222,7 +222,12 @@ class VisImage:
         """
         fig = mplfigure.Figure(frameon=False)
         self.dpi = fig.get_dpi()
-        fig.set_size_inches(self.width * self.scale / self.dpi, self.height * self.scale / self.dpi)
+        # add a small 1e-2 to avoid precision lost due to matplotlib's truncation
+        # (https://github.com/matplotlib/matplotlib/issues/15363)
+        fig.set_size_inches(
+            (self.width * self.scale + 1e-2) / self.dpi,
+            (self.height * self.scale + 1e-2) / self.dpi,
+        )
         self.canvas = FigureCanvasAgg(fig)
         # self.canvas = mpl.backends.backend_cairo.FigureCanvasCairo(fig)
         ax = fig.add_axes([0.0, 0.0, 1.0, 1.0])

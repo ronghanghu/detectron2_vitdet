@@ -66,3 +66,9 @@ class TestVisualizer(unittest.TestCase):
 
         v = Visualizer(img, self.metadata)
         v.draw_instance_predictions(inst)
+
+    def test_correct_output_shape(self):
+        img = np.random.rand(928, 928, 3) * 255
+        v = Visualizer(img, self.metadata)
+        out = v.output.get_image()
+        self.assertEqual(out.shape, img.shape)
