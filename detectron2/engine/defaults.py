@@ -297,10 +297,16 @@ class DefaultTrainer(SimpleTrainer):
         ]
 
     def train(self):
+        """
+        Run training.
+
+        Returns:
+            OrderedDict of results, if evaluation is enabled. Otherwise None.
+        """
         super().train(self.start_iter, self.max_iter)
         if hasattr(self, "_last_eval_results") and comm.is_main_process():
             verify_results(self.cfg, self._last_eval_results)
-        return self._last_eval_results
+            return self._last_eval_results
 
     @classmethod
     def build_model(cls, cfg):
