@@ -104,6 +104,6 @@ class CityscapesEvaluator(DatasetEvaluator):
         )["averages"]
 
         ret = OrderedDict()
-        ret["segm"] = {"AP": results["allAp"], "AP50": results["allAp50%"]}
+        ret["segm"] = {"AP": results["allAp"] * 100, "AP50": results["allAp50%"] * 100}
         self._working_dir.cleanup()
         return ret

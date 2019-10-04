@@ -95,7 +95,7 @@ class PascalVOCDetectionEvaluator(DatasetEvaluator):
                         ovthresh=thresh / 100.0,
                         use_07_metric=self._is_2007,
                     )
-                    aps[thresh].append(ap)
+                    aps[thresh].append(ap * 100)
 
         ret = OrderedDict()
         mAP = {iou: np.mean(x) for iou, x in aps.items()}
