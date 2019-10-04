@@ -216,3 +216,20 @@ texinfo_documents = [
 
 # If true, `todo` and `todoList` produce output, else they produce nothing.
 todo_include_todos = True
+
+
+def setup(app):
+    from recommonmark.transform import AutoStructify
+
+    # app.connect('autodoc-skip-member', autodoc_skip_member)
+    app.add_config_value(
+        "recommonmark_config",
+        {  # 'url_resolver': url_resolver,
+            "auto_toc_tree_section": "Contents",
+            "enable_math": True,
+            "enable_inline_math": True,
+            "enable_eval_rst": True,
+        },
+        True,
+    )
+    app.add_transform(AutoStructify)
