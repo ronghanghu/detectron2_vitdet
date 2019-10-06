@@ -193,7 +193,7 @@ def _create_text_labels(classes, scores, class_names):
         if labels is None:
             labels = ["{:.0f}%".format(s * 100) for s in scores]
         else:
-            labels = ["{}: {:.0f}%".format(l, s * 100) for l, s in zip(labels, scores)]
+            labels = ["{} {:.0f}%".format(l, s * 100) for l, s in zip(labels, scores)]
     return labels
 
 
@@ -298,7 +298,10 @@ class Visualizer:
         self.output = VisImage(self.img, scale=scale)
         self.cpu_device = torch.device("cpu")
 
-        self._default_font_size = np.sqrt(self.output.height * self.output.width) // 90
+        # too small texts are useless, therefore clamp to 9
+        self._default_font_size = max(
+            np.sqrt(self.output.height * self.output.width) // 90, 10 // scale
+        )
         self._instance_mode = instance_mode
 
     def draw_instance_predictions(self, predictions):
@@ -571,15 +574,29 @@ class Visualizer:
                         "Cannot draw labels when boxes and masks are not available."
                     )
                 # for small objects, draw text at the side to avoid occulusion
-                if (y1 - y0) * (x1 - x0) < _SMALL_OBJECT_AREA_THRESH:
+                instance_area = (y1 - y0) * (x1 - x0)
+                if (
+                    instance_area < _SMALL_OBJECT_AREA_THRESH * self.output.scale
+                    or y1 - y0 < 40 * self.output.scale
+                ):
                     if y1 >= self.output.height - 5:
                         text_pos = (x1, y0)
                     else:
                         text_pos = (x0, y1)
 
+                height_ratio = (y1 - y0) / np.sqrt(self.output.height * self.output.width)
                 lighter_color = self._change_color_brightness(color, brightness_factor=0.7)
+                font_size = (
+                    np.clip((height_ratio - 0.02) / 0.08 + 1, 1.2, 2)
+                    * 0.5
+                    * self._default_font_size
+                )
                 self.draw_text(
-                    labels[i], text_pos, color=lighter_color, horizontal_alignment=horiz_align
+                    labels[i],
+                    text_pos,
+                    color=lighter_color,
+                    horizontal_alignment=horiz_align,
+                    font_size=font_size,
                 )
 
         # draw keypoints

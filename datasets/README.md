@@ -21,6 +21,7 @@ Some of the builtin tests (`run_*_tests.sh`) uses a tiny version of the COCO dat
 which you can download with `./prepare_for_tests.sh`.
 
 ## Expected dataset structure for PanopticFPN:
+
 ```
 coco/
   annotations/
@@ -29,6 +30,10 @@ coco/
     # png annotations
 ```
 
+Install panopticapi by:
+```
+pip install git+https://github.com/cocodataset/panopticapi.git
+```
 Then, run `./prepare_panoptic_fpn.py`, to extract semantic annotations from panoptic annotations.
 
 ## Expected dataset structure for LVIS instance detection/segmentation:
@@ -38,6 +43,11 @@ coco/
 lvis/
   lvis_v0.5_{train,val}.json
 	lvis_v0.5_image_info_test.json
+```
+
+Install lvis-api by:
+```
+pip install git+https://github.com/lvis-dataset/lvis-api.git
 ```
 
 ## Expected dataset structure for cityscapes:
