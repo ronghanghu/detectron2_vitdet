@@ -15,7 +15,7 @@
 
 """
 An awesome colormap for really neat visualizations.
-Copied from Detectron.
+Copied from Detectron, and removed gray colors.
 """
 
 import numpy as np
@@ -23,6 +23,7 @@ import numpy as np
 __all__ = ["colormap", "random_color"]
 
 # fmt: off
+# RGB:
 _COLORS = np.array(
     [
         0.000, 0.447, 0.741,
@@ -78,7 +79,6 @@ _COLORS = np.array(
         1.000, 0.000, 1.000,
         1.000, 0.333, 1.000,
         1.000, 0.667, 1.000,
-        0.167, 0.000, 0.000,
         0.333, 0.000, 0.000,
         0.500, 0.000, 0.000,
         0.667, 0.000, 0.000,
@@ -98,10 +98,6 @@ _COLORS = np.array(
         0.000, 0.000, 1.000,
         0.000, 0.000, 0.000,
         0.143, 0.143, 0.143,
-        0.286, 0.286, 0.286,
-        0.429, 0.429, 0.429,
-        0.571, 0.571, 0.571,
-        0.714, 0.714, 0.714,
         0.857, 0.857, 0.857,
         1.000, 1.000, 1.000
     ]
@@ -139,3 +135,19 @@ def random_color(rgb=False, maximum=255):
     if not rgb:
         ret = ret[::-1]
     return ret
+
+
+if __name__ == "__main__":
+    import cv2
+
+    size = 100
+    H, W = 10, 10
+    canvas = np.random.rand(H * size, W * size, 3).astype("float32")
+    for h in range(H):
+        for w in range(W):
+            idx = h * W + w
+            if idx >= len(_COLORS):
+                break
+            canvas[h * size : (h + 1) * size, w * size : (w + 1) * size] = _COLORS[idx]
+    cv2.imshow("a", canvas)
+    cv2.waitKey(0)

@@ -161,7 +161,8 @@ def combine_semantic_and_instance_outputs(
 
     # Add instances one-by-one, check for overlaps with existing ones
     for inst_id in sorted_inds:
-        if instance_results.scores[inst_id].item() < instances_confidence_threshold:
+        score = instance_results.scores[inst_id].item()
+        if score < instances_confidence_threshold:
             break
         mask = instance_masks[inst_id]  # H,W
         mask_area = mask.sum().item()
@@ -184,6 +185,7 @@ def combine_semantic_and_instance_outputs(
             {
                 "id": current_segment_id,
                 "isthing": True,
+                "score": score,
                 "category_id": instance_results.pred_classes[inst_id].item(),
                 "instance_id": inst_id.item(),
             }

@@ -17,6 +17,7 @@ __all__ = ["ColorMode", "VisImage", "Visualizer"]
 
 
 _SMALL_OBJECT_AREA_THRESH = 1000
+_LARGE_MASK_AREA_THRESH = 120000
 _OFF_WHITE = (1.0, 1.0, 240.0 / 255)
 _BLACK = (0, 0, 0)
 _RED = (1.0, 0, 0)
@@ -131,10 +132,7 @@ class _PanopticPrediction:
     def __init__(self, panoptic_seg, segments_info):
         self._seg = panoptic_seg
 
-        self._sinfo = {
-            s["id"]: {"isthing": s["isthing"], "category_id": s["category_id"]}
-            for s in segments_info
-        }  # seg id -> seg info
+        self._sinfo = {s["id"]: s for s in segments_info}  # seg id -> seg info
         segment_ids, areas = torch.unique(panoptic_seg, sorted=True, return_counts=True)
         areas = areas.numpy()
         sorted_idxs = np.argsort(-areas)
@@ -388,7 +386,7 @@ class Visualizer:
         return self.output
 
     def draw_panoptic_seg_predictions(
-        self, panoptic_seg, segments_info, area_threshold=None, alpha=0.9
+        self, panoptic_seg, segments_info, area_threshold=None, alpha=0.7
     ):
         """
         Draw panoptic prediction results on an image.
@@ -809,10 +807,13 @@ class Visualizer:
             _num_cc, cc_labels, stats, centroids = cv2.connectedComponentsWithStats(binary_mask, 8)
             largest_component_id = np.argmax(stats[1:, -1]) + 1
 
-            # median is more stable than centroid
-            # center = centroids[largest_component_id]
-            center = np.median((cc_labels == largest_component_id).nonzero(), axis=1)[::-1]
-            self.draw_text(text, center, color=lighter_color)
+            # draw text on the largest component, as well as other very large components.
+            for cid in range(1, _num_cc):
+                if cid == largest_component_id or stats[cid, -1] > _LARGE_MASK_AREA_THRESH:
+                    # median is more stable than centroid
+                    # center = centroids[largest_component_id]
+                    center = np.median((cc_labels == cid).nonzero(), axis=1)[::-1]
+                    self.draw_text(text, center, color=lighter_color)
         return self.output
 
     def draw_polygon(self, segment, color, edge_color=None, alpha=0.5):
