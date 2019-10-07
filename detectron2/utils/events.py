@@ -215,12 +215,15 @@ class EventStorage:
         """
         name = self._current_prefix + name
         history = self._history[name]
+        value = float(value)
         history.update(value, self._iter)
         self._latest_scalars[name] = value
 
         existing_hint = self._smoothing_hints.get(name)
         if existing_hint is not None:
-            assert existing_hint == smoothing_hint
+            assert (
+                existing_hint == smoothing_hint
+            ), "Scalar {} was put with a different smoothing_hint!".format(name)
         else:
             self._smoothing_hints[name] = smoothing_hint
 

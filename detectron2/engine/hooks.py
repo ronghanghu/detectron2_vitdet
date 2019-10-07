@@ -300,9 +300,16 @@ class EvalHook(HookBase):
                     results, dict
                 ), "Eval function must return a dict. Got {} instead.".format(results)
 
-                self.trainer.storage.put_scalars(
-                    **flatten_results_dict(results), smoothing_hint=False
-                )
+                flattened_results = flatten_results_dict(results)
+                for k, v in flattened_results.items():
+                    try:
+                        v = float(v)
+                    except Exception:
+                        raise ValueError(
+                            "[EvalHook] eval_function should return a nested dict of float. "
+                            "Got '{}: {}' instead.".format(k, v)
+                        )
+                self.trainer.storage.put_scalars(**flattened_results, smoothing_hint=False)
 
             # Evaluation may take different time among workers.
             # A barrier make them start the next iteration together.
