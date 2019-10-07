@@ -22,7 +22,7 @@ The major differences regarding inference are:
 
 - RPN now uses different anchors.
 
-  In Detectron, the anchors were quantized and 
+  In Detectron, the anchors were quantized and
   [do not have accurate areas](https://github.com/facebookresearch/Detectron/issues/227).
   In Detectron2, the anchors are center-aligned to feature grid points and not quantized.
 
@@ -51,15 +51,15 @@ model-level compatibility. The majors ones are:
 
 - We fixed a [bug](https://github.com/facebookresearch/Detectron/issues/459) in
   Detectron, by making `RPN.POST_NMS_TOPK_TRAIN` per-image, rather than per-batch.
-  The fix may lead to a small accuracy drop for certain models (e.g. keypoint
+  The fix may lead to a small accuracy drop for a few models (e.g. keypoint
   detection) and will require some parameter tuning to catch up.
 - For simplicity, we change the default loss in bounding box regression to L1 loss, instead of smooth L1 loss.
 - We interpret the coordinates in COCO bounding box and segmentation annotations
   as coordinates in range `[0, width]` or `[0, height]`, and the coordinates in
   COCO keypoint annotations as pixel indices in range `[0, width - 1]` or `[0, height - 1]`
-  
-  
-We will later share more details and rationale behind the abovementioned issues 
+
+
+We will later share more details and rationale behind the abovementioned issues
 about pixels, coordinates, and "+1"s.
 
 
