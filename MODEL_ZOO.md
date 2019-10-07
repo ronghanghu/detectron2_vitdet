@@ -280,7 +280,7 @@ All models available for download through this document are licensed under the
 </tr>
 </tbody></table>
 
-### COCO Instance Segmentation Baselines
+### COCO Instance Segmentation Baselines with Mask R-CNN
 <!--
 ./gen_html_table.py --config 'COCO-InstanceSegmentation/mask*50*'{1x,3x}'*' 'COCO-InstanceSegmentation/mask*101*' --name R50-C4 R50-DC5 R50-FPN R50-C4 R50-DC5 R50-FPN R101-C4 R101-DC5 R101-FPN X101-FPN --fields lr_sched train_speed inference_speed mem box_AP mask_AP
 -->
@@ -410,7 +410,7 @@ All models available for download through this document are licensed under the
 </tr>
 </tbody></table>
 
-### COCO Keypoint Detection Baselines
+### COCO Person Keypoint Detection Baselines with Keypoint R-CNN
 <!--
 ./gen_html_table.py --config 'COCO-Keypoints/*50*' 'COCO-Keypoints/*101*'  --name R50-FPN R50-FPN R101-FPN X101-FPN --fields lr_sched train_speed inference_speed mem box_AP keypoint_AP
 -->
@@ -474,7 +474,7 @@ All models available for download through this document are licensed under the
 </tr>
 </tbody></table>
 
-### COCO Panoptic Segmentation Baselines
+### COCO Panoptic Segmentation Baselines with Panoptic FPN
 <!--
 ./gen_html_table.py --config 'COCO-PanopticSegmentation/*50*' 'COCO-PanopticSegmentation/*101*'  --name R50-FPN R50-FPN R101-FPN --fields lr_sched train_speed inference_speed mem box_AP mask_AP PQ
 -->
@@ -532,12 +532,75 @@ All models available for download through this document are licensed under the
 </tbody></table>
 
 
-### Cityscapes & Pascal VOC
+### LVIS Instance Segmentation Baselines with Mask R-CNN
 
-Simple baselines for Cityscapes instance segmentation & Pascal VOC detection.
+Mask R-CNN baselines on the [LVIS dataset](https://lvisdataset.org), v0.5.
+These baselines are described in Table 3(c) of the [LVIS paper](https://arxiv.org/abs/1908.03195).
+
+NOTE: the 1x schedule here has the same amount of __iterations__ as the COCO baselines.
+They are roughly 24 epochs of LVISv0.5 data.
 
 <!--
-./gen_html_table.py --config 'Cityscapes/*' 'PascalVOC-Detection/*' --name "Mask R-CNN (FPN) on Cityscapes" "Faster R-CNN (C4) on VOC" --fields train_speed inference_speed mem box_AP box_AP50 mask_AP
+./gen_html_table.py --config 'LVIS-InstanceSegmentation/mask*50*' 'LVIS-InstanceSegmentation/mask*101*' --name R50-FPN R101-FPN X101-FPN --fields lr_sched train_speed inference_speed mem box_AP mask_AP
+-->
+
+<table><tbody>
+<!-- START TABLE -->
+<!-- TABLE HEADER -->
+<th valign="bottom">Name</th>
+<th valign="bottom">lr<br/>sched</th>
+<th valign="bottom">train<br/>time<br/>(s/iter)</th>
+<th valign="bottom">inference<br/>time<br/>(s/im)</th>
+<th valign="bottom">train<br/>mem<br/>(GB)</th>
+<th valign="bottom">box<br/>AP</th>
+<th valign="bottom">mask<br/>AP</th>
+<th valign="bottom">model id</th>
+<th valign="bottom">download</th>
+<!-- TABLE BODY -->
+<!-- ROW: mask_rcnn_R_50_FPN_1x -->
+ <tr><td align="left"><a href="configs/LVIS-InstanceSegmentation/mask_rcnn_R_50_FPN_1x.yaml">R50-FPN</a></td>
+<td align="center">1x</td>
+<td align="center">0.319</td>
+<td align="center">0.369</td>
+<td align="center">6.6</td>
+<td align="center">24.0</td>
+<td align="center">24.4</td>
+<td align="center">134714017</td>
+<td align="center"><a href="https://dl.fbaipublicfiles.com/detectron2/LVIS-InstanceSegmentation/mask_rcnn_R_50_FPN_1x/134714017/model_final_1d8313.pkl">model</a>&nbsp;|&nbsp;<a href="https://dl.fbaipublicfiles.com/detectron2/LVIS-InstanceSegmentation/mask_rcnn_R_50_FPN_1x/134714017/metrics.json">metrics</a></td>
+</tr>
+<!-- ROW: mask_rcnn_R_101_FPN_1x -->
+ <tr><td align="left"><a href="configs/LVIS-InstanceSegmentation/mask_rcnn_R_101_FPN_1x.yaml">R101-FPN</a></td>
+<td align="center">1x</td>
+<td align="center">0.395</td>
+<td align="center">0.385</td>
+<td align="center">7.6</td>
+<td align="center">25.8</td>
+<td align="center">26.1</td>
+<td align="center">134807205</td>
+<td align="center"><a href="https://dl.fbaipublicfiles.com/detectron2/LVIS-InstanceSegmentation/mask_rcnn_R_101_FPN_1x/134807205/model_final_5ce494.pkl">model</a>&nbsp;|&nbsp;<a href="https://dl.fbaipublicfiles.com/detectron2/LVIS-InstanceSegmentation/mask_rcnn_R_101_FPN_1x/134807205/metrics.json">metrics</a></td>
+</tr>
+<!-- ROW: mask_rcnn_X_101_32x8d_FPN_1x -->
+ <tr><td align="left"><a href="configs/LVIS-InstanceSegmentation/mask_rcnn_X_101_32x8d_FPN_1x.yaml">X101-FPN</a></td>
+<td align="center">1x</td>
+<td align="center">1.330</td>
+<td align="center">0.461</td>
+<td align="center">10.0</td>
+<td align="center">27.3</td>
+<td align="center">27.9</td>
+<td align="center">135397361</td>
+<td align="center"><a href="https://dl.fbaipublicfiles.com/detectron2/LVIS-InstanceSegmentation/mask_rcnn_X_101_32x8d_FPN_1x/135397361/model_final_016c14.pkl">model</a>&nbsp;|&nbsp;<a href="https://dl.fbaipublicfiles.com/detectron2/LVIS-InstanceSegmentation/mask_rcnn_X_101_32x8d_FPN_1x/135397361/metrics.json">metrics</a></td>
+</tr>
+</tbody></table>
+
+
+### Cityscapes & Pascal VOC Baselines
+
+Simple baselines for
+* Mask R-CNN on Cityscapes instance segmentation
+* Faster R-CNN on Pascal VOC object detection
+
+<!--
+./gen_html_table.py --config 'Cityscapes/*' 'PascalVOC-Detection/*' --name "R50-FPN, Cityscapes" "R50-C4, VOC" --fields train_speed inference_speed mem box_AP box_AP50 mask_AP
 -->
 
 
@@ -584,7 +647,7 @@ Simple baselines for Cityscapes instance segmentation & Pascal VOC detection.
 Ablations for Deformable Conv and Cascade R-CNN:
 
 <!--
-./gen_html_table.py --config 'COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_1x.yaml' 'Misc/*R_50_FPN_1x_dconv*' 'Misc/cascade*50*' --name "Baseline" "Deformable Conv" "Cascade R-CNN" --fields lr_sched train_speed inference_speed mem box_AP mask_AP
+./gen_html_table.py --config 'COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_1x.yaml' 'Misc/*R_50_FPN_1x_dconv*' 'Misc/cascade*50*' --name "Baseline R50-FPN" "Deformable Conv" "Cascade R-CNN" --fields lr_sched train_speed inference_speed mem box_AP mask_AP
 -->
 
 <table><tbody>
@@ -601,7 +664,7 @@ Ablations for Deformable Conv and Cascade R-CNN:
 <th valign="bottom">download</th>
 <!-- TABLE BODY -->
 <!-- ROW: mask_rcnn_R_50_FPN_1x -->
- <tr><td align="left"><a href="configs/COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_1x.yaml">Baseline</a></td>
+ <tr><td align="left"><a href="configs/COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_1x.yaml">Baseline R50-FPN</a></td>
 <td align="center">1x</td>
 <td align="center">0.261</td>
 <td align="center">0.087</td>
@@ -638,7 +701,7 @@ Ablations for Deformable Conv and Cascade R-CNN:
 
 Ablations for GroupNorm:
 <!--
-./gen_html_table.py --config 'COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml' 'Misc/mask*50_FPN_3x_gn.yaml' 'Misc/scratch*' --name "Baseline" "GroupNorm" "GroupNorm (scratch)" --fields lr_sched train_speed inference_speed mem box_AP mask_AP
+./gen_html_table.py --config 'COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml' 'Misc/mask*50_FPN_3x_gn.yaml' 'Misc/scratch*' --name "Baseline R50-FPN" "GroupNorm" "GroupNorm (scratch)" --fields lr_sched train_speed inference_speed mem box_AP mask_AP
 	 -->
 
 <table><tbody>
@@ -655,7 +718,7 @@ Ablations for GroupNorm:
 <th valign="bottom">download</th>
 <!-- TABLE BODY -->
 <!-- ROW: mask_rcnn_R_50_FPN_3x -->
- <tr><td align="left"><a href="configs/COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml">Baseline</a></td>
+ <tr><td align="left"><a href="configs/COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml">Baseline R50-FPN</a></td>
 <td align="center">3x</td>
 <td align="center">0.261</td>
 <td align="center">0.079</td>
