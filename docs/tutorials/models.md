@@ -7,10 +7,11 @@ from detectron2.modeling import build_model
 model = build_model(cfg)  # returns a torch.nn.Module
 ```
 
-You can replace detectron2' model completely by your own model,
-but this is often not practical due to the complexity of a
-whole detection model. Therefore, we also provides a registration mechanism,
-which let you overwrite the behavior of certain internal components of the model.
+In some cases, e.g. if you trying to do something completely new, you may wish to implement
+a model entirely from scratch within detectron2. However, in many situations you may
+be interested in modifying or extending some components of an existing model.
+Therefore, we also provide a registration mechanism that lets you override the
+behavior of certain internal components of standard models.
 
 For example, to add a new backbone, import this code:
 ```python
@@ -22,10 +23,9 @@ class NewBackBone(Backbone):
 ```
 which will allow you to use `cfg.MODEL.BACKBONE.NAME = 'NewBackBone'` in your config file.
 
-To add new abilities to the ROI heads in a generalized R-CNN,
-implement a new
-[ROIHeads](../modules/modeling.html#detectron2.modeling.ROIHeads)
-in the `ROI_HEADS_REGISTRY`. 
+As another example, to add new abilities to the ROI heads in the Generalized R-CNN meta-architecture,
+you can implement a new
+[ROIHeads](../modules/modeling.html#detectron2.modeling.ROIHeads) subclass and put it in the `ROI_HEADS_REGISTRY`.
 See [densepose in detectron2](https://github.com/facebookresearch/detectron2/tree/master/projects/DensePose)
 for an example.
 

@@ -1,7 +1,7 @@
 # Change Log
 
 
-### Major Changes in Code:
+### Major Changes in Code
 
 * 2019-10-10: initial release.
 

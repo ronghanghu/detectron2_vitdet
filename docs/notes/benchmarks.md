@@ -9,12 +9,12 @@ with some other popular open source Mask R-CNN implementations.
 
 * Hardware: 8 NVIDIA V100s.
 * Software: CUDA 10.0, cuDNN 7.6.4, PyTorch 1.3.0.dev20190920 (nightly build), TensorFlow 1.5.0rc2, Keras 2.2.5.
-* Model: an end-to-end R-50 FPN Mask-RCNN model, using the same hyperparameter as the
+* Model: an end-to-end R-50-FPN Mask-RCNN model, using the same hyperparameter as the
 	[Detectron baseline config](https://github.com/facebookresearch/Detectron/blob/master/configs/12_2017_baselines/e2e_mask_rcnn_R-50-FPN_1x.yaml).
-* Metrics: We use the average throughput in iteration 100-500, to skip GPU warmup time.
-	Note that for R-CNN models, the throughput of a model typically changes during training, because
+* Metrics: We use the average throughput in iterations 100-500 to skip GPU warmup time.
+	Note that for R-CNN-style models, the throughput of a model typically changes during training, because
 	it depends on the predictions of the model. Therefore this metric is not directly comparable with
-	"train speed" in model zoo, which is the average speed of the entire training.
+	"train speed" in model zoo, which is the average speed of the entire training run.
 
 
 ### Main Results
@@ -52,18 +52,18 @@ Details for each implementation:
   ```
 
 * __maskrcnn-benchmark__: use commit 0ce8f6f with `sed -i ‘s/torch.uint8/torch.bool/g’ **/*.py` to make it compatible with latest PyTorch.
-  Then, run training with 
+  Then, run training with
   ```
   python -m torch.distributed.launch --nproc_per_node=8 tools/train_net.py --config-file configs/e2e_mask_rcnn_R_50_FPN_1x.yaml
   ```
   The speed we observed is faster than its model zoo, likely due to different software versions.
 
-* __tensorpack__: at commit caafda, `export TF_CUDNN_USE_AUTOTUNE=0`, then run 
+* __tensorpack__: at commit caafda, `export TF_CUDNN_USE_AUTOTUNE=0`, then run
   ```
   mpirun -np 8 ./train.py --config DATA.BASEDIR=/data/coco TRAINER=horovod BACKBONE.STRIDE_1X1=True TRAIN.STEPS_PER_EPOCH=50 --load ImageNet-R50-AlignPadding.npz
   ```
 
-* __mmdetection__: at commit 4d9a5f, apply the following diff, then run 
+* __mmdetection__: at commit 4d9a5f, apply the following diff, then run
 	```
 	./tools/dist_train.sh configs/mask_rcnn_r50_fpn_1x.py 8
 	```
@@ -108,8 +108,8 @@ Details for each implementation:
 		dict(type='LoadAnnotations', with_bbox=True, with_mask=True),
 	```
 	</details>
-	
-* __Detectron__: run 
+
+* __Detectron__: run
   ```
   python tools/train_net.py --cfg configs/12_2017_baselines/e2e_mask_rcnn_R-50-FPN_1x.yaml
   ```
