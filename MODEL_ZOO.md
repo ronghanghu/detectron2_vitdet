@@ -596,8 +596,8 @@ They are roughly 24 epochs of LVISv0.5 data.
 ### Cityscapes & Pascal VOC Baselines
 
 Simple baselines for
-* Mask R-CNN on Cityscapes instance segmentation
-* Faster R-CNN on Pascal VOC object detection
+* Mask R-CNN on Cityscapes instance segmentation (trained on fine annotations only)
+* Faster R-CNN on PASCAL VOC object detection (trained on VOC 2007 train+val + VOC 2012 train+val, tested on VOC 2007 using 11-point interpolated AP)
 
 <!--
 ./gen_html_table.py --config 'Cityscapes/*' 'PascalVOC-Detection/*' --name "R50-FPN, Cityscapes" "R50-C4, VOC" --fields train_speed inference_speed mem box_AP box_AP50 mask_AP
