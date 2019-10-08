@@ -618,7 +618,7 @@ Simple baselines for
 <th valign="bottom">download</th>
 <!-- TABLE BODY -->
 <!-- ROW: mask_rcnn_R_50_FPN -->
- <tr><td align="left"><a href="configs/Cityscapes/mask_rcnn_R_50_FPN.yaml">Mask R-CNN (FPN) on Cityscapes</a></td>
+ <tr><td align="left"><a href="configs/Cityscapes/mask_rcnn_R_50_FPN.yaml">R50-FPN, Cityscapes</a></td>
 <td align="center">0.240</td>
 <td align="center">0.397</td>
 <td align="center">4.4</td>
@@ -629,7 +629,7 @@ Simple baselines for
 <td align="center"><a href="https://dl.fbaipublicfiles.com/detectron2/Cityscapes/mask_rcnn_R_50_FPN/142423278/model_final_af9cf5.pkl">model</a>&nbsp;|&nbsp;<a href="https://dl.fbaipublicfiles.com/detectron2/Cityscapes/mask_rcnn_R_50_FPN/142423278/metrics.json">metrics</a></td>
 </tr>
 <!-- ROW: faster_rcnn_R_50_C4 -->
- <tr><td align="left"><a href="configs/PascalVOC-Detection/faster_rcnn_R_50_C4.yaml">Faster R-CNN (C4) on VOC</a></td>
+ <tr><td align="left"><a href="configs/PascalVOC-Detection/faster_rcnn_R_50_C4.yaml">R50-C4, VOC</a></td>
 <td align="center">0.537</td>
 <td align="center">0.096</td>
 <td align="center">4.8</td>

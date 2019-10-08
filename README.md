@@ -1,10 +1,51 @@
 # Detectron2
 
-There is no doc right now!
-See [Detectron2 Wiki/FAQ Quip](https://fb.quip.com/6LBMAtG25YHf) for installation and usage.
-Join our [user group](https://fb.workplace.com/groups/277527419809135/) for discussions.
+Detectron2 is Facebook AI Research's next generation software system
+that implements state-of-the-art object detection algorithms.
+It is a ground-up rewrite of the previous version,
+[Detectron](https://github.com/facebookresearch/Detectron/),
+and it originates from [maskrcnn-benchmark](https://github.com/facebookresearch/maskrcnn-benchmark/).
+It is written in Python and powered by the [PyTorch](https://pytorch.org) deep
+learning framework.
 
-Below are notes that temporarily live here but may be moved to other places later.
+![logo](.github/Detectron2-Logo-Horz.svg)
+
+
+## Installation
+
+
+## Quick Start
+
+
+
+## Model Zoo and Baselines
+
+We provide a large set of baseline results and trained models available for download in the [Detectron2 Model Zoo](MODEL_ZOO.md).
+
+
+## License
+
+Detectron2 is released under the [Apache 2.0 license](https://github.com/facebookresearch/detectron2/blob/master/LICENSE).
+
+## Citing Detectron
+
+If you use Detectron2 in your research or wish to refer to the baseline results published in the [Model Zoo](MODEL_ZOO.md), please use the following BibTeX entry.
+
+```
+@misc{wu2019detectron2,
+  author =       {Yuxin Wu and Alexander Kirillov and Francisco Massa and
+                  Wan-Yen Lo and Ross Girshick},
+  title =        {Detectron2},
+  howpublished = {\url{https://github.com/facebookresearch/detectron2}},
+  year =         {2019}
+}
+```
+
+
+=====================================
+
+old doc:
+
 
 ## Simple Demo
 
@@ -23,13 +64,3 @@ python demo.py --config-file ../configs/quick_schedules/mask_rcnn_R_50_FPN_infer
 ```bash
 python /path_to_detectron2/tools/train_net.py --config-file "/path/to/config/file.yaml"
 ```
-
-## Environment variables
-
-- `DETECTRON2_ENV_MODULE`: Name of a module defining a function called `setup_environment` to call before running any detectron2 code. This function can be used to perform set up steps that are specific to different computing or cluster environments.
-
-
-## Troubleshooting
-If you have issues running or compiling this code, we have compiled a list of common issues in
-[TROUBLESHOOTING.md](TROUBLESHOOTING.md). If your issue is not present there, please feel
-free to open a new issue.
