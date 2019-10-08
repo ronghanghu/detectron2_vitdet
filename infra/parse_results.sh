@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# A shell script that parses metrics from the log file.
+# Make it easier for developers to track performance of models.
+
 LOG="$1"
 
 if [[ -z "$LOG" ]]; then
