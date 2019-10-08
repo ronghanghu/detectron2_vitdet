@@ -4,7 +4,7 @@
 
 This file documents a large collection of baselines trained
 with detectron2 in Sep-Oct, 2019.
-The corresponding configurations for all models can be found under `configs/` directory.
+The corresponding configurations for all models can be found under the `configs/` directory.
 Unless otherwise noted, the following settings are used for all runs:
 
 #### Common Settings
@@ -12,7 +12,7 @@ Unless otherwise noted, the following settings are used for all runs:
   servers with 8 NVIDIA V100 GPUs, with data-parallel sync SGD and a total minibatch size of 16 images.
 * All models were trained with CUDA 9.2, cuDNN 7.4.2 or 7.6.3 (the difference on performance is found to be negligible).
 * The default settings are not directly comparable with Detectron.
-	For example, we use both horizontal flipping and scale jittering as training augmentation.
+	For example, our default training data augmentation uses scale jittering in addition to horizontal flipping.
 	For configs that are closer to Detectron's settings, see
 	[Detectron1-Comparisons](configs/Detectron1-Comparisons/).
 * No test-time augmentation is used for inference.
@@ -22,14 +22,16 @@ Unless otherwise noted, the following settings are used for all runs:
 * To check downloaded file integrity: any model on this page contains its md5 prefix in its file name.
 * All COCO models were trained on `train2017` and evaluated on `val2017`.
 * For Faster/Mask R-CNN, we provide baselines based on 3 different backbone combinations:
-	* FPN: Use a ResNet+FPN backbone with extra conv/fc in the head. It obtains the best
+	* FPN: Use a ResNet+FPN backbone with standard conv and FC heads for mask and box prediction,
+		respectively. It obtains the best
 		speed/accuracy tradeoff, but the other two are still useful for research.
 	* C4: Use a ResNet conv4 backbone with conv5 head. The original baseline in the Faster R-CNN paper.
-	* DC5 (Dilated-C5): Use a ResNet conv5 backbone with dilations in conv5, and extra conv/fc as head.
+	* DC5 (Dilated-C5): Use a ResNet conv5 backbone with dilations in conv5, and standard conv and FC heads
+	  for mask and box prediction, respectively.
 		The model used by the Deformable ConvNet paper.
-* Most models are trained with 3x schedule (~37 COCO epochs).
-  Despite 1x models are heavily under-trained, we provide some ResNet-50 models with 1x (~12 COCO epochs)
-	training schedule for quick research iteration.
+* Most models are trained with the 3x schedule (~37 COCO epochs).
+  Although 1x models are heavily under-trained, we provide some ResNet-50 models with the 1x (~12 COCO epochs)
+	training schedule for comparison when doing quick research iteration.
 
 #### ImageNet Pretrained Models
 
