@@ -1,8 +1,8 @@
+
 For a few datasets that detectron2 natively supports,
-it assumes they exist in this directory, with the following directory structure.
-
-You can link the original datasets to this directory.
-
+the datasets are assumed to exist in a directory called
+"datasets/", under the directory where you launch the program.
+with the following directory structure:
 
 ## Expected dataset structure for COCO instance/keypoint detection:
 
@@ -65,6 +65,10 @@ cityscapes/
     train/
     val/
     test/
+```
+Install cityscapes scripts by:
+```
+pip install git+https://github.com/mcordts/cityscapesScripts.git
 ```
 
 ## Expected dataset structure for Pascal VOC:

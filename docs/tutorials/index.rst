@@ -4,7 +4,8 @@ Tutorials
 .. toctree::
    :maxdepth: 2
 
-   beginner
+   install
+   getting_started
    extend
    datasets
    data_loading

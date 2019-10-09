@@ -21,14 +21,14 @@ Unless otherwise noted, the following settings are used for all runs:
 * The *model id* column is provided for ease of reference.
 * To check downloaded file integrity: any model on this page contains its md5 prefix in its file name.
 * All COCO models were trained on `train2017` and evaluated on `val2017`.
-* For Faster/Mask R-CNN, we provide baselines based on 3 different backbone combinations:
-	* FPN: Use a ResNet+FPN backbone with standard conv and FC heads for mask and box prediction,
+* For Faster/Mask R-CNN, we provide baselines based on __3 different backbone combinations__:
+	* __FPN__: Use a ResNet+FPN backbone with standard conv and FC heads for mask and box prediction,
 		respectively. It obtains the best
 		speed/accuracy tradeoff, but the other two are still useful for research.
-	* C4: Use a ResNet conv4 backbone with conv5 head. The original baseline in the Faster R-CNN paper.
-	* DC5 (Dilated-C5): Use a ResNet conv5 backbone with dilations in conv5, and standard conv and FC heads
+	* __C4__: Use a ResNet conv4 backbone with conv5 head. The original baseline in the Faster R-CNN paper.
+	* __DC5__ (Dilated-C5): Use a ResNet conv5 backbone with dilations in conv5, and standard conv and FC heads
 	  for mask and box prediction, respectively.
-		The model used by the Deformable ConvNet paper.
+		This is used by the Deformable ConvNet paper.
 * Most models are trained with the 3x schedule (~37 COCO epochs).
   Although 1x models are heavily under-trained, we provide some ResNet-50 models with the 1x (~12 COCO epochs)
 	training schedule for comparison when doing quick research iteration.

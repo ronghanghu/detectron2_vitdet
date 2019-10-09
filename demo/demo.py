@@ -46,11 +46,11 @@ def get_parser():
     parser.add_argument(
         "--confidence-threshold",
         type=float,
-        default=0.7,
+        default=0.5,
         help="Minimum score for instance predictions to be shown",
     )
     parser.add_argument(
-        "opts",
+        "--opts",
         help="Modify model config options using the command-line",
         default=None,
         nargs=argparse.REMAINDER,

@@ -1,52 +1,53 @@
 ## Installation
 
+Our [Colab Notebook](TODO) also has step-by-step instructions that install detectron2.
+
 ### Requirements:
-- Python 3
-- PyTorch 1.0 from a nightly release. Installation instructions can be found in https://pytorch.org/get-started/locally/
-- cocoapi
-- yacs
-- matplotlib
+- Python >= 3.6
+- PyTorch 1.3
+- [torchvision](https://github.com/pytorch/vision/) that matches the PyTorch installation.
+	You can install them together at [pytorch.org](http://pytorch.org) to make sure of this.
+- OpenCV, needed by demo and visualization
+- [fvcore](https://github.com/facebookresearch/fvcore/): `pip install 'git+https://github.com/facebookresearch/fvcore'`
+- pycocotools: `pip install cython; pip install 'git+https://github.com/cocodataset/cocoapi.git#subdirectory=PythonAPI'`
 - GCC >= 4.9
-- (optional) OpenCV for the webcam demo
 
 
-### Step-by-step installation
+### Build detectron2
 
-```bash
-# first, make sure that your conda is setup properly with the right environment
-# for that, check that `which conda`, `which pip` and `which python` points to the
-# right path. From a clean conda env, this is what you need to do
-
-conda create --name detectron2
-source activate detectron2
-
-# this installs the right pip and dependencies for the fresh python
-conda install ipython
-
-# detectron2 and coco api dependencies
-pip install ninja yacs cython matplotlib
-
-# Follow PyTorch installation in https://pytorch.org/get-started/locally/
-# For example:
-conda install pytorch-nightly -c pytorch
-
-# install pycocotools
-pip install --user 'git+https://github.com/cocodataset/cocoapi.git#subdirectory=PythonAPI'
-
-# optionally, install cityscapescripts
-pip install --user cityscapescripts
-
-# optionally, install shapely to use cropping for instance segmentation or work with cityscapes'
-# ground truth JSON files
-pip install --user shapely
-
-# Clone this repo, and run:
+After having the above dependencies, run:
+```
+git clone git@github.com:facebookresearch/detectron2.git
+cd detectron2
 python setup.py build develop
-# This will install the lib with
-# symbolic links, so that you can modify
-# the files if you want and won't need to
-# re-build it
 
 # or if you are on macOS
 # MACOSX_DEPLOYMENT_TARGET=10.9 CC=clang CXX=clang++ python setup.py build develop
+
+# or, as an alternative to `setup.py`, do
+pip install .
 ```
+
+### Common Installation Issues
+
++ Undefined torch/aten symbols, or segmentation fault immediately when running the library.
+  This may mean one of the two:
+
+	* detectron2 or torchvision is not compiled with the version of PyTorch you're running.
+
+		If you use a pre-built torchvision, uninstall torchvision & pytorch, and reinstall them
+		following [pytorch.org](http://pytorch.org).
+		If you manually build detectron2 or torchvision, remove the files you built (`build/`, `**/*.so`)
+		and rebuild them.
+
+	* detectron2 or torchvision is not compiled using gcc >= 4.9.
+
+	  You'll see a warning message during compilation in this case. Please remove the files you build,
+		and rebuild them.
+		Technically, you need the identical compiler that's used to build pytorch to guarantee
+		compatibility. But in practice, gcc >= 4.9 should work OK.
+
++ Undefined cuda symbols. The version of NVCC you use to build detectron2 or torchvision does
+	not match the version of cuda you are running with.
+	This happens sometimes when using anaconda.
+

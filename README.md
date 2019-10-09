@@ -13,9 +13,11 @@ learning framework.
 
 ## Installation
 
+See [INSTALL.md](INSTALL.md).
 
 ## Quick Start
 
+See [GETTING_STARTED.md](GETTING_STARTED.md), or our [Colab Notebook](TODO).
 
 
 ## Model Zoo and Baselines
@@ -39,28 +41,4 @@ If you use Detectron2 in your research or wish to refer to the baseline results 
   howpublished = {\url{https://github.com/facebookresearch/detectron2}},
   year =         {2019}
 }
-```
-
-
-=====================================
-
-old doc:
-
-
-## Simple Demo
-
-We provide a simple demo that illustrates how you can use `detectron2` for inference:
-```bash
-cd demo
-# use input files:
-python demo.py --config-file ../configs/quick_schedules/mask_rcnn_R_50_FPN_inference_acc_test.yaml \
-  --input /path/to/images*.jpg --output /path/to/output/directory
-# use webcam:
-python demo.py --config-file ../configs/quick_schedules/mask_rcnn_R_50_FPN_inference_acc_test.yaml --webcam
-```
-
-### Single GPU training
-
-```bash
-python /path_to_detectron2/tools/train_net.py --config-file "/path/to/config/file.yaml"
 ```

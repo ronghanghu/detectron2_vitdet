@@ -51,19 +51,19 @@ Details for each implementation:
   python tools/train_net.py  --config-file configs/Detectron1-Comparisons/mask_rcnn_R_50_FPN_noaug_1x.yaml --num-gpus 8
   ```
 
-* __maskrcnn-benchmark__: use commit 0ce8f6f with `sed -i ‘s/torch.uint8/torch.bool/g’ **/*.py` to make it compatible with latest PyTorch.
+* __maskrcnn-benchmark__: use commit `0ce8f6f` with `sed -i ‘s/torch.uint8/torch.bool/g’ **/*.py` to make it compatible with latest PyTorch.
   Then, run training with
   ```
   python -m torch.distributed.launch --nproc_per_node=8 tools/train_net.py --config-file configs/e2e_mask_rcnn_R_50_FPN_1x.yaml
   ```
   The speed we observed is faster than its model zoo, likely due to different software versions.
 
-* __tensorpack__: at commit caafda, `export TF_CUDNN_USE_AUTOTUNE=0`, then run
+* __tensorpack__: at commit `caafda`, `export TF_CUDNN_USE_AUTOTUNE=0`, then run
   ```
   mpirun -np 8 ./train.py --config DATA.BASEDIR=/data/coco TRAINER=horovod BACKBONE.STRIDE_1X1=True TRAIN.STEPS_PER_EPOCH=50 --load ImageNet-R50-AlignPadding.npz
   ```
 
-* __mmdetection__: at commit 4d9a5f, apply the following diff, then run
+* __mmdetection__: at commit `4d9a5f`, apply the following diff, then run
 	```
 	./tools/dist_train.sh configs/mask_rcnn_r50_fpn_1x.py 8
 	```
@@ -114,7 +114,7 @@ Details for each implementation:
   python tools/train_net.py --cfg configs/12_2017_baselines/e2e_mask_rcnn_R-50-FPN_1x.yaml
   ```
 
-* __matterport/Mask_RCNN__: at commit 3deaec, apply the following diff, `export TF_CUDNN_USE_AUTOTUNE=0`, then run
+* __matterport/Mask_RCNN__: at commit `3deaec`, apply the following diff, `export TF_CUDNN_USE_AUTOTUNE=0`, then run
 	```
 	python coco.py train --dataset=/data/coco/ --model=imagenet
 	```

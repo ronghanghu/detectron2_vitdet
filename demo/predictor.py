@@ -102,10 +102,10 @@ class VisualizationDemo(object):
             vis_frame = cv2.cvtColor(vis_frame.get_image(), cv2.COLOR_RGB2BGR)
             return vis_frame
 
+        frame_gen = self._frame_from_video(video)
         if self.parallel:
             buffer_size = self.predictor.default_buffer_size
 
-            frame_gen = self._frame_from_video(video)
             frame_data = deque()
 
             for cnt, frame in enumerate(frame_gen):

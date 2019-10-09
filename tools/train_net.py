@@ -7,8 +7,7 @@ It is an entry point that is made to train standard models in detectron2.
 In order to let one script support training of many models,
 this script contains logic that are specific to these built-in models and therefore
 may not be suitable for your own project.
-For example, your research project perhaps only needs a fixed "evaluator",
-and doesn't need results verification.
+For example, your research project perhaps only needs a single "evaluator".
 
 Therefore, we recommend you to use detectron2 as an library and take
 this file as an example of how to use the library.
