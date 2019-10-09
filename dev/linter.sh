@@ -1,6 +1,6 @@
 #!/bin/bash -ev
 
-# Run this script at project root by "./infra/linter.sh" before you commit
+# Run this script at project root by "./dev/linter.sh" before you commit
 
 echo "Running isort ..."
 isort -y --multi-line 3 --trailing-comma -sp . --skip datasets --skip docs --skip-glob '*/__init__.py' --atomic

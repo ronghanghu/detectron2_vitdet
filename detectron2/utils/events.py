@@ -158,7 +158,7 @@ class CommonMetricPrinter:
         else:
             max_mem_mb = None
 
-        # NOTE: max_mem is parsed by grep in "parse_coco_results.sh"
+        # NOTE: max_mem is parsed by grep in "dev/parse_results.sh"
         self.logger.info(
             """\
 eta: {eta}  iter: {iter}  {losses}  \
