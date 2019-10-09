@@ -3,7 +3,10 @@ import logging
 import re
 import torch
 
-from .checkpoint import get_missing_parameters_message, get_unexpected_parameters_message
+from fvcore.common.checkpoint import (
+    get_missing_parameters_message,
+    get_unexpected_parameters_message,
+)
 
 
 def convert_basic_c2_names(original_keys):

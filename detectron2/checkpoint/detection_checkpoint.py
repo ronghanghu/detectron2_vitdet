@@ -2,7 +2,8 @@ import pickle
 from fvcore.common.file_io import PathManager
 
 from .c2_model_loading import align_and_update_state_dicts
-from .checkpoint import Checkpointer
+from fvcore.common.checkpoint import Checkpointer
+import detectron2.utils.comm as comm
 
 
 class DetectionCheckpointer(Checkpointer):
@@ -10,6 +11,14 @@ class DetectionCheckpointer(Checkpointer):
     A checkpointer that is able to handle models in detectron & detectron2
     model zoo, and apply conversions for legacy models.
     """
+    def __init__(self, model, save_dir="", *, save_to_disk=None, **checkpointables):
+        is_main_process = comm.is_main_process()
+        super().__init__(
+            model,
+            save_dir,
+            save_to_disk=is_main_process if save_to_disk is None else save_to_disk,
+            **checkpointables,
+        )
 
     def _load_file(self, filename):
         if filename.endswith(".pkl"):
