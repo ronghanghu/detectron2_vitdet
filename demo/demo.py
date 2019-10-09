@@ -78,7 +78,7 @@ if __name__ == "__main__":
             predictions, visualized_output = demo.run_on_image(img)
             logger.info(
                 "{}: detected {} instances in {:.2f}s".format(
-                    path, len(predictions), time.time() - start_time
+                    path, len(predictions["instances"]), time.time() - start_time
                 )
             )
 

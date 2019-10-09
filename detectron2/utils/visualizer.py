@@ -242,8 +242,7 @@ class VisImage:
             filepath (str): a string that contains the absolute path, including the file name, where
                 the visualized image will be saved.
         """
-        self.ax.imshow(self.img, interpolation="nearest")
-        self.fig.savefig(filepath)
+        cv2.imwrite(filepath, self.get_image()[:, :, ::-1])
 
     def get_image(self):
         """
@@ -434,12 +433,12 @@ class Visualizer:
         masks, sinfo = list(zip(*all_instances))
         category_ids = [x["category_id"] for x in sinfo]
         try:
-            colors = [
-                self._jitter([x / 255 for x in self.metadata.thing_colors[k]]) for k in category_ids
-            ]
+            colors = [random_color(rgb=True, maximum=1) for k in category_ids]
         except AttributeError:
             colors = None
-        labels = [self.metadata.thing_classes[k] for k in category_ids]
+        labels = _create_text_labels(
+            category_ids, [x["score"] for x in sinfo], self.metadata.thing_classes
+        )
         self.overlay_instances(masks=masks, labels=labels, assigned_colors=colors)
 
         return self.output
@@ -544,8 +543,7 @@ class Visualizer:
             labels = [labels[k] for k in sorted_idxs] if labels is not None else None
             masks = [masks[idx] for idx in sorted_idxs] if masks is not None else None
             assigned_colors = [assigned_colors[idx] for idx in sorted_idxs]
-            # keypoints do not need to be sorted
-            # keypoints = keypoints[sorted_idxs] if keypoints is not None else None
+            keypoints = keypoints[sorted_idxs] if keypoints is not None else None
 
         for i in range(num_instances):
             color = assigned_colors[i]
@@ -570,9 +568,7 @@ class Visualizer:
                     text_pos = np.median(masks[i].mask.nonzero(), axis=1)[::-1]
                     horiz_align = "center"
                 else:
-                    raise NotImplementedError(
-                        "Cannot draw labels when boxes and masks are not available."
-                    )
+                    continue  # drawing the box confidence for keypoints isn't very useful.
                 # for small objects, draw text at the side to avoid occulusion
                 instance_area = (y1 - y0) * (x1 - x0)
                 if (

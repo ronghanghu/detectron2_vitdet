@@ -131,20 +131,40 @@ class COCOPanopticEvaluator(DatasetEvaluator):
         res["RQ_st"] = 100 * pq_res["Stuff"]["rq"]
 
         results = OrderedDict({"panoptic_seg": res})
-
-        headers = ["", "PQ", "SQ", "RQ", "#categories"]
-        data = []
-        for name in ["All", "Things", "Stuff"]:
-            row = [name] + [pq_res[name][k] * 100 for k in ["pq", "sq", "rq"]] + [pq_res[name]["n"]]
-            data.append(row)
-        table = tabulate(
-            data,
-            headers=headers,
-            tablefmt="pipe",
-            floatfmt=".3f",
-            stralign="center",
-            numalign="center",
-        )
-        logger.info("Panoptic Evaluation Results:\n" + table)
+        _print_panoptic_results(pq_res)
 
         return results
+
+
+def _print_panoptic_results(pq_res):
+    headers = ["", "PQ", "SQ", "RQ", "#categories"]
+    data = []
+    for name in ["All", "Things", "Stuff"]:
+        row = [name] + [pq_res[name][k] * 100 for k in ["pq", "sq", "rq"]] + [pq_res[name]["n"]]
+        data.append(row)
+    table = tabulate(
+        data, headers=headers, tablefmt="pipe", floatfmt=".3f", stralign="center", numalign="center"
+    )
+    logger.info("Panoptic Evaluation Results:\n" + table)
+
+
+if __name__ == "__main__":
+    from detectron2.utils.logger import setup_logger
+
+    logger = setup_logger()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--gt-json")
+    parser.add_argument("--gt-dir")
+    parser.add_argument("--pred-json")
+    parser.add_argument("--pred-dir")
+    args = parser.parse_args()
+
+    from panopticapi.evaluation import pq_compute
+
+    with contextlib.redirect_stdout(io.StringIO()):
+        pq_res = pq_compute(
+            args.gt_json, args.pred_json, gt_folder=args.gt_dir, pred_folder=args.pred_dir
+        )
+        _print_panoptic_results(pq_res)

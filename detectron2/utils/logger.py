@@ -28,6 +28,7 @@ class _ColorfulFormatter(logging.Formatter):
         return prefix + " " + log
 
 
+@functools.lru_cache()  # so that calling setup_logger multiple times won't add many handlers
 def setup_logger(
     output=None, distributed_rank=0, *, color=True, name="detectron2", abbrev_name=None
 ):
