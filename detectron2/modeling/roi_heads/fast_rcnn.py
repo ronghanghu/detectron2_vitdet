@@ -363,7 +363,8 @@ class FastRCNNOutputLayers(nn.Module):
             nn.init.constant_(l.bias, 0)
 
     def forward(self, x):
-        x = x.view(x.shape[0], np.prod(x.shape[1:]))
+        if x.dim() > 2:
+            x = torch.flatten(x, start_dim=1)
         scores = self.cls_score(x)
         proposal_deltas = self.bbox_pred(x)
         return scores, proposal_deltas

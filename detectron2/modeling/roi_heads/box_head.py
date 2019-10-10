@@ -1,5 +1,6 @@
 import numpy as np
 import fvcore.nn.weight_init as weight_init
+import torch
 from torch import nn
 from torch.nn import functional as F
 
@@ -70,7 +71,8 @@ class FastRCNNConvFCHead(nn.Module):
         for layer in self.conv_norm_relus:
             x = layer(x)
         if len(self.fcs):
-            x = x.view(x.shape[0], np.prod(x.shape[1:]))
+            if x.dim() > 2:
+                x = torch.flatten(x, start_dim=1)
             for layer in self.fcs:
                 x = F.relu(layer(x))
         return x
