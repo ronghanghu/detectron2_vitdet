@@ -1,4 +1,4 @@
-# Detectron2
+<img src=".github/Detectron2-Logo-Horz.svg" width="300" >
 
 Detectron2 is Facebook AI Research's next generation software system
 that implements state-of-the-art object detection algorithms.
@@ -7,8 +7,6 @@ It is a ground-up rewrite of the previous version,
 and it originates from [maskrcnn-benchmark](https://github.com/facebookresearch/maskrcnn-benchmark/).
 It is written in Python and powered by the [PyTorch](https://pytorch.org) deep
 learning framework.
-
-![logo](.github/Detectron2-Logo-Horz.svg)
 
 
 ## Installation
@@ -27,7 +25,7 @@ We provide a large set of baseline results and trained models available for down
 
 ## License
 
-Detectron2 is released under the [Apache 2.0 license](https://github.com/facebookresearch/detectron2/blob/master/LICENSE).
+Detectron2 is released under the [Apache 2.0 license](LICENSE).
 
 ## Citing Detectron
 

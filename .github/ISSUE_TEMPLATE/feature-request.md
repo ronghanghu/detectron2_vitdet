@@ -1,6 +1,6 @@
 ---
 name: "\U0001F680Feature Request"
-about: Submit a proposal/request for a new Mask R-CNN Benchmark feature
+about: Submit a proposal/request for a new detectron2 feature
 
 ---
 
@@ -14,11 +14,3 @@ about: Submit a proposal/request for a new Mask R-CNN Benchmark feature
 ## Pitch
 
 <!-- A clear and concise description of what you want to happen. -->
-
-## Alternatives
-
-<!-- A clear and concise description of any alternative solutions or features you've considered, if any. -->
-
-## Additional context
-
-<!-- Add any other context or screenshots about the feature request here. -->
