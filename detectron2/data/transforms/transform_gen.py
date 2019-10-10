@@ -1,22 +1,22 @@
 # -*- coding: utf-8 -*-
 # File: transformer.py
+
 import inspect
 import numpy as np
 import pprint
 import sys
 from abc import ABCMeta, abstractmethod
-from PIL import Image
-
-from .transform import (
+from fvcore.transforms.transform import (
     BlendTransform,
     CropTransform,
-    ExtentTransform,
     HFlipTransform,
     NoOpTransform,
-    ResizeTransform,
     Transform,
     TransformList,
 )
+from PIL import Image
+
+from .transform import ExtentTransform, ResizeTransform
 
 __all__ = [
     "RandomBrightness",
