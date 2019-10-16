@@ -1,5 +1,8 @@
+// Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 #pragma once
 #include <torch/extension.h>
+
+namespace detectron2 {
 
 at::Tensor ROIAlign_forward_cpu(
     const at::Tensor& input,
@@ -123,3 +126,5 @@ inline at::Tensor ROIAlign_backward(
       sampling_ratio,
       aligned);
 }
+
+} // namespace detectron2

@@ -1,19 +1,14 @@
-import os
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import unittest
 from collections import OrderedDict
-from tempfile import TemporaryDirectory
 import torch
 from torch import nn
 
-from detectron2.checkpoint import Checkpointer
 from detectron2.checkpoint.c2_model_loading import align_and_update_state_dicts
 from detectron2.utils.logger import setup_logger
 
 
 class TestCheckpointer(unittest.TestCase):
-    def create_model(self):
-        return nn.Sequential(nn.Linear(2, 3), nn.Linear(3, 1))
-
     def setUp(self):
         setup_logger()
 
@@ -32,60 +27,7 @@ class TestCheckpointer(unittest.TestCase):
         state_dict["layer2.bias"] = torch.rand(2)
         state_dict["res.layer2.weight"] = torch.rand(2, 3)
         state_dict["res.layer2.bias"] = torch.rand(2)
-
         return m, state_dict
-
-    def test_from_last_checkpoint_model(self):
-        # test that loading works even if they differ by a prefix
-        for trained_model, fresh_model in [
-            (self.create_model(), self.create_model()),
-            (nn.DataParallel(self.create_model()), self.create_model()),
-            (self.create_model(), nn.DataParallel(self.create_model())),
-            (nn.DataParallel(self.create_model()), nn.DataParallel(self.create_model())),
-        ]:
-
-            with TemporaryDirectory() as f:
-                checkpointer = Checkpointer(trained_model, save_dir=f)
-                checkpointer.save("checkpoint_file")
-
-                # in the same folder
-                fresh_checkpointer = Checkpointer(fresh_model, save_dir=f)
-                self.assertTrue(fresh_checkpointer.has_checkpoint())
-                self.assertEqual(
-                    fresh_checkpointer.get_checkpoint_file(), os.path.join(f, "checkpoint_file.pth")
-                )
-                fresh_checkpointer.load(fresh_checkpointer.get_checkpoint_file())
-
-            for trained_p, loaded_p in zip(trained_model.parameters(), fresh_model.parameters()):
-                # different tensor references
-                self.assertFalse(id(trained_p) == id(loaded_p))
-                # same content
-                self.assertTrue(trained_p.equal(loaded_p))
-
-    def test_from_name_file_model(self):
-        # test that loading works even if they differ by a prefix
-        for trained_model, fresh_model in [
-            (self.create_model(), self.create_model()),
-            (nn.DataParallel(self.create_model()), self.create_model()),
-            (self.create_model(), nn.DataParallel(self.create_model())),
-            (nn.DataParallel(self.create_model()), nn.DataParallel(self.create_model())),
-        ]:
-            with TemporaryDirectory() as f:
-                checkpointer = Checkpointer(trained_model, save_dir=f, save_to_disk=True)
-                checkpointer.save("checkpoint_file")
-
-                # on different folders
-                with TemporaryDirectory() as g:
-                    fresh_checkpointer = Checkpointer(fresh_model, save_dir=g)
-                    self.assertFalse(fresh_checkpointer.has_checkpoint())
-                    self.assertEqual(fresh_checkpointer.get_checkpoint_file(), "")
-                    fresh_checkpointer.load(os.path.join(f, "checkpoint_file.pth"))
-
-            for trained_p, loaded_p in zip(trained_model.parameters(), fresh_model.parameters()):
-                # different tensor references
-                self.assertFalse(id(trained_p) == id(loaded_p))
-                # same content
-                self.assertTrue(trained_p.equal(loaded_p))
 
     def test_complex_model_loaded(self):
         for add_data_parallel in [False, True]:

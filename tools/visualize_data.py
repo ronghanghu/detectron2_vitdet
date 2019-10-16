@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import argparse
 import numpy as np
 import os
@@ -23,7 +24,7 @@ def setup(args):
 
 
 def parse_args(in_args=None):
-    parser = argparse.ArgumentParser(description="Visualizes Ground-truth Dataset")
+    parser = argparse.ArgumentParser(description="Visualize ground-truth data")
     parser.add_argument(
         "--source",
         choices=["annotation", "dataloader"],
@@ -43,9 +44,6 @@ def parse_args(in_args=None):
 
 
 if __name__ == "__main__":
-    """
-    General utility to visualize ground truth dataset.
-    """
     args = parse_args()
     logger = setup_logger()
     logger.info("Arguments: " + str(args))

@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 from .boxes import Boxes, BoxMode, pairwise_iou
 from .image_list import ImageList
 from .instances import Instances

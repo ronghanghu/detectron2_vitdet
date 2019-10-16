@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 from abc import ABCMeta, abstractmethod
 import torch.nn as nn
 
@@ -55,28 +56,15 @@ class Backbone(nn.Module, metaclass=ABCMeta):
 
     @property
     def out_features(self):
-        """
-        Returns:
-            list[str]: List of output feature maps names that will be returned by :meth:`forward`.
-        """
+        """deprecated"""
         return self._out_features
 
     @property
     def out_feature_strides(self):
-        """
-        Returns:
-            dict[str->int]: Dict containing strides (values) of each
-                named feature map (keys) *returned* by the backbone when :meth:`forward`
-                is called. Example keys (depending on backbone type): "stem", "res2", ..., "res5".
-        """
+        """deprecated"""
         return {f: self._out_feature_strides[f] for f in self._out_features}
 
     @property
     def out_feature_channels(self):
-        """
-        Returns:
-            dict[str->int]: Dict containing the number of channels (values) in each named
-                feature map (keys) *returned* by the backbone when :meth:`forward` is called.
-                Example keys (depending on backbone type): "stem", "res2", ..., "res5".
-        """
+        """deprecated"""
         return {f: self._out_feature_channels[f] for f in self._out_features}

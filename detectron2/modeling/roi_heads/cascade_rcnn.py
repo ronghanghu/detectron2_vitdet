@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import torch
 from torch import nn
 from torch.autograd.function import Function
@@ -38,7 +39,7 @@ class CascadeROIHeads(StandardROIHeads):
         self.num_cascade_stages  = len(cascade_ious)
         assert len(cascade_bbox_reg_weights) == self.num_cascade_stages
         assert cfg.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG,  \
-            "CascadeROIHeads only support class-agnositc regression now!"
+            "CascadeROIHeads only support class-agnostic regression now!"
         assert cascade_ious[0] == cfg.MODEL.ROI_HEADS.IOU_THRESHOLDS[0]
         # fmt: on
 

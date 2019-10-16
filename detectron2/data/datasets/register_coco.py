@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import copy
 
 from detectron2.data import DatasetCatalog, MetadataCatalog
@@ -46,20 +47,22 @@ def register_coco_panoptic_separated(
     semantic annotations, each with its own contiguous ids. Hence it's called "separated".
 
     It follows the setting used by the PanopticFPN paper:
-        1. The instance annotations directly comes from polygons in the COCO
-          instances annotation task, rather than from the masks in the COCO panoptic annotations.
 
-          The two format have small differences:
-          Polygons in the instance annotations may have overlaps.
-          The mask annotations are produced by labeling the depth ordering of overlapped polygons.
+    1. The instance annotations directly come from polygons in the COCO
+       instances annotation task, rather than from the masks in the COCO panoptic annotations.
 
-        2. The semantic annotations are converted from panoptic annotations, where
-          all "things" are assigned a semantic id of 0.
-          All semantic categories will therefore have ids in contiguous
-          range [0, #stuff_categories).
+       The two format have small differences:
+       Polygons in the instance annotations may have overlaps.
+       The mask annotations are produced by labeling the overlapped polygons
+       with depth ordering.
+
+    2. The semantic annotations are converted from panoptic annotations, where
+       all "things" are assigned a semantic id of 0.
+       All semantic categories will therefore have ids in contiguous
+       range [1, #stuff_categories].
 
     This function will also register a pure semantic segmentation dataset
-    named `name + '_stuffonly'`.
+    named ``name + '_stuffonly'``.
 
     Args:
         name (str): the name that identifies a dataset,

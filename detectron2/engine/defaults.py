@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 
 """
 This file contains components with some default boilerplate logic user may need
-in training / testing. They will not work for everyeone, but many users may find them useful.
+in training / testing. They will not work for everyone, but many users may find them useful.
 
 The behavior of functions/classes in this file is subject to change,
 since they are meant to represent the "common default behavior" people need in their projects.
@@ -82,6 +83,7 @@ def default_argument_parser():
 def default_setup(cfg, args):
     """
     Perform some basic common setups at the beginning of a job, including:
+
     1. Set up the detectron2 logger
     2. Log basic information about environment, cmdline arguments, and config
     3. Backup the config to the output directory
@@ -184,11 +186,11 @@ class DefaultTrainer(SimpleTrainer):
     2. Load a checkpoint or `cfg.MODEL.WEIGHTS`, if exists.
     3. Register a few common hooks.
 
-    It is created to simplify the *standard model training workflow* and reduce code boilerplate
+    It is created to simplify the **standard model training workflow** and reduce code boilerplate
     for users who only need the standard training workflow, with standard features.
     It means this class makes *many assumptions* about your training logic that
-    may easily become invalid in a new research.
-    In fact, any assumptions beyond those made in the `SimpleTrainer` are too much for research.
+    may easily become invalid in a new research. In fact, any assumptions beyond those made in the
+    :class:`SimpleTrainer` are too much for research.
 
     The code of this class has been annotated about restrictive assumptions it mades.
     When they do not work for you, you're encouraged to write your own training logic.
@@ -200,8 +202,8 @@ class DefaultTrainer(SimpleTrainer):
 
     Attributes:
         scheduler:
-        checkpointer:
-        cfg:
+        checkpointer (DetectionCheckpointer):
+        cfg (CfgNode):
     """
 
     def __init__(self, cfg):
@@ -225,7 +227,7 @@ class DefaultTrainer(SimpleTrainer):
         # Assume no other objects need to be checkpointed.
         # We can later make it checkpoint the stateful hooks
         self.checkpointer = DetectionCheckpointer(
-            # Assume you want to save checkpoits together with logs/statistics
+            # Assume you want to save checkpoints together with logs/statistics
             model,
             cfg.OUTPUT_DIR,
             optimizer=optimizer,
@@ -238,6 +240,14 @@ class DefaultTrainer(SimpleTrainer):
         self.register_hooks(self.build_hooks())
 
     def resume_or_load(self, resume=True):
+        """
+        If `resume==True`, and last checkpoint exists, resume from it.
+
+        Otherwise, load a model specified by the config.
+
+        Args:
+            resume (bool): whether to do resume or not
+        """
         # The checkpoint stores the training iteration that just finished, thus we start
         # at the next iteration (or iter zero if there's no checkpoint).
         self.start_iter = (
@@ -248,6 +258,12 @@ class DefaultTrainer(SimpleTrainer):
         )
 
     def build_hooks(self):
+        """
+        Build a list of default hooks.
+
+        Returns:
+            list[HookBase]:
+        """
         cfg = self.cfg.clone()
         cfg.defrost()
         cfg.DATALOADER.NUM_WORKERS = 0  # save some memory and time for PreciseBN
@@ -288,6 +304,13 @@ class DefaultTrainer(SimpleTrainer):
         return ret
 
     def build_writers(self):
+        """
+        Build a list of default writers, that write metrics to the screen,
+        a json file, and a tensorboard event file respectively.
+
+        Returns:
+            list[Writer]: a list of objects that have a ``.write`` method.
+        """
         # Assume the default print/log frequency.
         return [
             # It may not always print what you want to see, since it prints "common" metrics only.
@@ -310,6 +333,10 @@ class DefaultTrainer(SimpleTrainer):
 
     @classmethod
     def build_model(cls, cfg):
+        """
+        Returns:
+            torch.nn.Module:
+        """
         model = build_model(cfg)
         logger = logging.getLogger(__name__)
         logger.info("Model:\n{}".format(model))
@@ -317,6 +344,10 @@ class DefaultTrainer(SimpleTrainer):
 
     @classmethod
     def build_optimizer(cls, cfg, model):
+        """
+        Returns:
+            torch.optim.Optimizer:
+        """
         return build_optimizer(cfg, model)
 
     @classmethod
@@ -325,14 +356,26 @@ class DefaultTrainer(SimpleTrainer):
 
     @classmethod
     def build_train_loader(cls, cfg):
+        """
+        Returns:
+            iterable
+        """
         return build_detection_train_loader(cfg)
 
     @classmethod
     def build_test_loader(cls, cfg, dataset_name):
+        """
+        Returns:
+            iterable
+        """
         return build_detection_test_loader(cfg, dataset_name)
 
     @classmethod
     def build_evaluator(cls, cfg, dataset_name):
+        """
+        Returns:
+            DatasetEvaluator
+        """
         raise NotImplementedError
 
     @classmethod

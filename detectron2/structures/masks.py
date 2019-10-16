@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import copy
 import numpy as np
 from typing import Any, Iterator, List, Union
@@ -101,6 +102,7 @@ class BitMasks:
             BitMasks: Create a new :class:`BitMasks` by indexing.
 
         The following usage are allowed:
+
         1. `new_masks = masks[3]`: return a `BitMasks` which contains only one mask.
         2. `new_masks = masks[2:10]`: return a slice of masks.
         3. `new_masks = masks[vector]`, where vector is a torch.BoolTensor
@@ -165,7 +167,8 @@ class BitMasks:
             mask_size (int): the size of the rasterized mask.
 
         Returns:
-            Tensor: A bool tensor of shape (N, mask_size, mask_size), where
+            Tensor:
+                A bool tensor of shape (N, mask_size, mask_size), where
                 N is the number of predicted boxes for this image.
         """
         assert len(boxes) == len(self), "{} != {}".format(len(boxes), len(self))
@@ -257,8 +260,8 @@ class PolygonMasks:
         Find masks that are non-empty.
 
         Returns:
-            Tensor: a BoolTensor which represents
-                whether each mask is empty (False) or non-empty (True).
+            Tensor:
+                a BoolTensor which represents whether each mask is empty (False) or not (True).
         """
         keep = [1 if len(polygon) > 0 else 0 for polygon in self.polygons]
         return torch.as_tensor(keep, dtype=torch.bool)
@@ -267,12 +270,13 @@ class PolygonMasks:
         """
         Support indexing over the instances and return a `PolygonMasks` object.
         `item` can be:
-            1. An integer. It will return an object with only one instance.
-            2. A slice. It will return an object with the selected instances.
-            3. A list[int]. It will return an object with the selected instances,
-                correpsonding to the indices in the list.
-            4. A vector mask of type BoolTensor, whose length is num_instances.
-               It will return an object with the instances whose mask is nonzero.
+
+        1. An integer. It will return an object with only one instance.
+        2. A slice. It will return an object with the selected instances.
+        3. A list[int]. It will return an object with the selected instances,
+           correpsonding to the indices in the list.
+        4. A vector mask of type BoolTensor, whose length is num_instances.
+           It will return an object with the instances whose mask is nonzero.
         """
         if isinstance(item, int):
             selected_polygons = [self.polygons[item]]
@@ -295,8 +299,8 @@ class PolygonMasks:
     def __iter__(self) -> Iterator[List[torch.Tensor]]:
         """
         Yields:
-            list[ndarray]: the polygons for one instance. Each Tensor is a
-                float64 vector representing a polygon.
+            list[ndarray]: the polygons for one instance.
+            Each Tensor is a float64 vector representing a polygon.
         """
         return iter(self.polygons)
 
@@ -319,7 +323,7 @@ class PolygonMasks:
 
         Returns:
             Tensor: A bool tensor of shape (N, mask_size, mask_size), where
-                N is the number of predicted boxes for this image.
+            N is the number of predicted boxes for this image.
         """
         assert len(boxes) == len(self), "{} != {}".format(len(boxes), len(self))
 

@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import datetime
 import logging
 import time
@@ -30,8 +31,9 @@ class DatasetEvaluator:
         """
         Process an input/output pair.
 
-        input: the input that's used to call the model.
-        output: the return value of `model(output)`
+        Args:
+            input: the input that's used to call the model.
+            output: the return value of `model(output)`
         """
         pass
 
@@ -40,12 +42,13 @@ class DatasetEvaluator:
         Evaluate/summarize the performance, after processing all input/output pairs.
 
         Returns:
-            dict: A new evaluator class can return a dict of arbitrary format
+            dict:
+                A new evaluator class can return a dict of arbitrary format
                 as long as the user can process the results.
-
                 In our train_net.py, we expect the following format:
-                key: the name of the task (e.g., bbox)
-                value: a dict of {metric name: score}, e.g.: {"AP50": 80}
+
+                * key: the name of the task (e.g., bbox)
+                * value: a dict of {metric name: score}, e.g.: {"AP50": 80}
         """
         pass
 
@@ -72,7 +75,7 @@ class DatasetEvaluators(DatasetEvaluator):
                 for k, v in result.items():
                     assert (
                         k not in results
-                    ), "Different evalutors produce results with the same key {}".format(k)
+                    ), "Different evaluators produce results with the same key {}".format(k)
                     results[k] = v
         return results
 
@@ -92,7 +95,7 @@ def inference_on_dataset(model, data_loader, evaluator):
         evaluator (DatasetEvaluator): the evaluator to run
 
     Returns:
-        The return value of `evaluator.evalute()`
+        The return value of `evaluator.evaluate()`
     """
     num_devices = torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
     logger = logging.getLogger(__name__)
@@ -104,12 +107,17 @@ def inference_on_dataset(model, data_loader, evaluator):
     logging_interval = 50
     num_warmup = min(5, logging_interval - 1, total - 1)
     start_time = time.time()
+    total_compute_time = 0
     with inference_context(model), torch.no_grad():
         for idx, inputs in enumerate(data_loader):
             if idx == num_warmup:
                 start_time = time.time()
+                total_compute_time = 0
 
+            start_compute_time = time.time()
             outputs = model(inputs)
+            torch.cuda.synchronize()
+            total_compute_time += time.time() - start_compute_time
             evaluator.process(inputs, outputs)
 
             if (idx + 1) % logging_interval == 0:
@@ -131,6 +139,12 @@ def inference_on_dataset(model, data_loader, evaluator):
     logger.info(
         "Total inference time: {} ({:.6f} s / img per device, on {} devices)".format(
             total_time_str, total_time / (total - num_warmup), num_devices
+        )
+    )
+    total_compute_time_str = str(datetime.timedelta(seconds=int(total_compute_time)))
+    logger.info(
+        "Total inference pure compute time: {} ({:.6f} s / img per device, on {} devices)".format(
+            total_compute_time_str, total_compute_time / (total - num_warmup), num_devices
         )
     )
 

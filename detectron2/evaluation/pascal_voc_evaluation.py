@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 
 import logging
 import numpy as np
@@ -28,7 +29,7 @@ class PascalVOCDetectionEvaluator(DatasetEvaluator):
     def __init__(self, dataset_name):
         """
         Args:
-            dataste_name (str): name of the dataset, e.g., "voc_2007_test"
+            dataset_name (str): name of the dataset, e.g., "voc_2007_test"
         """
         self._dataset_name = dataset_name
         meta = MetadataCatalog.get(dataset_name)
@@ -60,6 +61,10 @@ class PascalVOCDetectionEvaluator(DatasetEvaluator):
                 )
 
     def evaluate(self):
+        """
+        Returns:
+            dict: has a key "segm", whose value is a dict of "AP", "AP50", and "AP75".
+        """
         all_predictions = comm.gather(self._predictions, dst=0)
         if not comm.is_main_process():
             return

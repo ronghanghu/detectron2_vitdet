@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 
 import logging
 from fvcore.common.config import CfgNode as _CfgNode
@@ -14,6 +15,7 @@ class CfgNode(_CfgNode):
       the content of the file.
     2. Support config versioning.
       When attempting to merge an old config, it will convert the old config automatically.
+
     """
 
     # Note that the default value of allow_unsafe is changed to True
@@ -81,6 +83,8 @@ def set_global_cfg(cfg: CfgNode) -> None:
 
     Assume that the given "cfg" has the key "KEY", after calling
     `set_global_cfg(cfg)`, the key can be accessed by:
+
+    .. code-block:: python
 
         from detectron2.config import global_cfg
         print(global_cfg.KEY)

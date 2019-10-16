@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import numpy as np
 from typing import Any, List, Tuple, Union
 import torch
@@ -11,10 +12,10 @@ class Keypoints:
     containing the x,y location and visibility flag of each keypoint. This tensor has shape
     (N, K, 3) where N is the number of instances and K is the number of keypoints per instance.
 
-    The visiblity flag follows the COCO format and must be one of three integers:
-        v=0: not labeled (in which case x=y=0)
-        v=1: labeled but not visible
-        v=2: labeled and visible
+    The visibility flag follows the COCO format and must be one of three integers:
+    * v=0: not labeled (in which case x=y=0)
+    * v=1: labeled but not visible
+    * v=2: labeled and visible
     """
 
     def __init__(self, keypoints: Union[torch.Tensor, np.ndarray, List[List[float]]]):
@@ -41,10 +42,11 @@ class Keypoints:
             boxes: Nx4 tensor, the boxes to draw the keypoints to
 
         Returns:
-            heatmaps: A tensor of shape (N, K) containing an integer spatial label
+            heatmaps:
+                A tensor of shape (N, K) containing an integer spatial label
                 in the range [0, heatmap_size**2 - 1] for each keypoint in the input.
-            valid: A tensor of shape (N, K) containing whether each keypoint is in
-                the roi or not.
+            valid:
+                A tensor of shape (N, K) containing whether each keypoint is in the roi or not.
         """
         return _keypoints_to_heatmap(self.tensor, boxes, heatmap_size)
 
@@ -53,6 +55,7 @@ class Keypoints:
         Create a new `Keypoints` by indexing on this `Keypoints`.
 
         The following usage are allowed:
+
         1. `new_kpts = kpts[3]`: return a `Keypoints` which contains only one instance.
         2. `new_kpts = kpts[2:10]`: return a slice of key points.
         3. `new_kpts = kpts[vector]`, where vector is a torch.ByteTensor
@@ -171,11 +174,11 @@ def heatmaps_to_keypoints(maps: torch.Tensor, rois: torch.Tensor) -> torch.Tenso
         # softmax over the spatial region
         max_score, _ = roi_map.view(num_keypoints, -1).max(1)
         max_score = max_score.view(num_keypoints, 1, 1)
-        tmp_full_resoltuion = (roi_map - max_score).exp_()
-        tmp_pool_resoltuion = (maps[i] - max_score).exp_()
+        tmp_full_resolution = (roi_map - max_score).exp_()
+        tmp_pool_resolution = (maps[i] - max_score).exp_()
         # Produce scores over the region H x W, but normalize with POOL_H x POOL_W
         # So that the scores of objects of different absolute sizes will be more comparable
-        roi_map_probs = tmp_full_resoltuion / tmp_pool_resoltuion.sum((1, 2), keepdim=True)
+        roi_map_probs = tmp_full_resolution / tmp_pool_resolution.sum((1, 2), keepdim=True)
 
         w = roi_map.shape[2]
         pos = roi_map.view(num_keypoints, -1).argmax(1)

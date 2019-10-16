@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import numpy as np
 from enum import Enum, unique
 from typing import Iterator, List, Tuple, Union
@@ -13,11 +14,13 @@ class BoxMode(Enum):
     """
     Enum of different ways to represent a box.
 
-    XYXY_ABS: (x0, y0, x1, y1) in absolute floating points coordinates.
-        The coordinates in range [0, width or height].
-    XYWH_ABS: (x0, y0, w, h) in absolute floating points coordinates.
-    XYXY_REL: (x0, y0, x1, y1) in range [0, 1]. They are relative to the size of the image.
-    XYWH_REL: (x0, y0, w, h) in range [0, 1]. They are relative to the size of the image.
+    Attributes:
+
+        XYXY_ABS: (x0, y0, x1, y1) in absolute floating points coordinates.
+            The coordinates in range [0, width or height].
+        XYWH_ABS: (x0, y0, w, h) in absolute floating points coordinates.
+        XYXY_REL: (x0, y0, x1, y1) in range [0, 1]. They are relative to the size of the image.
+        XYWH_REL: (x0, y0, w, h) in range [0, 1]. They are relative to the size of the image.
     """
 
     XYXY_ABS = 0
@@ -136,8 +139,9 @@ class Boxes:
         A box is considered empty, if either of its side is no larger than threshold.
 
         Returns:
-            Tensor: a binary vector which represents
-                whether each box is empty (False) or non-empty (True).
+            Tensor:
+                a binary vector which represents whether each box is empty
+                (False) or non-empty (True).
         """
         box = self.tensor
         widths = box[:, 2] - box[:, 0]

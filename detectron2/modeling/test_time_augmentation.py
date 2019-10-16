@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import copy
 import numpy as np
 from contextlib import contextmanager
@@ -37,7 +38,8 @@ class DatasetMapperTTA:
             dict: a detection dataset dict
 
         Returns:
-            list[dict]: a list of dataset dicts, which contain augmented version of the input image.
+            list[dict]:
+                a list of dataset dicts, which contain augmented version of the input image.
                 The total number of dicts is ``len(min_sizes) * (2 if flip else 1)``.
         """
         ret = []

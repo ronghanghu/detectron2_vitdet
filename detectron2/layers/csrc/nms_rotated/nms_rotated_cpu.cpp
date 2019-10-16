@@ -1,3 +1,4 @@
+// Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 #include "../box_iou_rotated/box_iou_rotated_utils.h"
 #include "nms_rotated.h"
 

@@ -1,4 +1,4 @@
-# Using Custom Datasets
+# Use Custom Datasets
 
 If you want to use a custom dataset while also reusing detectron2's data loaders,
 you will need to
@@ -8,8 +8,11 @@ you will need to
 
 Next, we explain the above two concepts in details.
 
+The [Colab Notebook](https://colab.research.google.com/drive/16jcaJoc6bCFAQ96jDe2HwtXj7BMD_-m5)
+has a working example of how to register and train on a dataset of custom formats.
 
-### Registering a Dataset
+
+### Register a Dataset
 
 To let detectron2 know how to obtain a dataset named "my_dataset", you will implement
 a function that returns the items in your dataset and then tell detectron2 about this
@@ -51,7 +54,8 @@ can load an image from "file_name" if the "image" field is not available.
 		instance in this image. Each annotation dict may contain:
 	+ `bbox` (list[float]): list of 4 numbers representing the bounding box of the instance.
 	+ `bbox_mode` (int): the format of bbox.
-			It must be a member of [detectron2.structures.BoxMode](detectron2/structures/boxes.py).
+			It must be a member of
+      [structures.BoxMode](../modules/structures.html#detectron2.structures.BoxMode).
 		  Currently supports: `BoxMode.XYXY_ABS`, `BoxMode.XYWH_ABS`.
 	+ `category_id` (int): an integer in the range [0, num_categories) representing the category label.
       The value num_categories is reserved to represent the "background" category, if applicable.
@@ -73,18 +77,22 @@ can load an image from "file_name" if the "image" field is not available.
 	+ `iscrowd`: 0 or 1. Whether this instance is labeled as COCO's "crowd region".
 + `proposal_boxes` (array): 2D numpy array with shape (K, 4) representing K precomputed proposal boxes for this image.
 + `proposal_objectness_logits` (array): numpy array with shape (K, ), which corresponds to the objectness
-        logits of proposals in 'propopsal_boxes'.
+        logits of proposals in 'proposal_boxes'.
 + `proposal_bbox_mode` (int): the format of the precomputed proposal bbox.
-        It must be a member of [detectron2.structures.BoxMode](detectron2/structures/boxes.py).
+        It must be a member of
+        [structures.BoxMode](../modules/structures.html#detectron2.structures.BoxMode).
         Default format is `BoxMode.XYXY_ABS`.
 
 
 If your dataset is already in the COCO format, you can simply register it by
 ```python
-from detectron2.data.datasts import register_coco_instances
+from detectron2.data.datasets import register_coco_instances
 register_coco_instances("my_dataset", {}, "json_annotation.json", "path/to/image/dir")
 ```
 which will take care of everything (including metadata) for you.
+
+If your dataset is in COCO format with custom per-instance annotations,
+the [load_coco_json](../modules/data.html#detectron2.data.datasets.load_coco_json) function can be used.
 
 
 ### "Metadata" for Datasets

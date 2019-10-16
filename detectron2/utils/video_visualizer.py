@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import numpy as np
 import pycocotools.mask as mask_util
 
@@ -113,7 +114,7 @@ class VideoVisualizer:
         Args:
             sem_seg (ndarray or Tensor): semantic segmentation of shape (H, W),
                 each value is the integer label.
-            area_threhold (Optional[int]): only draw segmentations larger than the threshold
+            area_threshold (Optional[int]): only draw segmentations larger than the threshold
         """
         # don't need to do anything special
         frame_visualizer = Visualizer(frame, self.metadata)

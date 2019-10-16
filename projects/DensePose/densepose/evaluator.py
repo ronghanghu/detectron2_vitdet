@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# File:
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 
 import contextlib
 import copy
@@ -10,7 +10,6 @@ import logging
 import os
 from collections import OrderedDict
 import torch
-from pycocotools import coco
 from pycocotools.coco import COCO
 
 from detectron2.data import MetadataCatalog
@@ -20,8 +19,6 @@ from detectron2.utils.comm import all_gather, is_main_process, synchronize
 from detectron2.utils.logger import create_small_table
 
 from .densepose_coco_evaluation import DensePoseCocoEval
-
-coco.unicode = str
 
 
 class DensePoseCOCOEvaluator(DatasetEvaluator):

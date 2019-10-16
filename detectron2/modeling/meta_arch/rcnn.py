@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import logging
 import torch
 from torch import nn
@@ -43,17 +44,20 @@ class GeneralizedRCNN(nn.Module):
         Args:
             batched_inputs: a list, batched outputs of :class:`DatasetMapper` .
                 Each item in the list contains the inputs for one image.
+                For now, each item in the list is a dict that contains:
 
-        For now, each item in the list is a dict that contains:
-            image: Tensor, image in (C, H, W) format.
-            instances (optional): groundtruth Instances
-            proposals (optional): Instances, precomputed proposals.
-            Other information that's included in the original dicts, such as:
-                "height", "width" (int): the output resolution of the model, used in inference.
+                * image: Tensor, image in (C, H, W) format.
+                * instances (optional): groundtruth :class:`Instances`
+                * proposals (optional): :class:`Instances`, precomputed proposals.
+
+                Other information that's included in the original dicts, such as:
+
+                * "height", "width" (int): the output resolution of the model, used in inference.
                     See :meth:`postprocess` for details.
 
         Returns:
-            list[dict]: Each dict is the output for one input image.
+            list[dict]:
+                Each dict is the output for one input image.
                 The dict contains one key "instances" whose value is a :class:`Instances`.
                 The :class:`Instances` object has the following keys:
                     "pred_boxes", "pred_classes", "scores", "pred_masks", "pred_keypoints"

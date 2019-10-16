@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import contextlib
 import copy
 import io
@@ -223,7 +224,7 @@ class COCOEvaluator(DatasetEvaluator):
 
     def _derive_coco_results(self, coco_eval, iou_type, class_names=None):
         """
-        Derive the desired score numbers from summerized COCOeval.
+        Derive the desired score numbers from summarized COCOeval.
 
         Args:
             coco_eval (None or COCOEval): None represents no predictions from model.

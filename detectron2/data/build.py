@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import bisect
 import copy
 import itertools
@@ -286,11 +287,11 @@ def build_detection_train_loader(cfg, mapper=None):
     """
     A data loader is created by the following steps:
 
-    1. Use the dataset names in config to query `DatasetCatalog`, and obtain a list of dicts.
+    1. Use the dataset names in config to query :class:`DatasetCatalog`, and obtain a list of dicts.
     2. Start workers to work on the dicts. Each worker will:
-        (1) Map each metadata dict into another format to be consumed by the model.
-        (2) Batch them by simply putting dicts into a list.
-    The batched `list[mapped_dict]` is what this dataloader will return.
+      * Map each metadata dict into another format to be consumed by the model.
+      * Batch them by simply putting dicts into a list.
+    The batched ``list[mapped_dict]`` is what this dataloader will return.
 
     Args:
         cfg (CfgNode): the config
@@ -374,7 +375,7 @@ def build_detection_test_loader(cfg, dataset_name, mapper=None):
 
     Returns:
         DataLoader: a torch DataLoader, that loads the given detection
-           dataset, with test-time transformation and batching.
+        dataset, with test-time transformation and batching.
     """
     dataset_dicts = get_detection_dataset_dicts(
         [dataset_name],

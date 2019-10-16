@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import glob
 import logging
 import os
@@ -69,6 +70,10 @@ class CityscapesEvaluator(DatasetEvaluator):
                     fout.write("{} {} {}\n".format(os.path.basename(png_filename), class_id, score))
 
     def evaluate(self):
+        """
+        Returns:
+            dict: has a key "segm", whose value is a dict of "AP" and "AP50".
+        """
         comm.synchronize()
         if comm.get_rank() > 0:
             return
@@ -81,7 +86,7 @@ class CityscapesEvaluator(DatasetEvaluator):
 
         self._logger.info("Evaluating results under {} ...".format(self._temp_dir))
 
-        # set some global states in cityscapes evaluation API, before evaluting
+        # set some global states in cityscapes evaluation API, before evaluating
         cityscapes_eval.args.predictionPath = os.path.abspath(self._temp_dir)
         cityscapes_eval.args.predictionWalk = None
         cityscapes_eval.args.JSONOutput = False

@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 from __future__ import absolute_import, division, print_function, unicode_literals
 import unittest
 import torch
@@ -41,7 +42,7 @@ class TestNMSRotated(unittest.TestCase):
         scores = torch.rand(N)
         return boxes, scores
 
-    def test_bactched_nms_rotated_0_degree_cpu(self):
+    def test_batched_nms_rotated_0_degree_cpu(self):
         # torch.manual_seed(0)
         N = 2000
         num_classes = 50
@@ -65,7 +66,7 @@ class TestNMSRotated(unittest.TestCase):
             assert torch.equal(keep, keep_ref), err_msg.format(iou)
 
     @unittest.skipIf(not torch.cuda.is_available(), "CUDA unavailable")
-    def test_bactched_nms_rotated_0_degree_cuda(self):
+    def test_batched_nms_rotated_0_degree_cuda(self):
         # torch.manual_seed(0)
         N = 2000
         num_classes = 50

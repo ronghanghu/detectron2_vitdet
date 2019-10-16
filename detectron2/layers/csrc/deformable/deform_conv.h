@@ -1,5 +1,8 @@
+// Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 #pragma once
 #include <torch/extension.h>
+
+namespace detectron2 {
 
 #ifdef WITH_CUDA
 int deform_conv_forward_cuda(
@@ -370,3 +373,5 @@ inline void modulated_deform_conv_backward(
   }
   AT_ERROR("Not implemented on the CPU");
 }
+
+} // namespace detectron2

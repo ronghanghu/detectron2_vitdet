@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 
 import datetime
 import logging
@@ -142,6 +143,8 @@ class IterationTimer(HookBase):
 class PeriodicWriter(HookBase):
     """
     Write events to EventStorage periodically.
+
+    It is executed every ``period`` iterations and after the last iteration.
     """
 
     def __init__(self, writers, period=20):
@@ -163,11 +166,13 @@ class PeriodicWriter(HookBase):
 
 class PeriodicCheckpointer(_PeriodicCheckpointer, HookBase):
     """
-    Same as :class:`checkpoint.PeriodicCheckpointer`, but as a hook.
+    Same as :class:`detectron2.checkpoint.PeriodicCheckpointer`, but as a hook.
 
     Note that when used as a hook,
     it is unable to save additional data other than what's defined
     by the given `checkpointer`.
+
+    It is executed every ``period`` iterations and after the last iteration.
     """
 
     def before_train(self):
@@ -181,6 +186,7 @@ class PeriodicCheckpointer(_PeriodicCheckpointer, HookBase):
 class LRScheduler(HookBase):
     """
     A hook which executes a torch builtin LR scheduler and summarizes the LR.
+    It is executed after every iteration.
     """
 
     def __init__(self, optimizer, scheduler):
@@ -272,6 +278,8 @@ class AutogradProfiler(HookBase):
 class EvalHook(HookBase):
     """
     Run an evaluation function periodically, and at the end of training.
+
+    It is executed every ``eval_period`` iterations and after the last iteration.
     """
 
     def __init__(self, eval_period, eval_function):
@@ -282,7 +290,7 @@ class EvalHook(HookBase):
                 returns a nested dict of evaluation metrics.
 
         Note:
-            This hook must be enabled in all workers.
+            This hook must be enabled in all or none workers.
             If you would like only certain workers to perform evaluation,
             give other workers a no-op function (`eval_function=lambda: None`).
         """
@@ -327,6 +335,8 @@ class PreciseBN(HookBase):
     sometimes suboptimal.
     This class computes the true average of statistics rather than the moving average,
     and put true averages to every BN layer in the given model.
+
+    It is executed every ``period`` iterations and after the last iteration.
     """
 
     def __init__(self, period, model, data_loader, num_iter):
@@ -378,13 +388,14 @@ class PreciseBN(HookBase):
 
         def data_loader():
             nonlocal num_iter
-            num_iter += 1
-            if num_iter % 100 == 0:
-                self._logger.info(
-                    "Running precise-BN ... {}/{} iterations.".format(num_iter, self._num_iter)
-                )
-            # This way we can reuse the same iterator
-            yield next(self._data_iter)
+            while True:
+                num_iter += 1
+                if num_iter % 100 == 0:
+                    self._logger.info(
+                        "Running precise-BN ... {}/{} iterations.".format(num_iter, self._num_iter)
+                    )
+                # This way we can reuse the same iterator
+                yield next(self._data_iter)
 
         with EventStorage():  # capture events in a new storage to discard them
             self._logger.info(

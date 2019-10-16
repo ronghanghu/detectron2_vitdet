@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -10,8 +11,10 @@ from detectron2.utils.registry import Registry
 _TOTAL_SKIPPED = 0
 
 ROI_KEYPOINT_HEAD_REGISTRY = Registry("ROI_KEYPOINT_HEAD")
-"""
+ROI_KEYPOINT_HEAD_REGISTRY.__doc__ = """
 Registry for keypoint heads, which make keypoint predictions from per-region features.
+
+The registered object will be called with `obj(cfg, input_shape)`.
 """
 
 

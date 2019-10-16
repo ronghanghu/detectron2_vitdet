@@ -1,12 +1,17 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 class Registry(object):
     """
     The registry that provides name -> object mapping, to support third-party users' custom modules.
 
     To create a registry (inside detectron2):
 
+    .. code-block:: python
+
         BACKBONE_REGISTRY = Registry('BACKBONE')
 
     To register an object:
+
+    .. code-block:: python
 
         @BACKBONE_REGISTRY.register()
         class MyBackbone():
@@ -14,7 +19,9 @@ class Registry(object):
 
     Or:
 
-        BACKBONE_REGISTRY.register(obj=MyBackbone)
+    .. code-block:: python
+
+        BACKBONE_REGISTRY.register(MyBackbone)
     """
 
     def __init__(self, name):

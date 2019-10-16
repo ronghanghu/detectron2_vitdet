@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import pickle
 from fvcore.common.checkpoint import Checkpointer
 from fvcore.common.file_io import PathManager
@@ -9,7 +10,7 @@ from .c2_model_loading import align_and_update_state_dicts
 
 class DetectionCheckpointer(Checkpointer):
     """
-    A checkpointer that is able to handle models in detectron & detectron2
+    Same as :class:`Checkpointer`, but is able to handle models in detectron & detectron2
     model zoo, and apply conversions for legacy models.
     """
 

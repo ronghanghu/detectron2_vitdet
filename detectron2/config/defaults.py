@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 from .config import CfgNode as CN
 
 # -----------------------------------------------------------------------------
@@ -60,7 +61,7 @@ _C.INPUT.CROP = CN({"ENABLED": False})
 # Cropping type:
 # - "relative" crop (H * CROP.SIZE[0], W * CROP.SIZE[1]) part of an input of size (H, W)
 # - "relative_range" uniformly sample relative crop size from between [CROP.SIZE[0], [CROP.SIZE[1]].
-#   and  [1, 1] and use it as in "realtive" scenario.
+#   and  [1, 1] and use it as in "relative" scenario.
 # - "absolute" crop part of an input with absolute size: (CROP.SIZE[0], CROP.SIZE[1]).
 _C.INPUT.CROP.TYPE = "relative_range"
 # Size of crop in range (0, 1] if CROP.TYPE is "relative" or "relative_range" and in number of
@@ -256,6 +257,9 @@ _C.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.05
 # Overlap threshold used for non-maximum suppression (suppress boxes with
 # IoU >= this threshold)
 _C.MODEL.ROI_HEADS.NMS_THRESH_TEST = 0.5
+# If True, augment proposals with ground-truth boxes before sampling proposals to
+# train ROI heads.
+_C.MODEL.ROI_HEADS.PROPOSAL_APPEND_GT = True
 
 
 # ---------------------------------------------------------------------------- #
@@ -354,7 +358,7 @@ _C.MODEL.ROI_KEYPOINT_HEAD.LOSS_WEIGHT = 1.0
 _C.MODEL.ROI_KEYPOINT_HEAD.POOLER_TYPE = "ROIAlignV2"
 
 # ---------------------------------------------------------------------------- #
-# Semantic Segmenation Head
+# Semantic Segmentation Head
 # ---------------------------------------------------------------------------- #
 _C.MODEL.SEM_SEG_HEAD = CN()
 _C.MODEL.SEM_SEG_HEAD.NAME = "SemSegFPNHead"
@@ -463,6 +467,7 @@ _C.MODEL.RESNETS.DEFORM_ON_PER_STAGE = [False, False, False, False]
 _C.MODEL.RESNETS.DEFORM_MODULATED = False
 # Number of groups in deformable conv.
 _C.MODEL.RESNETS.DEFORM_NUM_GROUPS = 1
+
 
 # ---------------------------------------------------------------------------- #
 # Solver

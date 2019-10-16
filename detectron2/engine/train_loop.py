@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 
 import logging
 import numpy as np
@@ -48,15 +49,27 @@ class HookBase:
     """
 
     def before_train(self):
+        """
+        Called before the first iteration.
+        """
         pass
 
     def after_train(self):
+        """
+        Called after the last iteration.
+        """
         pass
 
     def before_step(self):
+        """
+        Called before each iteration.
+        """
         pass
 
     def after_step(self):
+        """
+        Called after each iteration.
+        """
         pass
 
 
@@ -94,7 +107,7 @@ class TrainerBase:
         for h in hooks:
             assert isinstance(h, HookBase)
             # To avoid circular reference, hooks and trainer cannot own each other.
-            # This noramlly does not matter, but will cause memory leak if the
+            # This normally does not matter, but will cause memory leak if the
             # involved objects contain __del__:
             # See http://engineering.hearsaysocial.com/2013/06/16/circular-references-in-python/
             h.trainer = weakref.proxy(self)
@@ -148,6 +161,7 @@ class SimpleTrainer(TrainerBase):
     A simple trainer for the most common type of task:
     single-cost single-optimizer single-data-source iterative optimization.
     It assumes that every step, you:
+
     1. Compute the loss with a data from the data_loader.
     2. Compute the gradients with the above loss.
     3. Update the model with the optimizer.
@@ -181,6 +195,9 @@ class SimpleTrainer(TrainerBase):
         self.optimizer = optimizer
 
     def run_step(self):
+        """
+        Implement the standard training logic described above.
+        """
         assert self.model.training, "[SimpleTrainer] model was changed to eval mode!"
         start = time.perf_counter()
         """
@@ -194,21 +211,16 @@ class SimpleTrainer(TrainerBase):
         """
         loss_dict = self.model(data)
         losses = sum(loss for loss in loss_dict.values())
-        if not torch.isfinite(losses).all():
-            raise FloatingPointError(
-                "Loss became infinite or NaN at iteration={}!\nloss_dict = {}".format(
-                    self.iter, loss_dict
-                )
-            )
+        self._detect_anomaly(losses, loss_dict)
 
-        # gather metrics among all workers for logging
-        metrics_dict = {k: v.detach().cpu().item() for k, v in loss_dict.items()}
+        metrics_dict = loss_dict
         metrics_dict["data_time"] = data_time
-        # This assumes we do DDP-style training, which is currently the only
-        # supported method in detectron2.
-        all_metrics_dict = comm.gather(metrics_dict)
-        self._write_metrics(all_metrics_dict)
+        self._write_metrics(metrics_dict)
 
+        """
+        If you need accumulate gradients or something similar, you can
+        wrap the optimizer with your custom `zero_grad()` method.
+        """
         self.optimizer.zero_grad()
         losses.backward()
 
@@ -218,21 +230,41 @@ class SimpleTrainer(TrainerBase):
         """
         self.optimizer.step()
 
-    def _write_metrics(self, all_metrics_dict):
+    def _detect_anomaly(self, losses, loss_dict):
+        if not torch.isfinite(losses).all():
+            raise FloatingPointError(
+                "Loss became infinite or NaN at iteration={}!\nloss_dict = {}".format(
+                    self.iter, loss_dict
+                )
+            )
+
+    def _write_metrics(self, metrics_dict: dict):
         """
         Args:
-            all_metrics_dict (list[dict]): list of metrics dict from all workers
+            metrics_dict (dict): dict of scalar metrics
         """
-        if comm.is_main_process():
-            # data_time among workers can have high variance. The actual latency
-            # caused by data_time is the maximum among workers.
-            data_time = np.max([x.pop("data_time") for x in all_metrics_dict])
+        metrics_dict = {
+            k: v.detach().cpu().item() if isinstance(v, torch.Tensor) else float(v)
+            for k, v in metrics_dict.items()
+        }
+        # gather metrics among all workers for logging
+        # This assumes we do DDP-style training, which is currently the only
+        # supported method in detectron2.
+        all_metrics_dict = comm.gather(metrics_dict)
 
+        if comm.is_main_process():
+            if "data_time" in all_metrics_dict[0]:
+                # data_time among workers can have high variance. The actual latency
+                # caused by data_time is the maximum among workers.
+                data_time = np.max([x.pop("data_time") for x in all_metrics_dict])
+                self.storage.put_scalar("data_time", data_time)
+
+            # average the rest metrics
             metrics_dict = {
                 k: np.mean([x[k] for x in all_metrics_dict]) for k in all_metrics_dict[0].keys()
             }
             total_losses_reduced = sum(loss for loss in metrics_dict.values())
 
-            self.storage.put_scalars(data_time=data_time, total_loss=total_losses_reduced)
+            self.storage.put_scalar("total_loss", total_losses_reduced)
             if len(metrics_dict) > 1:
                 self.storage.put_scalars(**metrics_dict)

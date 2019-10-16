@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import itertools
 import json
 import logging
@@ -85,10 +86,11 @@ class SemSegEvaluator(DatasetEvaluator):
     def evaluate(self):
         """
         Evaluates standard semantic segmentation metrics (http://cocodataset.org/#stuff-eval):
-            Mean intersection-over-union averaged across classes (mIoU)
-            Frequency Weighted IoU (fwIoU)
-            Mean pixel accuracy averaged across classes (mACC)
-            Pixel Accuracy (pACC)
+
+        * Mean intersection-over-union averaged across classes (mIoU)
+        * Frequency Weighted IoU (fwIoU)
+        * Mean pixel accuracy averaged across classes (mACC)
+        * Pixel Accuracy (pACC)
         """
         if self._distributed:
             synchronize()
@@ -140,7 +142,7 @@ class SemSegEvaluator(DatasetEvaluator):
 
     def encode_json_sem_seg(self, sem_seg, image_id):
         """
-        Convert semenatic segmentation to COCO stuff format with segments encoded as RLEs.
+        Convert semantic segmentation to COCO stuff format with segments encoded as RLEs.
         See http://cocodataset.org/#format-results
         """
         json_list = []

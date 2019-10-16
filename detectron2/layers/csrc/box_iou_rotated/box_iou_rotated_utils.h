@@ -1,3 +1,4 @@
+// Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 #pragma once
 
 #include <cassert>
@@ -302,10 +303,12 @@ HOST_DEVICE_INLINE T rotated_boxes_intersection(
   }
 
   // Convex Hull to order the intersection points in clockwise order and find
-  // the countour area.
+  // the contour area.
   int num_convex = convex_hull_graham<T>(intersectPts, num, orderedPts, true);
   return polygon_area<T>(orderedPts, num_convex);
 }
+
+} // namespace
 
 template <typename T>
 HOST_DEVICE_INLINE T
@@ -335,7 +338,5 @@ single_box_iou_rotated(T const* const box1_raw, T const* const box2_raw) {
   const T iou = intersection / (area1 + area2 - intersection);
   return iou;
 }
-
-} // namespace
 
 } // namespace detectron2

@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 from torch.nn import functional as F
 
 from detectron2.layers import paste_masks_in_image
@@ -68,7 +69,7 @@ def sem_seg_postprocess(result, img_size, output_height, output_width):
         output_height, output_width: the desired output resolution.
 
     Returns:
-        semantic segmenation prediction (Tensor): A tensor of the shape
+        semantic segmentation prediction (Tensor): A tensor of the shape
             (C, output_height, output_width) that contains per-pixel soft predictions.
     """
     result = result[:, : img_size[0], : img_size[1]].expand(1, -1, -1, -1)

@@ -1,5 +1,8 @@
+// Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 #include <ATen/TensorUtils.h>
 #include "ROIAlign.h"
+
+namespace {
 
 // implementation taken from Caffe2
 template <typename T>
@@ -91,7 +94,7 @@ void pre_calc_for_bilinear_interpolate(
           T hy = 1. - ly, hx = 1. - lx;
           T w1 = hy * hx, w2 = hy * lx, w3 = ly * hx, w4 = ly * lx;
 
-          // save weights and indeces
+          // save weights and indices
           PreCalc<T> pc;
           pc.pos1 = y_low * width + x_low;
           pc.pos2 = y_low * width + x_high;
@@ -390,6 +393,10 @@ void ROIAlignBackward(
   } // for
 } // ROIAlignBackward
 
+} // namespace
+
+namespace detectron2 {
+
 at::Tensor ROIAlign_forward_cpu(
     const at::Tensor& input,
     const at::Tensor& rois,
@@ -492,3 +499,5 @@ at::Tensor ROIAlign_backward_cpu(
   });
   return grad_input;
 }
+
+} // namespace detectron2

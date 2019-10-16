@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import logging
 import math
 from typing import List
@@ -102,15 +103,18 @@ class RetinaNet(nn.Module):
         Args:
             batched_inputs: a list, batched outputs of :class:`DatasetMapper` .
                 Each item in the list contains the inputs for one image.
-            For now, each item in the list is a dict that contains:
-                image: Tensor, image in (C, H, W) format.
-                instances: Instances
+                For now, each item in the list is a dict that contains:
+
+                * image: Tensor, image in (C, H, W) format.
+                * instances: Instances
+
                 Other information that's included in the original dicts, such as:
-                    "height", "width" (int): the output resolution of the model, used in inference.
-                        See :meth:`postprocess` for details.
+
+                * "height", "width" (int): the output resolution of the model, used in inference.
+                    See :meth:`postprocess` for details.
         Returns:
-            losses (dict[str: Tensor]): mapping from a named loss to a tensor
-                storing the loss. Used during training only.
+            dict[str: Tensor]:
+                mapping from a named loss to a tensor storing the loss. Used during training only.
         """
         images = self.preprocess_image(batched_inputs)
         if "instances" in batched_inputs[0]:
@@ -154,7 +158,8 @@ class RetinaNet(nn.Module):
                 :meth:`RetinaNetHead.forward`.
 
         Returns:
-            losses (dict[str: Tensor]): mapping from a named loss to a scalar tensor
+            dict[str: Tensor]:
+                mapping from a named loss to a scalar tensor
                 storing the loss. Used during training only. The dict keys are:
                 "loss_cls" and "loss_box_reg"
         """
@@ -203,7 +208,8 @@ class RetinaNet(nn.Module):
                 for the i-th input image.  Specify `targets` during training only.
 
         Returns:
-            gt_classes (Tensor): An integer tensor of shape (N, R) storing ground-truth
+            gt_classes (Tensor):
+                An integer tensor of shape (N, R) storing ground-truth
                 labels for each anchor.
                 R is the total number of anchors, i.e. the sum of Hi x Wi x A for all levels.
                 Anchors with an IoU with some target higher than the foreground threshold
@@ -211,7 +217,8 @@ class RetinaNet(nn.Module):
                 Anchors whose IoU are below the background threshold are assigned
                 the label "K". Anchors whose IoU are between the foreground and background
                 thresholds are assigned a label "-1", i.e. ignore.
-            gt_anchors_deltas (Tensor): Shape (N, R, 4).
+            gt_anchors_deltas (Tensor):
+                Shape (N, R, 4).
                 The last dimension represents ground-truth box2box transform
                 targets (dx, dy, dw, dh) that map each anchor to its matched ground-truth box.
                 The values in the tensor are meaningful only when the corresponding

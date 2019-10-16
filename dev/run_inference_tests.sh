@@ -1,4 +1,5 @@
 #!/bin/bash -e
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 
 BIN="python tools/train_net.py"
 OUTPUT="inference_test_output"

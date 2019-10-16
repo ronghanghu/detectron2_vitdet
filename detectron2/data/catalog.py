@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import copy
 import logging
 import types
@@ -18,7 +19,7 @@ class DatasetCatalog(object):
     format of `list[dict]`.
 
     The returned dicts should be in Detectron2 Dataset format (See DATASETS.md for details)
-    if used with the data loader functionatilities in `data/build.py,data/detection_transform.py`.
+    if used with the data loader functionalities in `data/build.py,data/detection_transform.py`.
 
     The purpose of having this catalog is to make it easy to choose
     different datasets, by just using the strings in the config.
@@ -182,7 +183,7 @@ class MetadataCatalog:
 
         Returns:
             Metadata: The :class:`Metadata` instance associated with this name,
-                or create an empty one if none is available.
+            or create an empty one if none is available.
         """
         assert len(name)
         if name in MetadataCatalog._NAME_TO_META:

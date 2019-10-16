@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import logging
 from fvcore.common.file_io import PathHandler, PathManager
 

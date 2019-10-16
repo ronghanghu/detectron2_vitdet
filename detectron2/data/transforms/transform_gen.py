@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 # File: transformer.py
 
 import inspect
@@ -197,6 +198,8 @@ class ResizeShortestEdge(TransformGen):
             size = np.random.randint(self.short_edge_length[0], self.short_edge_length[1] + 1)
         else:
             size = np.random.choice(self.short_edge_length)
+        if size == 0:
+            return NoOpTransform()
 
         scale = size * 1.0 / min(h, w)
         if h < w:

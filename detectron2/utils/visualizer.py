@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import colorsys
 import numpy as np
 from enum import Enum, unique
@@ -30,10 +31,11 @@ class ColorMode(Enum):
     """
     Enum of different color modes to use for instance visualizations.
 
-    IMAGE: Picks a random color for every instance and overlay segmentations with low opacity.
-    SEGMENTATION: Let instances of the same category have similar colors, and overlay them with
-        high opacity. This provides more attention on the quality of segmentation.
-    IMAGE_BW: same as IMAGE, but convert all areas without masks to gray-scale.
+    Attributes:
+        IMAGE: Picks a random color for every instance and overlay segmentations with low opacity.
+        SEGMENTATION: Let instances of the same category have similar colors, and overlay them with
+            high opacity. This provides more attention on the quality of segmentation.
+        IMAGE_BW: same as IMAGE, but convert all areas without masks to gray-scale.
     """
 
     IMAGE = 0
@@ -102,9 +104,11 @@ class GenericMask:
         # cv2.RETR_CCOMP flag retrieves all the contours and arranges them to a 2-level
         # hierarchy. External contours (boundary) of the object are placed in hierarchy-1.
         # Internal contours (holes) are placed in hierarchy-2.
-        # cv2.CHAIN_APPROX_NONE flag gets vertices of polygons from countours.
+        # cv2.CHAIN_APPROX_NONE flag gets vertices of polygons from contours.
         res = cv2.findContours(mask.astype("uint8"), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
         hierarchy = res[-1]
+        if hierarchy is None:  # empty mask
+            return [], False
         has_holes = (hierarchy.reshape(-1, 4)[:, 3] >= 0).sum() > 0
         res = res[-2]
         res = [x.flatten() for x in res]
@@ -432,14 +436,18 @@ class Visualizer:
             return self.output
         masks, sinfo = list(zip(*all_instances))
         category_ids = [x["category_id"] for x in sinfo]
+
+        try:
+            scores = [x["score"] for x in sinfo]
+        except KeyError:
+            scores = None
+        labels = _create_text_labels(category_ids, scores, self.metadata.thing_classes)
+
         try:
             colors = [random_color(rgb=True, maximum=1) for k in category_ids]
         except AttributeError:
             colors = None
-        labels = _create_text_labels(
-            category_ids, [x["score"] for x in sinfo], self.metadata.thing_classes
-        )
-        self.overlay_instances(masks=masks, labels=labels, assigned_colors=colors)
+        self.overlay_instances(masks=masks, labels=labels, assigned_colors=colors, alpha=alpha)
 
         return self.output
 
@@ -488,14 +496,15 @@ class Visualizer:
                 of XYXY_ABS format for the N objects in a single image.
             labels (list[str]): the text to be displayed for each instance.
             masks (masks-like object): Supported types are:
-                `structures.masks.PolygonMasks`, `structures.masks.BitMasks`.
-                list[list[ndarray]]: contains the segmentation masks for all objects in one image.
+
+                * `structures.masks.PolygonMasks`, `structures.masks.BitMasks`.
+                * list[list[ndarray]]: contains the segmentation masks for all objects in one image.
                     The first level of the list corresponds to individual instances. The second
                     level to all the polygon that compose the instance, and the third level
                     to the polygon coordinates. The third level should have the format of
                     [x0, y0, x1, y1, ..., xn, yn] (n >= 3).
-                list[ndarray]: each ndarray is a binary mask of shape (H, W).
-                list[dict]: each dict is a COCO-style RLE.
+                * list[ndarray]: each ndarray is a binary mask of shape (H, W).
+                * list[dict]: each dict is a COCO-style RLE.
             keypoints (Keypoint or array like): an array-like object of shape (N, K, 3),
                 where the N is the number of instances and K is the number of keypoints.
                 The last dimension corresponds to (x, y, visibility or score).
@@ -569,7 +578,7 @@ class Visualizer:
                     horiz_align = "center"
                 else:
                     continue  # drawing the box confidence for keypoints isn't very useful.
-                # for small objects, draw text at the side to avoid occulusion
+                # for small objects, draw text at the side to avoid occlusion
                 instance_area = (y1 - y0) * (x1 - x0)
                 if (
                     instance_area < _SMALL_OBJECT_AREA_THRESH * self.output.scale
@@ -620,8 +629,7 @@ class Visualizer:
             # draw keypoint
             x, y, prob = keypoint
             if prob > _KEYPOINT_THRESHOLD:
-                color = tuple(x / 255 for x in _BLACK)
-                self.draw_circle((x, y), color=color)
+                self.draw_circle((x, y), color=_RED)
                 keypoint_name = self.metadata.keypoint_names[idx]
                 visible[keypoint_name] = (x, y)
 
@@ -734,7 +742,7 @@ class Visualizer:
         )
         return self.output
 
-    def draw_circle(self, circle_coord, color, radius=5):
+    def draw_circle(self, circle_coord, color, radius=3):
         """
         Args:
             circle_coord (list(int) or tuple(int)): contains the x and y coordinates
@@ -747,7 +755,9 @@ class Visualizer:
             output (VisImage): image object with box drawn.
         """
         x, y = circle_coord
-        self.output.ax.add_patch(mpl.patches.Circle(circle_coord, radius=radius, color=color))
+        self.output.ax.add_patch(
+            mpl.patches.Circle(circle_coord, radius=radius, fill=True, color=color)
+        )
         return self.output
 
     def draw_line(self, x_data, y_data, color):
@@ -905,7 +915,7 @@ class Visualizer:
                 formats that are accepted.
             brightness_factor (float): a value in [-1.0, 1.0] range. A lightness factor of
                 0 will correspond to no change, a factor in [-1.0, 0) range will result in
-                a darker color and a factor in (0, 1.0] range will result in a ligher color.
+                a darker color and a factor in (0, 1.0] range will result in a lighter color.
 
         Returns:
             modified_color (tuple[double]): a tuple containing the RGB values of the
@@ -962,6 +972,6 @@ class Visualizer:
         """
         Returns:
             output (VisImage): the image output containing the visualizations added
-                to the image.
+            to the image.
         """
         return self.output

@@ -11,6 +11,7 @@ The differences in default config includes:
 * Use `ROIAlignV2`.
 
 In this directory, we provide a few configs that mimic Detectron's behavior as close as possible.
+This provides a fair comparison of accuracy and speed against Detectron.
 
 <!--
 ./gen_html_table.py --config 'Detectron1-Comparisons/*.yaml' --name "Faster R-CNN" "Keypoint R-CNN" "Mask R-CNN" --fields lr_sched train_speed inference_speed mem box_AP mask_AP keypoint_AP
@@ -75,3 +76,5 @@ In this directory, we provide a few configs that mimic Detectron's behavior as c
   [bug](https://github.com/facebookresearch/Detectron/issues/459) lead to a drop in box AP, and can be
 	compensated back by some parameter tuning.
 * Mask R-CNN: Detectron's AP is box 37.7, mask 33.9. We're 1 AP better in mask AP, due to more correct implementation.
+
+For speed comparison, see [benchmarks](https://detectron2.readthedocs.io/notes/benchmarks.html).

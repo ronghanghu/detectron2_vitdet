@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import io
 import logging
 import contextlib
@@ -20,11 +21,11 @@ logger = logging.getLogger(__name__)
 __all__ = ["load_coco_json", "load_sem_seg"]
 
 
-def load_coco_json(json_file, image_root, dataset_name=None):
+def load_coco_json(json_file, image_root, dataset_name=None, extra_annotation_keys=None):
     """
     Load a json file with COCO's instances annotation format.
     Currently supports instance detection, instance segmentation,
-    person keypoints and densepose annotations.
+    and person keypoints annotations.
 
     Args:
         json_file (str): full path to the json file in COCO instances annotation format.
@@ -32,9 +33,14 @@ def load_coco_json(json_file, image_root, dataset_name=None):
         dataset_name (str): the name of the dataset (e.g., coco_2017_train).
             If provided, this function will also put "thing_classes" into
             the metadata associated with this dataset.
+        extra_annotation_keys (list[str]): list of per-annotation keys that should also be
+            loaded into the dataset dict (besides "iscrowd", "bbox", "keypoints",
+            "category_id", "segmentation"). The values for these keys will be returned as-is.
+            For example, the densepose annotations are loaded in this way.
 
     Returns:
-        list[dict]: a list of dicts in "Detectron2 Dataset" format. (See DATASETS.md)
+        list[dict]: a list of dicts in Detectron2 standard format. (See
+        `Using Custom Datasets </tutorials/datasets.html>`_ )
 
     Notes:
         1. This function does not read the image files.
@@ -119,9 +125,7 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
 
     dataset_dicts = []
 
-    # TODO: refactoring candidate, one should not have to alter DB reader
-    # every time new data type is added
-    DENSEPOSE_KEYS = ["dp_x", "dp_y", "dp_I", "dp_U", "dp_V", "dp_masks"]
+    ann_keys = ["iscrowd", "bbox", "keypoints", "category_id"] + (extra_annotation_keys or [])
 
     num_instances_without_valid_segmentation = 0
 
@@ -145,11 +149,7 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
 
             assert anno.get("ignore", 0) == 0
 
-            obj = {
-                field: anno[field]
-                for field in ["iscrowd", "bbox", "keypoints", "category_id"] + DENSEPOSE_KEYS
-                if field in anno
-            }
+            obj = {key: anno[key] for key in ann_keys if key in anno}
 
             segm = anno.get("segmentation", None)
             if segm:  # either list[list[float]] or dict(RLE)
@@ -192,7 +192,7 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
 # TODO this function is not specific to COCO, except for the "image_id" logic.
 def load_sem_seg(gt_root, image_root, gt_ext="png", image_ext="jpg"):
     """
-    Load semantic segmenation datasets. All files under "gt_root" with "gt_ext" extension are
+    Load semantic segmentation datasets. All files under "gt_root" with "gt_ext" extension are
     treated as ground truth annotations and all files under "image_root" with "image_ext" extension
     as input images. Ground truth and input images are matched using file paths relative to
     "gt_root" and "image_root" respectively without taking into account file extensions.
@@ -206,20 +206,21 @@ def load_sem_seg(gt_root, image_root, gt_ext="png", image_ext="jpg"):
         image_ext (str): file extension for input images.
 
     Returns:
-        list[dict]: a list of dicts in "Detectron2 Dataset" format without instance-level
-            annotation. (See DATASETS.md)
+        list[dict]:
+            a list of dicts in detectron2 standard format without instance-level
+            annotation.
 
     Notes:
         1. This function does not read the image and ground truth files.
            The results do not have the "image" and "sem_seg" fields.
     """
 
-    # We match input images with ground truth based on their raltive filepaths (without file
+    # We match input images with ground truth based on their relative filepaths (without file
     # extensions) starting from 'image_root' and 'gt_root' respectively. COCO API works with integer
     # IDs, hence, we try to convert these paths to int if possible.
     def file2id(folder_path, file_path):
         # TODO id is not used.
-        # extract realtive path starting from `folder_path`
+        # extract relative path starting from `folder_path`
         image_id = os.path.normpath(os.path.relpath(file_path, start=folder_path))
         # remove file extension
         image_id = os.path.splitext(image_id)[0]

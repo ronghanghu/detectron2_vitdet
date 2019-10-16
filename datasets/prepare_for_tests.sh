@@ -1,4 +1,5 @@
 #!/bin/bash -e
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 
 # Download some files needed for running tests.
 

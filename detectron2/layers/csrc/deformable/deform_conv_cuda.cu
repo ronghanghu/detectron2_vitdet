@@ -1,8 +1,12 @@
-// copied from
+// Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
+
+// modified from
 // https://github.com/open-mmlab/mmdetection/blob/master/mmdet/ops/dcn/src/deform_conv_cuda.cpp
+// Original license: Apache 2.0
 
 // modify from
 // https://github.com/chengdazhi/Deformable-Convolution-V2-PyTorch/blob/mmdetection/mmdet/ops/dcn/src/deform_conv_cuda.c
+// Original license: Apache 2.0
 
 #include <torch/extension.h>
 
@@ -10,6 +14,8 @@
 
 #include <cmath>
 #include <vector>
+
+namespace detectron2 {
 
 void deformable_im2col(
     const at::Tensor data_im,
@@ -1120,3 +1126,5 @@ void modulated_deform_conv_cuda_backward(
                                   grad_output.size(3),
                                   grad_output.size(4)});
 }
+
+} // namespace detectron2

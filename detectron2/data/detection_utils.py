@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 
 """
 Common data processing utilities that are used in a
@@ -26,7 +27,7 @@ from .catalog import MetadataCatalog
 
 class SizeMismatchError(ValueError):
     """
-    When loaded image has difference width/height compared with annoation.
+    When loaded image has difference width/height compared with annotation.
     """
 
 
@@ -91,7 +92,7 @@ def transform_proposals(dataset_dict, image_shape, transforms, min_box_side_len,
     "proposal_boxes" and "objectness_logits".
     """
     if "proposal_boxes" in dataset_dict:
-        # Tranform proposal boxes
+        # Transform proposal boxes
         boxes = transforms.apply_box(
             BoxMode.convert(
                 dataset_dict.pop("proposal_boxes"),
@@ -133,7 +134,8 @@ def transform_instance_annotations(
         keypoint_hflip_indices (ndarray[int]): see `create_keypoint_hflip_indices`.
 
     Returns:
-        dict: the same input dict with fields "bbox", "segmentation", "keypoints"
+        dict:
+            the same input dict with fields "bbox", "segmentation", "keypoints"
             transformed according to `transforms`.
             The "bbox_mode" field will be set to XYXY_ABS.
     """
@@ -201,7 +203,8 @@ def annotations_to_instances(annos, image_size, mask_format="polygon"):
         image_size (tuple): height, width
 
     Returns:
-        Instances: It will contain fields "gt_boxes", "gt_classes",
+        Instances:
+            It will contain fields "gt_boxes", "gt_classes",
             "gt_masks", "gt_keypoints", if they can be obtained from `annos`.
             This is the format that builtin models expect.
     """
@@ -242,7 +245,8 @@ def annotations_to_instances_rotated(annos, image_size):
         image_size (tuple): height, width
 
     Returns:
-        Instances: Containing fields "gt_boxes", "gt_classes",
+        Instances:
+            Containing fields "gt_boxes", "gt_classes",
             if they can be obtained from `annos`.
             This is the format that builtin models expect.
     """
@@ -267,7 +271,7 @@ def filter_empty_instances(instances, by_box=True, by_mask=True):
         by_box (bool): whether to filter out instances with empty boxes
         by_mask (bool): whether to filter out instances with empty masks
 
-    Returns
+    Returns:
         Instances: the filtered instances.
     """
     assert by_box or by_mask
@@ -385,8 +389,7 @@ def build_transform_gen(cfg, is_train):
 
     logger = logging.getLogger(__name__)
     tfm_gens = []
-    if not min_size == 0:  # set to zero to disable resize
-        tfm_gens.append(T.ResizeShortestEdge(min_size, max_size, sample_style))
+    tfm_gens.append(T.ResizeShortestEdge(min_size, max_size, sample_style))
     if is_train:
         tfm_gens.append(T.RandomFlip())
         logger.info("TransformGens used in training: " + str(tfm_gens))

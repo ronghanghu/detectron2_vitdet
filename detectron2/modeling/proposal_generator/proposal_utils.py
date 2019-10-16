@@ -1,3 +1,4 @@
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import math
 import torch
 
@@ -42,7 +43,7 @@ def add_ground_truth_to_proposals_single_image(gt_boxes, proposals):
         Same as `add_ground_truth_to_proposals`, but for only one image.
     """
     device = proposals.objectness_logits.device
-    # Concating gt_boxes with proposals requires them to have the same fields
+    # Concatenating gt_boxes with proposals requires them to have the same fields
     # Assign all ground-truth boxes an objectness logit corresponding to P(object) \approx 1.
     gt_logit_value = math.log((1.0 - 1e-10) / (1 - (1.0 - 1e-10)))
 

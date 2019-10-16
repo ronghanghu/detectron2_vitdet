@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 
 import torch
 from torchvision.ops import boxes as box_ops
@@ -45,8 +46,11 @@ def nms_rotated(boxes, scores, iou_threshold):
     As an extreme example, consider a single character v and the square box around it.
 
     If the angle is 0 degree, the object (text) would be read as 'v';
+
     If the angle is 90 degrees, the object (text) would become '>';
+
     If the angle is 180 degrees, the object (text) would become '^';
+
     If the angle is 270/-90 degrees, the object (text) would become '<'
 
     All of these cases have IoU of 1 to each other, and rotated NMS that only
@@ -83,7 +87,7 @@ def nms_rotated(boxes, scores, iou_threshold):
 
     Returns:
         keep (Tensor): int64 tensor with the indices of the elements that have been kept
-           by Rotated NMS, sorted in decreasing order of scores
+        by Rotated NMS, sorted in decreasing order of scores
     """
     from detectron2 import _C
 
@@ -112,9 +116,9 @@ def batched_nms_rotated(boxes, scores, idxs, iou_threshold):
            with IoU < iou_threshold
 
     Returns:
-        Tensor: int64 tensor with the indices of
-            the elements that have been kept by NMS, sorted
-            in decreasing order of scores
+        Tensor:
+            int64 tensor with the indices of the elements that have been kept
+            by NMS, sorted in decreasing order of scores
     """
     assert boxes.shape[-1] == 5
 
