@@ -1,0 +1,15 @@
+_BASE_: "../../../configs/Base-RetinaNet.yaml"
+MODEL:
+  META_ARCHITECTURE: "ATSS"
+  WEIGHTS: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
+  RESNETS:
+    DEPTH: 50
+  ANCHOR_GENERATOR:
+    SIZES: [[64], [128], [256], [512], [1024]]  # One size for each in feature map
+    ASPECT_RATIOS: [[1.0]]  # One aspect ratios
+  ATSS:
+    NMS_THRESH_TEST: 0.6
+    BBOX_REG_LOSS_TYPE: "giou"
+    NORM: "GN"
+INPUT:
+  MIN_SIZE_TRAIN: (800,)
