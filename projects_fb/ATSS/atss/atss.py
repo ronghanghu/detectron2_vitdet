@@ -494,20 +494,24 @@ class ATSSHead(RetinaNetHead):
     """
 
     @configurable
-    def __init__(self, *, input_shape: List[ShapeSpec], num_anchors, **kwargs):
+    def __init__(
+        self, *, input_shape: List[ShapeSpec], conv_dims: List[int], num_anchors, **kwargs
+    ):
         """
         NOTE: this interface is experimental.
 
         Args:
             input_shape (List[ShapeSpec]): input shape
+            conv_dims (List[int]): dimensions for each convolution layer
             num_anchors (int): number of generated anchors
             kwargs: Remaining input args for RetinaNetHead init
         """
-        in_channels = input_shape[0].channels
-        super().__init__(input_shape=input_shape, num_anchors=num_anchors, **kwargs)
+        super().__init__(
+            input_shape=input_shape, conv_dims=conv_dims, num_anchors=num_anchors, **kwargs
+        )
 
         self.centerness = nn.Conv2d(
-            in_channels, num_anchors * 1, kernel_size=3, stride=1, padding=1
+            conv_dims[-1], num_anchors * 1, kernel_size=3, stride=1, padding=1
         )
 
         # Initialization
@@ -528,7 +532,7 @@ class ATSSHead(RetinaNetHead):
         return {
             "input_shape": input_shape,
             "num_classes": cfg.MODEL.ATSS.NUM_CLASSES,
-            "num_convs": cfg.MODEL.ATSS.NUM_CONVS,
+            "conv_dims": [input_shape[0].channels] * cfg.MODEL.ATSS.NUM_CONVS,
             "prior_prob": cfg.MODEL.ATSS.PRIOR_PROB,
             "norm": cfg.MODEL.ATSS.NORM,
             "num_anchors": num_anchors,
