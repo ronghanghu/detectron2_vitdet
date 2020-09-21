@@ -1,19 +1,18 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
-import logging
-import math
 from typing import List
 import torch
 from fvcore.nn import giou_loss, sigmoid_focal_loss_jit, smooth_l1_loss
 from torch import nn
 from torch.nn import functional as F
 
-from detectron2.layers import ShapeSpec, batched_nms, cat, get_norm
+from detectron2.config import configurable
+from detectron2.layers import ShapeSpec, batched_nms, cat
 from detectron2.modeling.anchor_generator import build_anchor_generator
 from detectron2.modeling.backbone import build_backbone
 from detectron2.modeling.box_regression import Box2BoxTransform
 from detectron2.modeling.matcher import Matcher
 from detectron2.modeling.meta_arch.build import META_ARCH_REGISTRY
-from detectron2.modeling.meta_arch.retinanet import permute_to_N_HWA_K
+from detectron2.modeling.meta_arch.retinanet import RetinaNetHead, permute_to_N_HWA_K
 from detectron2.modeling.postprocessing import detector_postprocess
 from detectron2.structures import Boxes, ImageList, Instances, pairwise_iou
 from detectron2.utils.comm import get_world_size
@@ -488,21 +487,37 @@ class ATSS(nn.Module):
         return images
 
 
-class ATSSHead(nn.Module):
+class ATSSHead(RetinaNetHead):
     """
     The head used in ATSS for object classification and box regression.
     It has two subnets for the two tasks, with a common structure but separate parameters.
     """
 
-    def __init__(self, cfg, input_shape: List[ShapeSpec]):
-        super().__init__()
-        # fmt: off
+    @configurable
+    def __init__(self, *, input_shape: List[ShapeSpec], num_anchors, **kwargs):
+        """
+        NOTE: this interface is experimental.
+
+        Args:
+            input_shape (List[ShapeSpec]): input shape
+            num_anchors (int): number of generated anchors
+            kwargs: Remaining input args for RetinaNetHead init
+        """
         in_channels = input_shape[0].channels
-        num_classes = cfg.MODEL.ATSS.NUM_CLASSES
-        num_convs   = cfg.MODEL.ATSS.NUM_CONVS
-        prior_prob  = cfg.MODEL.ATSS.PRIOR_PROB
-        norm        = cfg.MODEL.ATSS.NORM
-        num_in_feat = len(cfg.MODEL.ATSS.IN_FEATURES)
+        super().__init__(input_shape=input_shape, num_anchors=num_anchors, **kwargs)
+
+        self.centerness = nn.Conv2d(
+            in_channels, num_anchors * 1, kernel_size=3, stride=1, padding=1
+        )
+
+        # Initialization
+        torch.nn.init.normal_(self.centerness.weight, mean=0, std=0.01)
+        torch.nn.init.constant_(self.centerness.bias, 0)
+
+        self.scales = nn.ModuleList([Scale(init_value=1.0) for _ in range(len(input_shape))])
+
+    @classmethod
+    def from_config(cls, cfg, input_shape: List[ShapeSpec]):
         num_anchors = build_anchor_generator(cfg, input_shape).num_cell_anchors
         # fmt: on
         assert (
@@ -510,55 +525,14 @@ class ATSSHead(nn.Module):
         ), "Using different number of anchors between levels is not currently supported!"
         num_anchors = num_anchors[0]
 
-        if norm == "BN" or norm == "SyncBN":
-            logger = logging.getLogger(__name__)
-            logger.warn("Shared norm does not work well for BN, SyncBN, expect poor results")
-
-        cls_subnet = []
-        bbox_subnet = []
-        for _ in range(num_convs):
-            cls_subnet.append(
-                nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1)
-            )
-            if norm:
-                cls_subnet.append(get_norm(norm, in_channels))
-            cls_subnet.append(nn.ReLU())
-            bbox_subnet.append(
-                nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1)
-            )
-            if norm:
-                bbox_subnet.append(get_norm(norm, in_channels))
-            bbox_subnet.append(nn.ReLU())
-
-        self.cls_subnet = nn.Sequential(*cls_subnet)
-        self.bbox_subnet = nn.Sequential(*bbox_subnet)
-        # No normalization for the final prediction layers
-        self.cls_score = nn.Conv2d(
-            in_channels, num_anchors * num_classes, kernel_size=3, stride=1, padding=1
-        )
-        self.bbox_pred = nn.Conv2d(in_channels, num_anchors * 4, kernel_size=3, stride=1, padding=1)
-        self.centerness = nn.Conv2d(
-            in_channels, num_anchors * 1, kernel_size=3, stride=1, padding=1
-        )
-
-        # Initialization
-        for modules in [
-            self.cls_subnet,
-            self.bbox_subnet,
-            self.cls_score,
-            self.bbox_pred,
-            self.centerness,
-        ]:
-            for layer in modules.modules():
-                if isinstance(layer, nn.Conv2d):
-                    torch.nn.init.normal_(layer.weight, mean=0, std=0.01)
-                    torch.nn.init.constant_(layer.bias, 0)
-
-        # Use prior in model initialization to improve stability
-        bias_value = -(math.log((1 - prior_prob) / prior_prob))
-        torch.nn.init.constant_(self.cls_score.bias, bias_value)
-
-        self.scales = nn.ModuleList([Scale(init_value=1.0) for _ in range(num_in_feat)])
+        return {
+            "input_shape": input_shape,
+            "num_classes": cfg.MODEL.ATSS.NUM_CLASSES,
+            "num_convs": cfg.MODEL.ATSS.NUM_CONVS,
+            "prior_prob": cfg.MODEL.ATSS.PRIOR_PROB,
+            "norm": cfg.MODEL.ATSS.NORM,
+            "num_anchors": num_anchors,
+        }
 
     def forward(self, features):
         """
