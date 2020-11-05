@@ -1,4 +1,4 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
+# Copyright (c) Facebook, Inc. and its affiliates.
 from typing import List
 import torch
 from fvcore.nn import giou_loss, sigmoid_focal_loss_jit, smooth_l1_loss
