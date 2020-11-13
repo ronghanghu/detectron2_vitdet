@@ -55,7 +55,7 @@ class Trainer(DefaultTrainer):
         evaluator_list = []
         evaluator_type = MetadataCatalog.get(dataset_name).evaluator_type
         if evaluator_type in ["coco", "coco_panoptic_seg"]:
-            evaluator_list.append(COCOEvaluator(dataset_name, cfg, True, output_folder))
+            evaluator_list.append(COCOEvaluator(dataset_name, output_dir=output_folder))
         if evaluator_type == "cityscapes_instance":
             assert (
                 torch.cuda.device_count() >= comm.get_rank()
