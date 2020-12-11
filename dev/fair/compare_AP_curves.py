@@ -3,11 +3,11 @@ import json
 import numpy as np
 import os
 import matplotlib.pyplot as plt
-from fvcore.common.file_io import PathManager
 from pycocotools.coco import COCO
 
 from detectron2.data import MetadataCatalog
 from detectron2.evaluation.coco_evaluation import _evaluate_predictions_on_coco
+from detectron2.utils.file_io import PathManager
 from detectron2.utils.logger import setup_logger
 
 if __name__ == "__main__":

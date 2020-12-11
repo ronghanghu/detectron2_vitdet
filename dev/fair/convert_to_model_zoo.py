@@ -10,8 +10,8 @@ import shutil
 import torch
 
 try:
-    from fvcore.common.file_io import PathManager
-    from fvcore.fb.manifold import ManifoldPathHandler
+    from iopath.common.file_io import PathManager
+    from iopath.fb.manifold import ManifoldPathHandler
 
     PathManager.register_handler(ManifoldPathHandler())
 except ImportError:
