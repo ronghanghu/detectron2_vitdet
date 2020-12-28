@@ -122,7 +122,7 @@ if __name__ == "__main__":
     Please run the following (on FAIR cluster):
 
         module load fairusers_aws
-        fs3cmd sync -F {args.local_root}/ {args.cloud_root}/ --exclude '*.lock' --exclude 'log.txt' -n
+        fs3cmd sync -F {args.local_root}/ {args.cloud_root}/ --exclude '*.lock' --exclude 'log.txt' -exclude '.git*' -n
 
     If results look OK, remove "-n" to launch the actual sync.
     """  # noqa
