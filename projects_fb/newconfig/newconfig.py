@@ -5,9 +5,10 @@ import os
 from copy import deepcopy
 from typing import List
 import yaml
-from detectron2.utils.registry import _convert_target_to_string, locate
 from hydra.core.override_parser.overrides_parser import OverridesParser
 from omegaconf import DictConfig, ListConfig, OmegaConf
+
+from detectron2.utils.registry import _convert_target_to_string, locate
 
 
 """
