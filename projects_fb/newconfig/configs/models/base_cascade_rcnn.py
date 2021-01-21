@@ -8,8 +8,7 @@ from detectron2.modeling.roi_heads.cascade_rcnn import CascadeROIHeads
 from newconfig import Config as D
 from newconfig import ConfigFile
 
-# do we need a way to get the base of a config?
-model = ConfigFile.load_rel("./base_maskrcnn.py").model
+model = ConfigFile.load_rel("./base_maskrcnn.py", "model")
 
 # arguments that don't exist for Cascade R-CNN
 [model.roi_heads.pop(k) for k in ["box_head", "box_predictor", "proposal_matcher"]]

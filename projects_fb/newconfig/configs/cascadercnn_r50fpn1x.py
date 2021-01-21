@@ -5,7 +5,7 @@ from detectron2.solver.lr_scheduler import WarmupMultiStepLR
 from newconfig import Config as D
 from newconfig import ConfigFile
 
-model = ConfigFile.load_rel("./models/base_cascade_rcnn.py").model
+model = ConfigFile.load_rel("./models/base_cascade_rcnn.py", "model")
 
 dataloader = ConfigFile.load_rel("./data/coco.py")
 

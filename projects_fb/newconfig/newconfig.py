@@ -40,15 +40,6 @@ def apply_overrides(cfg, overrides: List[str]):
     return cfg
 
 
-def omegaconf_resolve(conf):
-    """
-    Resolve interpolation but still return DictConfig/ListConfig
-    """
-    return DictConfig(
-        content=OmegaConf.to_container(conf, resolve=True), flags={"allow_objects": True}
-    )
-
-
 # TODO: better names ..
 def Lazy(_target_, *args, **kwargs):
     assert len(args) == 0  # TODO?
@@ -60,33 +51,25 @@ Config = Lazy
 
 
 class ConfigFile:
-    def __init__(self, dict, filename=None):
-        super().__setattr__("_dict", dict)
-        super().__setattr__("_filename", filename)
-
-    def __getattr__(self, name):
-        return self._dict[name]
-
-    def __setattr__(self, name, val):
-        self._dict[name] = val
-
-    def __delattr__(self, name):
-        del self._dict[name]
-
     @staticmethod
-    def load_rel(filename):
+    def load_rel(filename, *args):
         """
         Load path relative to the caller's file.
+
+        args: keys to load and return. If not given, return all keys in a dict.
         """
         caller_frame = inspect.stack()[1]
         # TODO: use filename directly if caller is not a file
         caller_fname = caller_frame[0].f_code.co_filename
         caller_dir = os.path.dirname(caller_fname)
         filename = os.path.join(caller_dir, filename)
-        return ConfigFile.load(filename)
+        return ConfigFile.load(filename, *args)
 
     @staticmethod
-    def load(filename):
+    def load(filename, *args):
+        """
+        args: keys to load and return. If not given, return all keys in a dict.
+        """
         if filename.endswith(".py"):
             ConfigFile._validate_py_syntax(filename)
             spec = importlib.util.spec_from_file_location("detectron2_tmp_module", filename)
@@ -100,12 +83,17 @@ class ConfigFile:
                     if isinstance(value, (DictConfig, ListConfig)) and not name.startswith("_")
                 }
             )  # this does a deepcopy under the hood
-            return top_level
+            ret = top_level
         else:
             assert filename.endswith(".yaml"), filename
             with open(filename) as f:
                 obj = yaml.load(f)
-            return OmegaConf.create(obj, flags={"allow_objects": True})
+            ret = OmegaConf.create(obj, flags={"allow_objects": True})
+        if len(args):
+            ret = tuple(getattr(ret, a) for a in args)
+            return ret[0] if len(ret) == 1 else ret
+        else:
+            return ret
 
     @staticmethod
     def save(cfg, filename):
@@ -130,28 +118,23 @@ class ConfigFile:
 
 
 def instantiate(cfg):
-    cfg = omegaconf_resolve(cfg)
-
     # def _add_convert_flag(x):
     # if "_target_" in x:
     # x["_convert_"] = "all"
     # _visit_dict_config(cfg, _add_convert_flag)
     # return hydra.utils.instantiate(cfg)
     # slow. https://github.com/facebookresearch/hydra/issues/1200
-    return _instantiate_after_resolve(cfg)
 
-
-def _instantiate_after_resolve(cfg):
     if isinstance(cfg, DictConfig):
         newcfg = {}  # use python dict to be efficient.
         for k in list(cfg.keys()):
-            newcfg[k] = _instantiate_after_resolve(cfg[k])
+            newcfg[k] = instantiate(cfg[k])
         cfg = newcfg
     elif isinstance(cfg, ListConfig):
         # TODO: specialize for list, because many classes take
         # list[constructible objects], such as ResNet, DatasetMapper
         # alternative: wrap the list under a Lazy([...]) call in config
-        cfg = [_instantiate_after_resolve(cfg[k]) for k in range(len(cfg))]
+        cfg = [instantiate(cfg[k]) for k in range(len(cfg))]
 
     if isinstance(cfg, dict) and "_target_" in cfg:
         cls = cfg.pop("_target_")
