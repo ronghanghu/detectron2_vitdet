@@ -1,5 +1,4 @@
 import ast
-import importlib
 import inspect
 import os
 from copy import deepcopy
@@ -8,6 +7,7 @@ import yaml
 from hydra.core.override_parser.overrides_parser import OverridesParser
 from omegaconf import DictConfig, ListConfig, OmegaConf
 
+from detectron2.utils.file_io import PathManager
 from detectron2.utils.registry import _convert_target_to_string, locate
 
 
@@ -59,8 +59,8 @@ class ConfigFile:
         args: keys to load and return. If not given, return all keys in a dict.
         """
         caller_frame = inspect.stack()[1]
-        # TODO: use filename directly if caller is not a file
         caller_fname = caller_frame[0].f_code.co_filename
+        assert caller_fname != "<string>", "load_rel Unable to find caller"
         caller_dir = os.path.dirname(caller_fname)
         filename = os.path.join(caller_dir, filename)
         return ConfigFile.load(filename, *args)
@@ -72,21 +72,28 @@ class ConfigFile:
         """
         if filename.endswith(".py"):
             ConfigFile._validate_py_syntax(filename)
-            spec = importlib.util.spec_from_file_location("detectron2_tmp_module", filename)
-            mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)
+
+            # Record the filename
+            module_namespace = {"__file__": filename}
+            with PathManager.open(filename, "r") as f:
+                content = f.read()
+                # Compile first with filename to:
+                # 1. make filename appears in stacktrace
+                # 2. make load_rel able to find its parent's (possibly remote) location
+                exec(compile(content, filename, "exec"), module_namespace)
 
             top_level = DictConfig(
                 {
                     name: value
-                    for name, value in mod.__dict__.items()
+                    for name, value in module_namespace.items()
                     if isinstance(value, (DictConfig, ListConfig)) and not name.startswith("_")
-                }
+                },
+                flags={"allow_objects": True},
             )  # this does a deepcopy under the hood
             ret = top_level
         else:
             assert filename.endswith(".yaml"), filename
-            with open(filename) as f:
+            with PathManager.open(filename) as f:
                 obj = yaml.load(f)
             ret = OmegaConf.create(obj, flags={"allow_objects": True})
         if len(args):
