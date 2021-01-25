@@ -1,7 +1,7 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 from typing import List
 import torch
-from fvcore.nn import giou_loss, sigmoid_focal_loss_jit, smooth_l1_loss
+from fvcore.nn import sigmoid_focal_loss_jit
 from torch import nn
 from torch.nn import functional as F
 
@@ -9,7 +9,7 @@ from detectron2.config import configurable
 from detectron2.layers import ShapeSpec, batched_nms, cat
 from detectron2.modeling.anchor_generator import build_anchor_generator
 from detectron2.modeling.backbone import build_backbone
-from detectron2.modeling.box_regression import Box2BoxTransform
+from detectron2.modeling.box_regression import Box2BoxTransform, _dense_box_regression_loss
 from detectron2.modeling.matcher import Matcher
 from detectron2.modeling.meta_arch.build import META_ARCH_REGISTRY
 from detectron2.modeling.meta_arch.retinanet import RetinaNetHead, permute_to_N_HWA_K
@@ -185,9 +185,6 @@ class ATSS(nn.Module):
         """
         num_images = len(gt_labels)
         gt_labels = torch.stack(gt_labels)  # (N, R)
-        anchors = type(anchors[0]).cat(anchors).tensor  # (R, 4)
-        gt_anchor_deltas = [self.box2box_transform.get_deltas(anchors, k) for k in gt_boxes]
-        gt_anchor_deltas = torch.stack(gt_anchor_deltas)  # (N, R, 4)
 
         valid_mask = gt_labels >= 0
         pos_mask = (gt_labels >= 0) & (gt_labels != self.num_classes)
@@ -206,26 +203,19 @@ class ATSS(nn.Module):
             reduction="sum",
         )
 
+        loss_box_reg = _dense_box_regression_loss(
+            anchors,
+            self.box2box_transform,
+            pred_anchor_deltas,
+            gt_boxes,
+            pos_mask,
+            box_reg_loss_type=self.box_reg_loss_type,
+            smooth_l1_beta=self.smooth_l1_loss_beta,
+        )
+
+        anchors = type(anchors[0]).cat(anchors).tensor  # (R, 4)
         collapsed_pos_mask = pos_mask.view(-1)
         collapsed_gt_boxes = cat(gt_boxes)[collapsed_pos_mask]
-        if self.box_reg_loss_type == "smooth_l1":
-            loss_box_reg = (
-                smooth_l1_loss(
-                    cat(pred_anchor_deltas, dim=1)[pos_mask],
-                    gt_anchor_deltas[pos_mask],
-                    beta=self.smooth_l1_loss_beta,
-                )
-                .sum(dim=1)
-                .squeeze()
-            )
-        elif self.box_reg_loss_type == "giou":
-            pred_boxes = [
-                self.box2box_transform.apply_deltas(k, anchors)
-                for k in cat(pred_anchor_deltas, dim=1)
-            ]
-            loss_box_reg = giou_loss(cat(pred_boxes)[collapsed_pos_mask], collapsed_gt_boxes)
-        else:
-            raise ValueError(f"Invalid bbox reg loss type '{self.box_reg_loss_type}'")
 
         # Compute num_pos_avg_per_gpu to adjust loss_cls
         num_gpus = get_world_size()
@@ -247,9 +237,7 @@ class ATSS(nn.Module):
         else:
             loss_box_reg = loss_box_reg.sum()
 
-        collapsed_centerness = pred_boxes = (
-            cat(centerness, dim=1).squeeze(-1).view(-1)[collapsed_pos_mask]
-        )
+        collapsed_centerness = cat(centerness, dim=1).squeeze(-1).view(-1)[collapsed_pos_mask]
 
         loss_cls = loss_cls / num_pos_avg_per_gpu
         loss_centerness = (
