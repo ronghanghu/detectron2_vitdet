@@ -10,7 +10,7 @@ import shutil
 import torch
 
 try:
-    from iopath.common.file_io import PathManager
+    from iopath.common.file_io import g_pathmgr as PathManager
     from iopath.fb.manifold import ManifoldPathHandler
 
     PathManager.register_handler(ManifoldPathHandler())
@@ -27,7 +27,7 @@ faircluster:
 
 devgpu:
     bento console --kernel vision.detectron2 --file convert_to_model_zoo.py
-      -- -- --job-dir manifold://xx/output --cluster fb --output abcdefg
+      -- -- --job-dir manifold://fair_logging/tree/.../ --cluster fb --output abcdefg
 """
 
 DEFAULT_CLOUD_ROOT = {
@@ -36,7 +36,7 @@ DEFAULT_CLOUD_ROOT = {
 }
 DEFAULT_LOCAL_ROOT = {
     "fair": "/private/home/yuxinwu/data/D2models",  # on H2
-    "fb": "/mnt/vol/gfsai-bistro-east/ai-group/users/vision/detectron2",
+    "fb": "./",
 }
 
 
@@ -71,7 +71,7 @@ def get_model(model_file):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--job-dir", required=True)
+    parser.add_argument("--job-dir", required=True, help="directory that contains the final model")
     parser.add_argument("--cluster", required=True, choices=["fb", "fair"])
     parser.add_argument(
         "--output", required=True, help="output dir name relative to the model zoo root"
