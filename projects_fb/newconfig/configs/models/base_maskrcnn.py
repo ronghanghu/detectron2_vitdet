@@ -10,19 +10,15 @@ from detectron2.modeling.proposal_generator.rpn import RPN, StandardRPNHead
 from detectron2.modeling.roi_heads import FastRCNNOutputLayers, MaskRCNNConvUpsampleHead
 from detectron2.modeling.roi_heads.box_head import FastRCNNConvFCHead
 
-from newconfig import Lazy as D
+from newconfig import LazyCall as L
 
-model = D(
-    GeneralizedRCNN,
-    backbone=D(
-        FPN,
-        bottom_up=D(
-            ResNet,
-            stem=D(BasicStem, in_channels=3, out_channels=64),
+model = L(GeneralizedRCNN)(
+    backbone=L(FPN)(
+        bottom_up=L(ResNet)(
+            stem=L(BasicStem)(in_channels=3, out_channels=64),
             # can create some specializations such as "ResNet50" to avoid writing this
             stages=[
-                D(
-                    ResNet.make_stage,
+                L(ResNet.make_stage)(
                     block_class=BottleneckBlock,
                     num_blocks=n,
                     stride_per_block=[s] + [1] * (n - 1),
@@ -40,69 +36,61 @@ model = D(
         ),
         in_features=["res2", "res3", "res4", "res5"],
         out_channels=256,
-        top_block=D(LastLevelMaxPool),
+        top_block=L(LastLevelMaxPool)(),
     ),
-    proposal_generator=D(
-        RPN,
+    proposal_generator=L(RPN)(
         in_features=["p2", "p3", "p4", "p5", "p6"],
-        head=D(StandardRPNHead, in_channels=256, num_anchors=3),
-        anchor_generator=D(
-            DefaultAnchorGenerator,
+        head=L(StandardRPNHead)(in_channels=256, num_anchors=3),
+        anchor_generator=L(DefaultAnchorGenerator)(
             sizes=[[32], [64], [128], [256], [512]],
             aspect_ratios=[0.5, 1.0, 2.0],
             strides=[4, 8, 16, 32, 64],
             offset=0.0,
         ),
-        anchor_matcher=D(
-            Matcher, thresholds=[0.3, 0.7], labels=[0, -1, 1], allow_low_quality_matches=True
+        anchor_matcher=L(Matcher)(
+            thresholds=[0.3, 0.7], labels=[0, -1, 1], allow_low_quality_matches=True
         ),
-        box2box_transform=D(Box2BoxTransform, weights=[1.0, 1.0, 1.0, 1.0]),
+        box2box_transform=L(Box2BoxTransform)(weights=[1.0, 1.0, 1.0, 1.0]),
         batch_size_per_image=256,
         positive_fraction=0.5,
         pre_nms_topk=(2000, 1000),
         post_nms_topk=(1000, 1000),
         nms_thresh=0.7,
     ),
-    roi_heads=D(
-        StandardROIHeads,
+    roi_heads=L(StandardROIHeads)(
         num_classes=80,
         batch_size_per_image=512,
         positive_fraction=0.25,
-        proposal_matcher=D(
-            Matcher, thresholds=[0.5], labels=[0, 1], allow_low_quality_matches=False
+        proposal_matcher=L(Matcher)(
+            thresholds=[0.5], labels=[0, 1], allow_low_quality_matches=False
         ),
         box_in_features=["p2", "p3", "p4", "p5"],
-        box_pooler=D(
-            ROIPooler,
+        box_pooler=L(ROIPooler)(
             output_size=7,
             scales=(1.0 / 4, 1.0 / 8, 1.0 / 16, 1.0 / 32),
             sampling_ratio=0,
             pooler_type="ROIAlignV2",
         ),
-        box_head=D(
-            FastRCNNConvFCHead,
+        box_head=L(FastRCNNConvFCHead)(
             input_shape=ShapeSpec(channels=256, height=7, width=7),
             conv_dims=[],
             fc_dims=[1024, 1024],
         ),
-        box_predictor=D(
-            FastRCNNOutputLayers,
+        box_predictor=L(FastRCNNOutputLayers)(
             input_shape=ShapeSpec(channels=1024),
             test_score_thresh=0.05,
-            box2box_transform=D(Box2BoxTransform, weights=(10, 10, 5, 5)),
+            box2box_transform=L(Box2BoxTransform)(weights=(10, 10, 5, 5)),
             # NOTE: interpolation supported by OmegaConf
             num_classes="${..num_classes}",
         ),
         mask_in_features=["p2", "p3", "p4", "p5"],
-        mask_pooler=D(
-            ROIPooler,
+        mask_pooler=L(ROIPooler)(
             output_size=14,
             scales=(1.0 / 4, 1.0 / 8, 1.0 / 16, 1.0 / 32),
             sampling_ratio=0,
             pooler_type="ROIAlignV2",
         ),
-        mask_head=D(
-            MaskRCNNConvUpsampleHead,
+        mask_head=L(MaskRCNNConvUpsampleHead)(
             input_shape=ShapeSpec(channels=256, width=14, height=14),
             num_classes="${..num_classes}",
             conv_dims=[256, 256, 256, 256, 256],

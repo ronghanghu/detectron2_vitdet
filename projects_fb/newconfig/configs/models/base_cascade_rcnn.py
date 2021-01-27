@@ -5,8 +5,8 @@ from detectron2.modeling.roi_heads import FastRCNNOutputLayers
 from detectron2.modeling.roi_heads.box_head import FastRCNNConvFCHead
 from detectron2.modeling.roi_heads.cascade_rcnn import CascadeROIHeads
 
-from newconfig import Config as D
 from newconfig import ConfigFile
+from newconfig import LazyCall as L
 
 model = ConfigFile.load_rel("./base_maskrcnn.py", "model")
 
@@ -16,8 +16,7 @@ model = ConfigFile.load_rel("./base_maskrcnn.py", "model")
 model.roi_heads.update(
     _target_=CascadeROIHeads,  # TODO
     box_heads=[
-        D(
-            FastRCNNConvFCHead,
+        L(FastRCNNConvFCHead)(
             input_shape=ShapeSpec(channels=256, height=7, width=7),
             conv_dims=[],
             fc_dims=[1024, 1024],
@@ -25,11 +24,10 @@ model.roi_heads.update(
         for k in range(3)
     ],
     box_predictors=[
-        D(
-            FastRCNNOutputLayers,
+        L(FastRCNNOutputLayers)(
             input_shape=ShapeSpec(channels=1024),
             test_score_thresh=0.05,
-            box2box_transform=D(Box2BoxTransform, weights=(w1, w1, w2, w2)),
+            box2box_transform=L(Box2BoxTransform)(weights=(w1, w1, w2, w2)),
             cls_agnostic_bbox_reg=True,
             # NOTE: interpolation
             num_classes="${...num_classes}",
@@ -37,7 +35,7 @@ model.roi_heads.update(
         for (w1, w2) in [(10, 5), (20, 10), (30, 15)]
     ],
     proposal_matchers=[
-        D(Matcher, thresholds=[th], labels=[0, 1], allow_low_quality_matches=False)
+        L(Matcher)(thresholds=[th], labels=[0, 1], allow_low_quality_matches=False)
         for th in [0.5, 0.6, 0.7]
     ],
 )

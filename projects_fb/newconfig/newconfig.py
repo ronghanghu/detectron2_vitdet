@@ -40,16 +40,6 @@ def apply_overrides(cfg, overrides: List[str]):
     return cfg
 
 
-# TODO: better names ..
-def Lazy(_target_, *args, **kwargs):
-    assert len(args) == 0  # TODO?
-    kwargs["_target_"] = _target_
-    return DictConfig(content=kwargs, flags={"allow_objects": True})
-
-
-Config = Lazy
-
-
 class ConfigFile:
     @staticmethod
     def load_rel(filename, *args):
@@ -152,6 +142,21 @@ def instantiate(cfg):
         assert callable(cls), cls
         return cls(**cfg)
     return cfg
+
+
+class LazyCall:
+    """
+    Wrap a callable so its calls will not be execued, but returns a dict
+    that describes the call.
+    """
+
+    def __init__(self, target):
+        assert callable(target) or isinstance(target, str), target
+        self._target = target
+
+    def __call__(self, **kwargs):
+        kwargs["_target_"] = self._target
+        return DictConfig(content=kwargs, flags={"allow_objects": True})
 
 
 if __name__ == "__main__":
