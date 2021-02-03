@@ -2,7 +2,7 @@ import ast
 import inspect
 import os
 from copy import deepcopy
-from typing import List
+from typing import List, Tuple, Union
 import yaml
 from hydra.core.override_parser.overrides_parser import OverridesParser
 from omegaconf import DictConfig, ListConfig, OmegaConf
@@ -42,23 +42,25 @@ def apply_overrides(cfg, overrides: List[str]):
 
 class ConfigFile:
     @staticmethod
-    def load_rel(filename, *args):
+    def load_rel(filename: str, keys: Union[None, str, Tuple[str, ...]] = None):
         """
         Load path relative to the caller's file.
 
-        args: keys to load and return. If not given, return all keys in a dict.
+        Args:
+            keys: keys to load and return. If not given, return all keys in a dict.
         """
         caller_frame = inspect.stack()[1]
         caller_fname = caller_frame[0].f_code.co_filename
         assert caller_fname != "<string>", "load_rel Unable to find caller"
         caller_dir = os.path.dirname(caller_fname)
         filename = os.path.join(caller_dir, filename)
-        return ConfigFile.load(filename, *args)
+        return ConfigFile.load(filename, keys)
 
     @staticmethod
-    def load(filename, *args):
+    def load(filename: str, keys: Union[None, str, Tuple[str, ...]] = None):
         """
-        args: keys to load and return. If not given, return all keys in a dict.
+        Args:
+            keys: keys to load and return. If not given, return all keys in a dict.
         """
         if filename.endswith(".py"):
             ConfigFile._validate_py_syntax(filename)
@@ -86,8 +88,10 @@ class ConfigFile:
             with PathManager.open(filename) as f:
                 obj = yaml.load(f)
             ret = OmegaConf.create(obj, flags={"allow_objects": True})
-        if len(args):
-            ret = tuple(getattr(ret, a) for a in args)
+        if keys is not None:
+            if isinstance(keys, str):
+                keys = (keys,)
+            ret = tuple(getattr(ret, a) for a in keys)
             return ret[0] if len(ret) == 1 else ret
         else:
             return ret
