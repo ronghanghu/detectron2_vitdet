@@ -2,10 +2,9 @@ import os
 from torch.nn.parallel import DistributedDataParallel
 
 from detectron2.checkpoint import DetectionCheckpointer
-from detectron2.engine import SimpleTrainer, default_argument_parser, hooks, launch
+from detectron2.engine import SimpleTrainer, default_argument_parser, default_writers, hooks, launch
 from detectron2.evaluation import inference_on_dataset
 from detectron2.utils import comm
-from detectron2.utils.events import CommonMetricPrinter, JSONWriter, TensorboardXWriter
 from detectron2.utils.logger import setup_logger
 
 from newconfig import ConfigFile, apply_overrides, instantiate
@@ -56,11 +55,7 @@ def main(args):
                 ),
             ),
             hooks.PeriodicWriter(
-                [
-                    CommonMetricPrinter(args.max_iter),
-                    JSONWriter(os.path.join(args.output_dir, "metrics.json")),
-                    TensorboardXWriter(args.output_dir),
-                ],
+                default_writers(args.output_dir, args.max_iter),
                 period=20,
             )
             if comm.is_main_process()
