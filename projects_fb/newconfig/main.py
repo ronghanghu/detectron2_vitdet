@@ -4,6 +4,7 @@ from torch.nn.parallel import DistributedDataParallel
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.engine import SimpleTrainer, default_argument_parser, default_writers, hooks, launch
 from detectron2.evaluation import inference_on_dataset
+from detectron2.solver import LRMultiplier
 from detectron2.utils import comm
 from detectron2.utils.logger import setup_logger
 
@@ -32,8 +33,7 @@ def main(args):
     cfg.optimizer.params = model.parameters()
     optimizer = instantiate(cfg.optimizer)
 
-    cfg.scheduler.optimizer = optimizer
-    scheduler = instantiate(cfg.scheduler)
+    scheduler = LRMultiplier(optimizer, instantiate(cfg.lr_multiplier), args.max_iter)
 
     dataloader = cfg.dataloader
     trainer = SimpleTrainer(model, instantiate(dataloader.train), optimizer)
