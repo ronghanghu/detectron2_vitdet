@@ -1,5 +1,6 @@
 import ast
 import inspect
+import logging
 import os
 from copy import deepcopy
 from typing import List, Tuple, Union
@@ -9,6 +10,8 @@ from omegaconf import DictConfig, ListConfig, OmegaConf
 
 from detectron2.utils.file_io import PathManager
 from detectron2.utils.registry import _convert_target_to_string, locate
+
+logger = logging.getLogger("detectron2.config.instantiate")
 
 
 """
@@ -143,8 +146,14 @@ def instantiate(cfg):
             cls_name = cls
             cls = locate(cls_name)
             assert cls is not None, cls_name
+        else:
+            cls_name = cls.__module__ + "." + cls.__qualname__
         assert callable(cls), cls
-        return cls(**cfg)
+        try:
+            return cls(**cfg)
+        except TypeError:
+            logger.error(f"Error when instantiating {cls_name}!")
+            raise
     return cfg
 
 
