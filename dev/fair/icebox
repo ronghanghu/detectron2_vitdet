@@ -1,0 +1,69 @@
+#!/bin/bash
+
+# Icebox isolates the code that runs on the cluster from the code that you edit on
+# your devfair.
+#
+# Icebox copies all files under a project directory **with a specific directory structure
+# (see below)** to a frozen archive directory, aka an "icebox", to preserve the
+# state of the project code used for an experiment. Similarish to dumbo, but on helium.
+#
+# Compared to dumbo, icebox can handle projects that use multiple git repos and
+# compiled files (that are in .gitignore). Icebox uses a full file copy of all project
+# files, which is heavier-weight and therefore slower than dumbo, which uses some
+# lightweight git features.
+#
+# Expected project directory structure:
+# /my/project
+#     ├── detectron2
+#     │   ├── configs
+#     │   ├── ...
+#     │   ├── detectron2
+#     │   ├── ...
+#     ├── fvcore
+#     │   ├── CODE_OF_CONDUCT.md
+#     │   ├── ...
+#     │   ├── fvcore
+#     │   ├── ...
+#     └── packages  # This dir (after copying) will be put into PYTHONPATH
+#         ├── detectron2 -> ../detectron2/detectron2
+#         └── fvcore -> ../fvcore/fvcore
+#
+# Usage: detectron2/dev/fair/icebox any_command
+#
+# Examples:
+#
+#  [Local run]
+#  ./detectron2/dev/fair/icebox python detectron2/tools/train_net.py \
+#      --config detectron2/configs/COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_1x.yaml \
+#      SOLVER.IMS_PER_BATCH 4
+#
+#  [Cluster run]
+#  ./detectron2/dev/fair/icebox ./detectron2/dev/fair/launch.py \
+#      --config-file detectron2/configs/COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_1x.yaml \
+#      --num-gpus 8 -p dev --name icebox-launch-test
+#
+
+[ ! -d "./packages" ] && echo "./packages must exit" && exit 1
+
+# setup the icebox and copy the code
+ICEBOX=/checkpoint/$USER/icebox
+mkdir -p "$ICEBOX"
+PWD=$(pwd)
+RUN_DIR=$(mktemp -d "$ICEBOX/XXXXXXXXXX")
+trap "cd $PWD" EXIT
+echo "icebox run directory: $RUN_DIR"
+echo "copying code (this may take a moment) ..."
+cp -r . "$RUN_DIR"
+
+# change to the icebox run dir and set up the env
+cd "$RUN_DIR" || exit
+PKGS=$(realpath ./packages)
+export PYTHONPATH="$PKGS:$PYTHONPATH"
+echo "PYTHONPATH=$PYTHONPATH"
+
+# do the work
+echo "running command: $*"
+"$@"
+
+# return to where we started
+cd "$PWD"
