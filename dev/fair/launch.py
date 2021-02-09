@@ -84,8 +84,7 @@ class Trainer:
         socket_name = os.popen("ip r | grep default | awk '{print $5}'").read().strip("\n")
         print("[launcher] Setting GLOO and NCCL sockets IFNAME to: {}".format(socket_name))
         os.environ["GLOO_SOCKET_IFNAME"] = socket_name
-        # not sure if the next line is really affect anything
-        # os.environ["NCCL_SOCKET_IFNAME"] = socket_name
+        os.environ["NCCL_SOCKET_IFNAME"] = socket_name
 
         hostname_first_node = (
             os.popen("scontrol show hostnames $SLURM_JOB_NODELIST").read().split("\n")[0]
