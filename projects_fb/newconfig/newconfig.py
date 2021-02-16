@@ -2,6 +2,7 @@ import ast
 import inspect
 import logging
 import os
+from collections.abc import Mapping
 from copy import deepcopy
 from typing import List, Tuple, Union
 import yaml
@@ -104,8 +105,11 @@ class ConfigFile:
         cfg = deepcopy(cfg)
 
         def _replace_type_by_name(x):
-            if "_target_" in x:
-                x._target_ = _convert_target_to_string(x._target_)
+            if "_target_" in x and not isinstance(x._target_, str):
+                try:
+                    x._target_ = _convert_target_to_string(x._target_)
+                except AttributeError:
+                    pass
 
         # not necessary, but makes yaml looks nicer
         _visit_dict_config(cfg, _replace_type_by_name)
@@ -142,12 +146,17 @@ def instantiate(cfg):
 
     if isinstance(cfg, dict) and "_target_" in cfg:
         cls = cfg.pop("_target_")
+        cls = instantiate(cls)
         if isinstance(cls, str):
             cls_name = cls
             cls = locate(cls_name)
             assert cls is not None, cls_name
         else:
-            cls_name = cls.__module__ + "." + cls.__qualname__
+            try:
+                cls_name = cls.__module__ + "." + cls.__qualname__
+            except AttributeError:
+                # target could be anything, so the above could fail
+                cls_name = str(cls)
         assert callable(cls), cls
         try:
             return cls(**cfg)
@@ -164,7 +173,7 @@ class LazyCall:
     """
 
     def __init__(self, target):
-        assert callable(target) or isinstance(target, str), target
+        assert callable(target) or isinstance(target, (str, Mapping)), target
         self._target = target
 
     def __call__(self, **kwargs):

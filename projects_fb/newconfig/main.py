@@ -29,7 +29,7 @@ def main(args):
         model = DistributedDataParallel(
             model, device_ids=[comm.get_local_rank()], broadcast_buffers=False
         )
-    cfg.optimizer.params = model.parameters()
+    cfg.optimizer.params.model = model
     optimizer = instantiate(cfg.optimizer)
 
     dataloader = cfg.dataloader
