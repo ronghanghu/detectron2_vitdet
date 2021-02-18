@@ -85,6 +85,16 @@ class Trainer:
         print("[launcher] Setting GLOO and NCCL sockets IFNAME to: {}".format(socket_name))
         os.environ["GLOO_SOCKET_IFNAME"] = socket_name
         os.environ["NCCL_SOCKET_IFNAME"] = socket_name
+        roce_hca = (
+            os.popen(
+                "ibstat | grep 'Link layer: Ethernet' -B50 | grep \"CA '\" | tail -n1 | awk '{print $2}' "  # noqa
+            )
+            .read()
+            .strip("'\n")
+        )
+        if roce_hca:
+            print("[launcher] Disable ROCE HCA {}".format(roce_hca))
+            os.environ["NCCL_IB_HCA"] = f"^{roce_hca}"
 
         hostname_first_node = (
             os.popen("scontrol show hostnames $SLURM_JOB_NODELIST").read().split("\n")[0]
