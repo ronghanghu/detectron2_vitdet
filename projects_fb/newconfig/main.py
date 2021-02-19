@@ -1,13 +1,10 @@
 import os
-from torch.nn.parallel import DistributedDataParallel
 
-from detectron2.checkpoint import DetectionCheckpointer
-from detectron2.engine import SimpleTrainer, default_argument_parser, default_writers, hooks, launch
-from detectron2.evaluation import inference_on_dataset
-from detectron2.utils import comm
+from detectron2.engine import default_argument_parser, launch
 from detectron2.utils.logger import setup_logger
 
-from newconfig import ConfigFile, apply_overrides, instantiate
+from defaults import DefaultTrainer
+from newconfig import ConfigFile, apply_overrides
 
 
 def main(args):
@@ -17,57 +14,22 @@ def main(args):
     # support override
     cfg = apply_overrides(cfg, args.overrides)
 
+    os.makedirs(cfg.train.output_dir, exist_ok=True)  # TODO: call default_setup()
+
     # support serialization
-    dump_fname = "serialized.yaml"
+    dump_fname = os.path.join(cfg.train.output_dir, "serialized_config.yaml")
     ConfigFile.save(cfg, dump_fname)
     cfg = ConfigFile.load(dump_fname)
 
-    model = instantiate(cfg.model)
-    model.cuda()
-    print(model)
-    if comm.get_world_size() > 1:
-        model = DistributedDataParallel(
-            model, device_ids=[comm.get_local_rank()], broadcast_buffers=False
-        )
-    cfg.optimizer.params.model = model
-    optimizer = instantiate(cfg.optimizer)
-
-    dataloader = cfg.dataloader
-    trainer = SimpleTrainer(model, instantiate(dataloader.train), optimizer)
-    checkpointer = DetectionCheckpointer(
-        model,
-        args.output_dir,
-        optimizer=optimizer,
-    )
-    trainer.register_hooks(
-        [
-            hooks.IterationTimer(),
-            hooks.LRScheduler(scheduler=instantiate(cfg.lr_multiplier)),
-            hooks.PeriodicCheckpointer(checkpointer, 5000) if comm.is_main_process() else None,
-            hooks.EvalHook(
-                100,
-                lambda: inference_on_dataset(
-                    model, instantiate(dataloader.test), instantiate(dataloader.evaluator)
-                ),
-            ),
-            hooks.PeriodicWriter(
-                default_writers(args.output_dir, args.max_iter),
-                period=20,
-            )
-            if comm.is_main_process()
-            else None,
-        ]
-    )
-    trainer.train(0, args.max_iter)
+    trainer = DefaultTrainer(cfg)
+    trainer.resume_or_load(args.resume)
+    trainer.train()
 
 
 if __name__ == "__main__":
     parser = default_argument_parser()
-    parser.add_argument("--output-dir", default="output")
-    parser.add_argument("--max-iter", default=90000, type=int)
     parser.add_argument("--overrides", nargs="+")
     args = parser.parse_args()
-    os.makedirs(args.output_dir, exist_ok=True)
     launch(
         main,
         args.num_gpus,

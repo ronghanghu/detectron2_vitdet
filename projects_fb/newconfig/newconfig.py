@@ -82,7 +82,8 @@ class ConfigFile:
                 {
                     name: value
                     for name, value in module_namespace.items()
-                    if isinstance(value, (DictConfig, ListConfig)) and not name.startswith("_")
+                    if isinstance(value, (DictConfig, ListConfig, dict))
+                    and not name.startswith("_")
                 },
                 flags={"allow_objects": True},
             )  # this does a deepcopy under the hood
