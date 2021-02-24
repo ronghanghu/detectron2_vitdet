@@ -11,6 +11,7 @@ from detectron2.utils.logger import setup_logger
 from newconfig import instantiate
 
 
+# NOTE: can be merged with the existing DefaultTrainer
 class DefaultTrainer(TrainerBase):
     """
     Examples:
@@ -26,7 +27,13 @@ class DefaultTrainer(TrainerBase):
     def __init__(self, cfg):
         """
         Args:
-            cfg:
+            cfg: an object with the following attributes:
+                model: instantiate to a module
+                dataloader.{train,test}: instantiate to dataloaders
+                dataloader.evaluator: instantiate to evaluator for test set
+                optimizer: instantaite to an optimizer
+                lr_multiplier: instantiate to a fvcore scheduler
+                train: keys defined in `common_train.py`
         """
         super().__init__()
         logger = logging.getLogger("detectron2")

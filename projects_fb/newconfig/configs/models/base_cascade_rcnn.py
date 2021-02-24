@@ -14,7 +14,7 @@ model = ConfigFile.load_rel("./base_maskrcnn.py", "model")
 [model.roi_heads.pop(k) for k in ["box_head", "box_predictor", "proposal_matcher"]]
 
 model.roi_heads.update(
-    _target_=CascadeROIHeads,  # TODO
+    _target_=CascadeROIHeads,
     box_heads=[
         L(FastRCNNConvFCHead)(
             input_shape=ShapeSpec(channels=256, height=7, width=7),
