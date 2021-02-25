@@ -81,8 +81,8 @@ class ATSS(nn.Module):
             cfg.MODEL.ATSS.IOU_THRESHOLDS, cfg.MODEL.ATSS.IOU_LABELS, allow_low_quality_matches=True
         )
 
-        self.register_buffer("pixel_mean", torch.Tensor(cfg.MODEL.PIXEL_MEAN).view(-1, 1, 1))
-        self.register_buffer("pixel_std", torch.Tensor(cfg.MODEL.PIXEL_STD).view(-1, 1, 1))
+        self.register_buffer("pixel_mean", torch.Tensor(cfg.MODEL.PIXEL_MEAN).view(-1, 1, 1), False)
+        self.register_buffer("pixel_std", torch.Tensor(cfg.MODEL.PIXEL_STD).view(-1, 1, 1), False)
 
     @property
     def device(self):
