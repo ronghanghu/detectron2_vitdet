@@ -10,7 +10,7 @@ from detectron2.evaluation import COCOEvaluator
 from newconfig import LazyCall as L
 
 train = L(build_detection_train_loader)(
-    dataset=L(get_detection_dataset_dicts)(dataset_names=("coco_2017_val",)),
+    dataset=L(get_detection_dataset_dicts)(names="coco_2017_val"),
     mapper=L(DatasetMapper)(
         is_train=True,
         augmentations=[
@@ -29,7 +29,7 @@ train = L(build_detection_train_loader)(
 )
 
 test = L(build_detection_test_loader)(
-    dataset=L(get_detection_dataset_dicts)(dataset_names="coco_2017_val", filter_empty=False),
+    dataset=L(get_detection_dataset_dicts)(names="coco_2017_val", filter_empty=False),
     mapper=L(DatasetMapper)(
         is_train=False,
         augmentations=[
@@ -41,5 +41,5 @@ test = L(build_detection_test_loader)(
 )
 
 evaluator = L(COCOEvaluator)(
-    dataset_name="${..test.dataset.dataset_names}",
+    dataset_name="${..test.dataset.names}",
 )
