@@ -48,9 +48,14 @@ class DefaultTrainer(TrainerBase):
 
         # For training, wrap with DDP. But don't need this for inference.
         if comm.get_world_size() > 1:
+            fp16_compression = cfg.train.ddp.pop("fp16_compression", False)
             model = DistributedDataParallel(
-                model, device_ids=[comm.get_local_rank()], broadcast_buffers=False
+                model, device_ids=[comm.get_local_rank()], **cfg.train.ddp
             )
+            if fp16_compression:
+                from torch.distributed.algorithms.ddp_comm_hooks import default as comm_hooks
+
+                model.register_comm_hook(state=None, hook=comm_hooks.fp16_compress_hook)
         self._trainer = (AMPTrainer if cfg.train.amp.enabled else SimpleTrainer)(
             model, data_loader, optimizer
         )
