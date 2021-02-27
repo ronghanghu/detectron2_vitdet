@@ -15,14 +15,6 @@ from detectron2.utils.registry import _convert_target_to_string, locate
 logger = logging.getLogger("detectron2.config.instantiate")
 
 
-"""
-Highly experimental.
-
-Reference:
-https://github.com/open-mmlab/mmcv/blob/master/mmcv/utils/config.py
-"""
-
-
 def _visit_dict_config(cfg, func):
     if isinstance(cfg, DictConfig):
         func(cfg)

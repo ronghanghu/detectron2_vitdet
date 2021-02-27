@@ -15,7 +15,7 @@ from newconfig import LazyCall as L
 model = L(GeneralizedRCNN)(
     backbone=L(FPN)(
         bottom_up=L(ResNet)(
-            stem=L(BasicStem)(in_channels=3, out_channels=64),
+            stem=L(BasicStem)(in_channels=3, out_channels=64, norm="FrozenBN"),
             # can create some specializations such as "ResNet50" to avoid writing this
             stages=[
                 L(ResNet.make_stage)(
@@ -26,13 +26,13 @@ model = L(GeneralizedRCNN)(
                     bottleneck_channels=o // 4,
                     out_channels=o,
                     stride_in_1x1=True,
+                    norm="FrozenBN",
                 )
                 for (n, s, i, o) in zip(
                     [3, 4, 6, 3], [1, 2, 2, 2], [64, 256, 512, 1024], [256, 512, 1024, 2048]
                 )
             ],
             out_features=["res2", "res3", "res4", "res5"],
-            # freeze_at=2,
         ),
         in_features=["res2", "res3", "res4", "res5"],
         out_channels=256,

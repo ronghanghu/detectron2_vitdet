@@ -6,8 +6,8 @@ from newconfig import LazyCall as L
 
 SGD = L(torch.optim.SGD)(
     params=L(get_default_optimizer_params)(
-        # Both mmdet and classyvision use "optimizer factory" that does not
-        # depend on models
+        # params.model is meant to be set to the model object, before instantiating
+        # the optimizer. Currently the DefaultTrainer takes care of this automatically.
         weight_decay_norm=0.0
     ),
     lr=0.02,
