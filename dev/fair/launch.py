@@ -85,6 +85,7 @@ class Trainer:
         print("[launcher] Setting GLOO and NCCL sockets IFNAME to: {}".format(socket_name))
         os.environ["GLOO_SOCKET_IFNAME"] = socket_name
         os.environ["NCCL_SOCKET_IFNAME"] = socket_name
+        os.environ["NCCL_DEBUG"] = "INFO"
         roce_hca = (
             os.popen(
                 "ibstat | grep 'Link layer: Ethernet' -B50 | grep \"CA '\" | tail -n1 | awk '{print $2}' "  # noqa
