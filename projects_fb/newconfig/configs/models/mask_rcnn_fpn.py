@@ -69,7 +69,6 @@ model = L(GeneralizedRCNN)(
             input_shape=ShapeSpec(channels=1024),
             test_score_thresh=0.05,
             box2box_transform=L(Box2BoxTransform)(weights=(10, 10, 5, 5)),
-            # NOTE: interpolation supported by OmegaConf
             num_classes="${..num_classes}",
         ),
         mask_in_features=["p2", "p3", "p4", "p5"],

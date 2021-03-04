@@ -2,7 +2,7 @@
 
 from newconfig import ConfigFile
 
-model = ConfigFile.load_rel("./models/base_retinanet.py", "model")
+model = ConfigFile.load_rel("./models/retinanet.py", "model")
 model.backbone.bottom_up.freeze_at = 2
 
 dataloader = ConfigFile.load_rel("./data/coco.py")

@@ -1,7 +1,6 @@
 from newconfig import ConfigFile
 
-model = ConfigFile.load_rel("./models/mask_rcnn_fpn.py", "model")
-model.backbone.bottom_up.freeze_at = 2
+model = ConfigFile.load_rel("./models/cascade_rcnn.py", "model")
 
 dataloader = ConfigFile.load_rel("./data/coco.py")
 
