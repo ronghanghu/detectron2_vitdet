@@ -1,7 +1,8 @@
 import unittest
 
+from detectron2.config.instantiate import instantiate
+
 from newconfig import LazyCall as L
-from newconfig import instantiate
 
 
 class TestClass:
@@ -39,7 +40,7 @@ class TestConstruction(unittest.TestCase):
         # do nothing for other obj
         self.assertEqual(instantiate(5), 5)
         x = [3, 4, 5]
-        self.assertIs(instantiate(x), x)
+        self.assertEqual(instantiate(x), x)
         x = TestClass(1)
         self.assertIs(instantiate(x), x)
         x = {"xx": "yy"}

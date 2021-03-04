@@ -10,7 +10,7 @@ from hydra.core.override_parser.overrides_parser import OverridesParser
 from omegaconf import DictConfig, ListConfig, OmegaConf
 
 from detectron2.utils.file_io import PathManager
-from detectron2.utils.registry import _convert_target_to_string, locate
+from detectron2.utils.registry import _convert_target_to_string
 
 logger = logging.getLogger("detectron2.config.instantiate")
 
@@ -116,47 +116,6 @@ class ConfigFile:
             ast.parse(content)
         except SyntaxError as e:
             raise SyntaxError(f"Config file {filename} has syntax error") from e
-
-
-def instantiate(cfg):
-    # def _add_convert_flag(x):
-    # if "_target_" in x:
-    # x["_convert_"] = "all"
-    # _visit_dict_config(cfg, _add_convert_flag)
-    # return hydra.utils.instantiate(cfg)
-    # slow. https://github.com/facebookresearch/hydra/issues/1200
-
-    if isinstance(cfg, DictConfig):
-        newcfg = {}  # use python dict to be efficient.
-        for k in list(cfg.keys()):
-            newcfg[k] = instantiate(cfg[k])
-        cfg = newcfg
-    elif isinstance(cfg, ListConfig):
-        # TODO: specialize for list, because many classes take
-        # list[constructible objects], such as ResNet, DatasetMapper
-        # alternative: wrap the list under a Lazy([...]) call in config
-        cfg = [instantiate(cfg[k]) for k in range(len(cfg))]
-
-    if isinstance(cfg, dict) and "_target_" in cfg:
-        cls = cfg.pop("_target_")
-        cls = instantiate(cls)
-        if isinstance(cls, str):
-            cls_name = cls
-            cls = locate(cls_name)
-            assert cls is not None, cls_name
-        else:
-            try:
-                cls_name = cls.__module__ + "." + cls.__qualname__
-            except AttributeError:
-                # target could be anything, so the above could fail
-                cls_name = str(cls)
-        assert callable(cls), cls
-        try:
-            return cls(**cfg)
-        except TypeError:
-            logger.error(f"Error when instantiating {cls_name}!")
-            raise
-    return cfg
 
 
 class LazyCall:
