@@ -2,7 +2,7 @@ from detectron2.layers import ShapeSpec
 from detectron2.modeling import FPN, GeneralizedRCNN, ResNet, StandardROIHeads
 from detectron2.modeling.anchor_generator import DefaultAnchorGenerator
 from detectron2.modeling.backbone.fpn import LastLevelMaxPool
-from detectron2.modeling.backbone.resnet import BasicStem, BottleneckBlock
+from detectron2.modeling.backbone.resnet import BasicStem
 from detectron2.modeling.box_regression import Box2BoxTransform
 from detectron2.modeling.matcher import Matcher
 from detectron2.modeling.poolers import ROIPooler
@@ -16,22 +16,11 @@ model = L(GeneralizedRCNN)(
     backbone=L(FPN)(
         bottom_up=L(ResNet)(
             stem=L(BasicStem)(in_channels=3, out_channels=64, norm="FrozenBN"),
-            # can create some specializations such as "ResNet50" to avoid writing this
-            stages=[
-                L(ResNet.make_stage)(
-                    block_class=BottleneckBlock,
-                    num_blocks=n,
-                    stride_per_block=[s] + [1] * (n - 1),
-                    in_channels=i,
-                    bottleneck_channels=o // 4,
-                    out_channels=o,
-                    stride_in_1x1=True,
-                    norm="FrozenBN",
-                )
-                for (n, s, i, o) in zip(
-                    [3, 4, 6, 3], [1, 2, 2, 2], [64, 256, 512, 1024], [256, 512, 1024, 2048]
-                )
-            ],
+            stages=L(ResNet.make_default_stages)(
+                depth=50,
+                stride_in_1x1=True,
+                norm="FrozenBN",
+            ),
             out_features=["res2", "res3", "res4", "res5"],
         ),
         in_features=["res2", "res3", "res4", "res5"],
