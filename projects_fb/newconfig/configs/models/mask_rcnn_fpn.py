@@ -23,7 +23,7 @@ model = L(GeneralizedRCNN)(
             ),
             out_features=["res2", "res3", "res4", "res5"],
         ),
-        in_features=["res2", "res3", "res4", "res5"],
+        in_features="${.bottom_up.out_features}",
         out_channels=256,
         top_block=L(LastLevelMaxPool)(),
     ),
