@@ -1,7 +1,7 @@
 import os
 
 from detectron2.engine import default_argument_parser, launch
-from detectron2.utils.comm import get_rank
+from detectron2.utils.comm import get_rank, synchronize
 from detectron2.utils.logger import setup_logger
 
 from defaults import DefaultTrainer
@@ -23,6 +23,7 @@ def main(args):
         dump_fname = os.path.join(cfg.train.output_dir, "serialized_config.yaml")
         ConfigFile.save(cfg, dump_fname)
         # cfg = ConfigFile.load(dump_fname)
+    synchronize()
 
     trainer = DefaultTrainer(cfg)
     trainer.resume_or_load(args.resume)
