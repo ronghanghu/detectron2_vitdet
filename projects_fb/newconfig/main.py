@@ -12,7 +12,7 @@ def main(args):
     cfg = ConfigFile.load(args.config_file)
 
     # support override
-    cfg = apply_overrides(cfg, args.overrides)
+    cfg = apply_overrides(cfg, args.opts)
 
     os.makedirs(cfg.train.output_dir, exist_ok=True)  # TODO: call default_setup()
     setup_logger(cfg.train.output_dir, distributed_rank=get_rank(), name="fvcore")
@@ -20,7 +20,7 @@ def main(args):
 
     if get_rank() == 0:
         # support serialization
-        dump_fname = os.path.join(cfg.train.output_dir, "serialized_config.yaml")
+        dump_fname = os.path.join(cfg.train.output_dir, "config.yaml")
         ConfigFile.save(cfg, dump_fname)
         # cfg = ConfigFile.load(dump_fname)
     synchronize()
@@ -36,7 +36,6 @@ def main(args):
 
 if __name__ == "__main__":
     parser = default_argument_parser()
-    parser.add_argument("--overrides", nargs="+")
     args = parser.parse_args()
     launch(
         main,

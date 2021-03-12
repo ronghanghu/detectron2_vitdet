@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 import submitit
 import torch  # noqa import first to avoid https://github.com/pytorch/pytorch/issues/37377
+import yaml
 
 from detectron2.engine import default_argument_parser, launch
 from detectron2.utils.env import _import_file
@@ -69,6 +70,15 @@ def get_shared_folder() -> Path:
         p.mkdir(exist_ok=True)
         return p
     raise RuntimeError("No shared folder available")
+
+
+def is_yacs_cfg(config_file):
+    if config_file.endswith(".py"):
+        return False
+    else:
+        with open(config_file) as f:
+            obj = yaml.load(f.read())
+        return "train" not in obj
 
 
 class Trainer:
@@ -140,7 +150,10 @@ class Trainer:
                     f.write(os.path.basename(weights_file))
             self.args.resume = True
             self.args.resume_from = None
-        self.args.opts.extend(["OUTPUT_DIR", os.path.join(output_dir, "output")])
+        if is_yacs_cfg(self.args.config_file):
+            self.args.opts.extend(["OUTPUT_DIR", os.path.join(output_dir, "output")])
+        else:
+            self.args.opts.append("train.output_dir=" + os.path.join(output_dir, "output"))
         self.args.machine_rank = job_env.global_rank
 
 

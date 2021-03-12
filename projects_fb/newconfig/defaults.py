@@ -151,7 +151,7 @@ class DefaultTrainer(TrainerBase):
         Overwrite it if you'd like a different model.
         """
         model = instantiate(cfg.model)
-        logger = logging.getLogger(__name__)
+        logger = logging.getLogger("detectron2")
         logger.info("Model:\n{}".format(model))
         model.to(cfg.train.device)
         return model

@@ -12,7 +12,7 @@ train = dict(
         fp16_compression=False,
     ),
     checkpoint_period=5000,
-    eval_period=100,
+    eval_period=5000,
     log_period=20,
     device="cuda"
     # ...
