@@ -1,7 +1,11 @@
+import os
+import tempfile
 import unittest
 
 from detectron2.config.instantiate import instantiate
+from detectron2.layers import ShapeSpec
 
+from newconfig import ConfigFile
 from newconfig import LazyCall as L
 
 
@@ -51,3 +55,23 @@ class TestConstruction(unittest.TestCase):
         objconf = L(L(len)(int_arg=3))(call_arg=4)
         objconf._target_._target_ = TestClass
         self.assertEqual(instantiate(objconf), 7)
+
+    def test_instantiate_lst(self):
+        lst = [1, 2, L(TestClass)(int_arg=1)]
+        x = L(TestClass)(int_arg=lst)  # list as an argument should be recursively instantiated
+        x = instantiate(x).int_arg
+        self.assertEqual(x[:2], [1, 2])
+        self.assertIsInstance(x[2], TestClass)
+        self.assertEqual(x[2].int_arg, 1)
+
+    def test_instantiate_namedtuple(self):
+        x = L(TestClass)(int_arg=ShapeSpec(channels=1, width=3))
+        with tempfile.TemporaryDirectory() as d:
+            fname = os.path.join(d, "d2_test.yaml")
+            # test serialization
+            ConfigFile.save(x, fname)
+            x = ConfigFile.load(fname)
+
+        x = instantiate(x)
+        self.assertIsInstance(x.int_arg, ShapeSpec)
+        self.assertEqual(x.int_arg.channels, 1)
