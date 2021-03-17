@@ -4,46 +4,47 @@ from detectron2.solver import WarmupParamScheduler
 
 from newconfig import LazyCall as L
 
-lr_multiplier_1x = L(WarmupParamScheduler)(
-    scheduler=L(MultiStepParamScheduler)(
-        values=[1.0, 0.1, 0.01],
-        milestones=[60000, 80000],
-        num_updates=90000,
-    ),
-    warmup_length=1000 / 90000,
-    warmup_method="linear",
-    warmup_factor=0.001,
-)
 
-lr_multiplier_2x = L(WarmupParamScheduler)(
-    scheduler=L(MultiStepParamScheduler)(
-        values=[1.0, 0.1, 0.01],
-        milestones=[120000, 160000],
-        num_updates=180000,
-    ),
-    warmup_length=1000 / 180000,
-    warmup_method="linear",
-    warmup_factor=0.001,
-)
+def default_X_scheduler(num_X):
+    """
+    Returns the config for a default multi-step LR scheduler such as "1x", "3x",
+    commonly referred to in papers, where every 1x has the total length of 1440k
+    training images (~12 COCO epochs). LR is decayed twice at the end of training
+    following the strategy defined in "Rethinking ImageNet Pretraining", Sec 4.
 
-lr_multiplier_3x = L(WarmupParamScheduler)(
-    scheduler=L(MultiStepParamScheduler)(
-        values=[1.0, 0.1, 0.01],
-        milestones=[210000, 250000],
-        num_updates=270000,
-    ),
-    warmup_length=1000 / 270000,
-    warmup_method="linear",
-    warmup_factor=0.001,
-)
+    Args:
+        num_X: a positive real number
 
-lr_multiplier_6x = L(WarmupParamScheduler)(
-    scheduler=L(MultiStepParamScheduler)(
-        values=[1.0, 0.1, 0.01],
-        milestones=[480000, 520000],
-        num_updates=540000,
-    ),
-    warmup_length=1000 / 540000,
-    warmup_method="linear",
-    warmup_factor=0.001,
-)
+    Returns:
+        DictConfig: configs that define the multiplier for LR during training
+    """
+    # total number of iterations assuming 16 batch size, using 1440000/16=90000
+    total_steps_16bs = num_X * 90000
+
+    if num_X <= 2:
+        scheduler = L(MultiStepParamScheduler)(
+            values=[1.0, 0.1, 0.01],
+            # note that scheduler is scale-invariant. This is equivalent to
+            # milestones=[6, 8], num_updates=9
+            milestones=[60000, 80000],
+            num_updates=90000,
+        )
+    else:
+        scheduler = L(MultiStepParamScheduler)(
+            values=[1.0, 0.1, 0.01],
+            milestones=[total_steps_16bs - 60000, total_steps_16bs - 20000],
+            num_updates=total_steps_16bs,
+        )
+    return L(WarmupParamScheduler)(
+        scheduler=scheduler,
+        warmup_length=1000 / total_steps_16bs,
+        warmup_method="linear",
+        warmup_factor=0.001,
+    )
+
+
+lr_multiplier_1x = default_X_scheduler(1)
+lr_multiplier_2x = default_X_scheduler(2)
+lr_multiplier_3x = default_X_scheduler(3)
+lr_multiplier_6x = default_X_scheduler(6)
+lr_multiplier_9x = default_X_scheduler(9)
