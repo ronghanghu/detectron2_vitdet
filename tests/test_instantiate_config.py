@@ -1,12 +1,17 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+
 import os
 import tempfile
 import unittest
+import yaml
+from omegaconf import OmegaConf
+from omegaconf import __version__ as oc_version
 
+from detectron2.config.instantiate import LazyCall as L
 from detectron2.config.instantiate import instantiate
 from detectron2.layers import ShapeSpec
 
-from newconfig import ConfigFile
-from newconfig import LazyCall as L
+OC_VERSION = tuple(int(x) for x in oc_version.split(".")[:2])
 
 
 class TestClass:
@@ -20,6 +25,7 @@ class TestClass:
         return call_arg + self.int_arg
 
 
+@unittest.skipIf(OC_VERSION < (2, 1), "omegaconf version too old")
 class TestConstruction(unittest.TestCase):
     def test_basic_construct(self):
         objconf = L(TestClass)(
@@ -66,12 +72,17 @@ class TestConstruction(unittest.TestCase):
 
     def test_instantiate_namedtuple(self):
         x = L(TestClass)(int_arg=ShapeSpec(channels=1, width=3))
+        # test serialization
         with tempfile.TemporaryDirectory() as d:
             fname = os.path.join(d, "d2_test.yaml")
-            # test serialization
-            ConfigFile.save(x, fname)
-            x = ConfigFile.load(fname)
+            OmegaConf.save(x, fname)
+            with open(fname) as f:
+                x = yaml.unsafe_load(f)
 
         x = instantiate(x)
         self.assertIsInstance(x.int_arg, ShapeSpec)
         self.assertEqual(x.int_arg.channels, 1)
+
+    def test_bad_lazycall(self):
+        with self.assertRaises(Exception):
+            L(3)

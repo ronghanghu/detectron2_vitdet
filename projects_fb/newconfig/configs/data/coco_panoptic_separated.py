@@ -1,3 +1,4 @@
+from detectron2.config.instantiate import LazyCall as L
 from detectron2.evaluation import (
     COCOEvaluator,
     COCOPanopticEvaluator,
@@ -6,7 +7,6 @@ from detectron2.evaluation import (
 )
 
 from newconfig import ConfigFile
-from newconfig import LazyCall as L
 
 train, test = ConfigFile.load_rel("./coco.py", ("train", "test"))
 train.dataset.names = "coco_2017_train_panoptic_separated"

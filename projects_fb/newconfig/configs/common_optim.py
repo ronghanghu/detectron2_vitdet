@@ -1,8 +1,7 @@
 import torch
 
+from detectron2.config.instantiate import LazyCall as L
 from detectron2.solver.build import get_default_optimizer_params
-
-from newconfig import LazyCall as L
 
 SGD = L(torch.optim.SGD)(
     params=L(get_default_optimizer_params)(

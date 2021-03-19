@@ -2,7 +2,6 @@ import ast
 import inspect
 import logging
 import os
-from collections.abc import Mapping
 from copy import deepcopy
 from typing import List, Tuple, Union
 import yaml
@@ -83,7 +82,7 @@ class ConfigFile:
         else:
             assert filename.endswith(".yaml"), filename
             with PathManager.open(filename) as f:
-                obj = yaml.load(f)
+                obj = yaml.unsafe_load(f)
             ret = OmegaConf.create(obj, flags={"allow_objects": True})
         if keys is not None:
             if isinstance(keys, str):
@@ -110,27 +109,13 @@ class ConfigFile:
 
     @staticmethod
     def _validate_py_syntax(filename):
+        # see also https://github.com/open-mmlab/mmcv/blob/master/mmcv/utils/config.py
         with open(filename, "r") as f:
             content = f.read()
         try:
             ast.parse(content)
         except SyntaxError as e:
-            raise SyntaxError(f"Config file {filename} has syntax error") from e
-
-
-class LazyCall:
-    """
-    Wrap a callable so its calls will not be execued, but returns a dict
-    that describes the call.
-    """
-
-    def __init__(self, target):
-        assert callable(target) or isinstance(target, (str, Mapping)), target
-        self._target = target
-
-    def __call__(self, **kwargs):
-        kwargs["_target_"] = self._target
-        return DictConfig(content=kwargs, flags={"allow_objects": True})
+            raise SyntaxError(f"Config file {filename} has syntax error!") from e
 
 
 if __name__ == "__main__":

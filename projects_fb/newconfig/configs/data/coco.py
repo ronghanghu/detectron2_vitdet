@@ -1,4 +1,5 @@
 import detectron2.data.transforms as T
+from detectron2.config.instantiate import LazyCall as L
 from detectron2.data import (
     DatasetMapper,
     build_detection_test_loader,
@@ -6,8 +7,6 @@ from detectron2.data import (
     get_detection_dataset_dicts,
 )
 from detectron2.evaluation import COCOEvaluator
-
-from newconfig import LazyCall as L
 
 train = L(build_detection_train_loader)(
     dataset=L(get_detection_dataset_dicts)(names="coco_2017_train"),

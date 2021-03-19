@@ -1,8 +1,7 @@
 from fvcore.common.param_scheduler import MultiStepParamScheduler
 
+from detectron2.config.instantiate import LazyCall as L
 from detectron2.solver import WarmupParamScheduler
-
-from newconfig import LazyCall as L
 
 
 def default_X_scheduler(num_X):

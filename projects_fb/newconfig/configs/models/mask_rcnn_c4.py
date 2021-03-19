@@ -1,3 +1,4 @@
+from detectron2.config.instantiate import LazyCall as L
 from detectron2.layers import ShapeSpec
 from detectron2.modeling import GeneralizedRCNN, ResNet
 from detectron2.modeling.anchor_generator import DefaultAnchorGenerator
@@ -11,8 +12,6 @@ from detectron2.modeling.roi_heads import (
     MaskRCNNConvUpsampleHead,
     Res5ROIHeads,
 )
-
-from newconfig import LazyCall as L
 
 model = L(GeneralizedRCNN)(
     backbone=L(ResNet)(
