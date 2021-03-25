@@ -4,6 +4,7 @@ import logging
 import os
 from copy import deepcopy
 from typing import List, Tuple, Union
+import cloudpickle
 import yaml
 from hydra.core.override_parser.overrides_parser import OverridesParser
 from omegaconf import DictConfig, ListConfig, OmegaConf
@@ -105,12 +106,24 @@ class ConfigFile:
 
         # not necessary, but makes yaml looks nicer
         _visit_dict_config(cfg, _replace_type_by_name)
-        OmegaConf.save(cfg, filename)
+
+        try:
+            OmegaConf.save(cfg, filename)
+        except Exception:
+            logger.exception("Unable to serialize the config to yaml. Error:")
+            new_filename = filename + ".pkl"
+            try:
+                # retry by pickle
+                with PathManager.open(new_filename, "wb") as f:
+                    cloudpickle.dump(cfg, f)
+                logger.warning(f"Config saved using cloudpickle at {new_filename} ...")
+            except Exception:
+                pass
 
     @staticmethod
     def _validate_py_syntax(filename):
         # see also https://github.com/open-mmlab/mmcv/blob/master/mmcv/utils/config.py
-        with open(filename, "r") as f:
+        with PathManager.open(filename, "r") as f:
             content = f.read()
         try:
             ast.parse(content)
