@@ -1,3 +1,5 @@
+from omegaconf import OmegaConf
+
 import detectron2.data.transforms as T
 from detectron2.config.instantiate import LazyCall as L
 from detectron2.data import (
@@ -8,7 +10,9 @@ from detectron2.data import (
 )
 from detectron2.evaluation import COCOEvaluator
 
-train = L(build_detection_train_loader)(
+dataloader = OmegaConf.create()
+
+dataloader.train = L(build_detection_train_loader)(
     dataset=L(get_detection_dataset_dicts)(names="coco_2017_train"),
     mapper=L(DatasetMapper)(
         is_train=True,
@@ -27,7 +31,7 @@ train = L(build_detection_train_loader)(
     num_workers=4,
 )
 
-test = L(build_detection_test_loader)(
+dataloader.test = L(build_detection_test_loader)(
     dataset=L(get_detection_dataset_dicts)(names="coco_2017_val", filter_empty=False),
     mapper=L(DatasetMapper)(
         is_train=False,
@@ -39,6 +43,6 @@ test = L(build_detection_test_loader)(
     num_workers=4,
 )
 
-evaluator = L(COCOEvaluator)(
+dataloader.evaluator = L(COCOEvaluator)(
     dataset_name="${..test.dataset.names}",
 )

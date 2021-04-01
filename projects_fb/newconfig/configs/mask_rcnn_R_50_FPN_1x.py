@@ -1,12 +1,10 @@
-from newconfig import ConfigFile
+from .common_optim import SGD as optimizer
+from .common_schedule import lr_multiplier_1x as lr_multiplier
+from .common_train import train
+from .data.coco import dataloader
+from .models.mask_rcnn_fpn import model
 
-model = ConfigFile.load_rel("./models/mask_rcnn_fpn.py", "model")
+# equivalent to:
+# model = ConfigFile.load_rel("./models/mask_rcnn_fpn.py", "model")
+
 model.backbone.bottom_up.freeze_at = 2
-
-dataloader = ConfigFile.load_rel("./data/coco.py")
-
-lr_multiplier = ConfigFile.load_rel("./common_schedule.py", "lr_multiplier_1x")
-
-optimizer = ConfigFile.load_rel("./common_optim.py", "SGD")
-
-train = ConfigFile.load_rel("./common_train.py", "train")
