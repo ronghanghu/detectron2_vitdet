@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from detectron2.config.instantiate import LazyCall as L
+from detectron2.config import LazyCall as L
 from detectron2.layers import ShapeSpec
 from detectron2.modeling.mmdet_wrapper import MMDetBackbone
 

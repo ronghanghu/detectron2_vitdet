@@ -2,7 +2,7 @@ import logging
 from torch.nn.parallel import DistributedDataParallel
 
 from detectron2.checkpoint import DetectionCheckpointer
-from detectron2.config.instantiate import instantiate
+from detectron2.config import instantiate
 from detectron2.engine import AMPTrainer, SimpleTrainer, TrainerBase, default_writers, hooks
 from detectron2.evaluation import inference_on_dataset
 from detectron2.utils import comm

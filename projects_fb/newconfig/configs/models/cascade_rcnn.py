@@ -1,4 +1,4 @@
-from detectron2.config.instantiate import LazyCall as L
+from detectron2.config import LazyCall as L
 from detectron2.layers import ShapeSpec
 from detectron2.modeling.box_regression import Box2BoxTransform
 from detectron2.modeling.matcher import Matcher

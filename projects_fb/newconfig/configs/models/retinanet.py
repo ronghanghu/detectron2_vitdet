@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from detectron2.config.instantiate import LazyCall as L
+from detectron2.config import LazyCall as L
 from detectron2.layers import ShapeSpec
 from detectron2.modeling import FPN, ResNet, RetinaNet
 from detectron2.modeling.anchor_generator import DefaultAnchorGenerator

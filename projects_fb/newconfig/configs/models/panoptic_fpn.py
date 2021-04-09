@@ -1,4 +1,4 @@
-from detectron2.config.instantiate import LazyCall as L
+from detectron2.config import LazyCall as L
 from detectron2.layers import ShapeSpec
 from detectron2.modeling import PanopticFPN
 from detectron2.modeling.meta_arch.semantic_seg import SemSegFPNHead

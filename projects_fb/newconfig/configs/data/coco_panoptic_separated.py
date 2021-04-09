@@ -1,4 +1,4 @@
-from detectron2.config.instantiate import LazyCall as L
+from detectron2.config import LazyCall as L
 from detectron2.evaluation import (
     COCOEvaluator,
     COCOPanopticEvaluator,

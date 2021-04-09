@@ -1,7 +1,7 @@
 from omegaconf import OmegaConf
 
 import detectron2.data.transforms as T
-from detectron2.config.instantiate import LazyCall as L
+from detectron2.config import LazyCall as L
 from detectron2.data import (
     DatasetMapper,
     build_detection_test_loader,
