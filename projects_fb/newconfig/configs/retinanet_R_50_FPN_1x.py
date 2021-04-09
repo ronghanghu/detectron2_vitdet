@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 
-from newconfig import ConfigFile
+from .models.retinanet import model
 
-model = ConfigFile.load_rel("./models/retinanet.py", "model")
 model.backbone.bottom_up.freeze_at = 2
 
-dataloader = ConfigFile.load_rel("./data/coco.py")
+from .data.coco import dataloader
 
-lr_multiplier = ConfigFile.load_rel("./common_schedule.py", "lr_multiplier_1x")
+from .common_schedule import lr_multiplier_1x as lr_multiplier
 
-optimizer = ConfigFile.load_rel("./common_optim.py", "SGD")
+from .common_optim import SGD as optimizer
+
 optimizer.lr = 0.01
 
-train = ConfigFile.load_rel("./common_train.py", "train")
+from .common_train import train

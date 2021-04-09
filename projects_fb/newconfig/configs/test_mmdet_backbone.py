@@ -3,11 +3,7 @@ from detectron2.config.instantiate import LazyCall as L
 from detectron2.layers import ShapeSpec
 from detectron2.modeling.mmdet_wrapper import MMDetBackbone
 
-from newconfig import ConfigFile
-
-model, dataloader, lr_multiplier, optimizer, train = ConfigFile.load_rel(
-    "./mask_rcnn_R_50_FPN_1x.py", ("model", "dataloader", "lr_multiplier", "optimizer", "train")
-)
+from .mask_rcnn_R_50_FPN_1x import model, dataloader, lr_multiplier, optimizer, train
 
 # preproc for torchvision models:
 model.pixel_mean = [123.675, 116.280, 103.530]

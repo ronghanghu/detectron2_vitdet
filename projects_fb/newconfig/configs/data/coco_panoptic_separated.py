@@ -6,15 +6,14 @@ from detectron2.evaluation import (
     SemSegEvaluator,
 )
 
-from newconfig import ConfigFile
+from .coco import dataloader
 
-train, test = ConfigFile.load_rel("./coco.py", ("train", "test"))
-train.dataset.names = "coco_2017_train_panoptic_separated"
-train.dataset.filter_empty = False
-test.dataset.names = "coco_2017_val_panoptic_separated"
+dataloader.train.dataset.names = "coco_2017_train_panoptic_separated"
+dataloader.train.dataset.filter_empty = False
+dataloader.test.dataset.names = "coco_2017_val_panoptic_separated"
 
 
-evaluator = L(DatasetEvaluators)(
+dataloader.evaluator = L(DatasetEvaluators)(
     evaluators=[
         L(COCOEvaluator)(
             dataset_name="${....test.dataset.names}",

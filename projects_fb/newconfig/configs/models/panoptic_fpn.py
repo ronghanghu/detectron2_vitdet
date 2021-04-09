@@ -3,9 +3,8 @@ from detectron2.layers import ShapeSpec
 from detectron2.modeling import PanopticFPN
 from detectron2.modeling.meta_arch.semantic_seg import SemSegFPNHead
 
-from newconfig import ConfigFile
+from .mask_rcnn_fpn import model
 
-model = ConfigFile.load_rel("./mask_rcnn_fpn.py", "model")
 model._target_ = PanopticFPN
 model.sem_seg_head = L(SemSegFPNHead)(
     input_shape={

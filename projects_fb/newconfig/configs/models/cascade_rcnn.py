@@ -6,9 +6,7 @@ from detectron2.modeling.roi_heads import FastRCNNOutputLayers
 from detectron2.modeling.roi_heads.box_head import FastRCNNConvFCHead
 from detectron2.modeling.roi_heads.cascade_rcnn import CascadeROIHeads
 
-from newconfig import ConfigFile
-
-model = ConfigFile.load_rel("./mask_rcnn_fpn.py", "model")
+from .mask_rcnn_fpn import model
 
 # arguments that don't exist for Cascade R-CNN
 [model.roi_heads.pop(k) for k in ["box_head", "box_predictor", "proposal_matcher"]]
