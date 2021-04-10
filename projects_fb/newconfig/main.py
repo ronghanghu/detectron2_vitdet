@@ -1,18 +1,16 @@
 import os
 
+from detectron2.config import LazyConfig
 from detectron2.engine import default_argument_parser, launch
 from detectron2.utils.comm import get_rank, synchronize
 from detectron2.utils.logger import setup_logger
 
 from defaults import DefaultTrainer
-from newconfig import ConfigFile, apply_overrides
 
 
 def main(args):
-    cfg = ConfigFile.load(args.config_file)
-
-    # support override
-    cfg = apply_overrides(cfg, args.opts)
+    cfg = LazyConfig.load(args.config_file)
+    cfg = LazyConfig.apply_overrides(cfg, args.opts)
 
     os.makedirs(cfg.train.output_dir, exist_ok=True)  # TODO: call default_setup()
     setup_logger(cfg.train.output_dir, distributed_rank=get_rank(), name="fvcore")
@@ -21,7 +19,7 @@ def main(args):
     if get_rank() == 0:
         # support serialization
         dump_fname = os.path.join(cfg.train.output_dir, "config.yaml")
-        ConfigFile.save(cfg, dump_fname)
+        LazyConfig.save(cfg, dump_fname)
         # cfg = ConfigFile.load(dump_fname)
     synchronize()
 
