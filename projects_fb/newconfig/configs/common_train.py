@@ -8,7 +8,6 @@ train = dict(
     ddp=dict(  # options for DistributedDataParallel
         broadcast_buffers=False,
         find_unused_parameters=False,
-        check_reduction=False,
         fp16_compression=False,
     ),
     checkpoint_period=5000,

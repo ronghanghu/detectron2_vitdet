@@ -4,6 +4,7 @@ from torch.nn.parallel import DistributedDataParallel
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.config import instantiate
 from detectron2.engine import AMPTrainer, SimpleTrainer, TrainerBase, default_writers, hooks
+from detectron2.engine.defaults import create_ddp_model
 from detectron2.evaluation import inference_on_dataset
 from detectron2.utils import comm
 from detectron2.utils.env import TORCH_VERSION
@@ -47,14 +48,7 @@ class DefaultTrainer(TrainerBase):
 
         # For training, wrap with DDP. But don't need this for inference.
         if comm.get_world_size() > 1:
-            fp16_compression = cfg.train.ddp.pop("fp16_compression", False)
-            model = DistributedDataParallel(
-                model, device_ids=[comm.get_local_rank()], **cfg.train.ddp
-            )
-            if fp16_compression:
-                from torch.distributed.algorithms.ddp_comm_hooks import default as comm_hooks
-
-                model.register_comm_hook(state=None, hook=comm_hooks.fp16_compress_hook)
+            model = create_ddp_model(model, **cfg.train.ddp)
         self._trainer = (AMPTrainer if cfg.train.amp.enabled else SimpleTrainer)(
             model, data_loader, optimizer
         )
