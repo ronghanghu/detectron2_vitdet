@@ -7,7 +7,6 @@ from detectron2.engine import AMPTrainer, SimpleTrainer, TrainerBase, default_wr
 from detectron2.engine.defaults import create_ddp_model
 from detectron2.evaluation import inference_on_dataset
 from detectron2.utils import comm
-from detectron2.utils.env import TORCH_VERSION
 from detectron2.utils.logger import setup_logger
 
 
@@ -83,13 +82,7 @@ class DefaultTrainer(TrainerBase):
         if resume and self.checkpointer.has_checkpoint():
             self.start_iter = checkpoint.get("iteration", -1) + 1
             # The checkpoint stores the training iteration that just finished, thus we start
-            # at the next iteration (or iter zero if there's no checkpoint).
-        if isinstance(self.model, DistributedDataParallel):
-            # broadcast loaded data/model from the first rank, because other
-            # machines may not have access to the checkpoint file
-            if TORCH_VERSION >= (1, 7):
-                self.model._sync_params_and_buffers()
-            self.start_iter = comm.all_gather(self.start_iter)[0]
+            # at the next iteration
 
     def build_hooks(self):
         """
