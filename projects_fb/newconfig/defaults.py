@@ -1,4 +1,5 @@
 import logging
+import weakref
 from torch.nn.parallel import DistributedDataParallel
 
 from detectron2.checkpoint import DetectionCheckpointer
@@ -58,7 +59,7 @@ class DefaultTrainer(TrainerBase):
             # Assume you want to save checkpoints together with logs/statistics
             model,
             cfg.train.output_dir,
-            optimizer=optimizer,
+            trainer=weakref.proxy(self),
         )
         self.start_iter = 0
         self.max_iter = cfg.train.max_iter
@@ -78,11 +79,11 @@ class DefaultTrainer(TrainerBase):
         Args:
             resume (bool): whether to do resume or not
         """
-        checkpoint = self.checkpointer.resume_or_load(self.cfg.train.init_checkpoint, resume=resume)
+        self.checkpointer.resume_or_load(self.cfg.train.init_checkpoint, resume=resume)
         if resume and self.checkpointer.has_checkpoint():
-            self.start_iter = checkpoint.get("iteration", -1) + 1
             # The checkpoint stores the training iteration that just finished, thus we start
             # at the next iteration
+            self.start_iter = self.iter + 1
 
     def build_hooks(self):
         """
