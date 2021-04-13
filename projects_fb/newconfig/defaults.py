@@ -1,6 +1,5 @@
 import logging
 import weakref
-from torch.nn.parallel import DistributedDataParallel
 
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.config import instantiate
