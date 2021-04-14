@@ -1,5 +1,5 @@
-# common training configs.
-# DefaultTrainer is able to handle them
+# Common training-related configs that are designed for "tools/lazyconfig_train_net.py"
+# You can use your own instead, together with your own train_net.py
 train = dict(
     output_dir="./output",
     init_checkpoint="detectron2://ImageNetPretrained/MSRA/R-50.pkl",

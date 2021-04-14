@@ -45,9 +45,7 @@ class DefaultTrainer(TrainerBase):
         optimizer = self.build_optimizer(cfg, model)
         data_loader = self.build_train_loader(cfg)
 
-        # For training, wrap with DDP. But don't need this for inference.
-        if comm.get_world_size() > 1:
-            model = create_ddp_model(model, **cfg.train.ddp)
+        model = create_ddp_model(model, **cfg.train.ddp)
         self._trainer = (AMPTrainer if cfg.train.amp.enabled else SimpleTrainer)(
             model, data_loader, optimizer
         )
