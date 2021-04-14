@@ -1,10 +1,10 @@
-from .common_optim import SGD as optimizer
-from .common_schedule import lr_multiplier_1x as lr_multiplier
-from .common_train import train
-from .data.coco import dataloader
-from .models.mask_rcnn_fpn import model
+from detectron2.model_zoo import get_config
 
-# equivalent to:
-# model = ConfigFile.load_rel("./models/mask_rcnn_fpn.py", "model")
+optimizer = get_config("common/common_optim.py").SGD
+lr_multiplier = get_config("common/coco_schedule.py").lr_multiplier_1x
+dataloader = get_config("common/data/coco.py").dataloader
+model = get_config("common/models/mask_rcnn_fpn.py").model
+
+from .common_train import train
 
 model.backbone.bottom_up.freeze_at = 2

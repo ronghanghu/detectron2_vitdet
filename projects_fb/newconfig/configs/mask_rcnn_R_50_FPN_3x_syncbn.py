@@ -1,5 +1,8 @@
+from detectron2.model_zoo import get_config
+
 from .mask_rcnn_R_50_FPN_1x import dataloader, model, optimizer, train
-from .common_schedule import lr_multiplier_3x as lr_multiplier
+
+lr_multiplier = get_config("common/coco_schedule.py").lr_multiplier_3x
 
 model.backbone.bottom_up.freeze_at = 0
 # fmt: off
