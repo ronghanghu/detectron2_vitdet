@@ -11,7 +11,7 @@ import yaml
 from detectron2.engine import default_argument_parser, launch
 from detectron2.utils.env import _import_file
 
-DEFAULT_TARGET = Path(__file__).parent.parent.parent / "tools/train_net.py"
+DEFAULT_TARGET = Path(__file__).resolve().parent.parent.parent / "tools/train_net.py"
 
 
 """
@@ -77,7 +77,7 @@ def is_yacs_cfg(config_file):
         return False
     else:
         with open(config_file) as f:
-            obj = yaml.load(f.read())
+            obj = yaml.unsafe_load(f.read())
         return "train" not in obj
 
 
