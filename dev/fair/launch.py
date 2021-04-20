@@ -12,6 +12,9 @@ from detectron2.engine import default_argument_parser, launch
 from detectron2.utils.env import _import_file
 
 DEFAULT_TARGET = Path(__file__).resolve().parent.parent.parent / "tools/train_net.py"
+DEFAULT_TARGET_LAZY = (
+    Path(__file__).resolve().parent.parent.parent / "tools/lazyconfig_train_net.py"
+)
 
 
 """
@@ -45,9 +48,10 @@ def parse_args():
     # equivalent of buck target in fbcode's launcher
     parser.add_argument(
         "--target",
-        default=DEFAULT_TARGET,
+        default=None,
         type=str,
-        help=f"The target python file with a main() function to launch.  Default is {DEFAULT_TARGET}",  # noqa
+        help="The target python file with a main() function to launch. "
+        "Default is train_net.py or lazyconfig_train_net.py",  # noqa
     )
     parser.add_argument(
         "--mail", default="", type=str, help="Email this user when the job finishes if specified"
@@ -59,6 +63,11 @@ def parse_args():
         help="Comment to pass to scheduler, e.g. priority message",
     )
     args = parser.parse_args()
+    if args.target is None:
+        if is_yacs_cfg(args.config_file):
+            args.target = DEFAULT_TARGET
+        else:
+            args.target = DEFAULT_TARGET_LAZY
     assert os.path.isfile(args.target), args.target
     return args
 
