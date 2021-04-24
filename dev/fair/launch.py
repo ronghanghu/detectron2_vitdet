@@ -43,7 +43,7 @@ def parse_args():
         + "weight file name from the same directory",
     )
     parser.add_argument("--resume-job", default="", type=str, help="resume training from the job")
-    parser.add_argument("--use_volta32", action="store_true", help="Big models? Use this")
+    parser.add_argument("--use-volta32", action="store_true", help="Big models? Use this")
     parser.add_argument("--name", default="detectron2_job", type=str, help="Name of the job")
     # equivalent of buck target in fbcode's launcher
     parser.add_argument(
