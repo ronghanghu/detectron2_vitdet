@@ -179,7 +179,6 @@ def main():
         assert args.resume_from is None, "Cannot have both resume_job and resume_from!"
         print("[launcher] Resuming job {}".format(args.resume_job))
         job_dir_to_resume = os.path.join(str(args.job_dir).replace("%j", args.resume_job), "output")
-        args.config_file = os.path.join(job_dir_to_resume, "config.yaml")
         resume_from = os.path.join(job_dir_to_resume, "last_checkpoint")
         if os.path.isfile(resume_from):
             args.resume_from = resume_from
