@@ -106,6 +106,7 @@ def load_ytvis_json(json_file, image_root, dataset_name=None, extra_annotation_k
             record["height"] = vid_dict["height"]
             record["width"] = vid_dict["width"]
             record["video_id"] = video_id
+            record["frame_idx"] = frame_idx
 
             # annotation objects
             objs = []
