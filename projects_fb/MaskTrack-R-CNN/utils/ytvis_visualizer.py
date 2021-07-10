@@ -4,10 +4,76 @@ from PIL import Image
 
 from detectron2.utils.colormap import random_color
 from detectron2.utils.video_visualizer import VideoVisualizer
-from detectron2.utils.visualizer import Visualizer, _create_text_labels
+from detectron2.utils.visualizer import _OFF_WHITE, ColorMode, Visualizer, _create_text_labels
 
 
 class YTVISVisualizer(VideoVisualizer):
+    def draw_instance_predictions(self, frame, predictions, instance_colors=None):
+        """
+        Draw instance-level prediction results on an image.
+
+        Args:
+            frame (ndarray): an RGB image of shape (H, W, C), in the range [0, 255].
+            predictions (Instances): the output of an instance detection/segmentation
+                model. Following fields will be used to draw:
+                "pred_boxes", "pred_classes", "scores", "pred_masks" (or "pred_masks_rle").
+
+        Returns:
+            output (VisImage): image object with visualizations.
+        """
+        frame_visualizer = Visualizer(frame, self.metadata)
+        num_instances = len(predictions)
+        if num_instances == 0:
+            return frame_visualizer.output
+
+        boxes = predictions.pred_boxes.tensor.numpy() if predictions.has("pred_boxes") else None
+        scores = predictions.scores if predictions.has("scores") else None
+        classes = predictions.pred_classes.numpy() if predictions.has("pred_classes") else None
+        keypoints = predictions.pred_keypoints if predictions.has("pred_keypoints") else None
+        obj_ids = predictions.pred_obj_ids if predictions.has("pred_obj_ids") else None
+        raw_labels = _create_text_labels(classes, scores, self.metadata.get("thing_classes", None))
+        labels_and_scores = [l.split(" ") for l in raw_labels]
+        labels = [
+            ls[0] + f" (Object #{obj_id}) " + ls[1]
+            for obj_id, ls in zip(obj_ids, labels_and_scores)
+        ]
+
+        if predictions.has("pred_masks"):
+            masks = predictions.pred_masks
+        else:
+            masks = None
+
+        if self._instance_mode == ColorMode.IMAGE_BW:
+            frame_visualizer.output.img = frame_visualizer._create_grayscale_image(
+                (masks.any(dim=0) > 0).numpy() if masks is not None else None
+            )
+            colors = None
+            alpha = 0.3
+        else:
+            colors = []
+            for obj_id in obj_ids:
+                obj_id = obj_id.item()
+                if obj_id >= 0:
+                    color = instance_colors.get(obj_id)
+                    if color is None:
+                        color = random_color(rgb=True, maximum=1)
+                        instance_colors[obj_id] = color
+                else:
+                    color = _OFF_WHITE
+                colors.append(color)
+            alpha = 0.5
+
+        frame_visualizer.overlay_instances(
+            boxes=None if masks is not None else boxes,  # boxes are a bit distracting
+            masks=masks,
+            labels=labels,
+            keypoints=keypoints,
+            assigned_colors=colors,
+            alpha=alpha,
+        )
+
+        return frame_visualizer.output
+
     def draw_dataset_dict(self, frame_dict, instance_colors=None):
         """
         Draw annotations/segmentations in Detectron2 Dataset format.
