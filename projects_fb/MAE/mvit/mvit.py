@@ -273,12 +273,21 @@ class MViT(Backbone):
                 self._stages[i] = stage
                 # print(i, stage, name, self.out_features)
                 if name in self.out_features:
-                    print(name, i, dim_out, stride)
+                    print("output_features", name, i, dim_out, stride)
                     self._out_feature_channels[name] = dim_out
                     self._out_feature_strides[name] = stride
 
                     layer = norm_layer(dim_out)
                     self.add_module(f"{name}_norm", layer)
+            
+            name = f"block{i}"
+            if name in self.out_features:
+                print("output_features", name, i, dim_out, stride)
+                self._out_feature_channels[name] = dim_out
+                self._out_feature_strides[name] = stride
+
+                layer = norm_layer(dim_out)
+                self.add_module(f"{name}_norm", layer)
 
         embed_dim = dim_out
         # self.norm = norm_layer(embed_dim)
@@ -423,6 +432,12 @@ class MViT(Backbone):
                     #    x_out = x_out[:, 1:]
                     #print(x_out.shape, B, self.thw)
                     outputs[name] = x_out.reshape(B, thw[1], thw[2], -1).permute(0, 3, 1, 2)
+            
+            name = f"block{i}"
+            if name in self.out_features:
+                norm = getattr(self, f"{name}_norm")
+                x_out = norm(x)
+                outputs[name] = x_out.reshape(B, thw[1], thw[2], -1).permute(0, 3, 1, 2)
 
         return outputs
 
@@ -462,29 +477,56 @@ class MViT(Backbone):
         return self
 
 
-@BACKBONE_REGISTRY.register()
-def build_mvit_backbone(cfg, input_shape):
-    return MViT(cfg, in_chans=input_shape.channels)
+# @BACKBONE_REGISTRY.register()
+# def build_mvit_backbone(cfg, input_shape):
+#     return MViT(cfg, in_chans=input_shape.channels)
 
 
-@BACKBONE_REGISTRY.register()
-def build_mvit_fpn_backbone(cfg, input_shape):
-    """
-    Args:
-        cfg: a detectron2 CfgNode
+# @BACKBONE_REGISTRY.register()
+# def build_mvit_fpn_backbone(cfg, input_shape):
+#     """
+#     Args:
+#         cfg: a detectron2 CfgNode
 
-    Returns:
-        backbone (Backbone): backbone module, must be a subclass of :class:`Backbone`.
-    """
-    bottom_up = build_mvit_backbone(cfg, input_shape)
-    in_features = cfg.MODEL.FPN.IN_FEATURES
-    out_channels = cfg.MODEL.FPN.OUT_CHANNELS
-    backbone = FPN(
-        bottom_up=bottom_up,
-        in_features=in_features,
-        out_channels=out_channels,
-        norm=cfg.MODEL.FPN.NORM,
-        top_block=LastLevelMaxPool(),
-        fuse_type=cfg.MODEL.FPN.FUSE_TYPE,
-    )
-    return backbone
+#     Returns:
+#         backbone (Backbone): backbone module, must be a subclass of :class:`Backbone`.
+#     """
+#     bottom_up = build_mvit_backbone(cfg, input_shape)
+#     in_features = cfg.MODEL.FPN.IN_FEATURES
+#     out_channels = cfg.MODEL.FPN.OUT_CHANNELS
+#     backbone = FPN(
+#         bottom_up=bottom_up,
+#         in_features=in_features,
+#         out_channels=out_channels,
+#         norm=cfg.MODEL.FPN.NORM,
+#         top_block=LastLevelMaxPool(),
+#         fuse_type=cfg.MODEL.FPN.FUSE_TYPE,
+#     )
+#     return backbone
+
+
+class ViTUp(Backbone):
+    def __init__(self, net, in_features, scale_factors):
+        super(ViTUp, self).__init__()
+        assert isinstance(net, Backbone)
+        assert len(in_features) == len(scale_factors)
+
+        self.scale_factors = scale_factors
+
+        input_shapes = net.output_shape()
+        self.net = net
+        self._out_features = in_features
+        self._out_feature_channels = {f: input_shapes[f].channels for f in in_features}
+        self._out_feature_strides = {
+            f: int(input_shapes[f].stride / scale) for f, scale in zip(in_features, scale_factors)
+        }
+        print(self._out_feature_channels, self._out_feature_strides)
+    
+    def forward(self, x):
+        features = self.net(x)
+
+        outputs = {}
+        for f, scale in zip(self._out_features, self.scale_factors):
+            outputs[f] = F.interpolate(features[f], scale_factor=scale, mode="bilinear")
+        
+        return outputs
