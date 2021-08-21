@@ -2,8 +2,6 @@ from detectron2.config import LazyCall as L
 from detectron2.layers import ShapeSpec
 from detectron2.modeling.meta_arch import GeneralizedRCNN
 from detectron2.modeling.anchor_generator import DefaultAnchorGenerator
-from detectron2.modeling.backbone.fpn import LastLevelMaxPool
-from detectron2.modeling.backbone import BasicStem, FPN, ResNet
 from detectron2.modeling.box_regression import Box2BoxTransform
 from detectron2.modeling.matcher import Matcher
 from detectron2.modeling.poolers import ROIPooler
@@ -15,30 +13,20 @@ from detectron2.modeling.roi_heads import (
     FastRCNNConvFCHead,
 )
 
-from .mvit_config import config as cfg
-from ...mvit.mvit import MViT
-
-
-cfg.MVIT.PATCH_2D = True
-cfg.MVIT.MODE = "conv"
-cfg.MVIT.CLS_EMBED_ON = False
-cfg.MVIT.PATCH_KERNEL = [7, 7]
-cfg.MVIT.PATCH_STRIDE = [4, 4]
-cfg.MVIT.PATCH_PADDING = [3, 3]
-cfg.MVIT.DROPPATH_RATE = 0.2
-cfg.MVIT.DEPTH = 16
-cfg.MVIT.DIM_MUL = [[1, 2.0], [3, 2.0], [14, 2.0]]
-cfg.MVIT.HEAD_MUL = [[1, 2.0], [3, 2.0], [14, 2.0]]
-cfg.MVIT.POOL_KVQ_KERNEL = [1, 3, 3]
-cfg.MVIT.POOL_KV_STRIDE = [[0, 1, 4, 4], [1, 1, 2, 2], [2, 1, 2, 2], [3, 1, 1, 1], [4, 1, 1, 1], [5, 1, 1, 1], [6, 1, 1, 1], [7, 1, 1, 1], [8, 1, 1, 1], [9, 1, 1, 1], [10, 1, 1, 1], [11, 1, 1, 1], [12, 1, 1, 1], [13, 1, 1, 1], [14, 1, 1, 1], [15, 1, 1, 1]]
-cfg.MVIT.POOL_Q_STRIDE = [[1, 1, 2, 2], [3, 1, 2, 2], [14, 1, 2, 2]]
-cfg.MVIT.OUT_FEATURES = ["scale5"]
+from ....vit.vit import VisionTransformerDet
 
 
 model = L(GeneralizedRCNN)(
-    backbone=L(MViT)(cfg=cfg, in_chans=3),
+    backbone=L(VisionTransformerDet)(
+        patch_size=16,
+        embed_dim=768,
+        depth=12,
+        num_heads=12,
+        drop_path_rate=0.2,
+        out_features=["block11"],
+    ),
     proposal_generator=L(RPN)(
-        in_features=["scale5"],
+        in_features="${..backbone.out_features}",
         head=L(StandardRPNHead)(in_channels=768, num_anchors=15),
         anchor_generator=L(DefaultAnchorGenerator)(
             sizes=[[32, 64, 128, 256, 512]],
@@ -84,7 +72,7 @@ model = L(GeneralizedRCNN)(
         mask_in_features="${.box_in_features}",
         mask_pooler=L(ROIPooler)(
             output_size=14,
-            scales=(1.0 / 16, ),
+            scales=(1.0 / 16,),
             sampling_ratio=0,
             pooler_type="ROIAlignV2",
         ),

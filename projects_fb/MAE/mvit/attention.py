@@ -10,6 +10,7 @@ from torch.nn.init import trunc_normal_
 
 # from slowfast.models.common import DropPath, Mlp
 
+
 class Mlp(nn.Module):
     def __init__(
         self,
@@ -56,9 +57,7 @@ def drop_path(x, drop_prob: float = 0.0, training: bool = False):
     if drop_prob == 0.0 or not training:
         return x
     keep_prob = 1 - drop_prob
-    shape = (x.shape[0],) + (1,) * (
-        x.ndim - 1
-    )  # work with diff dim tensors, not just 2D ConvNets
+    shape = (x.shape[0],) + (1,) * (x.ndim - 1)  # work with diff dim tensors, not just 2D ConvNets
     mask = keep_prob + torch.rand(shape, dtype=x.dtype, device=x.device)
     mask.floor_()  # binarize
     output = x.div(keep_prob) * mask
@@ -92,9 +91,7 @@ def attention_pool(tensor, pool, thw_shape, has_cls_embed=True, norm=None):
 
     B, N, L, C = tensor.shape
     T, H, W = thw_shape
-    tensor = (
-        tensor.reshape(B * N, T, H, W, C).permute(0, 4, 1, 2, 3).contiguous()
-    )
+    tensor = tensor.reshape(B * N, T, H, W, C).permute(0, 4, 1, 2, 3).contiguous()
 
     tensor = pool(tensor)
 
@@ -142,7 +139,7 @@ def cal_rel_pos_spatial(attn, q, has_cls_embed, q_shape, k_shape, rel_pos_h, rel
     # Scale up rel pos if shapes for q and k are different.
     q_h_ratio = max(k_h / q_h, 1.0)
     k_h_ratio = max(q_h / k_h, 1.0)
-    dist_h = torch.arange(q_h)[:, None] * q_h_ratio- torch.arange(k_h)[None, :] * k_h_ratio
+    dist_h = torch.arange(q_h)[:, None] * q_h_ratio - torch.arange(k_h)[None, :] * k_h_ratio
     dist_h += (k_h - 1) * k_h_ratio
     q_w_ratio = max(k_w / q_w, 1.0)
     k_w_ratio = max(q_w / k_w, 1.0)
@@ -190,7 +187,7 @@ def cal_rel_pos_temporal(attn, q, has_cls_embed, q_shape, k_shape, rel_pos_t):
     # Scale up rel pos if shapes for q and k are different.
     q_t_ratio = max(k_t / q_t, 1.0)
     k_t_ratio = max(q_t / k_t, 1.0)
-    dist_t = torch.arange(q_t)[:, None] * q_t_ratio- torch.arange(k_t)[None, :] * k_t_ratio
+    dist_t = torch.arange(q_t)[:, None] * q_t_ratio - torch.arange(k_t)[None, :] * k_t_ratio
     dist_t += (k_t - 1) * k_t_ratio
     Rt = rel_pos_t[dist_t.long()]
 
@@ -205,7 +202,7 @@ def cal_rel_pos_temporal(attn, q, has_cls_embed, q_shape, k_shape, rel_pos_t):
     # [B*H*q_h*q_w, q_t, k_t] -> [B, H, q_t, q_h, q_w, k_t]
     rel = rel.view(B, n_head, q_h, q_w, q_t, k_t).permute(0, 1, 4, 2, 3, 5)
 
-    #attn[:, :, 1:, 1:] += attn_t
+    # attn[:, :, 1:, 1:] += attn_t
     attn[:, :, sp_idx:, sp_idx:] = (
         attn[:, :, sp_idx:, sp_idx:].view(B, -1, q_t, q_h, q_w, k_t, k_h, k_w)
         + rel[:, :, :, :, :, :, None, None]
@@ -238,7 +235,7 @@ def window_reverse(windows, ori_size):
         x: (B, T, H, W, C)
     """
     wT, wH, wW = windows.shape[1:4]
-    T, H, W = ori_size #int(ori_size[0]), int(ori_size[1]), int(ori_size[2])
+    T, H, W = ori_size  # int(ori_size[0]), int(ori_size[1]), int(ori_size[2])
     B = windows.shape[0] // (T * H * W // (wT * wH * wW))
     x = windows.view(B, T // wT, H // wH, W // wW, wT, wH, wW, -1)
     x = x.permute(0, 1, 4, 2, 5, 3, 6, 7).contiguous().view(B, T, H, W, -1)
@@ -246,9 +243,9 @@ def window_reverse(windows, ori_size):
 
 
 def make_window(x, thw, win_size):
-    #print(x.shape)
+    # print(x.shape)
     B, N, _, C = x.shape
-    #C = x.shape[-1]
+    # C = x.shape[-1]
     T, H, W = thw
     x_wins = x.contiguous().view(-1, T, H, W, C)
     pads = [(w - x % w) % w for x, w in zip(thw, win_size)]
@@ -267,7 +264,7 @@ def make_window(x, thw, win_size):
 
 def revert_window(x, thw, pads, win_size):
     _, _, C = x.shape
-    #l_pads, r_pads = pads
+    # l_pads, r_pads = pads
     x = x.view(-1, win_size[0], win_size[1], win_size[2], x.shape[-1])
     # x = x.view(-1, self.attn.thw_out[0], self.attn.thw_out[1], self.attn.thw_out[2], x_block.shape[-1])
     # ratios = [att_out / att_in for att_in, att_out in zip(self.attn.thw, self.attn.thw_out)]
@@ -278,7 +275,7 @@ def revert_window(x, thw, pads, win_size):
     # print("revert", x.shape, pad_out)
     x = window_reverse(x, pad_out)
 
-    x = x[:, :thw[0], :thw[1], :thw[2], :].contiguous()
+    x = x[:, : thw[0], : thw[1], : thw[2], :].contiguous()
 
     x = x.view(-1, thw[0] * thw[1] * thw[2], C)
 
@@ -318,7 +315,7 @@ class MultiScaleAttention(nn.Module):
         padding_q = [int(q // 2) for q in kernel_q]
         padding_kv = [int(kv // 2) for kv in kernel_kv]
 
-        assert not (self.win_size  and self.has_cls_embed)
+        assert not (self.win_size and self.has_cls_embed)
 
         if pool_first:
             self.q = nn.Linear(dim, dim, bias=qkv_bias)
@@ -444,7 +441,11 @@ class MultiScaleAttention(nn.Module):
             x = x.reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
             q = k = v = x
         else:
-            qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+            qkv = (
+                self.qkv(x)
+                .reshape(B, N, 3, self.num_heads, C // self.num_heads)
+                .permute(2, 0, 3, 1, 4)
+            )
             q, k, v = qkv[0], qkv[1], qkv[2]
 
         q, q_shape = attention_pool(
@@ -502,7 +503,12 @@ class MultiScaleAttention(nn.Module):
 
         if self.rel_pos_temporal:
             attn = cal_rel_pos_temporal(
-                attn, q, self.has_cls_embed, q_shape, k_shape, self.rel_pos_t,
+                attn,
+                q,
+                self.has_cls_embed,
+                q_shape,
+                k_shape,
+                self.rel_pos_t,
             )
 
         attn = attn.softmax(dim=-1)
@@ -571,9 +577,7 @@ class MultiScaleBlock(nn.Module):
             rel_pos_temporal=rel_pos_temporal,
             win_size=win_size,
         )
-        self.drop_path = (
-            DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
-        )
+        self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.has_cls_embed = has_cls_embed
@@ -593,18 +597,14 @@ class MultiScaleBlock(nn.Module):
             self.proj = nn.Linear(dim, dim_out)
 
         self.pool_skip = (
-            nn.MaxPool3d(
-                kernel_skip, stride_skip, padding_skip, ceil_mode=False
-            )
+            nn.MaxPool3d(kernel_skip, stride_skip, padding_skip, ceil_mode=False)
             if len(kernel_skip) > 0
             else None
         )
 
     def forward(self, x, thw_shape):
         x_block, thw_shape_new = self.attn(self.norm1(x), thw_shape)
-        x_res, _ = attention_pool(
-            x, self.pool_skip, thw_shape, has_cls_embed=self.has_cls_embed
-        )
+        x_res, _ = attention_pool(x, self.pool_skip, thw_shape, has_cls_embed=self.has_cls_embed)
         x = x_res + self.drop_path(x_block)
         x_norm = self.norm2(x)
         x_mlp = self.mlp(x_norm)
@@ -612,9 +612,9 @@ class MultiScaleBlock(nn.Module):
             x = self.proj(x_norm)
         x = x + self.drop_path(x_mlp)
         return x, thw_shape_new
-    
+
     def freeze(self):
         for p in self.parameters():
             p.requires_grad = False
-        
+
         return self

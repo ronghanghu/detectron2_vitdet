@@ -4,11 +4,12 @@ from detectron2.config import LazyCall as L
 from detectron2.solver import WarmupParamScheduler
 
 from detectron2 import model_zoo
+
 train = model_zoo.get_config("common/train.py").train
 
-from ..mvit.coco import dataloader
-from ..mvit.optim import AdamW as optimizer
-from ..mvit.mvit_s5 import model
+from ..common.coco import dataloader
+from ..common.optim import AdamW as optimizer
+from ..common.vit.vit import model
 
 
 train.amp.enabled = True
@@ -36,21 +37,3 @@ lr_multiplier = L(WarmupParamScheduler)(
     warmup_length=2000 / num_node / train.max_iter,
     warmup_factor=0.001,
 )
-
-model.backbone.cfg.MVIT.CLS_EMBED_ON = True
-model.backbone.cfg.MVIT.PATCH_KERNEL = [16, 16]
-model.backbone.cfg.MVIT.PATCH_STRIDE = [16, 16]
-model.backbone.cfg.MVIT.PATCH_PADDING = [0, 0]
-model.backbone.cfg.MVIT.EMBED_DIM = 768
-model.backbone.cfg.MVIT.NUM_HEADS = 12
-model.backbone.cfg.MVIT.MLP_RATIO = 4.0
-model.backbone.cfg.MVIT.QKV_BIAS = True
-model.backbone.cfg.MVIT.DROPPATH_RATE = 0.2
-model.backbone.cfg.MVIT.DEPTH = 12
-model.backbone.cfg.MVIT.DIM_MUL = []
-model.backbone.cfg.MVIT.HEAD_MUL = []
-model.backbone.cfg.MVIT.POOL_KV_STRIDE = []
-model.backbone.cfg.MVIT.POOL_Q_STRIDE = []
-model.backbone.cfg.MVIT.OUT_FEATURES = ["scale2"]
-
-model.proposal_generator.in_features = ["scale2"]

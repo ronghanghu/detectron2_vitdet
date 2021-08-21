@@ -5,18 +5,18 @@ from functools import partial
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+# try:
+from fairscale.nn.checkpoint import checkpoint_wrapper
 from torch.nn.init import trunc_normal_
+
+from detectron2.layers import Conv2d, FrozenBatchNorm2d, ShapeSpec, get_norm
+from detectron2.modeling import BACKBONE_REGISTRY, Backbone, ResNet, ResNetBlockBase
+from detectron2.modeling.backbone.fpn import FPN, LastLevelMaxPool
+from detectron2.modeling.backbone.resnet import BasicStem, BottleneckBlock, DeformBottleneckBlock
 
 from .attention import MultiScaleBlock
 
-from detectron2.layers import Conv2d, FrozenBatchNorm2d, get_norm
-from detectron2.modeling import BACKBONE_REGISTRY, ResNet, ResNetBlockBase, Backbone
-from detectron2.modeling.backbone.resnet import BasicStem, BottleneckBlock, DeformBottleneckBlock
-from detectron2.modeling.backbone.fpn import FPN, LastLevelMaxPool
-from detectron2.layers import ShapeSpec
-
-#try:
-from fairscale.nn.checkpoint import checkpoint_wrapper
 # except ImportError:
 #     checkpoint_wrapper = None
 
@@ -52,11 +52,11 @@ class PatchEmbed(nn.Module):
         x = self.proj(x)
         # B C (T) H W -> B (T)HW C
         return x.flatten(2).transpose(1, 2), x.shape
-    
+
     def freeze(self):
         for p in self.parameters():
             p.requires_grad = False
-        
+
         return self
 
 
@@ -86,7 +86,7 @@ class MViT(Backbone):
     def __init__(self, cfg, in_chans):
         super().__init__()
         # Get parameters.
-       # assert cfg.DATA.TRAIN_CROP_SIZE == cfg.DATA.TEST_CROP_SIZE
+        # assert cfg.DATA.TRAIN_CROP_SIZE == cfg.DATA.TEST_CROP_SIZE
         self.cfg = cfg
         pool_first = cfg.MVIT.POOL_FIRST
         # Prepare input.
@@ -130,8 +130,7 @@ class MViT(Backbone):
         self.input_dims = [temporal_size, spatial_size, spatial_size]
         assert self.input_dims[1] == self.input_dims[2]
         self.patch_dims = [
-            self.input_dims[i] // self.patch_stride[i]
-            for i in range(len(self.input_dims))
+            self.input_dims[i] // self.patch_stride[i] for i in range(len(self.input_dims))
         ]
         num_patches = math.prod(self.patch_dims)
 
@@ -148,9 +147,7 @@ class MViT(Backbone):
         if self.use_abs_pos:
             if self.sep_pos_embed:
                 self.pos_embed_spatial = nn.Parameter(
-                    torch.zeros(
-                        1, self.patch_dims[1] * self.patch_dims[2], embed_dim
-                    )
+                    torch.zeros(1, self.patch_dims[1] * self.patch_dims[2], embed_dim)
                 )
                 self.pos_embed_temporal = nn.Parameter(
                     torch.zeros(1, self.patch_dims[0], embed_dim)
@@ -158,9 +155,7 @@ class MViT(Backbone):
                 if self.cls_embed_on:
                     self.pos_embed_class = nn.Parameter(torch.zeros(1, 1, embed_dim))
             else:
-                self.pos_embed = nn.Parameter(
-                    torch.zeros(1, pos_embed_dim, embed_dim)
-                )
+                self.pos_embed = nn.Parameter(torch.zeros(1, pos_embed_dim, embed_dim))
 
         if self.drop_rate > 0.0:
             self.pos_drop = nn.Dropout(p=self.drop_rate)
@@ -178,9 +173,7 @@ class MViT(Backbone):
         win_sizes = [False] * cfg.MVIT.DEPTH
 
         for i in range(len(cfg.MVIT.POOL_Q_STRIDE)):
-            stride_q[cfg.MVIT.POOL_Q_STRIDE[i][0]] = cfg.MVIT.POOL_Q_STRIDE[i][
-                1:
-            ]
+            stride_q[cfg.MVIT.POOL_Q_STRIDE[i][0]] = cfg.MVIT.POOL_Q_STRIDE[i][1:]
             if cfg.MVIT.POOL_KVQ_KERNEL is not None:
                 pool_q[cfg.MVIT.POOL_Q_STRIDE[i][0]] = cfg.MVIT.POOL_KVQ_KERNEL
             else:
@@ -195,23 +188,17 @@ class MViT(Backbone):
             for i in range(cfg.MVIT.DEPTH):
                 if len(stride_q[i]) > 0:
                     _stride_kv = [
-                        max(_stride_kv[d] // stride_q[i][d], 1)
-                        for d in range(len(_stride_kv))
+                        max(_stride_kv[d] // stride_q[i][d], 1) for d in range(len(_stride_kv))
                     ]
                 cfg.MVIT.POOL_KV_STRIDE.append([i] + _stride_kv)
 
         for i in range(len(cfg.MVIT.POOL_KV_STRIDE)):
-            stride_kv[cfg.MVIT.POOL_KV_STRIDE[i][0]] = cfg.MVIT.POOL_KV_STRIDE[
-                i
-            ][1:]
+            stride_kv[cfg.MVIT.POOL_KV_STRIDE[i][0]] = cfg.MVIT.POOL_KV_STRIDE[i][1:]
             if cfg.MVIT.POOL_KVQ_KERNEL is not None:
-                pool_kv[
-                    cfg.MVIT.POOL_KV_STRIDE[i][0]
-                ] = cfg.MVIT.POOL_KVQ_KERNEL
+                pool_kv[cfg.MVIT.POOL_KV_STRIDE[i][0]] = cfg.MVIT.POOL_KVQ_KERNEL
             else:
                 pool_kv[cfg.MVIT.POOL_KV_STRIDE[i][0]] = [
-                    s + 1 if s > 1 else s
-                    for s in cfg.MVIT.POOL_KV_STRIDE[i][1:]
+                    s + 1 if s > 1 else s for s in cfg.MVIT.POOL_KV_STRIDE[i][1:]
                 ]
 
         for k in cfg.MVIT.WIN_SIZE_STRIDE:
@@ -269,7 +256,7 @@ class MViT(Backbone):
 
             if i == depth - 1 or dim_mul[i + 1] == 2:
                 stage += 1
-                name = f'scale{stage}'
+                name = f"scale{stage}"
                 self._stages[i] = stage
                 # print(i, stage, name, self.out_features)
                 if name in self.out_features:
@@ -279,7 +266,7 @@ class MViT(Backbone):
 
                     layer = norm_layer(dim_out)
                     self.add_module(f"{name}_norm", layer)
-            
+
             name = f"block{i}"
             if name in self.out_features:
                 print("output_features", name, i, dim_out, stride)
@@ -310,7 +297,6 @@ class MViT(Backbone):
         #     trunc_normal_(self.cls_token, std=0.02)
         self.apply(self._init_weights)
         self.freeze(cfg.MVIT.FREEZE_AT, cfg.MVIT.FREEZE_POS)
-
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
@@ -428,11 +414,11 @@ class MViT(Backbone):
                 if name in self.out_features:
                     norm = getattr(self, f"{name}_norm")
                     x_out = norm(x)
-                    #if self.cls_embed_on:
+                    # if self.cls_embed_on:
                     #    x_out = x_out[:, 1:]
-                    #print(x_out.shape, B, self.thw)
+                    # print(x_out.shape, B, self.thw)
                     outputs[name] = x_out.reshape(B, thw[1], thw[2], -1).permute(0, 3, 1, 2)
-            
+
             name = f"block{i}"
             if name in self.out_features:
                 norm = getattr(self, f"{name}_norm")
@@ -448,7 +434,7 @@ class MViT(Backbone):
             )
             for name in self.out_features
         }
-    
+
     def freeze(self, freeze_at=0, freeze_pos=False):
         if freeze_pos and self.use_abs_pos:
             print("freeze pos")
@@ -466,14 +452,14 @@ class MViT(Backbone):
             if self.norm_stem:
                 for p in self.norm_stem.parameters():
                     p.require_grad = False
-        
+
         for idx, block in enumerate(self.blocks, start=2):
             if freeze_at >= idx:
                 print(f"freeze block {idx - 2}")
                 block.freeze()
             else:
                 break
-        
+
         return self
 
 
@@ -521,12 +507,12 @@ class ViTUp(Backbone):
             f: int(input_shapes[f].stride / scale) for f, scale in zip(in_features, scale_factors)
         }
         print(self._out_feature_channels, self._out_feature_strides)
-    
+
     def forward(self, x):
         features = self.net(x)
 
         outputs = {}
         for f, scale in zip(self._out_features, self.scale_factors):
             outputs[f] = F.interpolate(features[f], scale_factor=scale, mode="bilinear")
-        
+
         return outputs
