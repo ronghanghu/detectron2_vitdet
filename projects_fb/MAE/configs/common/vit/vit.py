@@ -27,7 +27,7 @@ model = L(GeneralizedRCNN)(
     ),
     proposal_generator=L(RPN)(
         in_features="${..backbone.out_features}",
-        head=L(StandardRPNHead)(in_channels=768, num_anchors=15),
+        head=L(StandardRPNHead)(in_channels="${...backbone.embed_dim}", num_anchors=15),
         anchor_generator=L(DefaultAnchorGenerator)(
             sizes=[[32, 64, 128, 256, 512]],
             aspect_ratios=[0.5, 1.0, 2.0],

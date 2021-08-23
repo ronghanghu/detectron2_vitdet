@@ -58,6 +58,7 @@ class VisionTransformerDet(Backbone):
         norm_layer=None,
         act_layer=None,
         out_features=None,
+        has_cls_embed=False,
     ):
         """
         Args:
@@ -86,6 +87,7 @@ class VisionTransformerDet(Backbone):
         ) = embed_dim  # num_features for consistency with other models
         self.num_tokens = 1
         self.out_features = out_features
+        self.has_cls_embed = has_cls_embed
         norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
         act_layer = act_layer or nn.GELU
 
@@ -94,7 +96,8 @@ class VisionTransformerDet(Backbone):
         )
         num_patches = self.patch_embed.num_patches
 
-        # self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
+        if self.has_cls_embed:
+            self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + self.num_tokens, embed_dim))
         self.pos_drop = nn.Dropout(p=drop_rate)
 
@@ -120,14 +123,11 @@ class VisionTransformerDet(Backbone):
             name = f"block{i}"
 
             if name in self.out_features:
-                # print(name, )
                 self._out_feature_channels[name] = embed_dim
                 self._out_feature_strides[name] = patch_size
 
                 layer = norm_layer(embed_dim)
-                # self.add_module(f"{name}_norm", layer)
-                self.add_module(f"scale2_norm", layer)
-                
+                self.add_module(f"{name}_norm", layer)
 
         # self.norm = norm_layer(embed_dim)
 
@@ -144,6 +144,7 @@ class VisionTransformerDet(Backbone):
 
     def _get_pos_embed(self, pos_embed, bchw):
         h, w = bchw[-2], bchw[-1]
+        cls_pos_embed = pos_embed[:, 0:1, :]
         pos_embed = pos_embed[:, 1:]
         xy_num = pos_embed.shape[1]
         # print(xy_num, h, w, h * w)
@@ -151,7 +152,6 @@ class VisionTransformerDet(Backbone):
 
             size = int(math.sqrt(xy_num))
             assert size * size == xy_num
-            # cls_pos_embed = pos_embed[:, 0:1, :]
             new_pos_embed = F.interpolate(
                 pos_embed.reshape(1, size, size, -1).permute(0, 3, 1, 2),
                 size=(h, w),
@@ -160,12 +160,16 @@ class VisionTransformerDet(Backbone):
             )
 
             pos_embed = new_pos_embed.reshape(1, -1, h * w).permute(0, 2, 1)
-            # pos_embed = torch.cat((cls_pos_embed, pos_embed), dim=1)
+            if self.has_cls_embed:
+                pos_embed = torch.cat((cls_pos_embed, pos_embed), dim=1)
 
         return pos_embed
 
     def forward(self, x):
         x, bchw = self.patch_embed(x)
+        if self.has_cls_embed:
+            cls_token = self.cls_token.expand(x.shape[0], -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
+            x = torch.cat((cls_token, x), dim=1)
         x = self.pos_drop(x + self._get_pos_embed(self.pos_embed, bchw))
         outputs = {}
         for i, block in enumerate(self.blocks):
@@ -173,10 +177,10 @@ class VisionTransformerDet(Backbone):
             name = f"block{i}"
 
             if name in self.out_features:
-                # norm = getattr(self, f"{name}_norm")
-                norm = getattr(self, f"scale2_norm")
+                norm = getattr(self, f"{name}_norm")
                 x_out = norm(x)
-
+                if self.has_cls_embed:
+                    x_out = x_out[:, 1:]
                 outputs[name] = x_out.reshape(bchw[0], bchw[2], bchw[3], -1).permute(0, 3, 1, 2)
 
         return outputs
