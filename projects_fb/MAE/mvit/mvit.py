@@ -489,30 +489,3 @@ class MViT(Backbone):
 #         fuse_type=cfg.MODEL.FPN.FUSE_TYPE,
 #     )
 #     return backbone
-
-
-class ViTUp(Backbone):
-    def __init__(self, net, in_features, scale_factors):
-        super(ViTUp, self).__init__()
-        assert isinstance(net, Backbone)
-        assert len(in_features) == len(scale_factors)
-
-        self.scale_factors = scale_factors
-
-        input_shapes = net.output_shape()
-        self.net = net
-        self._out_features = in_features
-        self._out_feature_channels = {f: input_shapes[f].channels for f in in_features}
-        self._out_feature_strides = {
-            f: int(input_shapes[f].stride / scale) for f, scale in zip(in_features, scale_factors)
-        }
-        print(self._out_feature_channels, self._out_feature_strides)
-
-    def forward(self, x):
-        features = self.net(x)
-
-        outputs = {}
-        for f, scale in zip(self._out_features, self.scale_factors):
-            outputs[f] = F.interpolate(features[f], scale_factor=scale, mode="bilinear")
-
-        return outputs

@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from timm.models.layers import trunc_normal_
 from timm.models.vision_transformer import Block, _init_vit_weights
+from fairscale.nn.checkpoint import checkpoint_wrapper
 
 from detectron2.modeling import Backbone
 
@@ -59,6 +60,7 @@ class VisionTransformerDet(Backbone):
         act_layer=None,
         out_features=None,
         has_cls_embed=False,
+        checkpoint_block_num=0,
     ):
         """
         Args:
@@ -86,7 +88,7 @@ class VisionTransformerDet(Backbone):
             self.embed_dim
         ) = embed_dim  # num_features for consistency with other models
         self.num_tokens = 1
-        self.out_features = out_features
+        self._out_features = out_features
         self.has_cls_embed = has_cls_embed
         norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
         act_layer = act_layer or nn.GELU
@@ -119,10 +121,13 @@ class VisionTransformerDet(Backbone):
                 norm_layer=norm_layer,
                 act_layer=act_layer,
             )
+            if i + 1 <= checkpoint_block_num:
+                block = checkpoint_wrapper(block)
+
             self.blocks.append(block)
             name = f"block{i}"
 
-            if name in self.out_features:
+            if name in self._out_features:
                 self._out_feature_channels[name] = embed_dim
                 self._out_feature_strides[name] = patch_size
 
@@ -176,11 +181,114 @@ class VisionTransformerDet(Backbone):
             x = block(x)
             name = f"block{i}"
 
-            if name in self.out_features:
+            if name in self._out_features:
                 norm = getattr(self, f"{name}_norm")
                 x_out = norm(x)
                 if self.has_cls_embed:
                     x_out = x_out[:, 1:]
                 outputs[name] = x_out.reshape(bchw[0], bchw[2], bchw[3], -1).permute(0, 3, 1, 2)
+
+        return outputs
+
+
+class ViTUp(Backbone):
+    def __init__(self, net, in_features, scale_factors):
+        super(ViTUp, self).__init__()
+        assert isinstance(net, Backbone)
+        assert len(in_features) == len(scale_factors)
+
+        self.scale_factors = scale_factors
+
+        input_shapes = net.output_shape()
+        self.net = net
+        self._out_features = in_features
+        self._out_feature_channels = {f: input_shapes[f].channels for f in in_features}
+        self._out_feature_strides = {
+            f: int(input_shapes[f].stride / scale) for f, scale in zip(in_features, scale_factors)
+        }
+        print(self._out_feature_channels, self._out_feature_strides)
+
+    def forward(self, x):
+        features = self.net(x)
+
+        outputs = {}
+        for f, scale in zip(self._out_features, self.scale_factors):
+            outputs[f] = F.interpolate(features[f], scale_factor=scale, mode="bilinear")
+
+        return outputs
+
+
+class ViTUp1(Backbone):
+    def __init__(self, net, in_features, scale_factors, embed_dim, mode=1):
+        super(ViTUp1, self).__init__()
+        assert isinstance(net, Backbone)
+        assert len(in_features) == len(scale_factors)
+
+        self.scale_factors = scale_factors
+
+        input_shapes = net.output_shape()
+        self.net = net
+        self._out_features = in_features
+        self._out_feature_channels = {f: input_shapes[f].channels for f in in_features}
+        self._out_feature_strides = {
+            f: int(input_shapes[f].stride / scale) for f, scale in zip(in_features, scale_factors)
+        }
+        print(self._out_feature_channels, self._out_feature_strides)
+        for i, scale in enumerate(scale_factors):
+            if scale == 4.0:
+                if mode == 1:
+                    layer = nn.Sequential(
+                        nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
+                        nn.SyncBatchNorm(embed_dim),
+                        nn.GELU(),
+                        nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
+                    )
+                elif mode == 2:
+                    layer = nn.Sequential(
+                        nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
+                        nn.ReLU(),
+                        nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
+                    ) 
+                elif mode == 3:
+                    layer = nn.Sequential(
+                        nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
+                        nn.GELU(),
+                        nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
+                    ) 
+                elif mode == 4:
+                    layer = nn.Sequential(
+                        nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
+                        nn.SyncBatchNorm(embed_dim),
+                        nn.ReLU(),
+                        nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
+                    )
+                elif mode == 5:
+                    layer = nn.Sequential(
+                        nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
+                        nn.GroupNorm(32, embed_dim),
+                        nn.GELU(),
+                        nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
+                    )
+                else:
+                    raise NotImplementedError
+            elif scale == 2.0:
+                layer = nn.Sequential(
+                    nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
+                )
+            elif scale == 1.0:
+                layer = nn.Identity()
+            elif scale == 0.5:
+                layer = nn.MaxPool2d(kernel_size=2, stride=2)
+            
+            self.add_module(f"stage_{i}", layer)
+
+    def forward(self, x):
+        features = self.net(x)
+
+        outputs = {}
+        for i in range(len(self.scale_factors)):
+            f = features[self._out_features[i]]
+            layer = getattr(self, f"stage_{i}")
+            outputs[self._out_features[i]] = layer(f)
 
         return outputs
