@@ -3,8 +3,8 @@ from functools import partial
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from timm.models.layers import trunc_normal_
-from timm.models.vision_transformer import Block, _init_vit_weights
+from timm.models.layers import trunc_normal_, Mlp, DropPath
+from timm.models.vision_transformer import Attention, _init_vit_weights
 from fairscale.nn.checkpoint import checkpoint_wrapper
 
 from detectron2.modeling import Backbone
@@ -37,6 +37,75 @@ class PatchEmbed(nn.Module):
         return x, bchw
 
 
+def make_window(x, hw, win_size):
+    # print(x.shape)
+    B, _, C = x.shape
+    H, W = hw
+    x = x.view(B, H, W, C)
+
+    pad_h = (win_size - H % win_size) % win_size
+    pad_w = (win_size - W % win_size) % win_size
+
+    if pad_h > 0 or pad_w > 0:
+        x = F.pad(x, (0, 0, 0, pad_w, 0, pad_h))
+
+    Hp, Wp = H + pad_h, W + pad_w
+
+    # B, H, W, C -> B * nWin, win_size, win_size, C --> B * nWin, win_size * win_size, C
+    # print(x.shape, hw, Hp, Wp)
+    x = x.view(B, Hp // win_size, win_size, Wp // win_size, win_size, C)
+    # print(x.shape)
+    x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, win_size * win_size, C)
+    
+    return x, (Hp, Wp)
+
+
+def revert_window(x, pad_hw, hw, win_size):
+    Hp, Wp = pad_hw
+    H, W = hw
+    B = x.shape[0] // (Hp * Wp // win_size // win_size)
+   
+    # B * nWin, win_size, win_size, C -> B, H, W, C 
+    x = x.view(B, Hp // win_size, Wp // win_size, win_size, win_size, -1)
+    x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(B, Hp, Wp, -1)
+
+    if Hp > H or Wp > W:
+        x = x[:, :H, :W, :].contiguous()
+    
+    x = x.view(B, H * W, -1)
+
+    return x
+
+
+class Block(nn.Module):
+
+    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, drop=0., attn_drop=0.,
+                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, win_size=0):
+        super().__init__()
+        self.norm1 = norm_layer(dim)
+        self.attn = Attention(dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop)
+        # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.norm2 = norm_layer(dim)
+        mlp_hidden_dim = int(dim * mlp_ratio)
+        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
+        self.win_size = win_size
+        self.hw = None
+
+    def forward(self, x):
+        ori_x = x
+        x = self.norm1(x)
+        if self.win_size > 0:
+            x, pad_hw = make_window(x, self.hw, self.win_size)
+        x = self.attn(x)
+        if self.win_size > 0:
+            x = revert_window(x, pad_hw, self.hw, self.win_size)
+
+        x = ori_x + self.drop_path(x)
+        x = x + self.drop_path(self.mlp(self.norm2(x)))
+        return x
+
+
 class VisionTransformerDet(Backbone):
     """Vision Transformer Backbone for detection
     https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
@@ -61,6 +130,8 @@ class VisionTransformerDet(Backbone):
         out_features=None,
         has_cls_embed=False,
         checkpoint_block_num=0,
+        window_size=14,
+        window_block_indexes=[],
     ):
         """
         Args:
@@ -120,6 +191,7 @@ class VisionTransformerDet(Backbone):
                 drop_path=dpr[i],
                 norm_layer=norm_layer,
                 act_layer=act_layer,
+                win_size=window_size if i in window_block_indexes else 0,
             )
             if i + 1 <= checkpoint_block_num:
                 block = checkpoint_wrapper(block)
@@ -178,6 +250,7 @@ class VisionTransformerDet(Backbone):
         x = self.pos_drop(x + self._get_pos_embed(self.pos_embed, bchw))
         outputs = {}
         for i, block in enumerate(self.blocks):
+            block.hw = (bchw[2], bchw[3])
             x = block(x)
             name = f"block{i}"
 
