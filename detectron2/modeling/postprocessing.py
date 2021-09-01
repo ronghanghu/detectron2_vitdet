@@ -43,6 +43,8 @@ def detector_postprocess(
         output_width_tmp / results.image_size[1],
         output_height_tmp / results.image_size[0],
     )
+    scale_x = scale_y = max(scale_x, scale_y)
+
     results = Instances(new_size, **results.get_fields())
 
     if results.has("pred_boxes"):
