@@ -70,7 +70,7 @@ class Mlp(nn.Module):
 class Attention(nn.Module):
     def __init__(
             self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0.,
-            proj_drop=0., window_size=None, attn_head_dim=None):
+            proj_drop=0., window_size=None, attn_head_dim=None, use_cls_token=True):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
@@ -121,6 +121,8 @@ class Attention(nn.Module):
         self.proj = nn.Linear(all_head_dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
+        self.use_cls_token = use_cls_token
+
     def forward(self, x, rel_pos_bias=None):
         B, N, C = x.shape
         qkv_bias = None
@@ -139,10 +141,14 @@ class Attention(nn.Module):
                 self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
                     self.window_size[0] * self.window_size[1] + 1,
                     self.window_size[0] * self.window_size[1] + 1, -1)  # Wh*Ww,Wh*Ww,nH
+            if not self.use_cls_token:
+                relative_position_bias = relative_position_bias[1:, 1:]
             relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
             attn = attn + relative_position_bias.unsqueeze(0)
 
         if rel_pos_bias is not None:
+            if not self.use_cls_token:
+                rel_pos_bias = rel_pos_bias[:, 1:, 1:]
             attn = attn + rel_pos_bias
         
         attn = attn.softmax(dim=-1)
@@ -158,12 +164,13 @@ class Block(nn.Module):
 
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
                  drop_path=0., init_values=None, act_layer=nn.GELU, norm_layer=nn.LayerNorm,
-                 rel_window_size=None, attn_head_dim=None, win_size=0):
+                 rel_window_size=None, attn_head_dim=None, win_size=0, use_cls_token=True):
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = Attention(
             dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
-            attn_drop=attn_drop, proj_drop=drop, window_size=rel_window_size, attn_head_dim=attn_head_dim)
+            attn_drop=attn_drop, proj_drop=drop, window_size=rel_window_size, attn_head_dim=attn_head_dim,
+            use_cls_token=use_cls_token)
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
@@ -305,7 +312,7 @@ class BEiTDet(Backbone):
         self.pos_drop = nn.Dropout(p=drop_rate)
 
         if use_shared_rel_pos_bias:
-            assert use_cls_token_det  # we don't have this version yet
+            # assert use_cls_token_det  # we don't have this version yet
             assert len(window_block_indexes) == 0 # not implement yet
             self.rel_pos_bias = RelativePositionBias(window_size=self.patch_embed.patch_shape, num_heads=num_heads)
         else:
@@ -321,7 +328,7 @@ class BEiTDet(Backbone):
                 dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer,
                 init_values=init_values, rel_window_size=self.patch_embed.patch_shape if use_rel_pos_bias else None,
-                win_size=window_size if i in window_block_indexes else 0,
+                win_size=window_size if i in window_block_indexes else 0, use_cls_token=use_cls_token_det,
             )
             if i + 1 <= checkpoint_block_num:
                 block = checkpoint_wrapper(block)
