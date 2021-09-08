@@ -20,6 +20,8 @@ from timm.models.layers import drop_path, to_2tuple, trunc_normal_
 from fairscale.nn.checkpoint import checkpoint_wrapper
 from detectron2.modeling import Backbone
 
+from ..vit.vit import make_window, revert_window
+
 
 def _cfg(url='', **kwargs):
     return {
@@ -156,12 +158,12 @@ class Block(nn.Module):
 
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
                  drop_path=0., init_values=None, act_layer=nn.GELU, norm_layer=nn.LayerNorm,
-                 window_size=None, attn_head_dim=None):
+                 rel_window_size=None, attn_head_dim=None, win_size=0):
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = Attention(
             dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
-            attn_drop=attn_drop, proj_drop=drop, window_size=window_size, attn_head_dim=attn_head_dim)
+            attn_drop=attn_drop, proj_drop=drop, window_size=rel_window_size, attn_head_dim=attn_head_dim)
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
@@ -172,14 +174,32 @@ class Block(nn.Module):
             self.gamma_2 = nn.Parameter(init_values * torch.ones((dim)),requires_grad=True)
         else:
             self.gamma_1, self.gamma_2 = None, None
+        
+        self.win_size = win_size
+        self.hw = None
 
     def forward(self, x, rel_pos_bias=None):
+        # if self.gamma_1 is None:
+        #     x = x + self.drop_path(self.attn(self.norm1(x), rel_pos_bias=rel_pos_bias))
+        #     x = x + self.drop_path(self.mlp(self.norm2(x)))
+        # else:
+        #     x = x + self.drop_path(self.gamma_1 * self.attn(self.norm1(x), rel_pos_bias=rel_pos_bias))
+        #     x = x + self.drop_path(self.gamma_2 * self.mlp(self.norm2(x)))
+        ori_x = x
+        x = self.norm1(x)
+        if self.win_size > 0:
+            x, pad_hw = make_window(x, self.hw, self.win_size)
+        x = self.attn(x, rel_pos_bias=rel_pos_bias)
+        if self.win_size > 0:
+            x = revert_window(x, pad_hw, self.hw, self.win_size)
+        
         if self.gamma_1 is None:
-            x = x + self.drop_path(self.attn(self.norm1(x), rel_pos_bias=rel_pos_bias))
+            x = ori_x + self.drop_path(x)
             x = x + self.drop_path(self.mlp(self.norm2(x)))
         else:
-            x = x + self.drop_path(self.gamma_1 * self.attn(self.norm1(x), rel_pos_bias=rel_pos_bias))
-            x = x + self.drop_path(self.gamma_2 * self.mlp(self.norm2(x)))
+            x = ori_x + self.drop_path(self.gamma_1 * x)
+            x = x + self.drop_path(self.gamma_2 * self.mlp(self.norm2(x)))       
+
         return x
 
 
@@ -256,23 +276,28 @@ class BEiTDet(Backbone):
                  drop_path_rate=0., norm_layer=nn.LayerNorm, init_values=None,
                  use_abs_pos_emb=True, use_rel_pos_bias=False, use_shared_rel_pos_bias=False,
                  use_mean_pooling=True, init_scale=0.001, use_cls_token=True,
-                 out_features=None, checkpoint_block_num=0,
+                 out_features=None, checkpoint_block_num=0, window_size=0, window_block_indexes=[], use_cls_token_det=True,
+                 pretrain_img_size=224,
                  ):
         super().__init__()
         self.num_classes = num_classes
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
         self._out_features = out_features
+        self.use_cls_token = use_cls_token
+        self.use_cls_token_det = use_cls_token_det
+
 
         self.patch_embed = PatchEmbed(
             img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
-        num_patches = self.patch_embed.num_patches
+        # num_patches = self.patch_embed.num_patches
 
-        if use_cls_token:
+        if use_cls_token_det:
             self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         else:
             self.cls_token = None
         # self.mask_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         if use_abs_pos_emb:
+            num_patches = (pretrain_img_size // patch_size) * (pretrain_img_size // patch_size)
             num_positions = (num_patches + 1) if use_cls_token else num_patches
             self.pos_embed = nn.Parameter(torch.zeros(1, num_positions, embed_dim))
         else:
@@ -280,7 +305,8 @@ class BEiTDet(Backbone):
         self.pos_drop = nn.Dropout(p=drop_rate)
 
         if use_shared_rel_pos_bias:
-            assert use_cls_token  # we don't have this version yet
+            assert use_cls_token_det  # we don't have this version yet
+            assert len(window_block_indexes) == 0 # not implement yet
             self.rel_pos_bias = RelativePositionBias(window_size=self.patch_embed.patch_shape, num_heads=num_heads)
         else:
             self.rel_pos_bias = None
@@ -294,7 +320,8 @@ class BEiTDet(Backbone):
             block = Block(
                 dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer,
-                init_values=init_values, window_size=self.patch_embed.patch_shape if use_rel_pos_bias else None
+                init_values=init_values, rel_window_size=self.patch_embed.patch_shape if use_rel_pos_bias else None,
+                win_size=window_size if i in window_block_indexes else 0,
             )
             if i + 1 <= checkpoint_block_num:
                 block = checkpoint_wrapper(block)
@@ -351,6 +378,30 @@ class BEiTDet(Backbone):
         self.num_classes = num_classes
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
+    def _get_pos_embed(self, pos_embed, bchw):
+        h, w = bchw[-2], bchw[-1]
+        if self.use_cls_token:
+            cls_pos_embed = pos_embed[:, 0:1, :]
+            pos_embed = pos_embed[:, 1:]
+        xy_num = pos_embed.shape[1]
+        # print(xy_num, h, w, h * w)
+        if xy_num != h * w:
+
+            size = int(math.sqrt(xy_num))
+            assert size * size == xy_num
+            new_pos_embed = F.interpolate(
+                pos_embed.reshape(1, size, size, -1).permute(0, 3, 1, 2),
+                size=(h, w),
+                mode="bicubic",
+                align_corners=False,
+            )
+
+            pos_embed = new_pos_embed.reshape(1, -1, h * w).permute(0, 2, 1)
+            if self.use_cls_token_det:
+                pos_embed = torch.cat((cls_pos_embed, pos_embed), dim=1)
+
+        return pos_embed
+
     def forward(self, x):
         x, bchw = self.patch_embed(x)
         batch_size, seq_len, _ = x.size()
@@ -360,13 +411,14 @@ class BEiTDet(Backbone):
             x = torch.cat((cls_tokens, x), dim=1)
 
         if self.pos_embed is not None:
-            x = x + self.pos_embed
+            x = x + self._get_pos_embed(self.pos_embed, bchw)
         x = self.pos_drop(x)
 
         rel_pos_bias = self.rel_pos_bias() if self.rel_pos_bias is not None else None
 
         outputs = {}
         for i, blk in enumerate(self.blocks):
+            blk.hw = (bchw[2], bchw[3])
             x = blk(x, rel_pos_bias=rel_pos_bias)
             name = f"block{i}"
 
