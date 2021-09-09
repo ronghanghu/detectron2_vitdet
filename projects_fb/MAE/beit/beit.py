@@ -292,6 +292,7 @@ class BEiTDet(Backbone):
         self._out_features = out_features
         self.use_cls_token = use_cls_token
         self.use_cls_token_det = use_cls_token_det
+        self.window_block_indexes = window_block_indexes
 
 
         self.patch_embed = PatchEmbed(
@@ -313,8 +314,12 @@ class BEiTDet(Backbone):
 
         if use_shared_rel_pos_bias:
             # assert use_cls_token_det  # we don't have this version yet
-            assert len(window_block_indexes) == 0 # not implement yet
-            self.rel_pos_bias = RelativePositionBias(window_size=self.patch_embed.patch_shape, num_heads=num_heads)
+            # assert len(window_block_indexes) == 0 # not implement yet
+            if len(window_block_indexes) > 0:
+                self.rel_pos_bias = RelativePositionBias(window_size=(window_size, window_size), num_heads=num_heads)
+                self.rel_pos_bias_global = RelativePositionBias(window_size=self.patch_embed.patch_shape, num_heads=num_heads)
+            else:
+                self.rel_pos_bias = RelativePositionBias(window_size=self.patch_embed.patch_shape, num_heads=num_heads)
         else:
             self.rel_pos_bias = None
 
@@ -422,11 +427,16 @@ class BEiTDet(Backbone):
         x = self.pos_drop(x)
 
         rel_pos_bias = self.rel_pos_bias() if self.rel_pos_bias is not None else None
+        if len(self.window_block_indexes) > 0:
+            rel_pos_bias_global = self.rel_pos_bias_global() if self.rel_pos_bias_global is not None else None
 
         outputs = {}
         for i, blk in enumerate(self.blocks):
             blk.hw = (bchw[2], bchw[3])
-            x = blk(x, rel_pos_bias=rel_pos_bias)
+            bias = rel_pos_bias
+            if len(self.window_block_indexes) > 0 and i not in self.window_block_indexes:
+                bias = rel_pos_bias_global
+            x = blk(x, rel_pos_bias=bias)
             name = f"block{i}"
 
             if name in self._out_features:
