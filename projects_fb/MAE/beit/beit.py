@@ -12,6 +12,8 @@
 import math
 from functools import partial
 
+import logging
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -19,8 +21,12 @@ from timm.models.layers import drop_path, to_2tuple, trunc_normal_
 #from timm.models.registry import register_model
 from fairscale.nn.checkpoint import checkpoint_wrapper
 from detectron2.modeling import Backbone
+from scipy import interpolate
 
 from ..vit.vit import make_window, revert_window
+
+
+logger = logging.getLogger(__name__)
 
 
 def _cfg(url='', **kwargs):
@@ -275,6 +281,64 @@ class RelativePositionBias(nn.Module):
         return relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
 
 
+def resize_res_pos(key, rel_pos_bias, model_rel_pos_bias):
+    src_num_pos, num_attn_heads = rel_pos_bias.size()
+    dst_num_pos, _ = model_rel_pos_bias.size()
+    num_extra_tokens = 3
+    src_size = int((src_num_pos - num_extra_tokens) ** 0.5)
+    dst_size = int((dst_num_pos - num_extra_tokens) ** 0.5)
+    if src_size != dst_size:
+        logger.info("Rel position embed interpolate for %s from %dx%d to %dx%d" % (
+            key, src_size, src_size, dst_size, dst_size))
+        extra_tokens = rel_pos_bias[-num_extra_tokens:, :]
+        rel_pos_bias = rel_pos_bias[:-num_extra_tokens, :]
+
+        def geometric_progression(a, r, n):
+            return a * (1.0 - r ** n) / (1.0 - r)
+
+        left, right = 1.01, 1.5
+        while right - left > 1e-6:
+            q = (left + right) / 2.0
+            gp = geometric_progression(1, q, src_size // 2)
+            if gp > dst_size // 2:
+                right = q
+            else:
+                left = q
+
+        # if q > 1.13492:
+        #     q = 1.13492
+
+        dis = []
+        cur = 1
+        for i in range(src_size // 2):
+            dis.append(cur)
+            cur += q ** (i + 1)
+
+        r_ids = [-_ for _ in reversed(dis)]
+
+        x = r_ids + [0] + dis
+        y = r_ids + [0] + dis
+
+        t = dst_size // 2.0
+        dx = np.arange(-t, t + 0.1, 1.0)
+        dy = np.arange(-t, t + 0.1, 1.0)
+        # print("x = {}".format(x))
+        # print("dx = {}".format(dx))
+
+        all_rel_pos_bias = []
+
+        for i in range(num_attn_heads):
+            z = rel_pos_bias[:, i].view(src_size, src_size).float().numpy()
+            f = interpolate.interp2d(x, y, z, kind='cubic')
+            all_rel_pos_bias.append(
+                torch.Tensor(f(dx, dy)).contiguous().view(-1, 1).to(rel_pos_bias.device))
+
+        rel_pos_bias = torch.cat(all_rel_pos_bias, dim=-1)
+        rel_pos_bias = torch.cat((rel_pos_bias, extra_tokens), dim=0)
+
+    return rel_pos_bias
+
+
 class BEiTDet(Backbone):
     """ Vision Transformer with support for patch or hybrid CNN input stage
     """
@@ -284,7 +348,7 @@ class BEiTDet(Backbone):
                  use_abs_pos_emb=True, use_rel_pos_bias=False, use_shared_rel_pos_bias=False,
                  use_mean_pooling=True, init_scale=0.001, use_cls_token=True,
                  out_features=None, checkpoint_block_num=0, window_size=0, window_block_indexes=[], use_cls_token_det=True,
-                 pretrain_img_size=224,
+                 pretrain_img_size=224, pos_init_checkpoint=None,
                  ):
         super().__init__()
         self.num_classes = num_classes
@@ -293,7 +357,6 @@ class BEiTDet(Backbone):
         self.use_cls_token = use_cls_token
         self.use_cls_token_det = use_cls_token_det
         self.window_block_indexes = window_block_indexes
-
 
         self.patch_embed = PatchEmbed(
             img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
@@ -320,8 +383,10 @@ class BEiTDet(Backbone):
                 self.rel_pos_bias_global = RelativePositionBias(window_size=self.patch_embed.patch_shape, num_heads=num_heads)
             else:
                 self.rel_pos_bias = RelativePositionBias(window_size=self.patch_embed.patch_shape, num_heads=num_heads)
+                self.rel_pos_bias_global = None
         else:
             self.rel_pos_bias = None
+            self.rel_pos_bias_global = None
 
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
         self.use_rel_pos_bias = use_rel_pos_bias
@@ -356,6 +421,9 @@ class BEiTDet(Backbone):
         self.apply(self._init_weights)
         self.fix_init_weight()
 
+        if pos_init_checkpoint is not None:
+            self._load_pos_weights(pos_init_checkpoint)
+
         # self.head.weight.data.mul_(init_scale)
         # self.head.bias.data.mul_(init_scale)
 
@@ -375,6 +443,48 @@ class BEiTDet(Backbone):
         elif isinstance(m, nn.LayerNorm):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
+    
+    def _load_pos_weights(self, pos_init_checkpoint):
+        checkpoint = torch.load(pos_init_checkpoint, map_location=torch.device("cpu"))
+        assert "model" in checkpoint
+        state_dict = checkpoint["model"]
+
+        # abs pos embed
+        if "pos_embed" in state_dict and hasattr(self, "pos_embed"):
+            pos_embed_checkpoint = state_dict['pos_embed']
+            embedding_size = pos_embed_checkpoint.shape[-1]
+            num_patches = self.patch_embed.num_patches
+            num_extra_tokens = self.pos_embed.shape[-2] - num_patches
+            # height (== width) for the checkpoint position embedding
+            orig_size = int((pos_embed_checkpoint.shape[-2] - num_extra_tokens) ** 0.5)
+            # # height (== width) for the new position embedding
+            # new_size = int(num_patches ** 0.5)
+            new_size = self.patch_embed.patch_shape
+            # class_token and dist_token are kept unchanged
+            if orig_size != new_size[0] or orig_size != new_size[1]:
+                extra_tokens = pos_embed_checkpoint[:, :num_extra_tokens]
+                # only the position tokens are interpolated
+                pos_tokens = pos_embed_checkpoint[:, num_extra_tokens:]
+                pos_tokens = pos_tokens.reshape(-1, orig_size, orig_size, embedding_size).permute(0, 3, 1, 2)
+                pos_tokens = torch.nn.functional.interpolate(
+                    pos_tokens, size=(new_size[0], new_size[1]), mode='bicubic', align_corners=False)
+                pos_tokens = pos_tokens.permute(0, 2, 3, 1).flatten(1, 2)
+                pos_embed_checkpoint = torch.cat((extra_tokens, pos_tokens), dim=1)
+
+                logger.info(f"Resize pos embed from checkpoint from {orig_size}x{orig_size} to {new_size}")
+            
+            self.pos_embed.data[...] = pos_embed_checkpoint.clone()
+            logger.info("Init pos embed from checkpoint")
+                
+        # rel pos bias
+        for key, param in self.named_parameters():
+            if "relative_position_bias_table" in key:
+                ckpt_key = key.replace("_global", "") if "rel_pos_bias_global" in key else key
+                if ckpt_key in state_dict:
+                    rel_pos_bias = state_dict[ckpt_key]
+                    new_rel_pos_bias = resize_res_pos(key, rel_pos_bias, param).clone()
+                    param.data[...] = new_rel_pos_bias
+                    logger.info(f"Init {key} from {ckpt_key} in checkpoint")
 
     def get_num_layers(self):
         return len(self.blocks)
@@ -409,8 +519,8 @@ class BEiTDet(Backbone):
             )
 
             pos_embed = new_pos_embed.reshape(1, -1, h * w).permute(0, 2, 1)
-            if self.use_cls_token_det:
-                pos_embed = torch.cat((cls_pos_embed, pos_embed), dim=1)
+        if self.use_cls_token_det:
+            pos_embed = torch.cat((cls_pos_embed, pos_embed), dim=1)
 
         return pos_embed
 
