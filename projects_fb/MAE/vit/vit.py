@@ -209,6 +209,7 @@ class VisionTransformerDet(Backbone):
         window_block_indexes=[],
         use_shared_rel_pos_bias=False,
         pretrain_img_size=224,
+        out_norm=True,
     ):
         """
         Args:
@@ -241,6 +242,7 @@ class VisionTransformerDet(Backbone):
         norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
         act_layer = act_layer or nn.GELU
         self.window_block_indexes = window_block_indexes
+        self.out_norm = out_norm
 
         self.patch_embed = embed_layer(
             img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim
@@ -296,8 +298,9 @@ class VisionTransformerDet(Backbone):
                 self._out_feature_channels[name] = embed_dim
                 self._out_feature_strides[name] = patch_size
 
-                layer = norm_layer(embed_dim)
-                self.add_module(f"{name}_norm", layer)
+                if out_norm:
+                    layer = norm_layer(embed_dim)
+                    self.add_module(f"{name}_norm", layer)
 
         # self.norm = norm_layer(embed_dim)
 
@@ -356,8 +359,11 @@ class VisionTransformerDet(Backbone):
             name = f"block{i}"
 
             if name in self._out_features:
-                norm = getattr(self, f"{name}_norm")
-                x_out = norm(x)
+                if self.out_norm:
+                    norm = getattr(self, f"{name}_norm")
+                    x_out = norm(x)
+                else:
+                    x_out = x
                 if self.has_cls_embed:
                     x_out = x_out[:, 1:]
                 outputs[name] = x_out.reshape(bchw[0], bchw[2], bchw[3], -1).permute(0, 3, 1, 2)
