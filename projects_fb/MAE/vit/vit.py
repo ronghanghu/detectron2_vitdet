@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from timm.models.layers import trunc_normal_, Mlp, DropPath
-from timm.models.vision_transformer import Attention, _init_vit_weights
+from timm.models.vision_transformer import _init_vit_weights
 from fairscale.nn.checkpoint import checkpoint_wrapper
 
 from detectron2.modeling import Backbone
@@ -77,13 +77,88 @@ def revert_window(x, pad_hw, hw, win_size):
     return x
 
 
+class RelativePositionBias(nn.Module):
+
+    def __init__(self, window_size, num_heads):
+        super().__init__()
+        self.window_size = window_size
+        self.num_relative_distance = (2 * window_size[0] - 1) * (2 * window_size[1] - 1) + 3
+        self.relative_position_bias_table = nn.Parameter(
+            torch.zeros(self.num_relative_distance, num_heads))  # 2*Wh-1 * 2*Ww-1, nH
+        # cls to token & token 2 cls & cls to cls
+
+        # get pair-wise relative position index for each token inside the window
+        coords_h = torch.arange(window_size[0])
+        coords_w = torch.arange(window_size[1])
+        coords = torch.stack(torch.meshgrid([coords_h, coords_w]))  # 2, Wh, Ww
+        coords_flatten = torch.flatten(coords, 1)  # 2, Wh*Ww
+        relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]  # 2, Wh*Ww, Wh*Ww
+        relative_coords = relative_coords.permute(1, 2, 0).contiguous()  # Wh*Ww, Wh*Ww, 2
+        relative_coords[:, :, 0] += window_size[0] - 1  # shift to start from 0
+        relative_coords[:, :, 1] += window_size[1] - 1
+        relative_coords[:, :, 0] *= 2 * window_size[1] - 1
+        relative_position_index = \
+            torch.zeros(size=(window_size[0] * window_size[1] + 1,) * 2, dtype=relative_coords.dtype)
+        relative_position_index[1:, 1:] = relative_coords.sum(-1)  # Wh*Ww, Wh*Ww
+        relative_position_index[0, 0:] = self.num_relative_distance - 3
+        relative_position_index[0:, 0] = self.num_relative_distance - 2
+        relative_position_index[0, 0] = self.num_relative_distance - 1
+
+        self.register_buffer("relative_position_index", relative_position_index)
+
+        # trunc_normal_(self.relative_position_bias_table, std=.02)
+
+    def forward(self):
+        relative_position_bias = \
+            self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
+                self.window_size[0] * self.window_size[1] + 1,
+                self.window_size[0] * self.window_size[1] + 1, -1)  # Wh*Ww,Wh*Ww,nH
+        return relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
+
+
+class Attention(nn.Module):
+    def __init__(self, dim, num_heads=8, qkv_bias=False, attn_drop=0., proj_drop=0., use_cls_token=True):
+        super().__init__()
+        self.num_heads = num_heads
+        head_dim = dim // num_heads
+        self.scale = head_dim ** -0.5
+        self.use_cls_token = use_cls_token
+
+        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(dim, dim)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+    def forward(self, x, rel_pos_bias=None):
+        B, N, C = x.shape
+        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
+
+        attn = (q @ k.transpose(-2, -1)) * self.scale
+
+        if rel_pos_bias is not None:
+            if not self.use_cls_token:
+                rel_pos_bias = rel_pos_bias[:, 1:, 1:]
+            attn = attn + rel_pos_bias
+
+        attn = attn.softmax(dim=-1)
+        attn = self.attn_drop(attn)
+
+        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        return x
+
+
 class Block(nn.Module):
 
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, drop=0., attn_drop=0.,
-                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, win_size=0):
+                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, win_size=0, use_cls_token=True):
         super().__init__()
         self.norm1 = norm_layer(dim)
-        self.attn = Attention(dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop)
+        self.attn = Attention(
+            dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop, use_cls_token=use_cls_token
+        )
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
@@ -92,12 +167,12 @@ class Block(nn.Module):
         self.win_size = win_size
         self.hw = None
 
-    def forward(self, x):
+    def forward(self, x, rel_pos_bias=None):
         ori_x = x
         x = self.norm1(x)
         if self.win_size > 0:
             x, pad_hw = make_window(x, self.hw, self.win_size)
-        x = self.attn(x)
+        x = self.attn(x, rel_pos_bias=rel_pos_bias)
         if self.win_size > 0:
             x = revert_window(x, pad_hw, self.hw, self.win_size)
 
@@ -132,6 +207,8 @@ class VisionTransformerDet(Backbone):
         checkpoint_block_num=0,
         window_size=14,
         window_block_indexes=[],
+        use_shared_rel_pos_bias=False,
+        pretrain_img_size=224,
     ):
         """
         Args:
@@ -163,16 +240,31 @@ class VisionTransformerDet(Backbone):
         self.has_cls_embed = has_cls_embed
         norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
         act_layer = act_layer or nn.GELU
+        self.window_block_indexes = window_block_indexes
 
         self.patch_embed = embed_layer(
             img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim
         )
-        num_patches = self.patch_embed.num_patches
+        # num_patches = self.patch_embed.num_patches
 
         if self.has_cls_embed:
             self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
+        num_patches = (pretrain_img_size // patch_size) * (pretrain_img_size // patch_size)
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + self.num_tokens, embed_dim))
         self.pos_drop = nn.Dropout(p=drop_rate)
+
+        if use_shared_rel_pos_bias:
+            # assert use_cls_token_det  # we don't have this version yet
+            # assert len(window_block_indexes) == 0 # not implement yet
+            if len(window_block_indexes) > 0:
+                self.rel_pos_bias = RelativePositionBias(window_size=(window_size, window_size), num_heads=num_heads)
+                self.rel_pos_bias_global = RelativePositionBias(window_size=self.patch_embed.grid_size, num_heads=num_heads)
+            else:
+                self.rel_pos_bias = RelativePositionBias(window_size=self.patch_embed.grid_size, num_heads=num_heads)
+                self.rel_pos_bias_global = None
+        else:
+            self.rel_pos_bias = None
+            self.rel_pos_bias_global = None
 
         dpr = [
             x.item() for x in torch.linspace(0, drop_path_rate, depth)
@@ -192,6 +284,7 @@ class VisionTransformerDet(Backbone):
                 norm_layer=norm_layer,
                 act_layer=act_layer,
                 win_size=window_size if i in window_block_indexes else 0,
+                use_cls_token=has_cls_embed,
             )
             if i + 1 <= checkpoint_block_num:
                 block = checkpoint_wrapper(block)
@@ -248,10 +341,18 @@ class VisionTransformerDet(Backbone):
             cls_token = self.cls_token.expand(x.shape[0], -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
             x = torch.cat((cls_token, x), dim=1)
         x = self.pos_drop(x + self._get_pos_embed(self.pos_embed, bchw))
+
+        rel_pos_bias = self.rel_pos_bias() if self.rel_pos_bias is not None else None
+        if len(self.window_block_indexes) > 0:
+            rel_pos_bias_global = self.rel_pos_bias_global() if self.rel_pos_bias_global is not None else None
+
         outputs = {}
         for i, block in enumerate(self.blocks):
             block.hw = (bchw[2], bchw[3])
-            x = block(x)
+            bias = rel_pos_bias
+            if len(self.window_block_indexes) > 0 and i not in self.window_block_indexes:
+                bias = rel_pos_bias_global
+            x = block(x, rel_pos_bias=bias)
             name = f"block{i}"
 
             if name in self._out_features:
