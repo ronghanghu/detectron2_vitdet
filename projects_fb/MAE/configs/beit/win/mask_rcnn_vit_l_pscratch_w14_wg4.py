@@ -33,8 +33,8 @@ dataloader.test.mapper.augmentations = [
 
 
 # Model
-# Base
-embed_dim, depth, num_heads = 768, 12, 12
+# Large
+embed_dim, depth, num_heads = 1024, 24, 16
 
 model = model_zoo.get_config("common/models/mask_rcnn_fpn.py").model
 # To match the data loader
@@ -51,18 +51,30 @@ model.backbone.bottom_up = L(ViTUp1)(  # Creates multi-scale feature maps from V
         embed_dim=embed_dim,
         depth=depth,
         num_heads=num_heads,
-        # model size: B
+        # model size: L
         window_block_indexes=[
             0,
-            1,  # 2  global
+            1,
+            2,
             3,
-            4,  # 5  global
+            4,  # 5 global
             6,
-            7,  # 8  global
+            7,
+            8,
             9,
             10,  # 11 global
+            12,
+            13,
+            14,
+            15,
+            16,  # 17 global
+            18,
+            19,
+            20,
+            21,
+            22,  # 23 global
         ],
-        out_features=["block2", "block5", "block8", "block11"],
+        out_features=["block5", "block11", "block17", "block23"],
         mlp_ratio=4,
         qkv_bias=True,
         norm_layer=partial(nn.LayerNorm, eps=1e-6),
