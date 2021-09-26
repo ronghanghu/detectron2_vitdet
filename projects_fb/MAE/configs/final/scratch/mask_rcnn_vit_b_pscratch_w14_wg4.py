@@ -44,7 +44,7 @@ model.input_format = "RGB"
 model.backbone.bottom_up = L(ViTUp1)(  # Creates multi-scale feature maps from ViT backbone
     net=L(BEiTDet)(  # Single-scale ViT backbone
         img_size=image_size,
-        drop_path_rate=0.0,
+        drop_path_rate=0.1,
         use_shared_rel_pos_bias=True,
         init_values=None,  # No LayerScale
         window_size=14,
@@ -120,9 +120,17 @@ lr_multiplier = L(WarmupParamScheduler)(
 )
 
 # Rescale schedule
-# train.max_iter *= 4  # 100ep -> 400ep
+
+# factor = 4
+# train.max_iter *= factor  # 100ep -> factor*100ep
 # lr_multiplier.scheduler.milestones = [
-#     milestone * 4 for milestone in lr_multiplier.scheduler.milestones
+#     milestone * factor for milestone in lr_multiplier.scheduler.milestones
+# ]
+# lr_multiplier.scheduler.num_updates = train.max_iter
+
+# train.max_iter = train.max_iter // 2  # 100ep -> 50ep
+# lr_multiplier.scheduler.milestones = [
+#     milestone // 2 for milestone in lr_multiplier.scheduler.milestones
 # ]
 # lr_multiplier.scheduler.num_updates = train.max_iter
 
