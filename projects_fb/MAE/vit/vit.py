@@ -260,7 +260,10 @@ class VisionTransformerDet(Backbone):
             # assert len(window_block_indexes) == 0 # not implement yet
             if len(window_block_indexes) > 0:
                 self.rel_pos_bias = RelativePositionBias(window_size=(window_size, window_size), num_heads=num_heads)
-                self.rel_pos_bias_global = RelativePositionBias(window_size=self.patch_embed.grid_size, num_heads=num_heads)
+                if len(window_block_indexes) < depth:
+                    self.rel_pos_bias_global = RelativePositionBias(window_size=self.patch_embed.grid_size, num_heads=num_heads)
+                else:
+                    self.rel_pos_bias_global = None
             else:
                 self.rel_pos_bias = RelativePositionBias(window_size=self.patch_embed.grid_size, num_heads=num_heads)
                 self.rel_pos_bias_global = None
@@ -399,21 +402,22 @@ class ViTUp(Backbone):
 
 
 class ViTUp1(Backbone):
-    def __init__(self, net, in_features, scale_factors, embed_dim, mode=1):
+    def __init__(self, net, in_features, scale_factors, embed_dim, mode=1, resize_ratio=1.0):
         super(ViTUp1, self).__init__()
         assert isinstance(net, Backbone)
         assert len(in_features) == len(scale_factors)
 
         self.scale_factors = scale_factors
+        self.resize_ratio = resize_ratio
 
         input_shapes = net.output_shape()
         self.net = net
         self._out_features = in_features
         self._out_feature_channels = {f: input_shapes[f].channels for f in in_features}
         self._out_feature_strides = {
-            f: int(input_shapes[f].stride / scale) for f, scale in zip(in_features, scale_factors)
+            f: int(input_shapes[f].stride / resize_ratio / scale) for f, scale in zip(in_features, scale_factors)
         }
-        print(self._out_feature_channels, self._out_feature_strides)
+        print("resize", self._out_feature_channels, self._out_feature_strides, input_shapes)
         for i, scale in enumerate(scale_factors):
             if scale == 4.0:
                 if mode == 1:
@@ -468,6 +472,8 @@ class ViTUp1(Backbone):
         outputs = {}
         for i in range(len(self.scale_factors)):
             f = features[self._out_features[i]]
+            if self.resize_ratio != 1.0:
+                f = F.interpolate(f, scale_factor=self.resize_ratio, mode="bicubic")
             layer = getattr(self, f"stage_{i}")
             outputs[self._out_features[i]] = layer(f)
 
