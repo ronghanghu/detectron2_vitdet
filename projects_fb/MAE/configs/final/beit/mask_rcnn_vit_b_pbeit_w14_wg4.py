@@ -57,7 +57,7 @@ model.backbone.bottom_up = L(ViTUp1)(  # Creates multi-scale feature maps from V
         norm_layer=partial(nn.LayerNorm, eps=1e-6),
         checkpoint_block_num=0,
         use_cls_token_det=False,
-        use_abs_pos_emb=False,
+        use_abs_pos_emb=True,
         use_shared_rel_pos_bias=True,
         init_values=0.1,  # use layerscale for BeiT
         # model size: B
