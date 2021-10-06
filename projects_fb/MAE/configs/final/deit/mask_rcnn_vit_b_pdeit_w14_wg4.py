@@ -49,7 +49,7 @@ model.backbone.bottom_up = L(ViTUp1)(  # Creates multi-scale feature maps from V
         embed_dim=embed_dim,
         depth=depth,
         num_heads=num_heads,
-        drop_path_rate=0.0,
+        drop_path_rate=0.1,
         window_size=14,
         use_shared_rel_pos_bias=True,
         checkpoint_block_num=0,
@@ -136,7 +136,7 @@ lr_multiplier.scheduler.num_updates = train.max_iter
 
 # Optimizer hyperparams
 # center = (1.6e-4, 0.1)
-optimizer.lr = 1.6e-4
+optimizer.lr = 8e-5
 optimizer.weight_decay = 0.1
 optimizer.params.overrides = {
     "pos_embed": {"weight_decay": 0.0},
