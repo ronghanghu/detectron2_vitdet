@@ -380,7 +380,10 @@ class BEiTDet(Backbone):
             # assert len(window_block_indexes) == 0 # not implement yet
             if len(window_block_indexes) > 0:
                 self.rel_pos_bias = RelativePositionBias(window_size=(window_size, window_size), num_heads=num_heads)
-                self.rel_pos_bias_global = RelativePositionBias(window_size=self.patch_embed.patch_shape, num_heads=num_heads)
+                if len(window_block_indexes) < depth:
+                    self.rel_pos_bias_global = RelativePositionBias(window_size=self.patch_embed.patch_shape, num_heads=num_heads)
+                else:
+                    self.rel_pos_bias_global = None
             else:
                 self.rel_pos_bias = RelativePositionBias(window_size=self.patch_embed.patch_shape, num_heads=num_heads)
                 self.rel_pos_bias_global = None
