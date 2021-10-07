@@ -8,8 +8,7 @@ from detectron2.config import LazyCall as L
 from detectron2.layers.batch_norm import NaiveSyncBatchNorm
 from detectron2.solver import WarmupParamScheduler
 
-from ....vit.vit import ViTUp1
-from ....beit.beit import BEiTDet
+from ....vit.vit import VisionTransformerDet, ViTUp1
 from ...common.coco import dataloader
 from ...common.optim import AdamW as optimizer
 
@@ -44,21 +43,17 @@ model.pixel_mean = [123.675, 116.28, 103.53]
 model.pixel_std = [58.395, 57.12, 57.375]
 model.input_format = "RGB"
 model.backbone.bottom_up = L(ViTUp1)(  # Creates multi-scale feature maps from ViT backbone
-    net=L(BEiTDet)(  # Single-scale ViT backbone
+    net=L(VisionTransformerDet)(  # Single-scale ViT backbone
         img_size=image_size,
         patch_size=16,
         embed_dim=embed_dim,
         depth=depth,
         num_heads=num_heads,
-        drop_path_rate=0.3,
+        drop_path_rate=0.2,
         window_size=14,
-        mlp_ratio=4,
-        qkv_bias=True,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6),
-        checkpoint_block_num=0,
-        use_cls_token_det=False,
         use_shared_rel_pos_bias=True,
-        init_values=None, 
+        checkpoint_block_num=0,
+        out_norm=False,  # don't add output norm
         # model size: B
         # window_block_indexes=[
         #     0,
@@ -112,8 +107,9 @@ model.roi_heads.box_head.fc_dims = [1024]
 train = model_zoo.get_config("common/train.py").train
 train.amp.enabled = True
 train.ddp.fp16_compression = False
-# # from mae init (SupBEiT-wd0.3-200ep, 82.6% (EMA) )
-train.init_checkpoint = "/checkpoints/lyttonhao/mae_pretrain/SupBEiT-wd0.3-200ep_ema.pth"  # AWS 
+# AWS cluster path
+train.init_checkpoint = "/checkpoints/lyttonhao/mae_pretrain/moco_vitlarge_pretrained_tf2pt.pth"  # init from moco pretrain
+
 
 # Schedule
 
@@ -141,7 +137,7 @@ lr_multiplier.scheduler.num_updates = train.max_iter
 
 # Optimizer hyperparams
 # center = (1.6e-4, 0.1)
-optimizer.lr = 8e-5
+optimizer.lr = 1.6e-4
 optimizer.weight_decay = 0.1
 optimizer.params.overrides = {
     "pos_embed": {"weight_decay": 0.0},
