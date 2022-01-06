@@ -112,10 +112,8 @@ model.roi_heads.box_head.fc_dims = [1024]
 train = model_zoo.get_config("common/train.py").train
 train.amp.enabled = True
 train.ddp.fp16_compression = False
-# # from mae init (MAE-Base-vqvae-1600ep, 83.1% )
-# train.init_checkpoint = "/checkpoint/kaiminghe/converted/2021-09-14-17-42-20-v3-128-mb4096-epo1600-BeiTpartial-ViTBase-lr1.5e-4-wd5e-2-warm40-mask0.75-pred8d512-exNB-msaLNmlpLNeLNpLNkBN0-b0.95-dp0-NOcjit-sincos-clst-NOls-NObinit-NOrelpos-abspos-randmask-YESqkv-minlr-cropv2-NOgclip-VQVAE/pretrained_lastnorm_tf2pt.pth"  
-# from mae init (MAE-Base-vqvaeIN1k-1600ep, X% )
-train.init_checkpoint = "/checkpoint/kaiminghe/converted/2021-09-22-20-19-58-v3-128-mb4096-epo1600-BeiTpartial-ViTBase-lr1.5e-4-wd5e-2-warm40-mask0.75-pred8d512-exNB-msaLNmlpLNeLNpLNkBN0-b0.95-dp0-NOcjit-sincos-clst-NOls-NObinit-NOrelpos-abspos-randmask-YESqkv-minlr-cropv2-NOgclip-VQVAE-INv3/pretrained_lastnorm_tf2pt.pth"  
+# # from mae init (MMAE-Base-removeMeanStd-1600ep, X% )
+train.init_checkpoint = "/checkpoint/kaiminghe/converted/2021-10-26-03-13-08-v3-128-mb4096-epo1600-PMAEp16-ViTBase-lr1.5e-4-wd5e-2-warm40-mask0.75-pred8d512-exNB-msaLNmlpLNeLNpLNkBN0-1view-NOrelpos-abspos-clstoken-qkv-NOlayerscale-LNtgt/pretrained_lastnorm_tf2pt.pth"  
 
 
 # Schedule
@@ -144,7 +142,7 @@ lr_multiplier.scheduler.num_updates = train.max_iter
 
 # Optimizer hyperparams
 optimizer.lr = 8e-5
-optimizer.weight_decay = 0.05
+optimizer.weight_decay = 0.1
 optimizer.params.overrides = {
     "pos_embed": {"weight_decay": 0.0},
     "relative_position_bias_table": {"weight_decay": 0.0},

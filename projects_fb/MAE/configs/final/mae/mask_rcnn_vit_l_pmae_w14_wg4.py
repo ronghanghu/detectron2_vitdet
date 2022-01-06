@@ -50,7 +50,7 @@ model.backbone.bottom_up = L(ViTUp1)(  # Creates multi-scale feature maps from V
         embed_dim=embed_dim,
         depth=depth,
         num_heads=num_heads,
-        drop_path_rate=0.1,
+        drop_path_rate=0.3,
         window_size=14,
         mlp_ratio=4,
         qkv_bias=True,
@@ -112,11 +112,8 @@ model.roi_heads.box_head.fc_dims = [1024]
 train = model_zoo.get_config("common/train.py").train
 train.amp.enabled = True
 train.ddp.fp16_compression = False
-# # from mae init (MAE-Large-vqvae-1600ep, 85.7% )
-# train.init_checkpoint = "/checkpoint/kaiminghe/converted/2021-09-17-18-25-48-v3-128-mb4096-epo1600-BeiTpartial-ViTLarge-lr1.5e-4-wd5e-2-warm40-mask0.75-pred8d512-exNB-msaLNmlpLNeLNpLNkBN0-b0.95-dp0-NOcjit-sincos-clst-NOls-NObinit-NOrelpos-abspos-randmask-YESqkv-minlr-cropv2-NOgclip-VQVAE/pretrained_lastnorm_tf2pt.pth"  
-# from mae init (MAE-Large-vqvaeIN1k-1600ep, X% )
-train.init_checkpoint = "/checkpoint/kaiminghe/converted/2021-09-20-22-07-06-v3-128-mb4096-epo1600-BeiTpartial-ViTLarge-lr1.5e-4-wd5e-2-warm40-mask0.75-pred8d512-exNB-msaLNmlpLNeLNpLNkBN0-b0.95-dp0-NOcjit-sincos-clst-NOls-NObinit-NOrelpos-abspos-randmask-YESqkv-minlr-cropv2-NOgclip-VQVAE-INv3/pretrained_lastnorm_tf2pt.pth"  
-
+# from mae init (MAE-Large-removeMeanStd-1600ep, X% )
+train.init_checkpoint = "/checkpoint/kaiminghe/converted/2021-10-26-22-16-05-v3-128-mb4096-epo1600-PMAEp16-ViTLarge-lr1e-4-wd5e-2-warm40-mask0.75-pred8d512-exNB-msaLNmlpLNeLNpLNkBN0-1view-NOrelpos-abspos-clstoken-qkv-NOlayerscale-LNtgt-resume3/pretrained_lastnorm_tf2pt.pth"  
 
 
 
@@ -146,7 +143,7 @@ lr_multiplier.scheduler.num_updates = train.max_iter
 
 # Optimizer hyperparams
 optimizer.lr = 8e-5
-optimizer.weight_decay = 0.05
+optimizer.weight_decay = 0.1
 optimizer.params.overrides = {
     "pos_embed": {"weight_decay": 0.0},
     "relative_position_bias_table": {"weight_decay": 0.0},
