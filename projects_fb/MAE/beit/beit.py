@@ -22,8 +22,10 @@ from timm.models.layers import drop_path, to_2tuple, trunc_normal_
 from fairscale.nn.checkpoint import checkpoint_wrapper
 from detectron2.modeling import Backbone
 from scipy import interpolate
+import fvcore.nn.weight_init as weight_init
 
 from ..vit.vit import make_window, revert_window
+from ..vit.blocks import BasicBlock, BottleneckBlock, SingleBlock, PreBasicBlock, ConvNextBlock
 
 
 logger = logging.getLogger(__name__)
@@ -170,7 +172,10 @@ class Block(nn.Module):
 
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
                  drop_path=0., init_values=None, act_layer=nn.GELU, norm_layer=nn.LayerNorm,
-                 rel_window_size=None, attn_head_dim=None, win_size=0, use_cls_token=True):
+                 rel_window_size=None, attn_head_dim=None, win_size=0, use_cls_token=True,
+                 residual_block=None, residual_norm="BN", residual_act="relu", residual_kernel_size=3,
+                 residual_num_block=1,
+                 ):
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = Attention(
@@ -190,6 +195,75 @@ class Block(nn.Module):
         
         self.win_size = win_size
         self.hw = None
+
+        self.residual_block = residual_block
+        if residual_block:
+            if residual_block == "basic":
+                self.residual = nn.Sequential(
+                    *[BasicBlock(
+                        in_channels=dim,
+                        out_channels=dim,
+                        norm=residual_norm,
+                        activation=residual_act,
+                        kernel_size=residual_kernel_size,
+                        final_block=(i == residual_num_block - 1),
+                    ) for i in range(residual_num_block)]
+                )
+            elif residual_block == "bottleneck":
+                self.residual = nn.Sequential(
+                    *[BottleneckBlock(
+                        in_channels=dim,
+                        out_channels=dim,
+                        bottleneck_channels=dim // 4,
+                        norm=residual_norm,
+                        activation=residual_act,
+                        kernel_size=residual_kernel_size,
+                        final_block=(i == residual_num_block - 1),
+                    ) for i in range(residual_num_block)]
+                )
+            elif residual_block == "bottleneck2":
+                self.residual = nn.Sequential(
+                    *[BottleneckBlock(
+                        in_channels=dim,
+                        out_channels=dim,
+                        bottleneck_channels=dim // 2,
+                        norm=residual_norm,
+                        activation=residual_act,
+                        kernel_size=residual_kernel_size,
+                        final_block=(i == residual_num_block - 1),
+                    ) for i in range(residual_num_block)]
+                )
+            elif residual_block == "single":
+                self.residual = nn.Sequential(
+                    *[SingleBlock(
+                        in_channels=dim,
+                        out_channels=dim,
+                        norm=residual_norm,
+                        activation=residual_act,
+                        kernel_size=residual_kernel_size,
+                        final_block=(i == residual_num_block - 1),
+                    ) for i in range(residual_num_block)]
+                )
+            elif residual_block == "pre_basic":
+                self.residual = nn.Sequential(
+                    *[PreBasicBlock(
+                        in_channels=dim,
+                        out_channels=dim,
+                        norm=residual_norm,
+                        activation=residual_act,
+                        kernel_size=residual_kernel_size,
+                        final_block=(i == residual_num_block - 1),
+                    ) for i in range(residual_num_block)]
+                )
+            elif residual_block == "convnext":
+                self.residual = nn.Sequential(
+                    *[ConvNextBlock(
+                        dim=dim,
+                        final_block=(i == residual_num_block - 1),
+                    ) for i in range(residual_num_block)]
+                )
+            else:
+                raise NotImplementedError
 
     def forward(self, x, rel_pos_bias=None):
         # if self.gamma_1 is None:
@@ -212,6 +286,13 @@ class Block(nn.Module):
         else:
             x = ori_x + self.drop_path(self.gamma_1 * x)
             x = x + self.drop_path(self.gamma_2 * self.mlp(self.norm2(x)))       
+
+        if self.residual_block:
+            B, _, C = x.shape
+            x = x.reshape(B, self.hw[0], self.hw[1], C).permute(0, 3, 1, 2)
+
+            x = self.residual(x)
+            x = x.permute(0, 2, 3, 1).view(B, -1, C)
 
         return x
 
@@ -347,13 +428,22 @@ class BEiTDet(Backbone):
                  drop_path_rate=0., norm_layer=nn.LayerNorm, init_values=None,
                  use_abs_pos_emb=True, use_rel_pos_bias=False, use_shared_rel_pos_bias=False,
                  use_mean_pooling=True, init_scale=0.001, use_cls_token=True,
-                 out_features=None, checkpoint_block_num=0, window_size=0, window_block_indexes=[], use_cls_token_det=True,
-                 pretrain_img_size=224, pos_init_checkpoint=None,
+                 out_block_indexes=[], out_features=[], checkpoint_block_num=0, window_size=0, window_block_indexes=[], use_cls_token_det=True,
+                 pretrain_img_size=224, pos_init_checkpoint=None,         
+                 residual_block="bottleneck", residual_block_indexes=[], residual_norm="BN", residual_act="relu",
+                 residual_kernel_size=3, residual_num_block=1,
                  ):
         super().__init__()
         self.num_classes = num_classes
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
         self._out_features = out_features
+        if len(out_block_indexes) == 0:
+            assert len(out_features) != 0
+            # remove 'block' prefix
+            out_block_indexes = [int(name[5:]) for name in out_features]
+
+        self._out_block_indexes = out_block_indexes
+
         self.use_cls_token = use_cls_token
         self.use_cls_token_det = use_cls_token_det
         self.window_block_indexes = window_block_indexes
@@ -402,14 +492,21 @@ class BEiTDet(Backbone):
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer,
                 init_values=init_values, rel_window_size=self.patch_embed.patch_shape if use_rel_pos_bias else None,
                 win_size=window_size if i in window_block_indexes else 0, use_cls_token=use_cls_token_det,
+                residual_block=None if i not in residual_block_indexes else residual_block,
+                residual_norm=residual_norm,
+                residual_act=residual_act,
+                residual_kernel_size=residual_kernel_size,
+                residual_num_block=residual_num_block,
             )
             if i + 1 <= checkpoint_block_num:
                 block = checkpoint_wrapper(block)
 
             self.blocks.append(block)
-            name = f"block{i}"
-            self._out_feature_channels[name] = embed_dim
-            self._out_feature_strides[name] = patch_size
+            # name = f"block{i}"
+            for block_idx, name in zip(self._out_block_indexes, self._out_features):
+                if block_idx == i:
+                    self._out_feature_channels[name] = embed_dim
+                    self._out_feature_strides[name] = patch_size
 
         # self.norm = nn.Identity() if use_mean_pooling else norm_layer(embed_dim)
         # self.fc_norm = norm_layer(embed_dim) if use_mean_pooling else None
@@ -440,12 +537,27 @@ class BEiTDet(Backbone):
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
-            trunc_normal_(m.weight, std=.02)
+            if hasattr(m, "final_linear") and m.final_linear:
+                print("final_linear")
+                nn.init.constant_(m.weight, 0)
+            else:
+                trunc_normal_(m.weight, std=.02)
             if isinstance(m, nn.Linear) and m.bias is not None:
                 nn.init.constant_(m.bias, 0)
-        elif isinstance(m, nn.LayerNorm):
+        elif isinstance(m, (nn.LayerNorm, nn.GroupNorm, nn.BatchNorm2d)):
             nn.init.constant_(m.bias, 0)
-            nn.init.constant_(m.weight, 1.0)
+            nn.init.constant_(m.weight, 0.0 if hasattr(m, "final_norm") and m.final_norm else 1.0)
+            if hasattr(m, "final_norm") and m.final_norm:
+                print("final_norm")
+        elif isinstance(m, nn.Conv2d):
+            # residual blocks
+            if hasattr(m, "final_conv") and m.final_conv:
+                print("final_conv")
+                nn.init.constant_(m.weight, 0.0)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0.0)
+            else:
+                weight_init.c2_msra_fill(m)
     
     def _load_pos_weights(self, pos_init_checkpoint):
         checkpoint = torch.load(pos_init_checkpoint, map_location=torch.device("cpu"))
@@ -550,14 +662,17 @@ class BEiTDet(Backbone):
             if len(self.window_block_indexes) > 0 and i not in self.window_block_indexes:
                 bias = rel_pos_bias_global
             x = blk(x, rel_pos_bias=bias)
-            name = f"block{i}"
+            # name = f"block{i}"
 
-            if name in self._out_features:
+            if i in self._out_block_indexes:
                 x_out = x
                 if self.cls_token is not None:
                     x_out = x_out[:, 1:]
-                outputs[name] = x_out.reshape(bchw[0], bchw[2], bchw[3], -1).permute(0, 3, 1, 2)
-        
+                x_out = x_out.reshape(bchw[0], bchw[2], bchw[3], -1).permute(0, 3, 1, 2)
+                for block_idx, name in zip(self._out_block_indexes, self._out_features):
+                    if block_idx == i:
+                        outputs[name] = x_out
+
         return outputs
 
 
