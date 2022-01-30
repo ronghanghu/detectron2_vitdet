@@ -9,6 +9,8 @@ from fairscale.nn.checkpoint import checkpoint_wrapper
 
 from detectron2.modeling import Backbone
 
+from .blocks import LayerNorm
+
 
 class PatchEmbed(nn.Module):
     """2D Image to Patch Embedding"""
@@ -178,6 +180,7 @@ class Block(nn.Module):
 
         x = ori_x + self.drop_path(x)
         x = x + self.drop_path(self.mlp(self.norm2(x)))
+            
         return x
 
 
@@ -453,12 +456,36 @@ class ViTUp1(Backbone):
                         nn.GELU(),
                         nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
                     )
+                elif mode == 6:
+                    layer = nn.Sequential(
+                        nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
+                        LayerNorm(embed_dim, data_format="channels_first"),
+                        nn.GELU(),
+                        nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
+                    )
+                elif mode == 7:
+                    layer = nn.Sequential(
+                        nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
+                        LayerNorm(embed_dim, data_format="channels_first"),
+                        nn.GELU(),
+                        nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
+                        LayerNorm(embed_dim, data_format="channels_first"),
+                        nn.GELU(),
+                    )
                 else:
                     raise NotImplementedError
             elif scale == 2.0:
-                layer = nn.Sequential(
-                    nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
-                )
+                if mode != 7:
+                    layer = nn.Sequential(
+                        nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
+                    )
+                else:
+                    layer = nn.Sequential(
+                        nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
+                        LayerNorm(embed_dim, data_format="channels_first"),
+                        nn.GELU(),
+                    )
+                   
             elif scale == 1.0:
                 layer = nn.Identity()
             elif scale == 0.5:
