@@ -505,3 +505,106 @@ class ViTUp1(Backbone):
             outputs[self._out_features[i]] = layer(f)
 
         return outputs
+
+
+class ViTUpFirstUp(Backbone):
+    """[summary]
+        input: single scale
+        Upsample first, then downsample for four strides.
+    """
+    def __init__(self, net, in_features, out_features, upscale, scale_factors, embed_dim, mode, out_dim=None):
+        super(ViTUpFirstUp, self).__init__()
+        assert isinstance(net, Backbone)
+        assert len(in_features) == 1
+        assert len(out_features) == len(scale_factors)
+
+        self.scale_factors = scale_factors
+        self.upscale = upscale
+        self.in_feature = in_features[0]
+        out_dim = embed_dim if out_dim is None else out_dim
+
+        input_shapes = net.output_shape()
+        self.net = net
+        self._out_features = out_features
+        self._out_feature_channels = {f: out_dim for f in out_features}
+        self._out_feature_strides = {
+            f: int(input_shapes[self.in_feature].stride / upscale / scale) for f, scale in zip(out_features, scale_factors)
+        }
+        print("resize", self._out_feature_channels, self._out_feature_strides, input_shapes)
+
+        assert upscale == 4
+        self.upscale_layer = nn.Sequential(
+            nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
+            LayerNorm(embed_dim, data_format="channels_first"),
+            nn.GELU(),
+            nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
+            # LayerNorm(embed_dim, data_format="channels_first"),
+            # nn.GELU(),
+        )
+        assert mode in ["max", "conv"]
+        assert mode != "max" or out_dim == embed_dim
+
+        for i, scale in enumerate(scale_factors):
+            if scale == 1 / 8.0:
+                if mode == "max":
+                    layer = nn.MaxPool2d(kernel_size=8, stride=8)
+                else:
+                    layer = nn.Sequential(
+                        nn.Conv2d(embed_dim, out_dim, kernel_size=2, stride=2),
+                        LayerNorm(out_dim, data_format="channels_first"),
+                        nn.GELU(),
+                        nn.Conv2d(out_dim, out_dim, kernel_size=2, stride=2),
+                        LayerNorm(out_dim, data_format="channels_first"),
+                        nn.GELU(),
+                        nn.Conv2d(out_dim, out_dim, kernel_size=2, stride=2),
+                        # LayerNorm(out_dim, data_format="channels_first"),
+                        # nn.GELU(),
+                    )
+            elif scale == 1 / 4.0:
+                if mode == "max":
+                    layer = nn.MaxPool2d(kernel_size=4, stride=4)
+                else:
+                    layer = nn.Sequential(
+                        nn.Conv2d(embed_dim, out_dim, kernel_size=2, stride=2),
+                        LayerNorm(out_dim, data_format="channels_first"),
+                        nn.GELU(),
+                        nn.Conv2d(out_dim, out_dim, kernel_size=2, stride=2),
+                        # LayerNorm(out_dim, data_format="channels_first"),
+                        # nn.GELU(),
+                    )
+            elif scale == 1 / 2.0:
+                if mode == "max":
+                    layer = nn.MaxPool2d(kernel_size=2, stride=2)
+                else:
+                    layer = nn.Sequential(
+                        nn.Conv2d(embed_dim, out_dim, kernel_size=2, stride=2),
+                        # LayerNorm(out_dim, data_format="channels_first"),
+                        # nn.GELU(),
+                    )
+            elif scale == 1.0:
+                if out_dim == embed_dim:
+                    layer = nn.Identity()
+                else:
+                    layer = nn.Sequential(
+                        nn.Conv2d(embed_dim, out_dim, kernel_size=1, stride=1),
+                        # LayerNorm(out_dim, data_format="channels_first"),
+                        # nn.GELU(),
+                    )
+            else:
+                raise NotImplementedError
+            
+            self.add_module(f"stage_{i}", layer)
+
+    def forward(self, x):
+        features = self.net(x)
+
+        feature = self.upscale_layer(features[self.in_feature])
+        outputs = {}
+        for i in range(len(self.scale_factors)):
+            # f = features[self._out_features[i]]
+            # if self.resize_ratio != 1.0:
+            #     f = F.interpolate(f, scale_factor=self.resize_ratio, mode="bicubic")
+            layer = getattr(self, f"stage_{i}")
+            outputs[self._out_features[i]] = layer(feature)
+
+        return outputs
