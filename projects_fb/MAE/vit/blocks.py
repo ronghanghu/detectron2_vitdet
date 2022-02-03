@@ -8,7 +8,15 @@ from detectron2.layers import (
     CNNBlockBase,
     get_norm,
 )
+from detectron2.layers import get_norm as get_norm_default
 from timm.models.layers import DropPath
+
+
+def get_norm(norm, out_channels):
+    if norm == "LN":
+        return LayerNorm(out_channels, data_format="channels_first")
+    else:
+        return get_norm_default(norm, out_channels)
 
 
 class SingleBlock(CNNBlockBase):
@@ -17,7 +25,7 @@ class SingleBlock(CNNBlockBase):
     with two 3x3 conv layers and a projection shortcut if needed.
     """
 
-    def __init__(self, in_channels, out_channels, *, stride=1, kernel_size=3, norm="BN", activation="relu", final_block=True,):
+    def __init__(self, in_channels, out_channels, *, stride=1, kernel_size=3, norm="BN", activation="relu", final_block=True, drop_path=0.0, num_groups=1):
         """
         Args:
             in_channels (int): Number of input channels.
@@ -53,6 +61,7 @@ class SingleBlock(CNNBlockBase):
             kernel_size=kernel_size,
             stride=stride,
             padding=kernel_size // 2,
+            groups=num_groups,
             bias=False,
         )
         self.conv1_norm = get_norm(norm, out_channels)
@@ -66,6 +75,8 @@ class SingleBlock(CNNBlockBase):
             self.conv1_norm.final_norm = final_block
         else:
             self.conv1.final_conv = final_block
+        
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x):
         out = self.conv1(x)
@@ -76,7 +87,7 @@ class SingleBlock(CNNBlockBase):
         else:
             shortcut = x
 
-        out += shortcut
+        out = shortcut + self.drop_path(out)
         out = self.act1(out)
         return out
 
@@ -87,7 +98,7 @@ class BasicBlock(CNNBlockBase):
     with two 3x3 conv layers and a projection shortcut if needed.
     """
 
-    def __init__(self, in_channels, out_channels, *, stride=1, kernel_size=3, norm="BN", activation="relu", final_block=True,):
+    def __init__(self, in_channels, out_channels, *, stride=1, kernel_size=3, norm="BN", activation="relu", final_block=True, drop_path=0.0, num_groups=1):
         """
         Args:
             in_channels (int): Number of input channels.
@@ -123,6 +134,7 @@ class BasicBlock(CNNBlockBase):
             kernel_size=kernel_size,
             stride=stride,
             padding=kernel_size // 2,
+            groups=num_groups,
             bias=False,
         )
         self.conv1_norm = get_norm(norm, out_channels)
@@ -134,6 +146,7 @@ class BasicBlock(CNNBlockBase):
             kernel_size=kernel_size,
             stride=1,
             padding=kernel_size // 2,
+            groups=num_groups,
             bias=False,
         )
         self.conv2_norm = get_norm(norm, out_channels)
@@ -147,6 +160,8 @@ class BasicBlock(CNNBlockBase):
             self.conv2_norm.final_norm = final_block
         else:
             self.conv2.final_conv = final_block
+        
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x):
         out = self.conv1(x)
@@ -161,9 +176,12 @@ class BasicBlock(CNNBlockBase):
         else:
             shortcut = x
 
-        out += shortcut
+        out = shortcut + self.drop_path(out)
         out = self.act2(out)
         return out
+
+
+
 
 
 class PreBasicBlock(CNNBlockBase):
@@ -366,7 +384,7 @@ class ConvNextBlock(nn.Module):
         drop_path (float): Stochastic depth rate. Default: 0.0
         layer_scale_init_value (float): Init value for Layer Scale. Default: 1e-6.
     """
-    def __init__(self, dim, drop_path=0., layer_scale_init_value=0.0, final_block=True):
+    def __init__(self, dim, drop_path=0., layer_scale_init_value=-1.0, final_block=True):
         super().__init__()
         self.dwconv = nn.Conv2d(dim, dim, kernel_size=7, padding=3, groups=dim) # depthwise conv
         self.norm1 = LayerNorm(dim, eps=1e-6)
@@ -374,7 +392,7 @@ class ConvNextBlock(nn.Module):
         self.act = nn.GELU()
         self.pwconv2 = nn.Linear(4 * dim, dim)
         self.gamma = nn.Parameter(layer_scale_init_value * torch.ones((dim)), 
-                                    requires_grad=True) if layer_scale_init_value > 0 else None
+                                    requires_grad=True) if layer_scale_init_value >= 0 else None
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
         self.pwconv2.final_linear = final_block

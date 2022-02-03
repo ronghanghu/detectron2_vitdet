@@ -26,6 +26,7 @@ import fvcore.nn.weight_init as weight_init
 
 from ..vit.vit import make_window, revert_window
 from ..vit.blocks import BasicBlock, BottleneckBlock, SingleBlock, PreBasicBlock, ConvNextBlock
+from .attentions import AttentionPartition
 
 
 logger = logging.getLogger(__name__)
@@ -174,14 +175,23 @@ class Block(nn.Module):
                  drop_path=0., init_values=None, act_layer=nn.GELU, norm_layer=nn.LayerNorm,
                  rel_window_size=None, attn_head_dim=None, win_size=0, use_cls_token=True,
                  residual_block=None, residual_norm="BN", residual_act="relu", residual_kernel_size=3,
-                 residual_num_block=1,
+                 residual_num_block=1, residual_drop_path=False,
+                 attn="Attention", att_partition_size=49, att_partition_q_shuffle=False,
                  ):
         super().__init__()
         self.norm1 = norm_layer(dim)
-        self.attn = Attention(
-            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
-            attn_drop=attn_drop, proj_drop=drop, window_size=rel_window_size, attn_head_dim=attn_head_dim,
-            use_cls_token=use_cls_token)
+        if attn == "Attention":
+            self.attn = Attention(
+                dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
+                attn_drop=attn_drop, proj_drop=drop, window_size=rel_window_size, attn_head_dim=attn_head_dim,
+                use_cls_token=use_cls_token)
+        elif attn == "AttentionPartition":
+            assert attn_head_dim is None
+            self.attn = AttentionPartition(
+                dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
+                attn_drop=attn_drop, proj_drop=drop, partition_size=att_partition_size, 
+                q_shuffle=att_partition_q_shuffle,
+            )
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
@@ -206,7 +216,21 @@ class Block(nn.Module):
                         norm=residual_norm,
                         activation=residual_act,
                         kernel_size=residual_kernel_size,
+                        drop_path=drop_path if residual_drop_path else 0.0,
                         final_block=(i == residual_num_block - 1),
+                    ) for i in range(residual_num_block)]
+                )
+            elif residual_block == "basic_dw":
+                self.residual = nn.Sequential(
+                    *[BasicBlock(
+                        in_channels=dim,
+                        out_channels=dim,
+                        norm=residual_norm,
+                        activation=residual_act,
+                        kernel_size=residual_kernel_size,
+                        drop_path=drop_path if residual_drop_path else 0.0,
+                        final_block=(i == residual_num_block - 1),
+                        num_groups=dim,
                     ) for i in range(residual_num_block)]
                 )
             elif residual_block == "bottleneck":
@@ -241,7 +265,21 @@ class Block(nn.Module):
                         norm=residual_norm,
                         activation=residual_act,
                         kernel_size=residual_kernel_size,
+                        drop_path=drop_path if residual_drop_path else 0.0,
                         final_block=(i == residual_num_block - 1),
+                    ) for i in range(residual_num_block)]
+                )
+            elif residual_block == "single_dw":
+                self.residual = nn.Sequential(
+                    *[SingleBlock(
+                        in_channels=dim,
+                        out_channels=dim,
+                        norm=residual_norm,
+                        activation=residual_act,
+                        kernel_size=residual_kernel_size,
+                        drop_path=drop_path if residual_drop_path else 0.0,
+                        final_block=(i == residual_num_block - 1),
+                        num_groups=dim,
                     ) for i in range(residual_num_block)]
                 )
             elif residual_block == "pre_basic":
@@ -259,6 +297,7 @@ class Block(nn.Module):
                 self.residual = nn.Sequential(
                     *[ConvNextBlock(
                         dim=dim,
+                        drop_path=drop_path if residual_drop_path else 0.0,
                         final_block=(i == residual_num_block - 1),
                     ) for i in range(residual_num_block)]
                 )
@@ -431,7 +470,8 @@ class BEiTDet(Backbone):
                  out_block_indexes=[], out_features=[], checkpoint_block_num=0, window_size=0, window_block_indexes=[], use_cls_token_det=True,
                  pretrain_img_size=224, pos_init_checkpoint=None,         
                  residual_block="bottleneck", residual_block_indexes=[], residual_norm="BN", residual_act="relu",
-                 residual_kernel_size=3, residual_num_block=1,
+                 residual_kernel_size=3, residual_num_block=1, residual_drop_path=False,
+                 att_partition_block_indexes=[], att_partition_size=49, att_partition_q_shuffle=False,
                  ):
         super().__init__()
         self.num_classes = num_classes
@@ -497,6 +537,10 @@ class BEiTDet(Backbone):
                 residual_act=residual_act,
                 residual_kernel_size=residual_kernel_size,
                 residual_num_block=residual_num_block,
+                residual_drop_path=residual_drop_path,
+                attn="AttentionPartition" if i in att_partition_block_indexes else "Attention",
+                att_partition_size=att_partition_size,
+                att_partition_q_shuffle=att_partition_q_shuffle,
             )
             if i + 1 <= checkpoint_block_num:
                 block = checkpoint_wrapper(block)
@@ -558,6 +602,12 @@ class BEiTDet(Backbone):
                     nn.init.constant_(m.bias, 0.0)
             else:
                 weight_init.c2_msra_fill(m)
+        
+        if hasattr(m, "final_norm") or hasattr(m, "final_linear") or hasattr(m, "final_conv"):
+            nn.init.constant_(m.weight, 0)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+            print("final: zero_init")
     
     def _load_pos_weights(self, pos_init_checkpoint):
         checkpoint = torch.load(pos_init_checkpoint, map_location=torch.device("cpu"))
