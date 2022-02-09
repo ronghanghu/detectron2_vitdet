@@ -313,6 +313,13 @@ _C.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG = False
 # If true, RoI heads use bounding boxes predicted by the box head rather than proposal boxes.
 _C.MODEL.ROI_BOX_HEAD.TRAIN_ON_PRED_BOXES = False
 
+_C.MODEL.ROI_BOX_HEAD.USE_SIGMOID_CE = False
+_C.MODEL.ROI_BOX_HEAD.USE_FED_LOSS = False # Federated Loss
+_C.MODEL.ROI_BOX_HEAD.CAT_FREQ_PATH = \
+    'datasets/metadata/lvis_v1_train_cat_info.json'
+_C.MODEL.ROI_BOX_HEAD.FED_LOSS_NUM_CAT = 50
+_C.MODEL.ROI_BOX_HEAD.FED_LOSS_FREQ_WEIGHT = 0.5
+
 # ---------------------------------------------------------------------------- #
 # Cascaded Box Head
 # ---------------------------------------------------------------------------- #

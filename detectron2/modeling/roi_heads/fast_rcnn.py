@@ -12,6 +12,8 @@ from detectron2.modeling.box_regression import Box2BoxTransform
 from detectron2.structures import Boxes, Instances
 from detectron2.utils.events import get_event_storage
 
+from ..utils import load_class_freq, get_fed_loss_inds
+
 __all__ = ["fast_rcnn_inference", "FastRCNNOutputLayers"]
 
 
@@ -349,6 +351,11 @@ class FastRCNNOutputLayers(nn.Module):
         smooth_l1_beta: float = 0.0,
         box_reg_loss_type: str = "smooth_l1",
         loss_weight: Union[float, Dict[str, float]] = 1.0,
+        use_sigmoid_ce = False,
+        use_fed_loss = False,
+        cat_freq_path = '',
+        fed_loss_num_cat = 50,
+        fed_loss_freq_weight = 0.5,
     ):
         """
         NOTE: this interface is experimental.
@@ -394,6 +401,16 @@ class FastRCNNOutputLayers(nn.Module):
         if isinstance(loss_weight, float):
             loss_weight = {"loss_cls": loss_weight, "loss_box_reg": loss_weight}
         self.loss_weight = loss_weight
+        self.use_sigmoid_ce = use_sigmoid_ce
+        self.use_fed_loss = use_fed_loss
+        self.fed_loss_num_cat = fed_loss_num_cat
+
+        if self.use_fed_loss:
+            freq_weight = load_class_freq(cat_freq_path, fed_loss_freq_weight)
+            self.register_buffer('freq_weight', freq_weight)
+            assert len(self.freq_weight) == self.num_classes
+        else:
+            self.freq_weight = None
 
     @classmethod
     def from_config(cls, cfg, input_shape):
@@ -409,6 +426,11 @@ class FastRCNNOutputLayers(nn.Module):
             "test_topk_per_image"   : cfg.TEST.DETECTIONS_PER_IMAGE,
             "box_reg_loss_type"     : cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_LOSS_TYPE,
             "loss_weight"           : {"loss_box_reg": cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_LOSS_WEIGHT},
+            'use_sigmoid_ce': cfg.MODEL.ROI_BOX_HEAD.USE_SIGMOID_CE,
+            'use_fed_loss': cfg.MODEL.ROI_BOX_HEAD.USE_FED_LOSS,
+            'fed_loss_num_cat': cfg.MODEL.ROI_BOX_HEAD.FED_LOSS_NUM_CAT,
+            'cat_freq_path': cfg.MODEL.ROI_BOX_HEAD.CAT_FREQ_PATH,
+            'fed_loss_freq_weight': cfg.MODEL.ROI_BOX_HEAD.FED_LOSS_FREQ_WEIGHT,
             # fmt: on
         }
 
@@ -465,13 +487,74 @@ class FastRCNNOutputLayers(nn.Module):
         else:
             proposal_boxes = gt_boxes = torch.empty((0, 4), device=proposal_deltas.device)
 
+        if self.use_sigmoid_ce:
+            loss_cls = self.sigmoid_cross_entropy_loss(scores, gt_classes)
+        else:
+            loss_cls = self.softmax_cross_entropy_loss(scores, gt_classes)
+
         losses = {
-            "loss_cls": cross_entropy(scores, gt_classes, reduction="mean"),
+            "loss_cls": loss_cls,
             "loss_box_reg": self.box_reg_loss(
                 proposal_boxes, gt_boxes, proposal_deltas, gt_classes
             ),
         }
         return {k: v * self.loss_weight.get(k, 1.0) for k, v in losses.items()}
+
+    def sigmoid_cross_entropy_loss(self, pred_class_logits, gt_classes):
+        if pred_class_logits.numel() == 0:
+            return pred_class_logits.new_zeros([1])[0] # This is more robust than .sum() * 0.
+
+        B = pred_class_logits.shape[0]
+        C = pred_class_logits.shape[1] - 1
+
+        target = pred_class_logits.new_zeros(B, C + 1)
+        target[range(len(gt_classes)), gt_classes] = 1 # B x (C + 1)
+        target = target[:, :C] # B x C
+
+        weight = 1
+
+        if self.use_fed_loss and (self.freq_weight is not None): # fedloss
+            appeared = get_fed_loss_inds(
+                gt_classes, 
+                num_sample_cats=self.fed_loss_num_cat,
+                C=C,
+                weight=self.freq_weight)
+            appeared_mask = appeared.new_zeros(C + 1)
+            appeared_mask[appeared] = 1 # C + 1
+            appeared_mask = appeared_mask[:C]
+            fed_w = appeared_mask.view(1, C).expand(B, C)
+            weight = weight * fed_w.float()
+
+        cls_loss = F.binary_cross_entropy_with_logits(
+            pred_class_logits[:, :-1], target, reduction='none') # B x C
+        loss =  torch.sum(cls_loss * weight) / B  
+        return loss
+
+
+    def softmax_cross_entropy_loss(self, pred_class_logits, gt_classes):
+        """
+        change _no_instance handling
+        """
+        if pred_class_logits.numel() == 0:
+            return pred_class_logits.new_zeros([1])[0]
+
+        if self.use_fed_loss and (self.freq_weight is not None): # fedloss
+            C = pred_class_logits.shape[1] - 1
+            appeared = get_fed_loss_inds(
+                gt_classes, 
+                num_sample_cats=self.fed_loss_num_cat,
+                C=C,
+                weight=self.freq_weight)
+            appeared_mask = appeared.new_zeros(C + 1).float()
+            appeared_mask[appeared] = 1. # C + 1
+            appeared_mask[C] = 1.
+            loss = F.cross_entropy(
+                pred_class_logits, gt_classes, 
+                weight=appeared_mask, reduction="mean")        
+        else:
+            loss = F.cross_entropy(
+                pred_class_logits, gt_classes, reduction="mean")                  
+        return loss
 
     def box_reg_loss(self, proposal_boxes, gt_boxes, pred_deltas, gt_classes):
         """
@@ -618,5 +701,8 @@ class FastRCNNOutputLayers(nn.Module):
         """
         scores, _ = predictions
         num_inst_per_image = [len(p) for p in proposals]
-        probs = F.softmax(scores, dim=-1)
+        if self.use_sigmoid_ce:
+            probs = scores.sigmoid()
+        else:
+            probs = F.softmax(scores, dim=-1)
         return probs.split(num_inst_per_image, dim=0)
