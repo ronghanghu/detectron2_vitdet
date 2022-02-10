@@ -86,7 +86,7 @@ model.backbone.norm = "LN"  # Use LN in FPN
 
 model.roi_heads.box_head.conv_norm = (
     model.roi_heads.mask_head.conv_norm
-) = LN
+) = "LN"
 
 # 2conv in RPN:
 # https://github.com/tensorflow/tpu/blob/b24729de804fdb751b06467d3dce0637fa652060/models/official/detection/modeling/architecture/heads.py#L95-L97  # noqa: E501, B950
