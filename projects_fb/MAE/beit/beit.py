@@ -26,7 +26,7 @@ import fvcore.nn.weight_init as weight_init
 
 from ..vit.vit import make_window, revert_window
 from ..vit.blocks import BasicBlock, BottleneckBlock, SingleBlock, PreBasicBlock, ConvNextBlock
-from .attentions import AttentionPartition
+from .attentions import AttentionPartition, AttentionSubsampleMaxpool
 
 
 logger = logging.getLogger(__name__)
@@ -177,6 +177,7 @@ class Block(nn.Module):
                  residual_block=None, residual_norm="BN", residual_act="relu", residual_kernel_size=3,
                  residual_num_block=1, residual_drop_path=False,
                  attn="Attention", att_partition_size=49, att_partition_q_shuffle=False,
+                 att_pool_kernel=2,
                  ):
         super().__init__()
         self.norm1 = norm_layer(dim)
@@ -192,6 +193,12 @@ class Block(nn.Module):
                 attn_drop=attn_drop, proj_drop=drop, partition_size=att_partition_size, 
                 q_shuffle=att_partition_q_shuffle,
             )
+        elif attn == "AttentionMaxpool":
+            self.attn = AttentionSubsampleMaxpool(
+                dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
+                attn_drop=attn_drop, proj_drop=drop, pool_kernel=att_pool_kernel,
+            )
+
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
@@ -471,7 +478,8 @@ class BEiTDet(Backbone):
                  pretrain_img_size=224, pos_init_checkpoint=None,         
                  residual_block="bottleneck", residual_block_indexes=[], residual_norm="BN", residual_act="relu",
                  residual_kernel_size=3, residual_num_block=1, residual_drop_path=False,
-                 att_partition_block_indexes=[], att_partition_size=49, att_partition_q_shuffle=False,
+                 att_block="Attention", att_block_indexes=[], att_partition_size=49, att_partition_q_shuffle=False,
+                 att_pool_kernel=2,
                  ):
         super().__init__()
         self.num_classes = num_classes
@@ -538,9 +546,10 @@ class BEiTDet(Backbone):
                 residual_kernel_size=residual_kernel_size,
                 residual_num_block=residual_num_block,
                 residual_drop_path=residual_drop_path,
-                attn="AttentionPartition" if i in att_partition_block_indexes else "Attention",
+                attn=att_block if i in att_block_indexes else "Attention",
                 att_partition_size=att_partition_size,
                 att_partition_q_shuffle=att_partition_q_shuffle,
+                att_pool_kernel=att_pool_kernel,
             )
             if i + 1 <= checkpoint_block_num:
                 block = checkpoint_wrapper(block)
