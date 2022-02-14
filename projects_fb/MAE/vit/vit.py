@@ -608,3 +608,58 @@ class ViTUpFirstUp(Backbone):
             outputs[self._out_features[i]] = layer(feature)
 
         return outputs
+
+
+class ViTUpDimDown(Backbone):
+    def __init__(self, net, in_features, scale_factors, embed_dim, mode=1, resize_ratio=1.0):
+        super(ViTUpDimDown, self).__init__()
+        assert isinstance(net, Backbone)
+        assert len(in_features) == len(scale_factors)
+
+        self.scale_factors = scale_factors
+        self.resize_ratio = resize_ratio
+
+        input_shapes = net.output_shape()
+        self.net = net
+        self._out_features = in_features
+        self._out_feature_channels = {}
+        self._out_feature_strides = {}
+        for f, scale in zip(in_features, scale_factors):
+            self._out_feature_channels[f] = int(input_shapes[f].channels / scale) if scale > 1.0 else input_shapes[f].channels
+            self._out_feature_strides[f] = int(input_shapes[f].stride / resize_ratio / scale)
+
+        print("ViTUpDimDown", self._out_feature_channels, self._out_feature_strides, input_shapes)
+        for i, scale in enumerate(scale_factors):
+            if scale == 4.0:
+                if mode == 6:
+                    layer = nn.Sequential(
+                        nn.ConvTranspose2d(embed_dim, embed_dim // 2, kernel_size=2, stride=2),
+                        LayerNorm(embed_dim // 2, data_format="channels_first"),
+                        nn.GELU(),
+                        nn.ConvTranspose2d(embed_dim // 2, embed_dim // 4, kernel_size=2, stride=2),
+                    )
+                else:
+                    raise NotImplementedError
+            elif scale == 2.0:
+                layer = nn.Sequential(
+                    nn.ConvTranspose2d(embed_dim, embed_dim // 2, kernel_size=2, stride=2),
+                )
+            elif scale == 1.0:
+                layer = nn.Identity()
+            elif scale == 0.5:
+                layer = nn.MaxPool2d(kernel_size=2, stride=2)
+
+            self.add_module(f"stage_{i}", layer)
+
+    def forward(self, x):
+        features = self.net(x)
+
+        outputs = {}
+        for i in range(len(self.scale_factors)):
+            f = features[self._out_features[i]]
+            if self.resize_ratio != 1.0:
+                f = F.interpolate(f, scale_factor=self.resize_ratio, mode="bicubic")
+            layer = getattr(self, f"stage_{i}")
+            outputs[self._out_features[i]] = layer(f)
+
+        return outputs
