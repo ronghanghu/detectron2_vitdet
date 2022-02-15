@@ -93,6 +93,7 @@ class Attention(nn.Module):
             self.qkv = nn.Linear(dim, all_head_dim * 3, bias=False)
             if qkv_bias:
                 self.q_bias = nn.Parameter(torch.zeros(all_head_dim))
+                self.v_bias = nn.Parameter(torch.zeros(all_head_dim))
             else:
                 self.q_bias = None
                 self.v_bias = None
