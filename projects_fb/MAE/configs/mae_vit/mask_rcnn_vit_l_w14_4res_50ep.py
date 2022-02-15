@@ -8,7 +8,7 @@ from detectron2.config import LazyCall as L
 from detectron2.layers.batch_norm import NaiveSyncBatchNorm
 from detectron2.solver import WarmupParamScheduler
 
-from ...vit.vit import ViTUp1
+from ...vit.vit import ViTUpDimDown
 from ...beit.beit import BEiTDet
 from ..common.coco import dataloader
 from ..common.optim import AdamW as optimizer
@@ -44,7 +44,7 @@ model = model_zoo.get_config("common/models/mask_rcnn_fpn.py").model
 model.pixel_mean = [123.675, 116.28, 103.53]
 model.pixel_std = [58.395, 57.12, 57.375]
 model.input_format = "RGB"
-model.backbone.bottom_up = L(ViTUp1)(  # Creates multi-scale feature maps from ViT backbone
+model.backbone.bottom_up = L(ViTUpDimDown)(  # Creates multi-scale feature maps from ViT backbone
     net=L(BEiTDet)(  # Single-scale ViT backbone
         img_size=image_size,
         patch_size=16,
@@ -129,10 +129,16 @@ lr_multiplier.scheduler.milestones = [
 lr_multiplier.scheduler.num_updates = train.max_iter
 
 
+from ..common.optim import AdamLayerDecay as optimizer
+
+
 # Optimized hyperparams
-optimizer.lr = 2e-5
+optimizer.lr = 1e-4
 optimizer.weight_decay = 0.1
 optimizer.params.overrides = {
     "pos_embed": {"weight_decay": 0.0},
     "relative_position_bias_table": {"weight_decay": 0.0},
 }
+optimizer.params.lr_decay_rate = 0.8
+optimizer.params.num_layers = 24
+optimizer.params.skip_lr_decay = ["residual."]
