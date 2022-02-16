@@ -40,7 +40,7 @@ size2config = {
     },
 }
 
-config = size2config["B"]
+config = size2config["L-22k"]
 
 train = model_zoo.get_config("common/train.py").train
 train.amp.enabled = True
@@ -131,14 +131,15 @@ dataloader.test.mapper.augmentations = [
     L(T.FixedSizeCrop)(crop_size=(image_size, image_size)),
 ]
 
-train.max_iter = 180000
-train.eval_period = 0
+# 100 ep = 156250 iters * 64 images/iter / 100000 images/ep
+train.max_iter = 156250
+train.eval_period = 78125
 num_node = 8
 
 lr_multiplier = L(WarmupParamScheduler)(
     scheduler=L(MultiStepParamScheduler)(
         values=[1.0, 0.1, 0.01],
-        milestones=[160000, 173333],
+        milestones=[138889, 150463],  # following training schedules in table 15 of https://arxiv.org/abs/2101.11605v1
         num_updates=train.max_iter,
     ),
     warmup_length=2000 / num_node / train.max_iter,
@@ -146,7 +147,7 @@ lr_multiplier = L(WarmupParamScheduler)(
 )
 
 # Rescale schedule
-train.max_iter = train.max_iter // 2  # 115.2 ep -> 57.6ep
+train.max_iter = train.max_iter // 2  # 100 ep -> 50 ep
 lr_multiplier.scheduler.milestones = [
     milestone // 2 for milestone in lr_multiplier.scheduler.milestones
 ]
