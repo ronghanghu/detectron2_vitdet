@@ -124,11 +124,11 @@ lr_multiplier = L(WarmupParamScheduler)(
 )
 
 # Rescale schedule
-train.max_iter = train.max_iter // 2  # 100ep -> 50ep
-lr_multiplier.scheduler.milestones = [
-    milestone // 2 for milestone in lr_multiplier.scheduler.milestones
-]
-lr_multiplier.scheduler.num_updates = train.max_iter
+# train.max_iter = train.max_iter // 2  # 100ep -> 50ep
+# lr_multiplier.scheduler.milestones = [
+#     milestone // 2 for milestone in lr_multiplier.scheduler.milestones
+# ]
+# lr_multiplier.scheduler.num_updates = train.max_iter
 
 
 # # Optimized hyperparams
