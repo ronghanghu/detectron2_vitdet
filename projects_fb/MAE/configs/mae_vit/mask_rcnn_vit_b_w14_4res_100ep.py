@@ -102,8 +102,7 @@ train = model_zoo.get_config("common/train.py").train
 train.amp.enabled = True
 train.ddp.fp16_compression = False
 # # from mae init (MMAE-Base-removeMeanStd-1600ep, X% )
-# train.init_checkpoint = "manifold://winvision/tree/lyttonhao/mae_pretrain/MAE-Base-removeMeanStd-1600ep.pth"
-train.init_checkpoint = "/checkpoint/kaiminghe/converted/2021-10-26-03-13-08-v3-128-mb4096-epo1600-PMAEp16-ViTBase-lr1.5e-4-wd5e-2-warm40-mask0.75-pred8d512-exNB-msaLNmlpLNeLNpLNkBN0-1view-NOrelpos-abspos-clstoken-qkv-NOlayerscale-LNtgt/pretrained_lastnorm_tf2pt.pth"  
+train.init_checkpoint = "manifold://winvision/tree/lyttonhao/mae_pretrain/MAE-Base-removeMeanStd-1600ep.pth"
 
 
 

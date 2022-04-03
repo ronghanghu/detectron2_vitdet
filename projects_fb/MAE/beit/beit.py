@@ -25,8 +25,11 @@ from scipy import interpolate
 import fvcore.nn.weight_init as weight_init
 
 from ..vit.vit import make_window, revert_window
-from ..vit.blocks import BasicBlock, BottleneckBlock, SingleBlock, PreBasicBlock, ConvNextBlock
-from .attentions import AttentionPartition, AttentionSubsampleMaxpool
+from ..vit.blocks import (
+    BasicBlock, BottleneckBlock, SingleBlock, PreBasicBlock, ConvNextBlock, Conv31Block, Conv31Group32Block,
+    MaxPoolBlock, AvgPoolBlock
+)
+from .attentions import AttentionPartition, AttentionSubsampleMaxpool, AttentionPool
 
 
 logger = logging.getLogger(__name__)
@@ -51,7 +54,7 @@ class DropPath(nn.Module):
 
     def forward(self, x):
         return drop_path(x, self.drop_prob, self.training)
-    
+
     def extra_repr(self) -> str:
         return 'p={}'.format(self.drop_prob)
 
@@ -70,16 +73,87 @@ class Mlp(nn.Module):
         x = self.fc1(x)
         x = self.act(x)
         # x = self.drop(x)
-        # commit this for the orignal BERT implement 
+        # commit this for the orignal BERT implement
         x = self.fc2(x)
         x = self.drop(x)
         return x
 
 
+def get_rel_pos(rel_pos, d):
+    if isinstance(d, int):
+        ori_d = rel_pos.shape[0]
+        if ori_d == d:
+            return rel_pos
+        else:
+            # Interpolate rel pos.
+            new_pos_embed = F.interpolate(
+                rel_pos.reshape(1, ori_d, -1).permute(0, 2, 1),
+                size=d,
+                mode="linear",
+            )
+
+            return new_pos_embed.reshape(-1, d).permute(1, 0)
+
+
+def cal_rel_pos_spatial(
+    attn,
+    q,
+    hw,
+    has_cls_embed,
+    rel_pos_h,
+    rel_pos_w,
+):
+    """
+    Spatial Relative Positional Embeddings.
+    """
+    sp_idx = 1 if has_cls_embed else 0
+    # q_h = q_w = k_h = k_w = int((q.shape[2] - sp_idx) ** 0.5)
+    q_h = k_h = hw[0]
+    q_w = k_w = hw[1]
+
+    dh = int(2 * max(q_h, k_h) - 1)
+    dw = int(2 * max(q_w, k_w) - 1)
+    # Intepolate rel pos if needed.
+    rel_pos_h = get_rel_pos(rel_pos_h, dh)
+    rel_pos_w = get_rel_pos(rel_pos_w, dw)
+
+    # Scale up rel pos if shapes for q and k are different.
+    q_h_ratio = max(k_h / q_h, 1.0)
+    k_h_ratio = max(q_h / k_h, 1.0)
+    dist_h = (
+        torch.arange(q_h)[:, None] * q_h_ratio - torch.arange(k_h)[None, :] * k_h_ratio
+    )
+    dist_h += (k_h - 1) * k_h_ratio
+    q_w_ratio = max(k_w / q_w, 1.0)
+    k_w_ratio = max(q_w / k_w, 1.0)
+    dist_w = (
+        torch.arange(q_w)[:, None] * q_w_ratio - torch.arange(k_w)[None, :] * k_w_ratio
+    )
+    dist_w += (k_w - 1) * k_w_ratio
+
+    Rh = rel_pos_h[dist_h.long()]
+    Rw = rel_pos_w[dist_w.long()]
+
+    B, n_head, q_N, dim = q.shape
+
+    r_q = q[:, :, sp_idx:].reshape(B, n_head, q_h, q_w, dim)
+    rel_h = torch.einsum("byhwc,hkc->byhwk", r_q, Rh)
+    rel_w = torch.einsum("byhwc,wkc->byhwk", r_q, Rw)
+
+    attn[:, :, sp_idx:, sp_idx:] = (
+        attn[:, :, sp_idx:, sp_idx:].view(B, -1, q_h, q_w, k_h, k_w)
+        + rel_h[:, :, :, :, :, None]
+        + rel_w[:, :, :, :, None, :]
+    ).view(B, -1, q_h * q_w, k_h * k_w)
+
+    return attn
+
+
 class Attention(nn.Module):
     def __init__(
-            self, dim, num_heads=8, qkv_bias=False, k_bias=False, qk_scale=None, attn_drop=0.,
-            proj_drop=0., window_size=None, attn_head_dim=None, use_cls_token=True):
+            self, dim, num_heads=8, qkv_bias=False, seperate_qkv=False, k_bias=False, qk_scale=None, attn_drop=0.,
+            proj_drop=0., window_size=None, attn_head_dim=None, use_cls_token=True,
+            rel_q=False, rel_q_zero_init=True, input_size=None):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
@@ -89,16 +163,25 @@ class Attention(nn.Module):
         self.scale = qk_scale or head_dim ** -0.5
 
         self.k_bias = k_bias
-        if not k_bias:
-            self.qkv = nn.Linear(dim, all_head_dim * 3, bias=False)
-            if qkv_bias:
-                self.q_bias = nn.Parameter(torch.zeros(all_head_dim))
-                self.v_bias = nn.Parameter(torch.zeros(all_head_dim))
-            else:
-                self.q_bias = None
-                self.v_bias = None
+        self.seperate_qkv = seperate_qkv
+        self.hw = None
+
+        if seperate_qkv:
+            # compatible for mvit codebase
+            self.q = nn.Linear(dim, all_head_dim, bias=qkv_bias)
+            self.k = nn.Linear(dim, all_head_dim, bias=qkv_bias)
+            self.v = nn.Linear(dim, all_head_dim, bias=qkv_bias)
         else:
-            self.qkv = nn.Linear(dim, all_head_dim * 3, bias=qkv_bias)
+            if not k_bias:
+                self.qkv = nn.Linear(dim, all_head_dim * 3, bias=False)
+                if qkv_bias:
+                    self.q_bias = nn.Parameter(torch.zeros(all_head_dim))
+                    self.v_bias = nn.Parameter(torch.zeros(all_head_dim))
+                else:
+                    self.q_bias = None
+                    self.v_bias = None
+            else:
+                self.qkv = nn.Linear(dim, all_head_dim * 3, bias=qkv_bias)
 
         if window_size:
             self.window_size = window_size
@@ -136,21 +219,52 @@ class Attention(nn.Module):
 
         self.use_cls_token = use_cls_token
 
-    def forward(self, x, rel_pos_bias=None):
-        B, N, C = x.shape
-        if not self.k_bias:
-            qkv_bias = None
-            if self.q_bias is not None:
-                qkv_bias = torch.cat((self.q_bias, torch.zeros_like(self.v_bias, requires_grad=False), self.v_bias))
-            # qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-            qkv = F.linear(input=x, weight=self.qkv.weight, bias=qkv_bias)
-        else:
-            qkv = self.qkv(x)
-        qkv = qkv.reshape(B, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
+        self.rel_q = rel_q
+        if self.rel_q:
+            assert input_size[0] == input_size[1]
 
-        q = q * self.scale
-        attn = (q @ k.transpose(-2, -1))
+            rel_dim_h = 2 * input_size[0] - 1
+            rel_dim_w = 2 * input_size[1] - 1
+
+            self.rel_pos_h = nn.Parameter(torch.zeros(rel_dim_h, head_dim))
+            self.rel_pos_w = nn.Parameter(torch.zeros(rel_dim_w, head_dim))
+
+            if not rel_q_zero_init:
+                trunc_normal_(self.rel_pos_h, std=0.02)
+                trunc_normal_(self.rel_pos_w, std=0.02)
+
+    def forward(self, x, rel_pos_bias=None, mask=None):
+        B, N, C = x.shape
+        if self.seperate_qkv:
+            q = k = v = x
+            q = (
+                self.q(q)
+                .reshape(B, N, self.num_heads, -1)
+                .permute(0, 2, 1, 3)
+            )
+            k = (
+                self.k(k)
+                .reshape(B, N, self.num_heads, -1)
+                .permute(0, 2, 1, 3)
+            )
+            v = (
+                self.v(v)
+                .reshape(B, N, self.num_heads, -1)
+                .permute(0, 2, 1, 3)
+            )
+        else:
+            if not self.k_bias:
+                qkv_bias = None
+                if self.q_bias is not None:
+                    qkv_bias = torch.cat((self.q_bias, torch.zeros_like(self.v_bias, requires_grad=False), self.v_bias))
+                # qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+                qkv = F.linear(input=x, weight=self.qkv.weight, bias=qkv_bias)
+            else:
+                qkv = self.qkv(x)
+            qkv = qkv.reshape(B, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
+            q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
+
+        attn = ((q * self.scale) @ k.transpose(-2, -1))
 
         if self.relative_position_bias_table is not None:
             relative_position_bias = \
@@ -166,8 +280,24 @@ class Attention(nn.Module):
             if not self.use_cls_token:
                 rel_pos_bias = rel_pos_bias[:, 1:, 1:]
             attn = attn + rel_pos_bias
-        
-        attn = attn.softmax(dim=-1)
+
+        if self.rel_q:
+            attn = cal_rel_pos_spatial(
+                attn,
+                q,
+                self.hw,
+                self.use_cls_token,
+                self.rel_pos_h,
+                self.rel_pos_w,
+            )
+
+        if mask is not None:
+            nW = mask.shape[0]
+            attn = attn.view(B // nW, nW, self.num_heads, N, N) + mask.unsqueeze(1).unsqueeze(0)
+            attn = attn.view(-1, self.num_heads, N, N)
+            attn = attn.softmax(dim=-1)
+        else:
+            attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
 
         x = (attn @ v).transpose(1, 2).reshape(B, N, -1)
@@ -178,32 +308,42 @@ class Attention(nn.Module):
 
 class Block(nn.Module):
 
-    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, k_bias=False, qk_scale=None, drop=0., attn_drop=0.,
+    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, seperate_qkv=False, k_bias=False, qk_scale=None, drop=0., attn_drop=0.,
                  drop_path=0., init_values=None, act_layer=nn.GELU, norm_layer=nn.LayerNorm,
-                 rel_window_size=None, attn_head_dim=None, win_size=0, use_cls_token=True,
+                 rel_window_size=None, attn_head_dim=None, win_size=0, win_shift=False, use_cls_token=True,
                  residual_block=None, residual_norm="BN", residual_act="relu", residual_kernel_size=3,
                  residual_num_block=1, residual_drop_path=False,
                  attn="Attention", att_partition_size=49, att_partition_q_shuffle=False,
-                 att_pool_kernel=2,
+                 att_pool_kernel=2, att_pool_stride=2, att_pool_mode="max",
+                 rel_q=False, rel_q_zero_init=True, input_size=None,
                  ):
         super().__init__()
         self.norm1 = norm_layer(dim)
         if attn == "Attention":
             self.attn = Attention(
-                dim, num_heads=num_heads, qkv_bias=qkv_bias, k_bias=k_bias, qk_scale=qk_scale,
+                dim, num_heads=num_heads, qkv_bias=qkv_bias, seperate_qkv=seperate_qkv, k_bias=k_bias, qk_scale=qk_scale,
                 attn_drop=attn_drop, proj_drop=drop, window_size=rel_window_size, attn_head_dim=attn_head_dim,
-                use_cls_token=use_cls_token)
+                use_cls_token=use_cls_token, rel_q=rel_q, rel_q_zero_init=rel_q_zero_init,
+                input_size=input_size if win_size == 0 else (win_size, win_size),
+            )
         elif attn == "AttentionPartition":
             assert attn_head_dim is None
             self.attn = AttentionPartition(
                 dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
-                attn_drop=attn_drop, proj_drop=drop, partition_size=att_partition_size, 
+                attn_drop=attn_drop, proj_drop=drop, partition_size=att_partition_size,
                 q_shuffle=att_partition_q_shuffle,
             )
         elif attn == "AttentionMaxpool":
             self.attn = AttentionSubsampleMaxpool(
                 dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
                 attn_drop=attn_drop, proj_drop=drop, pool_kernel=att_pool_kernel,
+            )
+        elif attn == "AttentionPool":
+            self.attn = AttentionPool(
+                dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
+                attn_drop=attn_drop, proj_drop=drop, window_size=rel_window_size, attn_head_dim=attn_head_dim,
+                use_cls_token=use_cls_token, pool_kernel=att_pool_kernel, pool_stride=att_pool_stride,
+                pool_mode=att_pool_mode,
             )
 
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
@@ -216,8 +356,9 @@ class Block(nn.Module):
             self.gamma_2 = nn.Parameter(init_values * torch.ones((dim)),requires_grad=True)
         else:
             self.gamma_1, self.gamma_2 = None, None
-        
+
         self.win_size = win_size
+        self.shift_size = win_size // 2 if win_shift else 0
         self.hw = None
 
         self.residual_block = residual_block
@@ -315,10 +456,34 @@ class Block(nn.Module):
                         final_block=(i == residual_num_block - 1),
                     ) for i in range(residual_num_block)]
                 )
+            elif residual_block == "conv3_1":
+                self.residual = nn.Sequential(
+                    *[Conv31Block(
+                        dim=dim,
+                        drop_path=drop_path if residual_drop_path else 0.0,
+                        final_block=(i == residual_num_block - 1),
+                    ) for i in range(residual_num_block)]
+                )
+            elif residual_block == "conv3_1_g32":
+                self.residual = nn.Sequential(
+                    *[Conv31Group32Block(
+                        dim=dim,
+                        drop_path=drop_path if residual_drop_path else 0.0,
+                        final_block=(i == residual_num_block - 1),
+                    ) for i in range(residual_num_block)]
+                )
+            elif residual_block == "max_pool":
+                self.residual = nn.Sequential(
+                    *[MaxPoolBlock(residual_kernel_size) for i in range(residual_num_block)]
+                )
+            elif residual_block == "avg_pool":
+                self.residual = nn.Sequential(
+                    *[AvgPoolBlock(residual_kernel_size) for i in range(residual_num_block)]
+                )
             else:
                 raise NotImplementedError
 
-    def forward(self, x, rel_pos_bias=None):
+    def forward(self, x, rel_pos_bias=None, attn_mask=None):
         # if self.gamma_1 is None:
         #     x = x + self.drop_path(self.attn(self.norm1(x), rel_pos_bias=rel_pos_bias))
         #     x = x + self.drop_path(self.mlp(self.norm2(x)))
@@ -327,18 +492,23 @@ class Block(nn.Module):
         #     x = x + self.drop_path(self.gamma_2 * self.mlp(self.norm2(x)))
         ori_x = x
         x = self.norm1(x)
+        self.attn.hw = self.hw
         if self.win_size > 0:
-            x, pad_hw = make_window(x, self.hw, self.win_size)
-        x = self.attn(x, rel_pos_bias=rel_pos_bias)
+            x, pad_hw = make_window(x, self.hw, self.win_size, self.shift_size)
+            self.attn.hw = (self.win_size, self.win_size)
+        if self.shift_size > 0:
+            x = self.attn(x, rel_pos_bias=rel_pos_bias, mask=attn_mask)
+        else:
+            x = self.attn(x, rel_pos_bias=rel_pos_bias)
         if self.win_size > 0:
-            x = revert_window(x, pad_hw, self.hw, self.win_size)
-        
+            x = revert_window(x, pad_hw, self.hw, self.win_size, self.shift_size)
+
         if self.gamma_1 is None:
             x = ori_x + self.drop_path(x)
             x = x + self.drop_path(self.mlp(self.norm2(x)))
         else:
             x = ori_x + self.drop_path(self.gamma_1 * x)
-            x = x + self.drop_path(self.gamma_2 * self.mlp(self.norm2(x)))       
+            x = x + self.drop_path(self.gamma_2 * self.mlp(self.norm2(x)))
 
         if self.residual_block:
             B, _, C = x.shape
@@ -477,16 +647,18 @@ class BEiTDet(Backbone):
     """ Vision Transformer with support for patch or hybrid CNN input stage
     """
     def __init__(self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, embed_dim=768, depth=12,
-                 num_heads=12, mlp_ratio=4., qkv_bias=False, k_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
+                 num_heads=12, mlp_ratio=4., qkv_bias=False, seperate_qkv=False, k_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
                  drop_path_rate=0., norm_layer=nn.LayerNorm, init_values=None,
                  use_abs_pos_emb=True, use_rel_pos_bias=False, use_shared_rel_pos_bias=False,
                  use_mean_pooling=True, init_scale=0.001, use_cls_token=True,
                  out_block_indexes=[], out_features=[], checkpoint_block_num=0, window_size=0, window_block_indexes=[], use_cls_token_det=True,
-                 pretrain_img_size=224, pos_init_checkpoint=None,         
+                 pretrain_img_size=224, pos_init_checkpoint=None,
                  residual_block="bottleneck", residual_block_indexes=[], residual_norm="BN", residual_act="relu",
                  residual_kernel_size=3, residual_num_block=1, residual_drop_path=False,
                  att_block="Attention", att_block_indexes=[], att_partition_size=49, att_partition_q_shuffle=False,
-                 att_pool_kernel=2,
+                 att_pool_kernel=2, att_pool_stride=2, att_pool_mode="max",
+                 rel_q=False, rel_q_zero_init=True, rel_q_disable_block_index=[],
+                 win_shift_block_indexes=[],
                  ):
         super().__init__()
         self.num_classes = num_classes
@@ -502,6 +674,9 @@ class BEiTDet(Backbone):
         self.use_cls_token = use_cls_token
         self.use_cls_token_det = use_cls_token_det
         self.window_block_indexes = window_block_indexes
+        self.window_size = window_size
+        self.shift_size = window_size // 2
+        self.window_shift = len(win_shift_block_indexes) > 0
 
         self.patch_embed = PatchEmbed(
             img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
@@ -543,7 +718,7 @@ class BEiTDet(Backbone):
         self._out_feature_strides = {}
         for i in range(depth):
             block = Block(
-                dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, k_bias=k_bias, qk_scale=qk_scale,
+                dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, seperate_qkv=seperate_qkv, k_bias=k_bias, qk_scale=qk_scale,
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer,
                 init_values=init_values, rel_window_size=self.patch_embed.patch_shape if use_rel_pos_bias else None,
                 win_size=window_size if i in window_block_indexes else 0, use_cls_token=use_cls_token_det,
@@ -557,6 +732,12 @@ class BEiTDet(Backbone):
                 att_partition_size=att_partition_size,
                 att_partition_q_shuffle=att_partition_q_shuffle,
                 att_pool_kernel=att_pool_kernel,
+                att_pool_stride=att_pool_stride,
+                att_pool_mode=att_pool_mode,
+                rel_q=False if i in rel_q_disable_block_index else rel_q,
+                rel_q_zero_init=rel_q_zero_init,
+                input_size=self.patch_embed.patch_shape,
+                win_shift=i in win_shift_block_indexes,
             )
             if i + 1 <= checkpoint_block_num:
                 block = checkpoint_wrapper(block)
@@ -618,13 +799,13 @@ class BEiTDet(Backbone):
                     nn.init.constant_(m.bias, 0.0)
             else:
                 weight_init.c2_msra_fill(m)
-        
+
         if hasattr(m, "final_norm") or hasattr(m, "final_linear") or hasattr(m, "final_conv"):
             nn.init.constant_(m.weight, 0)
             if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
             print("final: zero_init")
-    
+
     def _load_pos_weights(self, pos_init_checkpoint):
         checkpoint = torch.load(pos_init_checkpoint, map_location=torch.device("cpu"))
         assert "model" in checkpoint
@@ -653,10 +834,10 @@ class BEiTDet(Backbone):
                 pos_embed_checkpoint = torch.cat((extra_tokens, pos_tokens), dim=1)
 
                 logger.info(f"Resize pos embed from checkpoint from {orig_size}x{orig_size} to {new_size}")
-            
+
             self.pos_embed.data[...] = pos_embed_checkpoint.clone()
             logger.info("Init pos embed from checkpoint")
-                
+
         # rel pos bias
         for key, param in self.named_parameters():
             if "relative_position_bias_table" in key:
@@ -721,13 +902,38 @@ class BEiTDet(Backbone):
         if len(self.window_block_indexes) > 0:
             rel_pos_bias_global = self.rel_pos_bias_global() if self.rel_pos_bias_global is not None else None
 
+        if self.window_shift:
+            # calculate attention mask for SW-MSA
+            H, W = bchw[-2], bchw[-1]
+            Hp = int(np.ceil(H / self.window_size)) * self.window_size
+            Wp = int(np.ceil(W / self.window_size)) * self.window_size
+            img_mask = torch.zeros((1, Hp, Wp, 1), device=x.device)  # 1 Hp Wp 1
+            h_slices = (slice(0, -self.window_size),
+                        slice(-self.window_size, -self.shift_size),
+                        slice(-self.shift_size, None))
+            w_slices = (slice(0, -self.window_size),
+                        slice(-self.window_size, -self.shift_size),
+                        slice(-self.shift_size, None))
+            cnt = 0
+            for h in h_slices:
+                for w in w_slices:
+                    img_mask[:, h, w, :] = cnt
+                    cnt += 1
+
+            mask_windows, _ = make_window(img_mask.view(1, -1, 1), (Hp, Wp), self.window_size)  # nW, window_size, window_size, 1
+            mask_windows = mask_windows.view(-1, self.window_size * self.window_size)
+            attn_mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)
+            attn_mask = attn_mask.masked_fill(attn_mask != 0, float(-100.0)).masked_fill(attn_mask == 0, float(0.0))
+        else:
+            attn_mask = None
+
         outputs = {}
         for i, blk in enumerate(self.blocks):
             blk.hw = (bchw[2], bchw[3])
             bias = rel_pos_bias
             if len(self.window_block_indexes) > 0 and i not in self.window_block_indexes:
                 bias = rel_pos_bias_global
-            x = blk(x, rel_pos_bias=bias)
+            x = blk(x, rel_pos_bias=bias, attn_mask=attn_mask)
             # name = f"block{i}"
 
             if i in self._out_block_indexes:

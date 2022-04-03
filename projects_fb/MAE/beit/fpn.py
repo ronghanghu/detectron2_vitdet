@@ -23,7 +23,7 @@ class FPNWoTopdown(Backbone):
     _fuse_type: torch.jit.Final[str]
 
     def __init__(
-        self, bottom_up, in_features, out_channels, norm="", top_block=None, out_conv=True, activation="",
+        self, bottom_up, in_features, out_channels, norm="", top_block=None, use_lateral_conv=True, out_conv=True, activation="",
     ):
         """
         Args:
@@ -72,10 +72,13 @@ class FPNWoTopdown(Backbone):
             lateral_act = act_layer() if act_layer else None
             output_act = act_layer() if act_layer else None
 
+            if not use_lateral_conv:
+                assert in_channels == out_channels
+
             lateral_conv = Conv2d(
                 in_channels, out_channels, kernel_size=1, bias=use_bias, norm=lateral_norm,
                 activation=lateral_act,
-            )
+            ) if use_lateral_conv else nn.Identity()
             output_conv = Conv2d(
                 out_channels,
                 out_channels,
@@ -86,7 +89,9 @@ class FPNWoTopdown(Backbone):
                 norm=output_norm,
                 activation=output_act,
             ) if out_conv else nn.Identity()
-            weight_init.c2_xavier_fill(lateral_conv)
+
+            if use_lateral_conv:
+                weight_init.c2_xavier_fill(lateral_conv)
             if out_conv:
                 weight_init.c2_xavier_fill(output_conv)
             stage = int(math.log2(strides[idx]))

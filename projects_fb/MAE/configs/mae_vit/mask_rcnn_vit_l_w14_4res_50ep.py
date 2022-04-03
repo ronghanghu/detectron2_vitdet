@@ -8,7 +8,7 @@ from detectron2.config import LazyCall as L
 from detectron2.layers.batch_norm import NaiveSyncBatchNorm
 from detectron2.solver import WarmupParamScheduler
 
-from ...vit.vit import ViTUpDimDown
+from ...vit.vit import ViTUp1
 from ...beit.beit import BEiTDet
 from ..common.coco import dataloader
 from ..common.optim import AdamW as optimizer
@@ -44,7 +44,7 @@ model = model_zoo.get_config("common/models/mask_rcnn_fpn.py").model
 model.pixel_mean = [123.675, 116.28, 103.53]
 model.pixel_std = [58.395, 57.12, 57.375]
 model.input_format = "RGB"
-model.backbone.bottom_up = L(ViTUpDimDown)(  # Creates multi-scale feature maps from ViT backbone
+model.backbone.bottom_up = L(ViTUp1)(  # Creates multi-scale feature maps from ViT backbone
     net=L(BEiTDet)(  # Single-scale ViT backbone
         img_size=image_size,
         patch_size=16,
@@ -59,7 +59,7 @@ model.backbone.bottom_up = L(ViTUpDimDown)(  # Creates multi-scale feature maps 
         checkpoint_block_num=0,
         use_cls_token_det=False,
         use_shared_rel_pos_bias=False,
-        init_values=None, 
+        init_values=None,
         # model size: L
         window_block_indexes=range(24),
         residual_block="basic",
@@ -101,7 +101,8 @@ train = model_zoo.get_config("common/train.py").train
 train.amp.enabled = True
 train.ddp.fp16_compression = False
 # from mae init (MAE-Large-removeMeanStd-1600ep, X% )
-train.init_checkpoint = "/checkpoint/kaiminghe/converted/2021-10-26-22-16-05-v3-128-mb4096-epo1600-PMAEp16-ViTLarge-lr1e-4-wd5e-2-warm40-mask0.75-pred8d512-exNB-msaLNmlpLNeLNpLNkBN0-1view-NOrelpos-abspos-clstoken-qkv-NOlayerscale-LNtgt-resume3/pretrained_lastnorm_tf2pt.pth"  
+#train.init_checkpoint = "/checkpoint/kaiminghe/converted/2021-10-26-22-16-05-v3-128-mb4096-epo1600-PMAEp16-ViTLarge-lr1e-4-wd5e-2-warm40-mask0.75-pred8d512-exNB-msaLNmlpLNeLNpLNkBN0-1view-NOrelpos-abspos-clstoken-qkv-NOlayerscale-LNtgt-resume3/pretrained_lastnorm_tf2pt.pth"
+train.init_checkpoint = "manifold://winvision/tree/lyttonhao/mae_pretrain/MAE-Large-removeMeanStd-1600ep.pth"
 
 
 
@@ -128,6 +129,14 @@ lr_multiplier.scheduler.milestones = [
 ]
 lr_multiplier.scheduler.num_updates = train.max_iter
 
+
+# # Optimized hyperparams
+# optimizer.lr = 2e-5
+# optimizer.weight_decay = 0.1
+# optimizer.params.overrides = {
+#     "pos_embed": {"weight_decay": 0.0},
+#     "relative_position_bias_table": {"weight_decay": 0.0},
+# }
 
 from ..common.optim import AdamLayerDecay as optimizer
 

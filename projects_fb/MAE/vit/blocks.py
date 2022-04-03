@@ -70,18 +70,18 @@ class SingleBlock(CNNBlockBase):
         for layer in [self.conv1, self.shortcut]:
             if layer is not None:  # shortcut can be None
                 weight_init.c2_msra_fill(layer)
-        
+
         if self.conv1_norm:
             self.conv1_norm.final_norm = final_block
         else:
             self.conv1.final_conv = final_block
-        
+
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x):
         out = self.conv1(x)
         out = self.conv1_norm(out) if self.conv1_norm else out
-        
+
         if self.shortcut is not None:
             shortcut = self.shortcut(x)
         else:
@@ -155,12 +155,12 @@ class BasicBlock(CNNBlockBase):
         for layer in [self.conv1, self.conv2, self.shortcut]:
             if layer is not None:  # shortcut can be None
                 weight_init.c2_msra_fill(layer)
-        
+
         if self.conv2_norm:
             self.conv2_norm.final_norm = final_block
         else:
             self.conv2.final_conv = final_block
-        
+
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x):
@@ -231,11 +231,11 @@ class PreBasicBlock(CNNBlockBase):
             padding=kernel_size // 2,
             bias=False,
         )
-        
+
         for layer in [self.conv1, self.conv2]:
             if layer is not None:  # shortcut can be None
                 weight_init.c2_msra_fill(layer)
-        
+
         self.conv2.final_conv = final_block
 
     def forward(self, x):
@@ -246,7 +246,7 @@ class PreBasicBlock(CNNBlockBase):
         out = self.conv2_norm(out) if self.conv2_norm else out
         out = self.act2(out)
         out = self.conv2(out)
-        
+
         out += x
         return out
 
@@ -345,7 +345,7 @@ class BottleneckBlock(CNNBlockBase):
         for layer in [self.conv1, self.conv2, self.conv3, self.shortcut]:
             if layer is not None:  # shortcut can be None
                 weight_init.c2_msra_fill(layer)
-        
+
         if self.conv3_norm:
             self.conv3_norm.final_norm = final_block
         else:
@@ -378,7 +378,7 @@ class ConvNextBlock(nn.Module):
     (1) DwConv -> LayerNorm (channels_first) -> 1x1 Conv -> GELU -> 1x1 Conv; all in (N, C, H, W)
     (2) DwConv -> Permute to (N, H, W, C); LayerNorm (channels_last) -> Linear -> GELU -> Linear; Permute back
     We use (2) as we find it slightly faster in PyTorch
-    
+
     Args:
         dim (int): Number of input channels.
         drop_path (float): Stochastic depth rate. Default: 0.0
@@ -391,7 +391,7 @@ class ConvNextBlock(nn.Module):
         self.pwconv1 = nn.Linear(dim, 4 * dim) # pointwise/1x1 convs, implemented with linear layers
         self.act = nn.GELU()
         self.pwconv2 = nn.Linear(4 * dim, dim)
-        self.gamma = nn.Parameter(layer_scale_init_value * torch.ones((dim)), 
+        self.gamma = nn.Parameter(layer_scale_init_value * torch.ones((dim)),
                                     requires_grad=True) if layer_scale_init_value >= 0 else None
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
@@ -413,10 +413,68 @@ class ConvNextBlock(nn.Module):
         return x
 
 
+class Conv31Block(nn.Module):
+    r"""
+    Args:
+        dim (int): Number of input channels.
+        drop_path (float): Stochastic depth rate. Default: 0.0
+    """
+    def __init__(self, dim, drop_path=0., final_block=True):
+        super().__init__()
+        self.dwconv = nn.Conv2d(dim, dim, kernel_size=3, padding=1, groups=dim) # depthwise conv
+        self.norm1 = LayerNorm(dim, eps=1e-6)
+        self.act = nn.GELU()
+        self.pwconv1 = nn.Linear(dim, dim) # pointwise/1x1 convs, implemented with linear layers
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+
+        self.pwconv1.final_linear = final_block
+
+    def forward(self, x):
+        input = x
+        x = self.dwconv(x)
+        x = x.permute(0, 2, 3, 1) # (N, C, H, W) -> (N, H, W, C)
+        x = self.norm1(x)
+        x = self.act(x)
+        x = self.pwconv1(x)
+        x = x.permute(0, 3, 1, 2) # (N, H, W, C) -> (N, C, H, W)
+
+        x = input + self.drop_path(x)
+        return x
+
+
+class Conv31Group32Block(nn.Module):
+    r"""
+    Args:
+        dim (int): Number of input channels.
+        drop_path (float): Stochastic depth rate. Default: 0.0
+    """
+    def __init__(self, dim, drop_path=0., final_block=True):
+        super().__init__()
+        self.dwconv = nn.Conv2d(dim, dim, kernel_size=3, padding=1, groups=32) # depthwise conv
+        self.norm1 = LayerNorm(dim, eps=1e-6)
+        self.act = nn.GELU()
+        self.pwconv1 = nn.Linear(dim, dim) # pointwise/1x1 convs, implemented with linear layers
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+
+        self.pwconv1.final_linear = final_block
+
+    def forward(self, x):
+        input = x
+        x = self.dwconv(x)
+        x = x.permute(0, 2, 3, 1) # (N, C, H, W) -> (N, H, W, C)
+        x = self.norm1(x)
+        x = self.act(x)
+        x = self.pwconv1(x)
+        x = x.permute(0, 3, 1, 2) # (N, H, W, C) -> (N, C, H, W)
+
+        x = input + self.drop_path(x)
+        return x
+
+
 class LayerNorm(nn.Module):
-    r""" LayerNorm that supports two data formats: channels_last (default) or channels_first. 
-    The ordering of the dimensions in the inputs. channels_last corresponds to inputs with 
-    shape (batch_size, height, width, channels) while channels_first corresponds to inputs 
+    r""" LayerNorm that supports two data formats: channels_last (default) or channels_first.
+    The ordering of the dimensions in the inputs. channels_last corresponds to inputs with
+    shape (batch_size, height, width, channels) while channels_first corresponds to inputs
     with shape (batch_size, channels, height, width).
     """
     def __init__(self, normalized_shape, eps=1e-6, data_format="channels_last"):
@@ -426,9 +484,9 @@ class LayerNorm(nn.Module):
         self.eps = eps
         self.data_format = data_format
         if self.data_format not in ["channels_last", "channels_first"]:
-            raise NotImplementedError 
+            raise NotImplementedError
         self.normalized_shape = (normalized_shape, )
-    
+
     def forward(self, x):
         if self.data_format == "channels_last":
             return F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
@@ -438,3 +496,27 @@ class LayerNorm(nn.Module):
             x = (x - u) / torch.sqrt(s + self.eps)
             x = self.weight[:, None, None] * x + self.bias[:, None, None]
             return x
+
+
+class MaxPoolBlock(nn.Module):
+    def __init__(self, kernel_size=3):
+        super().__init__()
+        padding = kernel_size // 2
+        self.pool = self.max_pool = nn.MaxPool2d(kernel_size, 1, padding)
+
+    def forward(self, x):
+        return self.pool(x)
+
+        return x
+
+
+class AvgPoolBlock(nn.Module):
+    def __init__(self, kernel_size=3):
+        super().__init__()
+        padding = kernel_size // 2
+        self.pool = nn.AvgPool2d(kernel_size, 1, padding)
+
+    def forward(self, x):
+        return self.pool(x)
+
+        return x

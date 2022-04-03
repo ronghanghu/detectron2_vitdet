@@ -5,17 +5,14 @@ from fvcore.common.param_scheduler import MultiStepParamScheduler
 import detectron2.data.transforms as T
 from detectron2 import model_zoo
 from detectron2.config import LazyCall as L
-from detectron2.layers import ShapeSpec
 from detectron2.layers.batch_norm import NaiveSyncBatchNorm
-from detectron2.modeling.box_regression import Box2BoxTransform
-from detectron2.modeling.roi_heads import FastRCNNOutputLayers
 from detectron2.solver import WarmupParamScheduler
 
-from ....vit.vit import ViTUp1
-from ....beit.beit import BEiTDet
-from ...common.lvis import dataloader
-from ...common.optim import AdamW as optimizer
-from ....beit.fpn import FPNWoTopdown
+from ...vit.vit import ViTUp1
+from ...beit.beit import BEiTDet
+from ..common.coco import dataloader
+from ..common.optim import AdamW as optimizer
+from ...beit.fpn import FPNWoTopdown
 
 # Data using LSJ
 image_size = 1024
@@ -40,7 +37,10 @@ dataloader.test.mapper.augmentations = [
 # Base
 # embed_dim, depth, num_heads = 768, 12, 12
 # Large
-embed_dim, depth, num_heads = 1024, 24, 16
+# embed_dim, depth, num_heads = 1024, 24, 16
+# Huge
+embed_dim, depth, num_heads = 1280, 32, 16
+
 
 model = model_zoo.get_config("common/models/mask_rcnn_fpn.py").model
 # To match the data loader
@@ -62,15 +62,15 @@ model.backbone.bottom_up = L(ViTUp1)(  # Creates multi-scale feature maps from V
         checkpoint_block_num=0,
         use_cls_token_det=False,
         use_shared_rel_pos_bias=False,
-        init_values=None, 
+        init_values=None,
         # model size: L
-        window_block_indexes=range(24),
+        window_block_indexes=range(depth),
         residual_block="basic",
-        residual_block_indexes=[5, 11, 17, 23],
+        residual_block_indexes=[7, 15, 23, 31],
         residual_norm="LN",
         residual_act="gelu",
         out_features=["s1", "s2", "s3", "s4"],
-        out_block_indexes=[23, 23, 23, 23],
+        out_block_indexes=[31, 31, 31, 31],
     ),
     in_features="${.net.out_features}",
     scale_factors=(4.0, 2.0, 1.0, 0.5),
@@ -98,39 +98,27 @@ model.proposal_generator.head.conv_dims = [-1, -1]
 model.roi_heads.box_head.conv_dims = [256, 256, 256, 256]
 model.roi_heads.box_head.fc_dims = [1024]
 
-# LVIS specific
-model.roi_heads.num_classes = 1203
-
-model.roi_heads.box_predictor = L(FastRCNNOutputLayers)(
-    input_shape=ShapeSpec(channels=1024),
-    test_score_thresh=0.0001,
-    box2box_transform=L(Box2BoxTransform)(weights=(10, 10, 5, 5)),
-    num_classes="${..num_classes}",
-    test_topk_per_image=300,
-    use_sigmoid_ce=True,
-    use_fed_loss=True,
-)
 
 # Initialization and trainer settings
 train = model_zoo.get_config("common/train.py").train
 train.amp.enabled = True
 train.ddp.fp16_compression = False
 # from mae init (MAE-Large-removeMeanStd-1600ep, X% )
-train.init_checkpoint = "/checkpoint/kaiminghe/converted/2021-10-26-22-16-05-v3-128-mb4096-epo1600-PMAEp16-ViTLarge-lr1e-4-wd5e-2-warm40-mask0.75-pred8d512-exNB-msaLNmlpLNeLNpLNkBN0-1view-NOrelpos-abspos-clstoken-qkv-NOlayerscale-LNtgt-resume3/pretrained_lastnorm_tf2pt.pth"  
+#train.init_checkpoint = "/checkpoint/kaiminghe/converted/2021-10-26-22-16-05-v3-128-mb4096-epo1600-PMAEp16-ViTLarge-lr1e-4-wd5e-2-warm40-mask0.75-pred8d512-exNB-msaLNmlpLNeLNpLNkBN0-1view-NOrelpos-abspos-clstoken-qkv-NOlayerscale-LNtgt-resume3/pretrained_lastnorm_tf2pt.pth"
+train.init_checkpoint = "manifold://winvision/tree/lyttonhao/mae_pretrain/MAE-Huge-removeMeanStd-1600ep.pth"
 
 
 
 # Schedule
 
-# 115.2 ep = 180000 iters * 64 images/iter / 100000 images/ep
-train.max_iter = 180000
-train.eval_period = 0
+# 100 ep = 184375 iters * 64 images/iter / 118000 images/ep
+train.max_iter = 184375
 num_node = 8
 
 lr_multiplier = L(WarmupParamScheduler)(
     scheduler=L(MultiStepParamScheduler)(
         values=[1.0, 0.1, 0.01],
-        milestones=[160000, 173333],
+        milestones=[163889, 177546],
         num_updates=train.max_iter,
     ),
     warmup_length=2000 / num_node / train.max_iter,
@@ -138,7 +126,7 @@ lr_multiplier = L(WarmupParamScheduler)(
 )
 
 # Rescale schedule
-train.max_iter = train.max_iter // 2  # 115.2 ep -> 57.6ep
+train.max_iter = train.max_iter // 2  # 100ep -> 50ep
 lr_multiplier.scheduler.milestones = [
     milestone // 2 for milestone in lr_multiplier.scheduler.milestones
 ]
@@ -146,9 +134,23 @@ lr_multiplier.scheduler.num_updates = train.max_iter
 
 
 # Optimized hyperparams
-optimizer.lr = 2e-5
+# optimizer.lr = 2e-5
+# optimizer.weight_decay = 0.1
+
+
+
+from ..common.optim import AdamLayerDecay as optimizer
+
+
+# Optimized hyperparams
+optimizer.lr = 1e-4
 optimizer.weight_decay = 0.1
-optimizer.params.overrides = {
-    "pos_embed": {"weight_decay": 0.0},
-    "relative_position_bias_table": {"weight_decay": 0.0},
-}
+
+optimizer.params.lr_decay_rate = 0.9
+optimizer.params.num_layers = 32
+optimizer.params.skip_lr_decay = ["residual."]
+
+
+# wd for all params
+optimizer.params.overrides = {}
+optimizer.params.weight_decay_norm = None

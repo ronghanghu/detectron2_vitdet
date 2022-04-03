@@ -6,13 +6,15 @@ import detectron2.data.transforms as T
 from detectron2 import model_zoo
 from detectron2.config import LazyCall as L
 from detectron2.layers import ShapeSpec
+from detectron2.layers.batch_norm import NaiveSyncBatchNorm
 from detectron2.modeling.box_regression import Box2BoxTransform
 from detectron2.modeling.roi_heads import FastRCNNOutputLayers
 from detectron2.solver import WarmupParamScheduler
 
-from ....vit.vit import ViTUpDimDown
+from ....vit.vit import ViTUp1
 from ....beit.beit import BEiTDet
 from ...common.lvis import dataloader
+from ...common.optim import AdamW as optimizer
 from ....beit.fpn import FPNWoTopdown
 
 # Data using LSJ
@@ -45,7 +47,7 @@ model = model_zoo.get_config("common/models/mask_rcnn_fpn.py").model
 model.pixel_mean = [123.675, 116.28, 103.53]
 model.pixel_std = [58.395, 57.12, 57.375]
 model.input_format = "RGB"
-model.backbone.bottom_up = L(ViTUpDimDown)(  # Creates multi-scale feature maps from ViT backbone
+model.backbone.bottom_up = L(ViTUp1)(  # Creates multi-scale feature maps from ViT backbone
     net=L(BEiTDet)(  # Single-scale ViT backbone
         img_size=image_size,
         patch_size=16,
@@ -122,15 +124,15 @@ train.init_checkpoint = "/checkpoint/kaiminghe/converted/2021-10-26-03-13-08-v3-
 
 # Schedule
 
-# 100 ep = 156250 iters * 64 images/iter / 100000 images/ep
-train.max_iter = 156250
-train.eval_period = 78125
+# 115.2 ep = 180000 iters * 64 images/iter / 100000 images/ep
+train.max_iter = 180000
+train.eval_period = 0
 num_node = 8
 
 lr_multiplier = L(WarmupParamScheduler)(
     scheduler=L(MultiStepParamScheduler)(
         values=[1.0, 0.1, 0.01],
-        milestones=[138889, 150463],  # following training schedules in table 15 of https://arxiv.org/abs/2101.11605v1
+        milestones=[160000, 173333],
         num_updates=train.max_iter,
     ),
     warmup_length=2000 / num_node / train.max_iter,
@@ -138,21 +140,17 @@ lr_multiplier = L(WarmupParamScheduler)(
 )
 
 # Rescale schedule
-train.max_iter = train.max_iter // 2  # 100 ep -> 50 ep
+train.max_iter = train.max_iter // 2  # 115.2 ep -> 57.6ep
 lr_multiplier.scheduler.milestones = [
     milestone // 2 for milestone in lr_multiplier.scheduler.milestones
 ]
 lr_multiplier.scheduler.num_updates = train.max_iter
 
-from ...common.optim import AdamLayerDecay as optimizer
 
 # Optimized hyperparams
-optimizer.lr = 1e-4
+optimizer.lr = 8e-5
 optimizer.weight_decay = 0.1
 optimizer.params.overrides = {
     "pos_embed": {"weight_decay": 0.0},
     "relative_position_bias_table": {"weight_decay": 0.0},
 }
-optimizer.params.lr_decay_rate = 0.7
-optimizer.params.num_layers = 12
-optimizer.params.skip_lr_decay = ["residual."]

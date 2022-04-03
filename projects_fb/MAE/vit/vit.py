@@ -39,7 +39,7 @@ class PatchEmbed(nn.Module):
         return x, bchw
 
 
-def make_window(x, hw, win_size):
+def make_window(x, hw, win_size, shift_size=0):
     # print(x.shape)
     B, _, C = x.shape
     H, W = hw
@@ -53,27 +53,33 @@ def make_window(x, hw, win_size):
 
     Hp, Wp = H + pad_h, W + pad_w
 
+    if shift_size > 0:
+        x = torch.roll(x, shifts=(-shift_size, -shift_size), dims=(1, 2))
+
     # B, H, W, C -> B * nWin, win_size, win_size, C --> B * nWin, win_size * win_size, C
     # print(x.shape, hw, Hp, Wp)
     x = x.view(B, Hp // win_size, win_size, Wp // win_size, win_size, C)
     # print(x.shape)
     x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, win_size * win_size, C)
-    
+
     return x, (Hp, Wp)
 
 
-def revert_window(x, pad_hw, hw, win_size):
+def revert_window(x, pad_hw, hw, win_size, shift_size=0):
     Hp, Wp = pad_hw
     H, W = hw
     B = x.shape[0] // (Hp * Wp // win_size // win_size)
-   
-    # B * nWin, win_size, win_size, C -> B, H, W, C 
+
+    # B * nWin, win_size, win_size, C -> B, H, W, C
     x = x.view(B, Hp // win_size, Wp // win_size, win_size, win_size, -1)
     x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(B, Hp, Wp, -1)
 
+    if shift_size > 0:
+        x = torch.roll(x, shifts=(shift_size, shift_size), dims=(1, 2))
+
     if Hp > H or Wp > W:
         x = x[:, :H, :W, :].contiguous()
-    
+
     x = x.view(B, H * W, -1)
 
     return x
@@ -180,7 +186,7 @@ class Block(nn.Module):
 
         x = ori_x + self.drop_path(x)
         x = x + self.drop_path(self.mlp(self.norm2(x)))
-            
+
         return x
 
 
@@ -435,13 +441,13 @@ class ViTUp1(Backbone):
                         nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
                         nn.ReLU(),
                         nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
-                    ) 
+                    )
                 elif mode == 3:
                     layer = nn.Sequential(
                         nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
                         nn.GELU(),
                         nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
-                    ) 
+                    )
                 elif mode == 4:
                     layer = nn.Sequential(
                         nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
@@ -485,12 +491,12 @@ class ViTUp1(Backbone):
                         LayerNorm(embed_dim, data_format="channels_first"),
                         nn.GELU(),
                     )
-                   
+
             elif scale == 1.0:
                 layer = nn.Identity()
             elif scale == 0.5:
                 layer = nn.MaxPool2d(kernel_size=2, stride=2)
-            
+
             self.add_module(f"stage_{i}", layer)
 
     def forward(self, x):
@@ -512,7 +518,7 @@ class ViTUpFirstUp(Backbone):
         input: single scale
         Upsample first, then downsample for four strides.
     """
-    def __init__(self, net, in_features, out_features, upscale, scale_factors, embed_dim, mode, out_dim=None):
+    def __init__(self, net, in_features, out_features, upscale, scale_factors, embed_dim, mode, use_finest_conv=False, finest_3x3_conv_num=1, out_dim=None):
         super(ViTUpFirstUp, self).__init__()
         assert isinstance(net, Backbone)
         assert len(in_features) == 1
@@ -537,20 +543,47 @@ class ViTUpFirstUp(Backbone):
             nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
             LayerNorm(embed_dim, data_format="channels_first"),
             nn.GELU(),
-            nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),
+            nn.ConvTranspose2d(embed_dim, out_dim, kernel_size=2, stride=2),
             # LayerNorm(embed_dim, data_format="channels_first"),
             # nn.GELU(),
         )
-        assert mode in ["max", "conv"]
-        assert mode != "max" or out_dim == embed_dim
+        assert mode in ["max", "conv", "avg"]
+        # assert mode != "max" or out_dim == embed_dim
+
+        self.use_finest_conv = use_finest_conv
+        if use_finest_conv:
+            self.finest_convs = nn.Sequential(
+                nn.Conv2d(out_dim, out_dim, kernel_size=1, stride=1),
+                LayerNorm(out_dim, data_format="channels_first"),
+                nn.GELU(),
+            )
+            if finest_3x3_conv_num == 1:
+                self.finest_3x3_convs = nn.Sequential(
+                    nn.Conv2d(out_dim, out_dim, kernel_size=3, stride=1, padding=1),
+                    LayerNorm(out_dim, data_format="channels_first"),
+                    nn.GELU(),
+                )
+            elif finest_3x3_conv_num == 2:
+                self.finest_3x3_convs = nn.Sequential(
+                    nn.Conv2d(out_dim, out_dim, kernel_size=3, stride=1, padding=1),
+                    LayerNorm(out_dim, data_format="channels_first"),
+                    nn.GELU(),
+                    nn.Conv2d(out_dim, out_dim, kernel_size=3, stride=1, padding=1),
+                    LayerNorm(out_dim, data_format="channels_first"),
+                    nn.GELU(),
+                )
+            else:
+                raise NotImplementedError
 
         for i, scale in enumerate(scale_factors):
             if scale == 1 / 8.0:
                 if mode == "max":
                     layer = nn.MaxPool2d(kernel_size=8, stride=8)
+                elif mode == "avg":
+                    layer = nn.AvgPool2d(kernel_size=8, stride=8)
                 else:
                     layer = nn.Sequential(
-                        nn.Conv2d(embed_dim, out_dim, kernel_size=2, stride=2),
+                        nn.Conv2d(out_dim, out_dim, kernel_size=2, stride=2),
                         LayerNorm(out_dim, data_format="channels_first"),
                         nn.GELU(),
                         nn.Conv2d(out_dim, out_dim, kernel_size=2, stride=2),
@@ -563,9 +596,11 @@ class ViTUpFirstUp(Backbone):
             elif scale == 1 / 4.0:
                 if mode == "max":
                     layer = nn.MaxPool2d(kernel_size=4, stride=4)
+                elif mode == "avg":
+                    layer = nn.AvgPool2d(kernel_size=4, stride=4)
                 else:
                     layer = nn.Sequential(
-                        nn.Conv2d(embed_dim, out_dim, kernel_size=2, stride=2),
+                        nn.Conv2d(out_dim, out_dim, kernel_size=2, stride=2),
                         LayerNorm(out_dim, data_format="channels_first"),
                         nn.GELU(),
                         nn.Conv2d(out_dim, out_dim, kernel_size=2, stride=2),
@@ -575,30 +610,35 @@ class ViTUpFirstUp(Backbone):
             elif scale == 1 / 2.0:
                 if mode == "max":
                     layer = nn.MaxPool2d(kernel_size=2, stride=2)
+                elif mode == "avg":
+                    layer = nn.MaxPool2d(kernel_size=2, stride=2)
                 else:
                     layer = nn.Sequential(
-                        nn.Conv2d(embed_dim, out_dim, kernel_size=2, stride=2),
+                        nn.Conv2d(out_dim, out_dim, kernel_size=2, stride=2),
                         # LayerNorm(out_dim, data_format="channels_first"),
                         # nn.GELU(),
                     )
             elif scale == 1.0:
-                if out_dim == embed_dim:
-                    layer = nn.Identity()
-                else:
-                    layer = nn.Sequential(
-                        nn.Conv2d(embed_dim, out_dim, kernel_size=1, stride=1),
-                        # LayerNorm(out_dim, data_format="channels_first"),
-                        # nn.GELU(),
-                    )
+                #if out_dim == embed_dim:
+                layer = nn.Identity()
+                # else:
+                #     layer = nn.Sequential(
+                #         nn.Conv2d(out_dim, out_dim, kernel_size=1, stride=1),
+                #         # LayerNorm(out_dim, data_format="channels_first"),
+                #         # nn.GELU(),
+                #     )
             else:
                 raise NotImplementedError
-            
+
             self.add_module(f"stage_{i}", layer)
 
     def forward(self, x):
         features = self.net(x)
 
         feature = self.upscale_layer(features[self.in_feature])
+        if self.use_finest_conv:
+            feature = self.finest_convs(feature)
+            feature = self.finest_3x3_convs(feature)
         outputs = {}
         for i in range(len(self.scale_factors)):
             # f = features[self._out_features[i]]
