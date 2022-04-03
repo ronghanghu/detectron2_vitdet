@@ -104,8 +104,8 @@ train = model_zoo.get_config("common/train.py").train
 train.amp.enabled = True
 train.ddp.fp16_compression = False
 # from mae init (MAE-Large-removeMeanStd-1600ep, X% )
-#train.init_checkpoint = "/checkpoint/kaiminghe/converted/2021-10-26-22-16-05-v3-128-mb4096-epo1600-PMAEp16-ViTLarge-lr1e-4-wd5e-2-warm40-mask0.75-pred8d512-exNB-msaLNmlpLNeLNpLNkBN0-1view-NOrelpos-abspos-clstoken-qkv-NOlayerscale-LNtgt-resume3/pretrained_lastnorm_tf2pt.pth"
-train.init_checkpoint = "manifold://winvision/tree/lyttonhao/mae_pretrain/MAE-Huge-removeMeanStd-1600ep.pth"
+train.init_checkpoint = "/checkpoint/kaiminghe/converted/2021-09-22-22-51-23-v3-128-mb4096-epo1600-BeiTpartial-ViTHuge-lr1.5e-4-wd5e-2-warm40-mask0.75-pred8d512-exNB-msaLNmlpLNeLNpLNkBN0-b0.95-dp0-NOcjit-sincos-clst-NOls-NObinit-NOrelpos-abspos-randmask-YESqkv-minlr-cropv2-NOgclip-VQVAE-INv3-resume2/pretrained_lastnorm_tf2pt.pth"  
+# train.init_checkpoint = "manifold://winvision/tree/lyttonhao/mae_pretrain/MAE-Huge-removeMeanStd-1600ep.pth"
 
 
 
