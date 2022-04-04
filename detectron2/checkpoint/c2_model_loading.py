@@ -273,6 +273,11 @@ def align_and_update_state_dicts(model_state_dict, ckpt_state_dict, c2_conversio
                     key_ckpt
                 )
             )
+            if key_ckpt == "pos_embed":
+                raise RuntimeError(
+                    "Please check the positional embedding size in the checkpoint and "
+                    "set pretrain_img_size to match the pretraining image size "
+                    "when fine-tuning from a high-res pretrained model.")
             continue
 
         assert key_model not in result_state_dict
