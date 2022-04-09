@@ -313,12 +313,14 @@ _C.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG = False
 # If true, RoI heads use bounding boxes predicted by the box head rather than proposal boxes.
 _C.MODEL.ROI_BOX_HEAD.TRAIN_ON_PRED_BOXES = False
 
+# Federated loss can be used to improve the training of LVIS
+_C.MODEL.ROI_BOX_HEAD.USE_FED_LOSS = False
+# Sigmoid cross entrophy is used with federated loss
 _C.MODEL.ROI_BOX_HEAD.USE_SIGMOID_CE = False
-_C.MODEL.ROI_BOX_HEAD.USE_FED_LOSS = False # Federated Loss
-_C.MODEL.ROI_BOX_HEAD.CAT_FREQ_PATH = \
-    'datasets/metadata/lvis_v1_train_cat_info.json'
-_C.MODEL.ROI_BOX_HEAD.FED_LOSS_NUM_CAT = 50
-_C.MODEL.ROI_BOX_HEAD.FED_LOSS_FREQ_WEIGHT = 0.5
+# The power value applied to image_count when calcualting frequency weight
+_C.MODEL.ROI_BOX_HEAD.FED_LOSS_FREQ_WEIGHT_POWER = 0.5
+# Number of classes to keep in total
+_C.MODEL.ROI_BOX_HEAD.FED_LOSS_NUM_CLASSES = 50
 
 # ---------------------------------------------------------------------------- #
 # Cascaded Box Head

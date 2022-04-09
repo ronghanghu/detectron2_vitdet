@@ -1,18 +1,17 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 import logging
-from typing import Dict, List, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 import torch
 from fvcore.nn import giou_loss, smooth_l1_loss
 from torch import nn
 from torch.nn import functional as F
 
 from detectron2.config import configurable
+from detectron2.data.detection_utils import get_fed_loss_cls_weights
 from detectron2.layers import ShapeSpec, batched_nms, cat, cross_entropy, nonzero_tuple
 from detectron2.modeling.box_regression import Box2BoxTransform
 from detectron2.structures import Boxes, Instances
 from detectron2.utils.events import get_event_storage
-
-from ..utils import load_class_freq, get_fed_loss_inds
 
 __all__ = ["fast_rcnn_inference", "FastRCNNOutputLayers"]
 
@@ -351,11 +350,10 @@ class FastRCNNOutputLayers(nn.Module):
         smooth_l1_beta: float = 0.0,
         box_reg_loss_type: str = "smooth_l1",
         loss_weight: Union[float, Dict[str, float]] = 1.0,
-        use_sigmoid_ce = False,
-        use_fed_loss = False,
-        cat_freq_path = '',
-        fed_loss_num_cat = 50,
-        fed_loss_freq_weight = 0.5,
+        use_fed_loss: bool = False,
+        use_sigmoid_ce: bool = False,
+        get_fed_loss_cls_weights: Optional[Callable] = None,
+        fed_loss_num_classes: int = 50,
     ):
         """
         NOTE: this interface is experimental.
@@ -401,16 +399,17 @@ class FastRCNNOutputLayers(nn.Module):
         if isinstance(loss_weight, float):
             loss_weight = {"loss_cls": loss_weight, "loss_box_reg": loss_weight}
         self.loss_weight = loss_weight
-        self.use_sigmoid_ce = use_sigmoid_ce
         self.use_fed_loss = use_fed_loss
-        self.fed_loss_num_cat = fed_loss_num_cat
+        self.use_sigmoid_ce = use_sigmoid_ce
+        self.fed_loss_num_classes = fed_loss_num_classes
 
         if self.use_fed_loss:
-            freq_weight = load_class_freq(cat_freq_path, fed_loss_freq_weight)
-            self.register_buffer('freq_weight', freq_weight)
-            assert len(self.freq_weight) == self.num_classes
-        else:
-            self.freq_weight = None
+            assert self.use_sigmoid_ce, "Please use sigmoid cross entropy loss with federated loss"
+            fed_loss_cls_weights = get_fed_loss_cls_weights()
+            assert (
+                len(fed_loss_cls_weights) == self.num_classes
+            ), "Please check the provided fed_loss_cls_weights. Their size should match num_classes"
+            self.register_buffer("fed_loss_cls_weights", fed_loss_cls_weights)
 
     @classmethod
     def from_config(cls, cfg, input_shape):
@@ -418,19 +417,18 @@ class FastRCNNOutputLayers(nn.Module):
             "input_shape": input_shape,
             "box2box_transform": Box2BoxTransform(weights=cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_WEIGHTS),
             # fmt: off
-            "num_classes"           : cfg.MODEL.ROI_HEADS.NUM_CLASSES,
-            "cls_agnostic_bbox_reg" : cfg.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG,
-            "smooth_l1_beta"        : cfg.MODEL.ROI_BOX_HEAD.SMOOTH_L1_BETA,
-            "test_score_thresh"     : cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST,
-            "test_nms_thresh"       : cfg.MODEL.ROI_HEADS.NMS_THRESH_TEST,
-            "test_topk_per_image"   : cfg.TEST.DETECTIONS_PER_IMAGE,
-            "box_reg_loss_type"     : cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_LOSS_TYPE,
-            "loss_weight"           : {"loss_box_reg": cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_LOSS_WEIGHT},
-            'use_sigmoid_ce': cfg.MODEL.ROI_BOX_HEAD.USE_SIGMOID_CE,
-            'use_fed_loss': cfg.MODEL.ROI_BOX_HEAD.USE_FED_LOSS,
-            'fed_loss_num_cat': cfg.MODEL.ROI_BOX_HEAD.FED_LOSS_NUM_CAT,
-            'cat_freq_path': cfg.MODEL.ROI_BOX_HEAD.CAT_FREQ_PATH,
-            'fed_loss_freq_weight': cfg.MODEL.ROI_BOX_HEAD.FED_LOSS_FREQ_WEIGHT,
+            "num_classes"               : cfg.MODEL.ROI_HEADS.NUM_CLASSES,
+            "cls_agnostic_bbox_reg"     : cfg.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG,
+            "smooth_l1_beta"            : cfg.MODEL.ROI_BOX_HEAD.SMOOTH_L1_BETA,
+            "test_score_thresh"         : cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST,
+            "test_nms_thresh"           : cfg.MODEL.ROI_HEADS.NMS_THRESH_TEST,
+            "test_topk_per_image"       : cfg.TEST.DETECTIONS_PER_IMAGE,
+            "box_reg_loss_type"         : cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_LOSS_TYPE,
+            "loss_weight"               : {"loss_box_reg": cfg.MODEL.ROI_BOX_HEAD.BBOX_REG_LOSS_WEIGHT},
+            "use_fed_loss"              : cfg.MODEL.ROI_BOX_HEAD.USE_FED_LOSS,
+            "use_sigmoid_ce"            : cfg.MODEL.ROI_BOX_HEAD.USE_SIGMOID_CE,
+            "get_fed_loss_cls_weights"  : lambda: get_fed_loss_cls_weights(dataset_names=cfg.DATASETS.TRAIN, freq_weight_power=cfg.MODEL.ROI_BOX_HEAD.FED_LOSS_FREQ_WEIGHT_POWER),  # noqa
+            "fed_loss_num_classes"      : cfg.MODEL.ROI_BOX_HEAD.FED_LOSS_NUM_CLASSES,
             # fmt: on
         }
 
@@ -490,7 +488,7 @@ class FastRCNNOutputLayers(nn.Module):
         if self.use_sigmoid_ce:
             loss_cls = self.sigmoid_cross_entropy_loss(scores, gt_classes)
         else:
-            loss_cls = self.softmax_cross_entropy_loss(scores, gt_classes)
+            loss_cls = cross_entropy(scores, gt_classes, reduction="mean")
 
         losses = {
             "loss_cls": loss_cls,
@@ -500,60 +498,72 @@ class FastRCNNOutputLayers(nn.Module):
         }
         return {k: v * self.loss_weight.get(k, 1.0) for k, v in losses.items()}
 
-    def sigmoid_cross_entropy_loss(self, pred_class_logits, gt_classes):
-        if pred_class_logits.numel() == 0:
-            return pred_class_logits.new_zeros([1])[0] # This is more robust than .sum() * 0.
-
-        B = pred_class_logits.shape[0]
-        C = pred_class_logits.shape[1] - 1
-
-        target = pred_class_logits.new_zeros(B, C + 1)
-        target[range(len(gt_classes)), gt_classes] = 1 # B x (C + 1)
-        target = target[:, :C] # B x C
-
-        weight = 1
-
-        if self.use_fed_loss and (self.freq_weight is not None): # fedloss
-            appeared = get_fed_loss_inds(
-                gt_classes, 
-                num_sample_cats=self.fed_loss_num_cat,
-                C=C,
-                weight=self.freq_weight)
-            appeared_mask = appeared.new_zeros(C + 1)
-            appeared_mask[appeared] = 1 # C + 1
-            appeared_mask = appeared_mask[:C]
-            fed_w = appeared_mask.view(1, C).expand(B, C)
-            weight = weight * fed_w.float()
-
-        cls_loss = F.binary_cross_entropy_with_logits(
-            pred_class_logits[:, :-1], target, reduction='none') # B x C
-        loss =  torch.sum(cls_loss * weight) / B  
-        return loss
-
-
-    def softmax_cross_entropy_loss(self, pred_class_logits, gt_classes):
+    # Implementation from https://github.com/xingyizhou/CenterNet2/blob/master/projects/CenterNet2/centernet/modeling/roi_heads/fed_loss.py  # noqa
+    # with slight modifications
+    def get_fed_loss_classes(self, gt_classes, num_fed_loss_classes, num_classes, weight):
         """
-        change _no_instance handling
+        Args:
+            gt_classes: a long tensor of shape R that contains the gt class label of each proposal.
+            num_fed_loss_classes: number of classes to keep in total, including both unique gt
+                classes and sampled negative classes
+            num_classes: number of foreground classes
+            weight: probabilities used to sample negative classes
+
+        Returns:
+            Tensor:
+                classes to keep when calculating the federated loss, including both unique gt
+                classes and sampled negative classes.
+        """
+        unique_gt_classes = torch.unique(gt_classes)
+        prob = unique_gt_classes.new_ones(num_classes + 1).float()
+        prob[-1] = 0
+        if len(unique_gt_classes) < num_fed_loss_classes:
+            prob[:num_classes] = weight.float().clone()
+            prob[unique_gt_classes] = 0
+            sampled_negative_classes = torch.multinomial(
+                prob, num_fed_loss_classes - len(unique_gt_classes), replacement=False
+            )
+            fed_loss_classes = torch.cat([unique_gt_classes, sampled_negative_classes])
+        return fed_loss_classes
+
+    # Implementation from https://github.com/xingyizhou/CenterNet2/blob/master/projects/CenterNet2/centernet/modeling/roi_heads/custom_fast_rcnn.py#L113  # noqa
+    # with slight modifications
+    def sigmoid_cross_entropy_loss(self, pred_class_logits, gt_classes):
+        """
+        Args:
+            pred_class_logits: shape (N, K+1), scores for each of the N box. Each row contains the
+            scores for K object categories and 1 background class
+            gt_classes: a long tensor of shape R that contains the gt class label of each proposal.
         """
         if pred_class_logits.numel() == 0:
             return pred_class_logits.new_zeros([1])[0]
 
-        if self.use_fed_loss and (self.freq_weight is not None): # fedloss
-            C = pred_class_logits.shape[1] - 1
-            appeared = get_fed_loss_inds(
-                gt_classes, 
-                num_sample_cats=self.fed_loss_num_cat,
-                C=C,
-                weight=self.freq_weight)
-            appeared_mask = appeared.new_zeros(C + 1).float()
-            appeared_mask[appeared] = 1. # C + 1
-            appeared_mask[C] = 1.
-            loss = F.cross_entropy(
-                pred_class_logits, gt_classes, 
-                weight=appeared_mask, reduction="mean")        
+        N = pred_class_logits.shape[0]
+        K = pred_class_logits.shape[1] - 1
+
+        target = pred_class_logits.new_zeros(N, K + 1)
+        target[range(len(gt_classes)), gt_classes] = 1
+        target = target[:, :K]
+
+        cls_loss = F.binary_cross_entropy_with_logits(
+            pred_class_logits[:, :-1], target, reduction="none"
+        )
+
+        if self.use_fed_loss:
+            fed_loss_classes = self.get_fed_loss_classes(
+                gt_classes,
+                num_fed_loss_classes=self.fed_loss_num_classes,
+                num_classes=K,
+                weight=self.fed_loss_cls_weights,
+            )
+            fed_loss_classes_mask = fed_loss_classes.new_zeros(K + 1)
+            fed_loss_classes_mask[fed_loss_classes] = 1
+            fed_loss_classes_mask = fed_loss_classes_mask[:K]
+            weight = fed_loss_classes_mask.view(1, K).expand(N, K).float()
         else:
-            loss = F.cross_entropy(
-                pred_class_logits, gt_classes, reduction="mean")                  
+            weight = 1
+
+        loss = torch.sum(cls_loss * weight) / N
         return loss
 
     def box_reg_loss(self, proposal_boxes, gt_boxes, pred_deltas, gt_classes):
