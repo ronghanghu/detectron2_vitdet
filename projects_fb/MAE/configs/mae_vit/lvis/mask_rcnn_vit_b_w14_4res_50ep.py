@@ -163,7 +163,7 @@ lr_multiplier.scheduler.num_updates = train.max_iter
 from ...common.optim import AdamLayerDecay as optimizer
 
 # Optimized hyperparams
-optimizer.lr = 1e-4
+optimizer.lr = 2e-4  # this lr is based on Hanzi's run_fb_cluster.sh
 optimizer.weight_decay = 0.1
 optimizer.params.overrides = {
     "pos_embed": {"weight_decay": 0.0},
