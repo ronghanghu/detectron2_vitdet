@@ -17,6 +17,7 @@ def print_csv_format(results):
     """
     assert isinstance(results, Mapping) or not len(results), results
     logger = logging.getLogger(__name__)
+    full_copypaste = []
     for task, res in results.items():
         if isinstance(res, Mapping):
             # Don't print "AP-category" metrics since they are usually not tracked.
@@ -26,7 +27,10 @@ def print_csv_format(results):
             logger.info("copypaste: " + ",".join(["{0:.4f}".format(k[1]) for k in important_res]))
         else:
             logger.info(f"copypaste: {task}={res}")
-
+        full_copypaste.extend(important_res)
+    logger.info(
+        "full copypaste: " + ",".join(["{0:.6f}".format(k[1] / 100) for k in full_copypaste])
+    )
 
 def verify_results(cfg, results):
     """
