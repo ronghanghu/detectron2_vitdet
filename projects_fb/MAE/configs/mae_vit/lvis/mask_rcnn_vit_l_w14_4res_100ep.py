@@ -154,11 +154,11 @@ lr_multiplier = L(WarmupParamScheduler)(
 )
 
 # Rescale schedule
-train.max_iter = train.max_iter // 2  # 100 ep -> 50 ep
-lr_multiplier.scheduler.milestones = [
-    milestone // 2 for milestone in lr_multiplier.scheduler.milestones
-]
-lr_multiplier.scheduler.num_updates = train.max_iter
+# train.max_iter = train.max_iter // 2  # 100 ep -> 50 ep
+# lr_multiplier.scheduler.milestones = [
+#     milestone // 2 for milestone in lr_multiplier.scheduler.milestones
+# ]
+# lr_multiplier.scheduler.num_updates = train.max_iter
 
 from ...common.optim import AdamLayerDecay as optimizer
 
