@@ -4,6 +4,7 @@ import logging
 import re
 from typing import Dict, List
 import torch
+import torch.nn.functional as F
 from tabulate import tabulate
 
 
@@ -254,6 +255,8 @@ def align_and_update_state_dicts(model_state_dict, ckpt_state_dict, c2_conversio
     # matched_pairs (matched checkpoint key --> matched model key)
     matched_keys = {}
     result_state_dict = {}
+    ckpt_patch_size = -1
+    model_patch_size = -1
     for idx_model, idx_ckpt in enumerate(idxs.tolist()):
         if idx_ckpt == -1:
             continue
@@ -261,6 +264,70 @@ def align_and_update_state_dicts(model_state_dict, ckpt_state_dict, c2_conversio
         key_ckpt = ckpt_keys[idx_ckpt]
         value_ckpt = ckpt_state_dict[key_ckpt]
         shape_in_model = model_state_dict[key_model].shape
+
+        # resize patch embedding 14x14 to 16x16 for vit-h-14
+        if "patch_embed.proj.weight" in key_ckpt and shape_in_model != value_ckpt.shape:
+            if ckpt_patch_size <= 0:
+                ckpt_patch_size = value_ckpt.shape[-1]
+            if model_patch_size <= 0:
+                model_patch_size = shape_in_model[-1]
+            logger.warning(
+                "interpolate {} in checkpoint from {} into shape of {} for {} in the model.".format(
+                    key_ckpt, value_ckpt.shape, shape_in_model, key_model,
+                )
+            )
+            ckpt_state_dict[key_ckpt] = F.interpolate(
+                value_ckpt, size=(shape_in_model[-2], shape_in_model[-1]), mode="bicubic",
+                align_corners=False,
+            )
+            value_ckpt = ckpt_state_dict[key_ckpt]
+
+        # resize pos embedding for vit-h-14
+        if "pos_embed" in key_ckpt and shape_in_model != value_ckpt.shape:
+            logger.warning(
+                "interploate {} in checkpoint from {} into shape of {} for {} in the model.".format(
+                    key_ckpt, value_ckpt.shape, shape_in_model, key_model,
+                )
+            )
+            ckpt_size = int(value_ckpt.shape[1] ** 0.5)
+            model_size = int(shape_in_model[1] ** 0.5)
+            ## check whether the model is pretrained under the same image size
+            if ckpt_patch_size <= 0:
+                for k in ckpt_keys:
+                    if "patch_embed.proj.weight" in k:
+                        ckpt_patch_size = ckpt_state_dict[k].shape[-1]
+            assert ckpt_patch_size > 0
+            if model_patch_size <= 0:
+                for k in model_keys:
+                    if "patch_embed.proj.weight" in k:
+                        model_patch_size = model_state_dict[k].shape[-1]
+            assert model_patch_size > 0
+            if ckpt_patch_size * ckpt_size != model_patch_size * model_size:
+                raise RuntimeError(
+                    "Please check the positional embedding size in the checkpoint and "
+                    "set pretrain_img_size to match the pretraining image size "
+                    "when fine-tuning from a high-res pretrained model."
+                    f"\ncheckpoint: patch size {ckpt_patch_size}, grid length: {ckpt_size}"
+                    f"\nmodel: patch size {model_patch_size}, grid length: {model_size}")
+            ## assume having cls-token
+            assert ckpt_size * ckpt_size + 1 == value_ckpt.shape[1]
+            assert model_size * model_size + 1 == shape_in_model[1]
+
+            cls_pos_embed = value_ckpt[:, 0:1, :]
+            pos_embed = value_ckpt[:, 1:]
+
+            pos_embed = F.interpolate(
+                pos_embed.reshape(1, ckpt_size, ckpt_size, -1).permute(0, 3, 1, 2),
+                size=(model_size, model_size),
+                mode="bicubic",
+                align_corners=False,
+            )
+
+            pos_embed = pos_embed.reshape(1, -1, model_size * model_size).permute(0, 2, 1)
+            pos_embed = torch.cat((cls_pos_embed, pos_embed), dim=1)
+
+            ckpt_state_dict[key_ckpt] = pos_embed
+            value_ckpt = ckpt_state_dict[key_ckpt]
 
         if shape_in_model != value_ckpt.shape:
             logger.warning(
