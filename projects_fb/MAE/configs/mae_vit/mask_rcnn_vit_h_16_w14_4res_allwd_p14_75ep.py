@@ -59,7 +59,7 @@ model.backbone.bottom_up = L(ViTUp1)(  # Creates multi-scale feature maps from V
         mlp_ratio=4,
         qkv_bias=True,
         norm_layer=partial(nn.LayerNorm, eps=1e-6),
-        checkpoint_block_num=0,
+        checkpoint_block_num=100000,
         use_cls_token_det=False,
         use_shared_rel_pos_bias=False,
         init_values=None,
