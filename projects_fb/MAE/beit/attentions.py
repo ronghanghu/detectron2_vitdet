@@ -70,14 +70,7 @@ class AttentionPartition(nn.Module):
         # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
         self.scale = qk_scale or head_dim ** -0.5
 
-        if qkv_bias:
-            self.q_bias = nn.Parameter(torch.zeros(dim))
-            self.v_bias = nn.Parameter(torch.zeros(dim))
-        else:
-            self.q_bias = None
-            self.v_bias = None
-
-        self.qkv = nn.Linear(dim, 3 * dim, bias=False)
+        self.qkv = nn.Linear(dim, 3 * dim, bias=qkv_bias)
 
         assert attn_drop == 0.  # do not use
         # self.attn_drop = nn.Dropout(attn_drop)
@@ -93,14 +86,8 @@ class AttentionPartition(nn.Module):
         assert rel_pos_bias is None
         N, L, D = x.shape
 
-        # qkv = self.qkv(x)  # [N, T, S, 3 * D]
-
-        qkv_bias = None
-        if self.q_bias is not None:
-            qkv_bias = torch.cat((self.q_bias, torch.zeros_like(self.v_bias, requires_grad=False), self.v_bias))
+        qkv = self.qkv(x)  # [N, T, S, 3 * D]
         # qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        qkv = F.linear(input=x, weight=self.qkv.weight, bias=qkv_bias)
-
         q, k, v = qkv.split(D, dim=-1)
 
         x = partition_attention(q, k, v, heads=self.num_heads, scale=self.scale, partition_size=self.partition_size, q_shuffle=self.q_shuffle)
@@ -149,15 +136,7 @@ class AttentionSubsample(nn.Module):
         # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
         self.scale = qk_scale or head_dim ** -0.5
 
-        if qkv_bias:
-            self.q_bias = nn.Parameter(torch.zeros(dim))
-            self.v_bias = nn.Parameter(torch.zeros(dim))
-        else:
-            self.q_bias = None
-            self.v_bias = None
-
-        self.qkv = nn.Linear(dim, 3 * dim, bias=False)
-
+        self.qkv = nn.Linear(dim, 3 * dim, bias=qkv_bias)
 
         assert attn_drop==0.  # do not use
         # self.attn_drop = nn.Dropout(attn_drop)
@@ -174,11 +153,7 @@ class AttentionSubsample(nn.Module):
         assert rel_pos_bias is None
         N, S, D = x.shape  # S: H*W
 
-        # qkv = self.qkv(x)  # [N, T, S, 3 * D]
-
-        qkv_bias = None
-        if self.q_bias is not None:
-            qkv_bias = torch.cat((self.q_bias, torch.zeros_like(self.v_bias, requires_grad=False), self.v_bias))
+        qkv = self.qkv(x)  # [N, T, S, 3 * D]
         # qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         qkv = F.linear(input=x, weight=self.qkv.weight, bias=qkv_bias)
 
@@ -266,13 +241,7 @@ class AttentionPool(nn.Module):
         all_head_dim = head_dim * self.num_heads
         self.scale = qk_scale or head_dim ** -0.5
 
-        self.qkv = nn.Linear(dim, all_head_dim * 3, bias=False)
-        if qkv_bias:
-            self.q_bias = nn.Parameter(torch.zeros(all_head_dim))
-            self.v_bias = nn.Parameter(torch.zeros(all_head_dim))
-        else:
-            self.q_bias = None
-            self.v_bias = None
+        self.qkv = nn.Linear(dim, all_head_dim * 3, bias=qkv_bias)
 
         if window_size:
             self.window_size = window_size
@@ -347,11 +316,7 @@ class AttentionPool(nn.Module):
 
     def forward(self, x, rel_pos_bias=None):
         B, N, C = x.shape
-        qkv_bias = None
-        if self.q_bias is not None:
-            qkv_bias = torch.cat((self.q_bias, torch.zeros_like(self.v_bias, requires_grad=False), self.v_bias))
-        # qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        qkv = F.linear(input=x, weight=self.qkv.weight, bias=qkv_bias)
+        qkv = self.qkv(x)
         qkv = qkv.reshape(B, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
 

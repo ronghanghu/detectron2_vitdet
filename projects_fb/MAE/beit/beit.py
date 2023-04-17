@@ -172,16 +172,8 @@ class Attention(nn.Module):
             self.k = nn.Linear(dim, all_head_dim, bias=qkv_bias)
             self.v = nn.Linear(dim, all_head_dim, bias=qkv_bias)
         else:
-            if not k_bias:
-                self.qkv = nn.Linear(dim, all_head_dim * 3, bias=False)
-                if qkv_bias:
-                    self.q_bias = nn.Parameter(torch.zeros(all_head_dim))
-                    self.v_bias = nn.Parameter(torch.zeros(all_head_dim))
-                else:
-                    self.q_bias = None
-                    self.v_bias = None
-            else:
-                self.qkv = nn.Linear(dim, all_head_dim * 3, bias=qkv_bias)
+            # ignore self.k_bias and always add all bias terms
+            self.qkv = nn.Linear(dim, all_head_dim * 3, bias=qkv_bias)
 
         if window_size:
             self.window_size = window_size
@@ -253,14 +245,7 @@ class Attention(nn.Module):
                 .permute(0, 2, 1, 3)
             )
         else:
-            if not self.k_bias:
-                qkv_bias = None
-                if self.q_bias is not None:
-                    qkv_bias = torch.cat((self.q_bias, torch.zeros_like(self.v_bias, requires_grad=False), self.v_bias))
-                # qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-                qkv = F.linear(input=x, weight=self.qkv.weight, bias=qkv_bias)
-            else:
-                qkv = self.qkv(x)
+            qkv = self.qkv(x)
             qkv = qkv.reshape(B, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
             q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
 
