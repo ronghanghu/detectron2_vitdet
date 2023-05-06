@@ -34,8 +34,8 @@ dataloader.test.mapper.augmentations = [
 
 
 # Model
-# Small
-embed_dim, depth, num_heads = 384, 12, 12
+# Small (6 heads)
+embed_dim, depth, num_heads = 384, 12, 6
 # Large
 # embed_dim, depth, num_heads = 1024, 24, 16
 
